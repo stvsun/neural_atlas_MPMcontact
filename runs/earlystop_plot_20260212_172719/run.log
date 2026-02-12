@@ -1,0 +1,64 @@
+================================================================================
+PINN with Gradient Surgery and Symmetry Enforcement (PyTorch)
+================================================================================
+
+Problem: Anisotropic diffusion on oval (elliptical) domain
+A = diag(2.0, 0.5)
+Ellipse semiaxes: a=2.0, b=1.0
+Exact solution: v(x,y) = sqrt((x/a)^2 + (y/b)^2)
+Backend: PyTorch 1.10.0 on cpu
+
+================================================================================
+EXPERIMENT: Impact of Gradient Surgery (Fair Comparison)
+================================================================================
+Seed: 42
+Max epochs: 500, LR: 0.001
+Early stopping: min_epochs=50, window=20, min_rel_improve=0.05, patience=2
+
+================================================================================
+Training: WITHOUT Gradient Surgery
+================================================================================
+
+Training data:
+  Interior: 400
+  Boundary: 100
+  Symmetry: 50
+Epoch 100/500 | Total: 2.4207 | PDE: 1.4871 | BC: 0.9070 | Sym: 0.0153 | Conflicts: 4 | Time: 0.7s
+Early stop at epoch 110/500: relative improvement=4.951e-02, streak=2
+
+Training completed in 0.8s
+Stop reason: low relative improvement (< 5.00e-02) for 2 checks, window=20
+
+================================================================================
+Evaluation: Baseline
+================================================================================
+L2 error: 6.348487e-01
+Max error: 1.115625e+00
+
+================================================================================
+Training: WITH Gradient Surgery
+================================================================================
+
+Training data:
+  Interior: 400
+  Boundary: 100
+  Symmetry: 50
+Epoch 100/500 | Total: 2.1942 | PDE: 1.4839 | BC: 0.7057 | Sym: 0.0047 | Conflicts: 4 | Time: 0.7s
+Early stop at epoch 151/500: relative improvement=4.956e-02, streak=2
+
+Training completed in 1.1s
+Stop reason: low relative improvement (< 5.00e-02) for 2 checks, window=20
+
+================================================================================
+Evaluation: With Gradient Surgery
+================================================================================
+L2 error: 4.953444e-01
+Max error: 8.681928e-01
+
+Method                   L2 Error         Max Error       
+----------------------------------------------------------
+Baseline                 6.348487e-01     1.115625e+00    
+Gradient Surgery         4.953444e-01     8.681928e-01    
+Improvement              21.974          %
+Epochs run (base/surg): 110/151
+Saved visualization: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/runs/earlystop_plot_20260212_172719/pinn_gradient_surgery_results.png

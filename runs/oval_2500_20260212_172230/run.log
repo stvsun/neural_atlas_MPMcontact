@@ -1,0 +1,66 @@
+================================================================================
+PINN with Gradient Surgery and Symmetry Enforcement (PyTorch)
+================================================================================
+
+Problem: Anisotropic diffusion on oval (elliptical) domain
+A = diag(2.0, 0.5)
+Ellipse semiaxes: a=2.0, b=1.0
+Exact solution: v(x,y) = sqrt((x/a)^2 + (y/b)^2)
+Backend: PyTorch 1.10.0 on cpu
+
+================================================================================
+EXPERIMENT: Impact of Gradient Surgery (Fair Comparison)
+================================================================================
+Seed: 42
+Epochs: 2500, LR: 0.001
+
+================================================================================
+Training: WITHOUT Gradient Surgery
+================================================================================
+
+Training data:
+  Interior: 400
+  Boundary: 100
+  Symmetry: 50
+Epoch 500/2500 | Total: 1.3110 | PDE: 0.9040 | BC: 0.4027 | Sym: 0.0035 | Conflicts: 3 | Time: 3.6s
+Epoch 1000/2500 | Total: 0.8653 | PDE: 0.6795 | BC: 0.1683 | Sym: 0.0020 | Conflicts: 3 | Time: 7.3s
+Epoch 1500/2500 | Total: 0.6505 | PDE: 0.5399 | BC: 0.0893 | Sym: 0.0017 | Conflicts: 4 | Time: 10.9s
+Epoch 2000/2500 | Total: 0.5213 | PDE: 0.4451 | BC: 0.0583 | Sym: 0.0014 | Conflicts: 4 | Time: 14.4s
+Epoch 2500/2500 | Total: 0.4343 | PDE: 0.3766 | BC: 0.0432 | Sym: 0.0013 | Conflicts: 5 | Time: 18.3s
+
+Training completed in 18.3s
+
+================================================================================
+Evaluation: Baseline
+================================================================================
+L2 error: 8.853244e-02
+Max error: 2.983828e-01
+
+================================================================================
+Training: WITH Gradient Surgery
+================================================================================
+
+Training data:
+  Interior: 400
+  Boundary: 100
+  Symmetry: 50
+Epoch 500/2500 | Total: 1.1714 | PDE: 0.8218 | BC: 0.3487 | Sym: 0.0009 | Conflicts: 4 | Time: 3.8s
+Epoch 1000/2500 | Total: 0.8327 | PDE: 0.6220 | BC: 0.2106 | Sym: 0.0002 | Conflicts: 4 | Time: 7.6s
+Epoch 1500/2500 | Total: 0.6317 | PDE: 0.4978 | BC: 0.1337 | Sym: 0.0002 | Conflicts: 4 | Time: 11.2s
+Epoch 2000/2500 | Total: 0.5043 | PDE: 0.4144 | BC: 0.0897 | Sym: 0.0002 | Conflicts: 5 | Time: 14.9s
+Epoch 2500/2500 | Total: 0.4114 | PDE: 0.3466 | BC: 0.0646 | Sym: 0.0002 | Conflicts: 5 | Time: 18.7s
+
+Training completed in 18.7s
+
+================================================================================
+Evaluation: With Gradient Surgery
+================================================================================
+L2 error: 1.400526e-01
+Max error: 3.267092e-01
+
+Method                   L2 Error         Max Error       
+----------------------------------------------------------
+Baseline                 8.853244e-02     2.983828e-01    
+Gradient Surgery         1.400526e-01     3.267092e-01    
+Improvement              -58.194         %
+Saved visualization: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/runs/oval_2500_20260212_172230/pinn_gradient_surgery_results.png
