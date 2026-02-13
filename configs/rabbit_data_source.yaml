@@ -1,0 +1,19 @@
+# Data source options for meshfree rabbit atlas pipeline.
+data_source:
+  # Primary path: use a local real point cloud if available.
+  # Supported: .npz/.npy/.xyz/.txt/.csv/.ply
+  points_file: null
+
+  # Fallback path: scripted download from Stanford scan repository.
+  download_url: "https://graphics.stanford.edu/pub/3Dscanrep/bunny.tar.gz"
+  use_download_if_missing: true
+  download_dir: null
+
+  # Keep strict meshfree defaults; procedural fallback is disabled by default.
+  allow_procedural_fallback: false
+
+preprocess:
+  n_surface_max: 30000
+  normal_k: 32
+  frame_k: 96
+  seed: 42

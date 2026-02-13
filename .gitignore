@@ -1,0 +1,33 @@
+# OS / editor artifacts
+.DS_Store
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+
+# Experiment output roots
+runs/
+downloads/
+
+# Generated training / solver artifacts
+*.log
+*.npz
+*.pt
+*.pth
+*.onnx
+
+# Generated visualization / postprocessing files
+*.png
+*.svg
+*.vtu
+*.vtp
+*.pvtu
+*.pvd
+*.xdmf
+*.h5
+*.hdf5
+
+# Generated metrics/report snapshots
+*_metrics.json
+*_history.json
+*_report.json
