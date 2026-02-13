@@ -67,13 +67,12 @@ poisson_schwarz:
   jac_kappa_max: 1.0e3
   pde_clip_quantile: 0.98
   pde_huber_delta: 1.0
-  pde_warmup_iters: 50
+  pde_warmup_iters: 10
 
-  # M4: rebalanced so PDE dominates and interface flux is strongly enforced
-  w_pde: 5.0
-  w_bc: 1.0
-  w_interface_value: 2.0
-  w_interface_flux: 2.0
+  w_pde: 1.0
+  w_bc: 2.0
+  w_interface_value: 0.8
+  w_interface_flux: 0.2
   w_interface_flux_start: null
   w_interface_flux_end: null
   flux_ramp_iters: 0
@@ -93,34 +92,10 @@ poisson_schwarz:
   interface_flux_tol: 1.5e-2
   plateau_patience: 15
   plateau_tol: 5.0e-5
-  plateau_use_rel_l2: true
   target_rel_l2: 1.5e-1
   guard_rel_l2: 0.0
   guard_patience: 0
   checkpoint_policy: "last"
-
-  # M7: hard BC enforcement via SDF-based lifting
-  hard_bc: false
-  hard_bc_scale: 0.05
-
-  # M1/W1: direct-coordinate PDE mode — bypasses the learned decoder Jacobian
-  # and computes the Laplacian in the rigid TNB frame instead.  Must be true so
-  # that training, eval_global_metrics, and eval_rel_l2_subset all operate on
-  # the same coordinate frame as the pretrain supervision (TNB-based).
-  direct_coord_pde: true
-
-  # M2: SDF-guided interior sampling
-  sdf_checkpoint: null
-  use_sdf_sampling: false
-  sdf_interior_threshold: 0.0
-  sdf_rejection_factor: 6
-
-  # M8: residual-based adaptive sampling (RAR)
-  rar_period: 0
-  rar_candidates: 512
-  rar_top_k: 64
-  rar_pool_max: 256
-  rar_mix_n: 32
 
 outputs:
   root: "runs"

@@ -59,6 +59,42 @@ def relative_improvement_over_window(values, window):
     return (prev_mean - curr_mean) / max(abs(prev_mean), 1e-12)
 
 
+def update_gradnorm_weights(
+    task_losses,
+    task_grad_norms,
+    task_weights,
+    initial_task_losses,
+    alpha=1.5,
+    step_size=0.025,
+    eps=1e-8,
+    min_weight=0.1,
+):
+    """
+    Update task weights using a GradNorm-style balancing rule.
+
+    The update is multiplicative and keeps the average task weight at 1.0.
+    """
+    loss_ratios = task_losses / torch.clamp(initial_task_losses, min=1e-4)
+    inverse_train_rates = loss_ratios / torch.clamp(loss_ratios.mean(), min=eps)
+    inverse_train_rates = torch.clamp(inverse_train_rates, min=0.5, max=2.0)
+
+    weighted_norms = task_weights * task_grad_norms
+    avg_norm = torch.clamp(weighted_norms.mean(), min=eps)
+    target_norms = avg_norm * torch.pow(inverse_train_rates, alpha)
+
+    ratio = torch.clamp(
+        target_norms / torch.clamp(weighted_norms, min=eps),
+        min=0.5,
+        max=2.0,
+    )
+    updated_weights = task_weights * torch.pow(ratio, step_size)
+    updated_weights = torch.clamp(updated_weights, min=min_weight)
+    updated_weights = updated_weights * (
+        task_weights.numel() / torch.clamp(updated_weights.sum(), min=eps)
+    )
+    return updated_weights.detach()
+
+
 def normalized_coordinates(x, y):
     return x / DOMAIN_A, y / DOMAIN_B
 
@@ -299,6 +335,7 @@ def train_with_gradient_surgery(
     n_epochs=2000,
     lr=1e-3,
     use_surgery=True,
+    use_gradnorm=False,
     training_data=None,
     verbose=True,
     log_every=400,
@@ -306,16 +343,23 @@ def train_with_gradient_surgery(
     early_stop_window=100,
     early_stop_min_rel_improve=1e-3,
     early_stop_patience=3,
+    gradnorm_alpha=1.5,
+    gradnorm_lr=0.025,
+    target_total_loss=None,
 ):
     """
-    Train PINN with or without gradient surgery.
+    Train PINN with optional Gradient Surgery and GradNorm.
 
     Stops early when relative improvement of total loss over a sliding window
-    becomes too small for `early_stop_patience` consecutive checks.
+    becomes too small for `early_stop_patience` consecutive checks, or when
+    `target_total_loss` is reached.
     """
     if verbose:
         print(f"\n{'=' * 80}")
-        print(f"Training: {'WITH' if use_surgery else 'WITHOUT'} Gradient Surgery")
+        training_label = f"{'WITH' if use_surgery else 'WITHOUT'} Gradient Surgery"
+        if use_gradnorm:
+            training_label += " + GradNorm"
+        print(f"Training: {training_label}")
         print(f"{'=' * 80}")
 
     if training_data is None:
@@ -341,6 +385,15 @@ def train_with_gradient_surgery(
 
     task_names = ["pde", "bc", "symmetry", "center"]
     params = list(nn.parameters())
+    n_tasks = len(task_names)
+    task_weights = torch.ones(n_tasks, dtype=params[0].dtype, device=params[0].device)
+    gradnorm_task_indices = [0, 1, 2]  # Keep center objective as fixed auxiliary weight.
+    initial_task_losses = None
+
+    if use_gradnorm:
+        for name in task_names:
+            history[f"weight_{name}"] = []
+
     low_improve_streak = 0
     stopped_early = False
     stop_reason = "max_epochs"
@@ -362,6 +415,27 @@ def train_with_gradient_surgery(
             )
             grad_list.append(flatten_gradients(task_grads, params))
 
+        task_loss_tensor = torch.stack([losses[name].detach() for name in task_names])
+        grad_norms = torch.stack([torch.norm(grad.detach(), p=2) for grad in grad_list])
+
+        if use_gradnorm:
+            if initial_task_losses is None:
+                initial_task_losses = torch.clamp(
+                    task_loss_tensor[gradnorm_task_indices], min=1e-4
+                )
+            updated_primary_weights = update_gradnorm_weights(
+                task_losses=task_loss_tensor[gradnorm_task_indices],
+                task_grad_norms=grad_norms[gradnorm_task_indices],
+                task_weights=task_weights[gradnorm_task_indices],
+                initial_task_losses=initial_task_losses,
+                alpha=gradnorm_alpha,
+                step_size=gradnorm_lr,
+            )
+            task_weights[gradnorm_task_indices] = updated_primary_weights
+            task_weights[3] = 1.0
+            for idx, name in enumerate(task_names):
+                history[f"weight_{name}"].append(float(task_weights[idx].item()))
+
         # Count conflicts
         conflicts = 0
         for i in range(len(grad_list)):
@@ -370,12 +444,14 @@ def train_with_gradient_surgery(
                     conflicts += 1
         history["conflicts_detected"].append(conflicts)
 
+        weighted_grad_list = [task_weights[i] * grad_list[i] for i in range(n_tasks)]
+
         # Apply PCGrad if requested
         if use_surgery:
-            grad_list = pcgrad(grad_list)
+            weighted_grad_list = pcgrad(weighted_grad_list)
 
         # Combine and apply gradient
-        combined_grad = torch.stack(grad_list, dim=0).mean(dim=0)
+        combined_grad = torch.stack(weighted_grad_list, dim=0).mean(dim=0)
         grads_per_param = unflatten_for_model(nn, combined_grad)
 
         with torch.no_grad():
@@ -390,6 +466,21 @@ def train_with_gradient_surgery(
         history["center"].append(float(losses["center"].item()))
 
         epoch_id = epoch + 1
+        total_loss_value = history["total_loss"][-1]
+
+        if target_total_loss is not None and total_loss_value <= target_total_loss:
+            stopped_early = True
+            stop_reason = (
+                f"target total loss reached "
+                f"({total_loss_value:.3e} <= {target_total_loss:.3e})"
+            )
+            if verbose:
+                print(
+                    f"Target reached at epoch {epoch_id}/{n_epochs}: "
+                    f"total_loss={total_loss_value:.3e}"
+                )
+            break
+
         rel_improve = None
         if (
             epoch_id >= max(min_epochs, 2 * early_stop_window)
@@ -406,6 +497,15 @@ def train_with_gradient_surgery(
 
         if verbose and (epoch + 1) % log_every == 0:
             elapsed = time.time() - start_time
+            weight_suffix = ""
+            if use_gradnorm:
+                weight_suffix = (
+                    " | W:"
+                    f" pde={task_weights[0].item():.2f},"
+                    f" bc={task_weights[1].item():.2f},"
+                    f" sym={task_weights[2].item():.2f},"
+                    f" ctr={task_weights[3].item():.2f}"
+                )
             print(
                 f"Epoch {epoch + 1}/{n_epochs} | "
                 f"Total: {total_loss.item():.4f} | "
@@ -414,6 +514,7 @@ def train_with_gradient_surgery(
                 f"Sym: {losses['symmetry'].item():.4f} | "
                 f"Conflicts: {conflicts} | "
                 f"Time: {elapsed:.1f}s"
+                f"{weight_suffix}"
             )
 
         if low_improve_streak >= early_stop_patience:
@@ -441,6 +542,10 @@ def train_with_gradient_surgery(
     history["epochs_ran"] = len(history["total_loss"])
     history["stopped_early"] = bool(stopped_early)
     history["stop_reason"] = stop_reason
+    history["final_total_loss"] = (
+        history["total_loss"][-1] if history["total_loss"] else float("nan")
+    )
+    history["target_total_loss"] = target_total_loss
     return history
 
 
@@ -683,6 +788,10 @@ def run_single_comparison(
     early_stop_window=100,
     early_stop_min_rel_improve=1e-3,
     early_stop_patience=3,
+    use_gradnorm=False,
+    gradnorm_alpha=1.5,
+    gradnorm_lr=0.025,
+    target_total_loss=None,
 ):
     set_seed(seed)
     training_data = generate_training_data(
@@ -703,16 +812,25 @@ def run_single_comparison(
     print(f"Seed: {seed}")
     print(f"Max epochs: {n_epochs}, LR: {lr}")
     print(
+        "Optimization: Baseline="
+        f"{'GradNorm' if use_gradnorm else 'uniform weighting'}, "
+        "Surgery=PCGrad"
+        f"{' + GradNorm' if use_gradnorm else ''}"
+    )
+    print(
         "Early stopping: "
         f"min_epochs={min_epochs}, window={early_stop_window}, "
         f"min_rel_improve={early_stop_min_rel_improve}, patience={early_stop_patience}"
     )
+    if target_total_loss is not None:
+        print(f"Target total loss: {target_total_loss:.2e}")
 
     history_baseline = train_with_gradient_surgery(
         nn_baseline,
         n_epochs=n_epochs,
         lr=lr,
         use_surgery=False,
+        use_gradnorm=use_gradnorm,
         training_data=training_data,
         verbose=True,
         log_every=max(1, n_epochs // 5),
@@ -720,6 +838,9 @@ def run_single_comparison(
         early_stop_window=early_stop_window,
         early_stop_min_rel_improve=early_stop_min_rel_improve,
         early_stop_patience=early_stop_patience,
+        gradnorm_alpha=gradnorm_alpha,
+        gradnorm_lr=gradnorm_lr,
+        target_total_loss=target_total_loss,
     )
     X_grid, Y_grid, V_base, V_exact, l2_base, max_base = evaluate_network(
         nn_baseline, "Baseline", verbose=True
@@ -730,6 +851,7 @@ def run_single_comparison(
         n_epochs=n_epochs,
         lr=lr,
         use_surgery=True,
+        use_gradnorm=use_gradnorm,
         training_data=training_data,
         verbose=True,
         log_every=max(1, n_epochs // 5),
@@ -737,6 +859,9 @@ def run_single_comparison(
         early_stop_window=early_stop_window,
         early_stop_min_rel_improve=early_stop_min_rel_improve,
         early_stop_patience=early_stop_patience,
+        gradnorm_alpha=gradnorm_alpha,
+        gradnorm_lr=gradnorm_lr,
+        target_total_loss=target_total_loss,
     )
     _, _, V_surg, _, l2_surg, max_surg = evaluate_network(
         nn_surgery, "With Gradient Surgery", verbose=True
@@ -755,10 +880,14 @@ def run_single_comparison(
         "l2_improvement_percent": float(improvement),
         "avg_conflicts_baseline": float(tensor_mean(history_baseline["conflicts_detected"])),
         "avg_conflicts_surgery": float(tensor_mean(history_surgery["conflicts_detected"])),
+        "final_total_loss_baseline": float(history_baseline["final_total_loss"]),
+        "final_total_loss_surgery": float(history_surgery["final_total_loss"]),
         "epochs_ran_baseline": int(history_baseline["epochs_ran"]),
         "epochs_ran_surgery": int(history_surgery["epochs_ran"]),
         "stopped_early_baseline": bool(history_baseline["stopped_early"]),
         "stopped_early_surgery": bool(history_surgery["stopped_early"]),
+        "stop_reason_baseline": history_baseline["stop_reason"],
+        "stop_reason_surgery": history_surgery["stop_reason"],
         "train_time_baseline_sec": float(history_baseline["train_time_sec"]),
         "train_time_surgery_sec": float(history_surgery["train_time_sec"]),
     }
@@ -771,6 +900,11 @@ def run_single_comparison(
     print(
         f"Epochs run (base/surg): "
         f"{history_baseline['epochs_ran']}/{history_surgery['epochs_ran']}"
+    )
+    print(
+        f"Final total loss (base/surg): "
+        f"{history_baseline['final_total_loss']:.3e}/"
+        f"{history_surgery['final_total_loss']:.3e}"
     )
 
     if make_plot:
@@ -806,6 +940,10 @@ def run_benchmark(
     early_stop_window=100,
     early_stop_min_rel_improve=1e-3,
     early_stop_patience=3,
+    use_gradnorm=False,
+    gradnorm_alpha=1.5,
+    gradnorm_lr=0.025,
+    target_total_loss=None,
 ):
     all_trials = []
     print(f"\n{'=' * 80}")
@@ -834,12 +972,16 @@ def run_benchmark(
             n_epochs=n_epochs,
             lr=lr,
             use_surgery=False,
+            use_gradnorm=use_gradnorm,
             training_data=training_data,
             verbose=False,
             min_epochs=min_epochs,
             early_stop_window=early_stop_window,
             early_stop_min_rel_improve=early_stop_min_rel_improve,
             early_stop_patience=early_stop_patience,
+            gradnorm_alpha=gradnorm_alpha,
+            gradnorm_lr=gradnorm_lr,
+            target_total_loss=target_total_loss,
         )
         _, _, _, _, l2_base, max_base = evaluate_network(nn_baseline, title="Baseline", verbose=False)
 
@@ -848,12 +990,16 @@ def run_benchmark(
             n_epochs=n_epochs,
             lr=lr,
             use_surgery=True,
+            use_gradnorm=use_gradnorm,
             training_data=training_data,
             verbose=False,
             min_epochs=min_epochs,
             early_stop_window=early_stop_window,
             early_stop_min_rel_improve=early_stop_min_rel_improve,
             early_stop_patience=early_stop_patience,
+            gradnorm_alpha=gradnorm_alpha,
+            gradnorm_lr=gradnorm_lr,
+            target_total_loss=target_total_loss,
         )
         _, _, _, _, l2_surg, max_surg = evaluate_network(
             nn_surgery, title="With Surgery", verbose=False
@@ -870,6 +1016,8 @@ def run_benchmark(
             "improvement_percent": float(improvement),
             "avg_conflicts_baseline": float(tensor_mean(history_base["conflicts_detected"])),
             "avg_conflicts_surgery": float(tensor_mean(history_surg["conflicts_detected"])),
+            "final_total_loss_baseline": float(history_base["final_total_loss"]),
+            "final_total_loss_surgery": float(history_surg["final_total_loss"]),
             "epochs_ran_baseline": int(history_base["epochs_ran"]),
             "epochs_ran_surgery": int(history_surg["epochs_ran"]),
             "train_time_baseline_sec": float(history_base["train_time_sec"]),
@@ -889,6 +1037,12 @@ def run_benchmark(
     imp_vals = torch.tensor([item["improvement_percent"] for item in all_trials], dtype=DTYPE)
     epochs_base_vals = torch.tensor([item["epochs_ran_baseline"] for item in all_trials], dtype=DTYPE)
     epochs_surg_vals = torch.tensor([item["epochs_ran_surgery"] for item in all_trials], dtype=DTYPE)
+    final_loss_base_vals = torch.tensor(
+        [item["final_total_loss_baseline"] for item in all_trials], dtype=DTYPE
+    )
+    final_loss_surg_vals = torch.tensor(
+        [item["final_total_loss_surgery"] for item in all_trials], dtype=DTYPE
+    )
 
     summary = {
         "trials": trials,
@@ -902,6 +1056,8 @@ def run_benchmark(
         "improvement_percent_std": float(imp_vals.std(unbiased=False).item()),
         "epochs_ran_baseline_mean": float(epochs_base_vals.mean().item()),
         "epochs_ran_surgery_mean": float(epochs_surg_vals.mean().item()),
+        "final_total_loss_baseline_mean": float(final_loss_base_vals.mean().item()),
+        "final_total_loss_surgery_mean": float(final_loss_surg_vals.mean().item()),
     }
 
     print(f"\n{'=' * 80}")
@@ -916,6 +1072,11 @@ def run_benchmark(
     print(
         f"Avg epochs run (base/surg): "
         f"{summary['epochs_ran_baseline_mean']:.1f}/{summary['epochs_ran_surgery_mean']:.1f}"
+    )
+    print(
+        f"Final total loss (base/surg): "
+        f"{summary['final_total_loss_baseline_mean']:.3e}/"
+        f"{summary['final_total_loss_surgery_mean']:.3e}"
     )
 
     payload = {"summary": summary, "trials_data": all_trials}
@@ -949,6 +1110,10 @@ def parse_args():
     parser.add_argument("--early-stop-window", type=int, default=100)
     parser.add_argument("--early-stop-min-rel-improve", type=float, default=1e-3)
     parser.add_argument("--early-stop-patience", type=int, default=3)
+    parser.add_argument("--target-total-loss", type=float, default=None)
+    parser.add_argument("--use-gradnorm", action="store_true")
+    parser.add_argument("--gradnorm-alpha", type=float, default=1.5)
+    parser.add_argument("--gradnorm-lr", type=float, default=0.025)
     parser.add_argument("--no-plot", action="store_true")
     return parser.parse_args()
 
@@ -978,6 +1143,10 @@ def main():
             early_stop_window=args.early_stop_window,
             early_stop_min_rel_improve=args.early_stop_min_rel_improve,
             early_stop_patience=args.early_stop_patience,
+            use_gradnorm=args.use_gradnorm,
+            gradnorm_alpha=args.gradnorm_alpha,
+            gradnorm_lr=args.gradnorm_lr,
+            target_total_loss=args.target_total_loss,
         )
     else:
         run_single_comparison(
@@ -993,6 +1162,10 @@ def main():
             early_stop_window=args.early_stop_window,
             early_stop_min_rel_improve=args.early_stop_min_rel_improve,
             early_stop_patience=args.early_stop_patience,
+            use_gradnorm=args.use_gradnorm,
+            gradnorm_alpha=args.gradnorm_alpha,
+            gradnorm_lr=args.gradnorm_lr,
+            target_total_loss=args.target_total_loss,
         )
 
 
