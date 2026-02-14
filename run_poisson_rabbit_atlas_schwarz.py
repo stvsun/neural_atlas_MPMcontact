@@ -87,6 +87,38 @@ def normalize_rows_tensor(x: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
     return x / torch.clamp(n, min=eps)
 
 
+def robust_unit_interval(values: torch.Tensor, q_lo: float = 0.05, q_hi: float = 0.95) -> torch.Tensor:
+    if values.numel() == 0:
+        return torch.zeros_like(values)
+    v_cpu = values.detach().to(device=torch.device("cpu"), dtype=torch.float64).reshape(-1)
+    if not torch.isfinite(v_cpu).all():
+        v_cpu = torch.nan_to_num(v_cpu, nan=0.0, posinf=0.0, neginf=0.0)
+    lo = float(torch.quantile(v_cpu, max(0.0, min(1.0, q_lo))).item())
+    hi = float(torch.quantile(v_cpu, max(0.0, min(1.0, q_hi))).item())
+    if hi <= lo + 1e-12:
+        return torch.zeros_like(values)
+    out = (values - lo) / (hi - lo)
+    return torch.clamp(out, min=0.0, max=1.0)
+
+
+def sample_indices_from_weights(weights: torch.Tensor, n_take: int) -> torch.Tensor:
+    n = int(weights.numel())
+    if n <= 0:
+        return torch.zeros((0,), device=weights.device, dtype=torch.int64)
+    if n_take <= 0:
+        return torch.zeros((0,), device=weights.device, dtype=torch.int64)
+    replace = n_take > n
+    w = torch.clamp(weights, min=1e-12)
+    w_sum = torch.sum(w)
+    if (not torch.isfinite(w_sum)) or float(w_sum.item()) <= 0.0:
+        return torch.randint(0, n, (n_take,), device=weights.device)
+    w = w / w_sum
+    if weights.device.type == "mps":
+        sel = torch.multinomial(w.detach().cpu(), n_take, replacement=replace)
+        return sel.to(device=weights.device, dtype=torch.int64)
+    return torch.multinomial(w, n_take, replacement=replace)
+
+
 class MLP(torch.nn.Module):
     def __init__(self, in_dim: int, out_dim: int, width: int, depth: int):
         super().__init__()
@@ -391,17 +423,51 @@ def choose_color_groups(meta_json: Optional[str], n_charts: int, membership_np: 
 
 
 def plot_history(history: Dict[str, List[float]], out_path: str) -> None:
-    iters = np.arange(1, len(history["global_residual"]) + 1)
-    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    iters = np.arange(1, len(history["global_residual"]) + 1, dtype=np.float64)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    ax = axes[0, 0]
     ax.semilogy(iters, np.maximum(history["global_residual"], 1e-16), label="global_residual")
     ax.semilogy(iters, np.maximum(history["interface_value"], 1e-16), label="interface_value")
     ax.semilogy(iters, np.maximum(history["interface_flux"], 1e-16), label="interface_flux")
     ax.semilogy(iters, np.maximum(history["bc_loss"], 1e-16), label="bc_loss")
     ax.set_xlabel("Schwarz iteration")
-    ax.set_ylabel("Metric")
-    ax.set_title("Atlas Schwarz Poisson convergence")
+    ax.set_ylabel("Loss-like metric")
+    ax.set_title("Primary metrics")
     ax.grid(True, alpha=0.3)
     ax.legend()
+
+    ax = axes[0, 1]
+    if len(history.get("rel_l2_eval", [])) > 0:
+        ax.semilogy(iters, np.maximum(history["rel_l2_eval"], 1e-16), label="rel_l2_eval")
+    ax.set_xlabel("Schwarz iteration")
+    ax.set_ylabel("Relative L2")
+    ax.set_title("Accuracy")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+
+    ax = axes[1, 0]
+    if len(history.get("w_interface_flux_eff", [])) > 0:
+        ax.plot(iters, history["w_interface_flux_eff"], label="w_interface_flux_eff")
+    if len(history.get("adaptive_flux_multiplier", [])) > 0:
+        ax.plot(iters, history["adaptive_flux_multiplier"], label="adaptive_flux_multiplier")
+    ax.set_xlabel("Schwarz iteration")
+    ax.set_ylabel("Weight")
+    ax.set_title("Flux schedule")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+
+    ax = axes[1, 1]
+    if len(history.get("lr", [])) > 0:
+        ax.plot(iters, history["lr"], label="lr")
+    if len(history.get("iter_rejected", [])) > 0:
+        ax.plot(iters, history["iter_rejected"], label="iter_rejected")
+    ax.set_xlabel("Schwarz iteration")
+    ax.set_ylabel("Control")
+    ax.set_title("Trust-region control")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+
     plt.tight_layout()
     plt.savefig(out_path, dpi=160)
     plt.close(fig)
@@ -451,6 +517,7 @@ def metric_l2(u_pred: np.ndarray, u_true: np.ndarray) -> Dict[str, float]:
 
 
 def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
+    run_start = time.time()
     device = resolve_device(args.device)
     dtype = resolve_dtype(args.dtype, device=device)
 
@@ -461,12 +528,32 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     elif args.tf32:
         print("TF32 requested but CUDA is unavailable; ignoring --tf32.")
 
-    use_amp = bool(args.amp and device.type == "cuda" and dtype == torch.float32)
+    # AMP support:
+    # - CUDA: autocast + GradScaler
+    # - MPS: autocast only (GradScaler is CUDA-specific)
+    mps_amp_supported = False
+    if device.type == "mps" and hasattr(torch, "autocast"):
+        try:
+            with torch.autocast(device_type="mps", dtype=torch.float16):
+                pass
+            mps_amp_supported = True
+        except Exception:
+            mps_amp_supported = False
+
+    use_cuda_amp = bool(args.amp and device.type == "cuda" and dtype == torch.float32)
+    use_mps_amp = bool(args.amp and device.type == "mps" and dtype == torch.float32 and mps_amp_supported)
+    use_amp = bool(use_cuda_amp or use_mps_amp)
     if args.amp and not use_amp:
-        print(
-            "AMP requested but unavailable for this device/dtype; "
-            "continuing without AMP."
-        )
+        if device.type == "mps":
+            print(
+                "AMP requested on MPS but unsupported by this PyTorch/MPS setup; "
+                "continuing without AMP."
+            )
+        else:
+            print(
+                "AMP requested but unavailable for this device/dtype; "
+                "continuing without AMP."
+            )
 
     use_cuda_stream_parallel = bool(
         args.parallel_color_updates and device.type == "cuda" and torch.cuda.device_count() > 0
@@ -477,10 +564,16 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             "falling back to sequential color sweeps."
         )
 
+    amp_backend = "cuda" if use_cuda_amp else ("mps" if use_mps_amp else "none")
     print(
-        f"Device={device.type} dtype={dtype} amp={use_amp} tf32={bool(args.tf32 and device.type == 'cuda')} "
-        f"parallel_color_updates={use_cuda_stream_parallel}"
+        f"Device={device.type} dtype={dtype} amp={use_amp} amp_backend={amp_backend} "
+        f"tf32={bool(args.tf32 and device.type == 'cuda')} parallel_color_updates={use_cuda_stream_parallel}"
     )
+    if device.type == "mps":
+        print(
+            "MPS backend selected. For unsupported ops fallback, run with "
+            "PYTORCH_ENABLE_MPS_FALLBACK=1 in your shell."
+        )
 
     atlas_np = np.load(args.atlas_data)
     points = torch.tensor(atlas_np["points"], device=device, dtype=dtype)
@@ -529,6 +622,121 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 overlap_idx_pairs[(i, j)] = shared
                 neighbors[i].append(j)
                 neighbors[j].append(i)
+
+    trainable_chart_mask: List[bool] = []
+    for i in range(n_charts):
+        has_points = point_idx_by_chart[i].numel() > 0
+        if args.chart_train_mode == "all":
+            trainable = has_points
+        else:
+            trainable = has_points and (len(neighbors[i]) >= args.overlap_min_neighbors)
+        trainable_chart_mask.append(bool(trainable))
+    n_trainable = int(sum(1 for x in trainable_chart_mask if x))
+    print(f"Chart train mode={args.chart_train_mode} trainable_charts={n_trainable}/{n_charts}")
+
+    # Curvature/detail proxy for adaptive sampling and chart refinement.
+    # This emphasizes high-normal-deviation + extremity regions (ears/paws-like zones).
+    primary_chart = torch.argmax(membership, dim=1)
+    normal_dev = torch.linalg.norm(normals - nvec[primary_chart], dim=1)
+    centroid = torch.mean(points, dim=0, keepdim=True)
+    extremity = torch.linalg.norm(points - centroid, dim=1)
+    overlap_count = torch.sum(membership.to(dtype=dtype), dim=1)
+
+    n_w = max(0.0, float(args.detail_normal_weight))
+    e_w = max(0.0, float(args.detail_extremity_weight))
+    o_w = max(0.0, float(args.detail_overlap_weight))
+    w_sum = max(1e-12, n_w + e_w + o_w)
+    detail_score = (
+        n_w * robust_unit_interval(normal_dev)
+        + e_w * robust_unit_interval(extremity)
+        + o_w * robust_unit_interval(overlap_count)
+    ) / w_sum
+    detail_score = torch.clamp(detail_score, min=0.0, max=1.0)
+
+    q_detail = float(np.clip(args.detail_quantile, 0.0, 1.0))
+    if q_detail <= 0.0:
+        detail_cut = torch.as_tensor(-1e9, device=device, dtype=dtype)
+    elif q_detail >= 1.0:
+        detail_cut = torch.max(detail_score.detach())
+    else:
+        detail_cut = torch.quantile(detail_score.detach().to(device=torch.device("cpu")), q_detail).to(
+            device=device, dtype=dtype
+        )
+    high_detail_mask = detail_score >= detail_cut
+    n_high_detail_points = int(torch.sum(high_detail_mask).item())
+
+    chart_detail_strength: List[float] = []
+    chart_high_detail_fraction: List[float] = []
+    detail_idx_by_chart: List[torch.Tensor] = []
+    chart_sampling_weights: List[torch.Tensor] = []
+    detail_sampling_weights: List[torch.Tensor] = []
+    for i in range(n_charts):
+        idx = point_idx_by_chart[i]
+        if idx.numel() == 0:
+            chart_detail_strength.append(0.0)
+            chart_high_detail_fraction.append(0.0)
+            detail_idx_by_chart.append(idx)
+            chart_sampling_weights.append(torch.zeros((0,), device=device, dtype=dtype))
+            detail_sampling_weights.append(torch.zeros((0,), device=device, dtype=dtype))
+            continue
+        s = detail_score[idx]
+        hi = high_detail_mask[idx]
+        chart_detail_strength.append(float(torch.mean(s).item()))
+        chart_high_detail_fraction.append(float(torch.mean(hi.to(dtype=dtype)).item()))
+
+        # Weighting for adaptive sampler.
+        if args.curvature_adaptive_sampling:
+            w_all = 1.0 + float(args.curvature_sample_weight) * s
+            w_all = w_all + float(args.curvature_sample_weight) * 0.5 * hi.to(dtype=dtype)
+        else:
+            w_all = torch.ones_like(s)
+        chart_sampling_weights.append(torch.clamp(w_all, min=1e-8))
+
+        didx = idx[hi]
+        detail_idx_by_chart.append(didx)
+        if didx.numel() > 0:
+            ds = detail_score[didx]
+            w_detail = 1.0 + float(args.curvature_sample_weight) * ds
+            detail_sampling_weights.append(torch.clamp(w_detail, min=1e-8))
+        else:
+            detail_sampling_weights.append(torch.zeros((0,), device=device, dtype=dtype))
+
+    detail_chart_mask: List[bool] = [False for _ in range(n_charts)]
+    detail_chart_topk = max(0, min(int(args.detail_chart_topk), int(n_charts)))
+    if args.curvature_adaptive_sampling and detail_chart_topk > 0:
+        detail_order = np.argsort(np.asarray(chart_detail_strength))[::-1]
+        picked = 0
+        for chart_i in detail_order:
+            i = int(chart_i)
+            if point_idx_by_chart[i].numel() == 0:
+                continue
+            detail_chart_mask[i] = True
+            picked += 1
+            if picked >= detail_chart_topk:
+                break
+
+    overlap_sampling_weights: Dict[Tuple[int, int], torch.Tensor] = {}
+    overlap_detail_strength: Dict[Tuple[int, int], float] = {}
+    for key, shared in overlap_idx_pairs.items():
+        if shared.numel() == 0:
+            overlap_detail_strength[key] = 0.0
+            overlap_sampling_weights[key] = torch.zeros((0,), device=device, dtype=dtype)
+            continue
+        s = detail_score[shared]
+        overlap_detail_strength[key] = float(torch.mean(s).item())
+        if args.curvature_adaptive_sampling:
+            hi = high_detail_mask[shared].to(dtype=dtype)
+            w_pair = 1.0 + float(args.curvature_sample_weight) * s + 0.5 * float(args.curvature_sample_weight) * hi
+        else:
+            w_pair = torch.ones_like(s)
+        overlap_sampling_weights[key] = torch.clamp(w_pair, min=1e-8)
+
+    if args.curvature_adaptive_sampling:
+        detail_charts = [i for i, flag in enumerate(detail_chart_mask) if flag]
+        print(
+            f"Curvature-adaptive sampling enabled | high-detail points={n_high_detail_points}/{n_points} "
+            f"(q={q_detail:.2f}) | detail charts={detail_charts}"
+        )
 
     def mask_interface_normals(i: int, j: int, x: torch.Tensor) -> torch.Tensor:
         x_var = x.clone().detach().requires_grad_(True)
@@ -588,8 +796,17 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         print(f"Loaded initial chart PINNs from: {args.init_u_checkpoint}")
 
     opts = [torch.optim.Adam(u.parameters(), lr=args.lr) for u in u_nets]
-    scalers = [torch.cuda.amp.GradScaler(enabled=use_amp) for _ in range(n_charts)]
-    amp_ctx = torch.cuda.amp.autocast if use_amp else contextlib.nullcontext
+    if use_cuda_amp:
+        scalers: List[Optional[torch.cuda.amp.GradScaler]] = [torch.cuda.amp.GradScaler(enabled=True) for _ in range(n_charts)]
+    else:
+        scalers = [None for _ in range(n_charts)]
+
+    def amp_ctx() -> contextlib.AbstractContextManager:
+        if use_cuda_amp:
+            return torch.cuda.amp.autocast()
+        if use_mps_amp:
+            return torch.autocast(device_type="mps", dtype=torch.float16)
+        return contextlib.nullcontext()
     stream_pool: List[torch.cuda.Stream] = []
     if use_cuda_stream_parallel:
         n_streams = max(1, min(args.stream_pool_size, args.max_parallel_charts))
@@ -603,13 +820,50 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "bc_loss": [],
         "rel_l2_eval": [],
         "w_interface_flux_eff": [],
+        "adaptive_flux_multiplier": [],
+        "lr": [],
+        "iter_rejected": [],
     }
 
-    def sample_local_xi(i: int, n_samples: int) -> torch.Tensor:
+    def sample_chart_point_indices(i: int, n_samples: int, prefer_detail: bool = True) -> Optional[torch.Tensor]:
         idx = point_idx_by_chart[i]
-        if idx.numel() == 0:
+        if idx.numel() == 0 or n_samples <= 0:
+            return None
+        n_take = int(n_samples)
+        if not args.curvature_adaptive_sampling:
+            sel = torch.randint(0, idx.numel(), (n_take,), device=device)
+            return idx[sel]
+
+        detail_ratio = float(np.clip(args.detail_region_ratio, 0.0, 1.0)) if prefer_detail else 0.0
+        detail_idx = detail_idx_by_chart[i]
+        picks: List[torch.Tensor] = []
+
+        n_detail = 0
+        if detail_idx.numel() > 0 and detail_ratio > 0.0:
+            n_detail = int(round(n_take * detail_ratio))
+            n_detail = max(0, min(n_take, n_detail))
+            if n_detail > 0:
+                sel_d = sample_indices_from_weights(detail_sampling_weights[i], n_detail)
+                picks.append(detail_idx[sel_d])
+
+        n_base = n_take - n_detail
+        if n_base > 0:
+            sel_b = sample_indices_from_weights(chart_sampling_weights[i], n_base)
+            picks.append(idx[sel_b])
+
+        if not picks:
+            sel = torch.randint(0, idx.numel(), (n_take,), device=device)
+            return idx[sel]
+        if len(picks) == 1:
+            return picks[0]
+        out = torch.cat(picks, dim=0)
+        perm = torch.randperm(out.numel(), device=device)
+        return out[perm]
+
+    def sample_local_xi(i: int, n_samples: int) -> torch.Tensor:
+        pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
+        if pick is None:
             return torch.zeros((n_samples, 3), device=device, dtype=dtype)
-        pick = idx[torch.randint(0, idx.numel(), (n_samples,), device=device)]
         x = points[pick]
         xi = local_coords(x, seeds[i], t1[i], t2[i], nvec[i])
         noise = args.xi_noise_scale * support_r[i] * torch.randn_like(xi)
@@ -619,11 +873,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         return xi
 
     def local_bc_batch(i: int, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        idx = point_idx_by_chart[i]
-        if idx.numel() == 0:
+        pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
+        if pick is None:
             z = torch.zeros((n_samples, 3), device=device, dtype=dtype)
             return z, torch.zeros((n_samples, 1), device=device, dtype=dtype), z
-        pick = idx[torch.randint(0, idx.numel(), (n_samples,), device=device)]
         x = points[pick]
         xi = local_coords(x, seeds[i], t1[i], t2[i], nvec[i])
         target = manufactured_u(x).detach()
@@ -639,7 +892,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         if shared is None or shared.numel() == 0:
             return None
         take = min(n_samples, int(shared.numel()))
-        sel = torch.randint(0, shared.numel(), (take,), device=device)
+        if args.curvature_adaptive_sampling and args.curvature_adaptive_interface_sampling:
+            sel = sample_indices_from_weights(overlap_sampling_weights[key], take)
+        else:
+            sel = torch.randint(0, shared.numel(), (take,), device=device)
         pick = shared[sel]
         x = points[pick]
         xi_i = local_coords(x, seeds[i], t1[i], t2[i], nvec[i])
@@ -865,7 +1121,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         for ep in range(1, args.bc_pretrain_epochs + 1):
             losses_ep = []
             for i in range(n_charts):
-                if point_idx_by_chart[i].numel() == 0:
+                if point_idx_by_chart[i].numel() == 0 or (not trainable_chart_mask[i]):
                     continue
                 u_nets[i].train()
                 opts[i].zero_grad()
@@ -903,7 +1159,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                         if iv_terms:
                             loss = loss + args.bc_pretrain_interface_weight * torch.mean(torch.stack(iv_terms))
 
-                if use_amp:
+                if use_cuda_amp:
+                    assert scalers[i] is not None
                     scalers[i].scale(loss).backward()
                     scalers[i].unscale_(opts[i])
                     torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
@@ -926,7 +1183,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         for ep in range(1, args.interior_pretrain_epochs + 1):
             losses_ep = []
             for i in range(n_charts):
-                if point_idx_by_chart[i].numel() == 0:
+                if point_idx_by_chart[i].numel() == 0 or (not trainable_chart_mask[i]):
                     continue
 
                 u_nets[i].train()
@@ -962,7 +1219,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                         grad_true_sup = manufactured_grad_u(x_sup).detach()
                         loss = loss + args.interior_pretrain_grad_weight * torch.mean((grad_pred_sup - grad_true_sup) ** 2)
 
-                if use_amp:
+                if use_cuda_amp:
+                    assert scalers[i] is not None
                     scalers[i].scale(loss).backward()
                     scalers[i].unscale_(opts[i])
                     torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
@@ -981,16 +1239,24 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 )
 
     def optimize_chart(i: int, w_pde_eff: float, w_if_flux_eff: float) -> None:
-        if point_idx_by_chart[i].numel() == 0:
+        if point_idx_by_chart[i].numel() == 0 or (not trainable_chart_mask[i]):
             return
         u_nets[i].train()
         old_state = copy_state_dict(u_nets[i].state_dict())
+        chart_is_detail = bool(detail_chart_mask[i]) if args.curvature_adaptive_sampling else False
+        step_boost = float(args.detail_chart_step_boost) if chart_is_detail else 1.0
+        batch_boost = float(args.detail_chart_batch_boost) if chart_is_detail else 1.0
+        local_steps_i = max(1, int(round(args.local_steps * max(1.0, step_boost))))
+        pde_batch_i = max(8, int(round(args.pde_batch * max(1.0, batch_boost))))
+        bc_batch_i = max(8, int(round(args.bc_batch * max(1.0, batch_boost))))
+        if_batch_i = max(8, int(round(args.if_batch * max(1.0, batch_boost))))
+        sup_batch_i = max(8, int(round(args.manufactured_supervision_batch * max(1.0, batch_boost))))
 
-        for _ in range(args.local_steps):
+        for _ in range(local_steps_i):
             opts[i].zero_grad()
 
             with amp_ctx():
-                xi_int = sample_local_xi(i, args.pde_batch)
+                xi_int = sample_local_xi(i, pde_batch_i)
                 res, _, valid = mapped_poisson_residual(
                     u_nets[i],
                     decoders[i],
@@ -1007,14 +1273,14 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 res_use = select_residual_samples(res, valid, with_clip=True)
                 loss_pde = pde_loss_fn(res_use)
 
-                xi_bc, u_bc, _ = local_bc_batch(i, args.bc_batch)
+                xi_bc, u_bc, _ = local_bc_batch(i, bc_batch_i)
                 u_hat_bc = u_nets[i](xi_bc)
                 loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
 
                 loss_sup = torch.tensor(0.0, device=device, dtype=dtype)
                 loss_sup_grad = torch.tensor(0.0, device=device, dtype=dtype)
                 if args.w_manufactured_supervision > 0.0 or args.w_manufactured_grad_supervision > 0.0:
-                    xi_sup = sample_local_xi(i, args.manufactured_supervision_batch)
+                    xi_sup = sample_local_xi(i, sup_batch_i)
                     x_sup = decoders[i](
                         xi_sup,
                         seed=seeds[i],
@@ -1046,13 +1312,18 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 iv_terms: List[torch.Tensor] = []
                 if_terms: List[torch.Tensor] = []
                 for j in neighbors[i]:
-                    ib = interface_batch(i, j, args.if_batch)
+                    ib = interface_batch(i, j, if_batch_i)
                     if ib is None:
                         continue
                     _, xi_i, xi_j, n_if = ib
                     liv, _, lif_train = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
-                    iv_terms.append(liv)
-                    if_terms.append(lif_train)
+                    pair_key = (i, j) if i < j else (j, i)
+                    pair_boost = 1.0
+                    if args.curvature_adaptive_sampling and args.interface_detail_boost > 1.0:
+                        d_pair = overlap_detail_strength.get(pair_key, 0.0)
+                        pair_boost = 1.0 + (float(args.interface_detail_boost) - 1.0) * float(d_pair)
+                    iv_terms.append(pair_boost * liv)
+                    if_terms.append(pair_boost * lif_train)
 
                 loss_iv = torch.mean(torch.stack(iv_terms)) if iv_terms else torch.tensor(0.0, device=device, dtype=dtype)
                 loss_if = torch.mean(torch.stack(if_terms)) if if_terms else torch.tensor(0.0, device=device, dtype=dtype)
@@ -1066,7 +1337,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     + args.w_manufactured_grad_supervision * loss_sup_grad
                 )
 
-            if use_amp:
+            if use_cuda_amp:
+                assert scalers[i] is not None
                 scalers[i].scale(loss).backward()
                 scalers[i].unscale_(opts[i])
                 torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
@@ -1097,21 +1369,23 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             for g in opt.param_groups:
                 g["lr"] = float(new_lr)
 
+    if args.w_interface_flux_start is None:
+        flux_w_start = float(args.w_interface_flux)
+    else:
+        flux_w_start = float(args.w_interface_flux_start)
+    if args.w_interface_flux_end is None:
+        flux_w_end = float(args.w_interface_flux)
+    else:
+        flux_w_end = float(args.w_interface_flux_end)
+    flux_w_min = min(flux_w_start, flux_w_end)
+    flux_w_max = max(flux_w_start, flux_w_end)
+    reject_lr_decay = min(1.0, max(1e-4, float(args.iter_reject_lr_decay)))
+
     def effective_flux_weight(it: int) -> float:
-        if args.w_interface_flux_start is None and args.w_interface_flux_end is None:
-            return float(args.w_interface_flux)
-        if args.w_interface_flux_start is None:
-            w_start = float(args.w_interface_flux)
-        else:
-            w_start = float(args.w_interface_flux_start)
-        if args.w_interface_flux_end is None:
-            w_end = float(args.w_interface_flux)
-        else:
-            w_end = float(args.w_interface_flux_end)
         if args.flux_ramp_iters <= 0:
-            return w_end
+            return flux_w_end
         alpha = min(1.0, float(it) / max(1.0, float(args.flux_ramp_iters)))
-        return w_start + (w_end - w_start) * alpha
+        return flux_w_start + (flux_w_end - flux_w_start) * alpha
 
     snapshots: Dict[str, Optional[Dict[str, object]]] = {
         "best_score": None,
@@ -1125,7 +1399,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     best_flux = float("inf")
     stale = 0
     guard_stale = 0
+    reject_count = 0
     guard_limit = float(args.guard_rel_l2 if args.guard_rel_l2 > 0.0 else args.target_rel_l2)
+    adaptive_flux_mult = 1.0
 
     def maybe_record_snapshot(
         name: str,
@@ -1149,15 +1425,23 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             "lr": current_lr(),
         }
 
-    start = time.time()
+    schwarz_start = time.time()
 
     for it in range(1, args.max_schwarz_iters + 1):
         warm = min(1.0, float(it) / max(1.0, float(args.pde_warmup_iters)))
         w_pde_eff = args.w_pde * warm
-        w_if_flux_eff = effective_flux_weight(it)
+        flux_base = effective_flux_weight(it)
+        if args.adaptive_flux_weight:
+            w_if_flux_eff = float(np.clip(flux_base * adaptive_flux_mult, flux_w_min, flux_w_max))
+        else:
+            w_if_flux_eff = flux_base
+
+        iter_state_before = snapshot_u_states()
+        iter_lr_before = current_lr()
+        iter_rejected = 0
 
         for group in color_groups:
-            active = [i for i in group if point_idx_by_chart[i].numel() > 0]
+            active = [i for i in group if point_idx_by_chart[i].numel() > 0 and trainable_chart_mask[i]]
             if not active:
                 continue
 
@@ -1177,12 +1461,36 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
 
         pde_m, bc_m, iv_m, if_m = eval_global_metrics()
         rel_l2_eval = eval_rel_l2_subset()
+        rel_l2_proposed = rel_l2_eval
+        if args.iter_accept_rel_l2 > 0.0 and rel_l2_proposed > args.iter_accept_rel_l2:
+            load_snapshot_u_states(iter_state_before)
+            new_lr = max(1e-7, iter_lr_before * reject_lr_decay)
+            set_lr(new_lr)
+            pde_m, bc_m, iv_m, if_m = eval_global_metrics()
+            rel_l2_eval = eval_rel_l2_subset()
+            iter_rejected = 1
+            reject_count += 1
+            print(
+                f"[TrustRegion] iter={it} rejected: rel_l2_eval={rel_l2_proposed:.3e} "
+                f"> {args.iter_accept_rel_l2:.3e}; restored state and lr={new_lr:.3e}"
+            )
+
+        if args.adaptive_flux_weight:
+            if rel_l2_eval <= args.adaptive_flux_rel_l2_thresh:
+                adaptive_flux_mult *= float(args.adaptive_flux_up)
+            else:
+                adaptive_flux_mult *= float(args.adaptive_flux_down)
+            adaptive_flux_mult = max(1e-6, adaptive_flux_mult)
+
         history["global_residual"].append(pde_m)
         history["bc_loss"].append(bc_m)
         history["interface_value"].append(iv_m)
         history["interface_flux"].append(if_m)
         history["rel_l2_eval"].append(rel_l2_eval)
         history["w_interface_flux_eff"].append(w_if_flux_eff)
+        history["adaptive_flux_multiplier"].append(float(adaptive_flux_mult))
+        history["lr"].append(current_lr())
+        history["iter_rejected"].append(float(iter_rejected))
 
         # Plateau tracking should reflect the effective training objective weights.
         score = w_pde_eff * pde_m + args.w_interface_value * iv_m + w_if_flux_eff * if_m
@@ -1208,12 +1516,13 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             maybe_record_snapshot("best_flux", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
 
         if it % max(1, args.log_every) == 0:
-            elapsed = time.time() - start
+            elapsed = time.time() - schwarz_start
             print(
                 f"[Schwarz] iter={it}/{args.max_schwarz_iters} "
                 f"pde={pde_m:.3e} bc={bc_m:.3e} if_val={iv_m:.3e} if_flux={if_m:.3e} "
                 f"rel_l2_eval={rel_l2_eval:.3e} w_if={w_if_flux_eff:.3e} "
-                f"score={score:.3e} stale={stale} t={elapsed:.1f}s"
+                f"score={score:.3e} stale={stale} rejected={iter_rejected} "
+                f"lr={current_lr():.3e} flux_mult={adaptive_flux_mult:.3e} t={elapsed:.1f}s"
             )
 
         pde_ok = (args.w_pde <= 0.0) or (pde_m <= args.residual_tol)
@@ -1255,6 +1564,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         history["interface_flux"].append(if_m)
         history["rel_l2_eval"].append(rel_l2_eval)
         history["w_interface_flux_eff"].append(w_if_flux_eff)
+        history["adaptive_flux_multiplier"].append(float(adaptive_flux_mult))
+        history["lr"].append(current_lr())
+        history["iter_rejected"].append(0.0)
         maybe_record_snapshot("best_score", 0, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
         maybe_record_snapshot("best_rel_l2", 0, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
         if rel_l2_eval <= args.target_rel_l2:
@@ -1365,12 +1677,27 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "device": str(device),
         "dtype": str(dtype).replace("torch.", ""),
         "amp_used": bool(use_amp),
+        "amp_backend": amp_backend,
         "tf32_used": bool(args.tf32 and device.type == "cuda"),
         "parallel_color_updates_used": bool(use_cuda_stream_parallel),
         "interface_transmission_mode": args.interface_transmission_mode,
         "robin_lambda": float(args.robin_lambda),
         "interface_flux_mode": args.interface_flux_mode,
         "interface_normal_mode": args.interface_normal_mode,
+        "curvature_adaptive_sampling": bool(args.curvature_adaptive_sampling),
+        "curvature_adaptive_interface_sampling": bool(args.curvature_adaptive_interface_sampling),
+        "detail_quantile": float(q_detail),
+        "n_high_detail_points": int(n_high_detail_points),
+        "high_detail_fraction": float(n_high_detail_points / max(1, n_points)),
+        "detail_chart_ids": [int(i) for i, flag in enumerate(detail_chart_mask) if flag],
+        "chart_detail_strength": [float(v) for v in chart_detail_strength],
+        "chart_high_detail_fraction": [float(v) for v in chart_high_detail_fraction],
+        "detail_chart_step_boost": float(args.detail_chart_step_boost),
+        "detail_chart_batch_boost": float(args.detail_chart_batch_boost),
+        "interface_detail_boost": float(args.interface_detail_boost),
+        "chart_train_mode": args.chart_train_mode,
+        "overlap_min_neighbors": int(args.overlap_min_neighbors),
+        "n_trainable_charts": int(n_trainable),
         "color_groups": [[int(x) for x in g] for g in color_groups],
         "n_charts": int(n_charts),
         "n_points": int(n_points),
@@ -1388,7 +1715,21 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "target_met": bool(global_stats["relative_l2_error"] <= args.target_rel_l2),
         "checkpoint_policy": args.checkpoint_policy,
         "selected_state": "last" if selected_label is None else selected_label,
-        "runtime_seconds": float(time.time() - start),
+        "runtime_seconds": float(time.time() - run_start),
+        "schwarz_runtime_seconds": float(time.time() - schwarz_start),
+        "trust_region": {
+            "iter_accept_rel_l2": float(args.iter_accept_rel_l2),
+            "iter_reject_lr_decay": float(reject_lr_decay),
+            "rejected_iterations": int(reject_count),
+        },
+        "adaptive_flux": {
+            "enabled": bool(args.adaptive_flux_weight),
+            "up": float(args.adaptive_flux_up),
+            "down": float(args.adaptive_flux_down),
+            "rel_l2_thresh": float(args.adaptive_flux_rel_l2_thresh),
+            "start": float(flux_w_start),
+            "end": float(flux_w_end),
+        },
     }
 
     def snap_summary(name: str) -> Optional[Dict[str, object]]:
@@ -1425,6 +1766,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         chart_id=chart_id.cpu().numpy().astype(np.int32),
         blend_weight=blend_weight.cpu().numpy().reshape(-1),
         interface_residual=interface_residual.cpu().numpy().reshape(-1),
+        detail_score=detail_score.cpu().numpy().reshape(-1),
+        high_detail_mask=high_detail_mask.cpu().numpy().astype(np.uint8).reshape(-1),
         chart_weights=weights.cpu().numpy(),
         chart_values=u_chart_t.cpu().numpy(),
     )
@@ -1534,12 +1877,29 @@ def parse_args() -> argparse.Namespace:
         choices=["auto", "float32", "float64"],
         help="Tensor dtype. 'auto' chooses float32 on GPU backends and float64 on CPU.",
     )
-    parser.add_argument("--amp", action="store_true", help="Enable CUDA automatic mixed precision.")
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="Enable mixed precision when supported (CUDA autocast+GradScaler, MPS autocast).",
+    )
     parser.add_argument("--tf32", action="store_true", help="Enable TF32 matmul/cudnn on CUDA.")
 
     parser.add_argument("--pinn-width", type=int, default=64)
     parser.add_argument("--pinn-depth", type=int, default=4)
     parser.add_argument("--lr", type=float, default=8e-4)
+    parser.add_argument(
+        "--chart-train-mode",
+        type=str,
+        default="all",
+        choices=["all", "overlap_only"],
+        help="Train all charts or only charts with sufficient overlap neighbors.",
+    )
+    parser.add_argument(
+        "--overlap-min-neighbors",
+        type=int,
+        default=1,
+        help="Minimum overlap-neighbor count for trainable charts in overlap_only mode.",
+    )
 
     parser.add_argument("--max-schwarz-iters", type=int, default=60)
     parser.add_argument("--local-steps", type=int, default=15)
@@ -1553,6 +1913,60 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.30,
         help="Relative Gaussian perturbation scale for interior chart sampling in xi coordinates.",
+    )
+    parser.add_argument(
+        "--curvature-adaptive-sampling",
+        action="store_true",
+        help="Enable curvature/extremity adaptive chart sampling and detail-chart refinement.",
+    )
+    parser.add_argument(
+        "--curvature-adaptive-interface-sampling",
+        action="store_true",
+        help="Use detail-weighted sampling on chart-overlap interfaces.",
+    )
+    parser.add_argument("--detail-quantile", type=float, default=0.82, help="High-detail threshold quantile in [0,1].")
+    parser.add_argument(
+        "--detail-region-ratio",
+        type=float,
+        default=0.55,
+        help="Target fraction of detail samples in adaptive chart batches.",
+    )
+    parser.add_argument(
+        "--curvature-sample-weight",
+        type=float,
+        default=3.0,
+        help="Weight multiplier applied to detail score for adaptive sampling.",
+    )
+    parser.add_argument(
+        "--detail-normal-weight",
+        type=float,
+        default=0.75,
+        help="Detail-score weight for normal-deviation proxy.",
+    )
+    parser.add_argument(
+        "--detail-extremity-weight",
+        type=float,
+        default=0.20,
+        help="Detail-score weight for extremity-distance proxy.",
+    )
+    parser.add_argument(
+        "--detail-overlap-weight",
+        type=float,
+        default=0.05,
+        help="Detail-score weight for overlap-count proxy.",
+    )
+    parser.add_argument("--detail-chart-topk", type=int, default=4, help="Number of highest-detail charts to refine.")
+    parser.add_argument(
+        "--detail-chart-step-boost",
+        type=float,
+        default=1.6,
+        help="Local-steps multiplier for selected high-detail charts.",
+    )
+    parser.add_argument(
+        "--detail-chart-batch-boost",
+        type=float,
+        default=1.35,
+        help="Batch-size multiplier for selected high-detail charts.",
     )
 
     parser.add_argument("--eval-pde-samples-per-chart", type=int, default=96)
@@ -1632,6 +2046,12 @@ def parse_args() -> argparse.Namespace:
         default=2048,
         help="Batch size for precomputing mask-levelset interface normals.",
     )
+    parser.add_argument(
+        "--interface-detail-boost",
+        type=float,
+        default=1.0,
+        help="Multiplicative boost (>=1) for interface terms on high-detail overlap pairs.",
+    )
 
     parser.add_argument("--interior-pretrain-epochs", type=int, default=0)
     parser.add_argument("--interior-pretrain-batch", type=int, default=256)
@@ -1645,6 +2065,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--w-interface-flux-start", type=float, default=None)
     parser.add_argument("--w-interface-flux-end", type=float, default=None)
     parser.add_argument("--flux-ramp-iters", type=int, default=0)
+    parser.add_argument("--adaptive-flux-weight", action="store_true")
+    parser.add_argument("--adaptive-flux-up", type=float, default=1.05)
+    parser.add_argument("--adaptive-flux-down", type=float, default=0.8)
+    parser.add_argument("--adaptive-flux-rel-l2-thresh", type=float, default=0.145)
 
     parser.add_argument("--residual-tol", type=float, default=2e-3)
     parser.add_argument("--interface-tol", type=float, default=8e-3)
@@ -1654,6 +2078,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-rel-l2", type=float, default=1.5e-1)
     parser.add_argument("--guard-rel-l2", type=float, default=0.0, help="L2 guard threshold (<=0 uses target-rel-l2).")
     parser.add_argument("--guard-patience", type=int, default=0, help="Rollback after this many consecutive guard violations.")
+    parser.add_argument(
+        "--iter-accept-rel-l2",
+        type=float,
+        default=0.155,
+        help="Reject Schwarz iteration if eval rel-L2 exceeds this value; <=0 disables rejection.",
+    )
+    parser.add_argument(
+        "--iter-reject-lr-decay",
+        type=float,
+        default=0.7,
+        help="Learning-rate multiplier after trust-region rejection.",
+    )
     parser.add_argument(
         "--checkpoint-policy",
         type=str,

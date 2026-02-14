@@ -1,0 +1,131 @@
+# Canonical config for inverse steady Elder-like rabbit atlas benchmark.
+# Simple key:value format parsed by parse_simple_yaml.
+
+atlas-data: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_schwarz_20260213_005232/rabbit_atlas_data.npz
+atlas-checkpoint: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_schwarz_20260213_005232/rabbit_atlas_trained.pt
+atlas-meta: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_schwarz_20260213_005232/rabbit_atlas_meta.json
+output-dir: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main
+run-tag: milestone1
+
+seed: 42
+device: auto
+dtype: auto
+amp: true
+
+pinn-width: 96
+pinn-depth: 5
+
+teacher-iters: 40
+teacher-lr: 8e-4
+teacher-local-steps: 1
+teacher-omega: 0.9
+teacher-pde-batch: 160
+teacher-bc-batch: 128
+teacher-if-batch: 128
+teacher-log-every: 5
+
+max-schwarz-iters: 120
+local-steps: 2
+omega: 0.9
+lr: 1.5e-4
+lr-perm: 1.2e-4
+
+pde-batch: 192
+bc-batch: 160
+if-batch: 160
+xi-noise-scale: 0.08
+
+Ra: 6.0
+Dm: 0.02
+
+w-flow: 1.0
+w-trans: 1.0
+w-bc: 2.0
+w-if-val: 1.0
+w-if-flux-teacher: 0.8
+w-if-flux-start: 8.0
+w-if-flux-end: 80.0
+flux-ramp-iters: 20
+adaptive-flux-weight: true
+adaptive-flux-up: 1.02
+adaptive-flux-down: 0.85
+adaptive-flux-field-thresh: 0.14
+
+w-data: 8.0
+w-data-p: 1.0
+w-data-c: 1.0
+w-data-u: 0.0
+
+w-reg: 0.5
+w-reg-k0: 1.0
+w-reg-aniso: 1e-3
+w-reg-quat: 1e-3
+k0-prior: 1.0
+
+interface-transmission-mode: robin
+robin-lambda: 12.0
+interface-normal-mode: mask_levelset
+interface-normal-blend: 0.15
+interface-detail-boost: 1.6
+
+inlet-z-quantile: 0.90
+top-z-quantile: 0.78
+inlet-phi-center-deg: 45.0
+inlet-phi-halfwidth-deg: 40.0
+gauge-z-quantile: 0.08
+gauge-phi-center-deg: -120.0
+gauge-phi-halfwidth-deg: 18.0
+
+curvature-adaptive-sampling: true
+curvature-adaptive-interface-sampling: true
+detail-quantile: 0.82
+detail-region-ratio: 0.55
+curvature-sample-weight: 3.0
+detail-normal-weight: 0.75
+detail-extremity-weight: 0.20
+detail-overlap-weight: 0.05
+detail-chart-topk: 4
+detail-chart-step-boost: 1.6
+detail-chart-batch-boost: 1.35
+
+n-obs-per-chart: 256
+
+k0-true: 1.00
+k0-init: 0.97
+k0-min: 1e-4
+lam1-true: 1.80
+lam2-true: 1.00
+lam3-true: 0.5556
+a1-init: 0.554
+a2-init: 0.02956
+true-euler-x-deg: 22.0
+true-euler-y-deg: -17.0
+true-euler-z-deg: 31.0
+init-euler-x-deg: 20.0
+init-euler-y-deg: -16.0
+init-euler-z-deg: 29.0
+
+acc-k0-rel: 0.05
+acc-eig-rel: 0.10
+acc-axis-deg: 12.0
+target-field-rel: 0.15
+
+eval-fixed-cache: true
+eval-cache-seed: 1234
+eval-cache-per-chart: 128
+eval-cache-per-overlap: 96
+eval-bc-samples-per-chart: 64
+eval-pde-samples-per-chart: 96
+eval-if-samples: 64
+
+iter-accept-field-rel: 0.155
+iter-reject-lr-decay: 0.8
+guard-field-rel: 0.151
+guard-patience: 4
+guard-lr-decay: 0.5
+
+plateau-patience: 16
+plateau-tol: 5e-5
+checkpoint-policy: best_target
+warm-start-teacher: true
+log-every: 1
