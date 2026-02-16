@@ -13,6 +13,7 @@ import json
 import math
 import os
 import random
+import sys
 import struct
 import tarfile
 import tempfile
@@ -25,6 +26,11 @@ import torch
 
 
 torch.set_default_dtype(torch.float64)
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 
 def set_seed(seed: int) -> None:
@@ -437,7 +443,10 @@ def main() -> None:
             raise RuntimeError(
                 "No point cloud available. Provide --points-file or enable fallback with --allow-procedural-fallback."
             )
-        from train_sdf_rabbit import generate_procedural_rabbit  # local fallback for smoke/prototyping
+        try:
+            from src.train_sdf_rabbit import generate_procedural_rabbit  # release layout
+        except ModuleNotFoundError:
+            from train_sdf_rabbit import generate_procedural_rabbit  # legacy fallback
 
         points, normals = generate_procedural_rabbit(args.n_surface_max)
         source = "procedural_fallback"

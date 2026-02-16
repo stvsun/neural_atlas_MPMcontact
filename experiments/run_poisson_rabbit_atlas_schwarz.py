@@ -90,7 +90,12 @@ def normalize_rows_tensor(x: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
 def robust_unit_interval(values: torch.Tensor, q_lo: float = 0.05, q_hi: float = 0.95) -> torch.Tensor:
     if values.numel() == 0:
         return torch.zeros_like(values)
-    v_cpu = values.detach().to(device=torch.device("cpu"), dtype=torch.float64).reshape(-1)
+    # MPS does not support float64 tensors; move to CPU first, then cast if needed.
+    v_cpu = values.detach().to(device=torch.device("cpu")).reshape(-1)
+    if not torch.is_floating_point(v_cpu):
+        v_cpu = v_cpu.to(dtype=torch.float32)
+    elif v_cpu.dtype in (torch.float16, torch.bfloat16):
+        v_cpu = v_cpu.to(dtype=torch.float32)
     if not torch.isfinite(v_cpu).all():
         v_cpu = torch.nan_to_num(v_cpu, nan=0.0, posinf=0.0, neginf=0.0)
     lo = float(torch.quantile(v_cpu, max(0.0, min(1.0, q_lo))).item())
@@ -108,14 +113,28 @@ def sample_indices_from_weights(weights: torch.Tensor, n_take: int) -> torch.Ten
     if n_take <= 0:
         return torch.zeros((0,), device=weights.device, dtype=torch.int64)
     replace = n_take > n
+
+    # On MPS, keep this entire path on CPU to avoid sporadic Metal backend index errors.
+    if weights.device.type == "mps":
+        w_cpu = weights.detach().to(device=torch.device("cpu"))
+        if not torch.is_floating_point(w_cpu):
+            w_cpu = w_cpu.to(dtype=torch.float32)
+        elif w_cpu.dtype in (torch.float16, torch.bfloat16):
+            w_cpu = w_cpu.to(dtype=torch.float32)
+        w_cpu = torch.nan_to_num(torch.clamp(w_cpu, min=1e-12), nan=0.0, posinf=0.0, neginf=0.0)
+        w_sum = float(torch.sum(w_cpu).item())
+        if (not np.isfinite(w_sum)) or w_sum <= 0.0:
+            sel = torch.randint(0, n, (n_take,), device=torch.device("cpu"))
+            return sel.to(device=weights.device, dtype=torch.int64)
+        w_cpu = w_cpu / w_sum
+        sel = torch.multinomial(w_cpu, n_take, replacement=replace)
+        return sel.to(device=weights.device, dtype=torch.int64)
+
     w = torch.clamp(weights, min=1e-12)
     w_sum = torch.sum(w)
-    if (not torch.isfinite(w_sum)) or float(w_sum.item()) <= 0.0:
+    if (not bool(torch.isfinite(w_sum).item())) or float(w_sum.item()) <= 0.0:
         return torch.randint(0, n, (n_take,), device=weights.device)
     w = w / w_sum
-    if weights.device.type == "mps":
-        sel = torch.multinomial(w.detach().cpu(), n_take, replacement=replace)
-        return sel.to(device=weights.device, dtype=torch.int64)
     return torch.multinomial(w, n_take, replacement=replace)
 
 
@@ -144,7 +163,7 @@ class ChartDecoder(torch.nn.Module):
     def __init__(self, width: int = 64, depth: int = 4):
         super().__init__()
         self.net = MLP(in_dim=3, out_dim=3, width=width, depth=depth)
-        self.raw_scale = torch.nn.Parameter(torch.tensor(-1.8, dtype=torch.float64))
+        self.raw_scale = torch.nn.Parameter(torch.tensor(-1.8, dtype=torch.get_default_dtype()))
 
     def forward(
         self,
@@ -178,12 +197,35 @@ class MaskNet(torch.nn.Module):
 
 
 class LocalPoissonPINN(torch.nn.Module):
-    def __init__(self, width: int = 64, depth: int = 4):
+    def __init__(
+        self,
+        width: int = 64,
+        depth: int = 4,
+        arch: str = "mlp",
+        residual_scale: float = 0.1,
+        residual_zero_init: bool = True,
+    ):
         super().__init__()
+        arch = str(arch).lower().strip()
+        if arch not in {"mlp", "resnet"}:
+            raise ValueError(f"Unsupported LocalPoissonPINN arch: {arch}")
+        self.arch = arch
+        self.residual_scale = float(residual_scale)
         self.net = MLP(in_dim=3, out_dim=1, width=width, depth=depth)
+        if self.arch == "resnet":
+            self.res_net = MLP(in_dim=3, out_dim=1, width=width, depth=depth)
+            if residual_zero_init:
+                # Start from the base branch when warm-starting from an MLP checkpoint.
+                torch.nn.init.zeros_(self.res_net.out.weight)
+                torch.nn.init.zeros_(self.res_net.out.bias)
+        else:
+            self.res_net = None
 
     def forward(self, xi: torch.Tensor) -> torch.Tensor:
-        return self.net(xi)
+        out = self.net(xi)
+        if self.res_net is not None:
+            out = out + self.residual_scale * self.res_net(xi)
+        return out
 
 
 def local_coords(
@@ -257,6 +299,69 @@ def stabilized_jacobian_ops(
     sigma_floor: float,
     det_floor: float,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    # MPS currently has unstable behavior for linalg.svd/linalg.inv in this workflow.
+    # Use an adjugate-based 3x3 inverse branch on MPS to avoid those kernels.
+    if jac.device.type == "mps":
+        eye = torch.eye(3, device=jac.device, dtype=jac.dtype).unsqueeze(0).expand(jac.shape[0], 3, 3)
+        jac_reg = jac + float(sigma_floor) * eye
+
+        a = jac_reg[:, 0, 0]
+        b = jac_reg[:, 0, 1]
+        c = jac_reg[:, 0, 2]
+        d = jac_reg[:, 1, 0]
+        e = jac_reg[:, 1, 1]
+        f = jac_reg[:, 1, 2]
+        g = jac_reg[:, 2, 0]
+        h = jac_reg[:, 2, 1]
+        i = jac_reg[:, 2, 2]
+
+        c11 = e * i - f * h
+        c12 = c * h - b * i
+        c13 = b * f - c * e
+        c21 = f * g - d * i
+        c22 = a * i - c * g
+        c23 = c * d - a * f
+        c31 = d * h - e * g
+        c32 = b * g - a * h
+        c33 = a * e - b * d
+
+        det_reg = a * c11 + b * c21 + c * c31
+        det_reg_safe = torch.where(
+            det_reg >= 0.0,
+            torch.clamp(det_reg, min=det_floor),
+            torch.clamp(det_reg, max=-det_floor),
+        )
+        adj = torch.stack(
+            [
+                torch.stack([c11, c12, c13], dim=1),
+                torch.stack([c21, c22, c23], dim=1),
+                torch.stack([c31, c32, c33], dim=1),
+            ],
+            dim=1,
+        )
+        inv_j = adj / det_reg_safe.unsqueeze(-1).unsqueeze(-1)
+
+        # Avoid torch.det on MPS (unstable in some builds) with explicit 3x3 determinant.
+        qa = jac[:, 0, 0]
+        qb = jac[:, 0, 1]
+        qc = jac[:, 0, 2]
+        qd = jac[:, 1, 0]
+        qe = jac[:, 1, 1]
+        qf = jac[:, 1, 2]
+        qg = jac[:, 2, 0]
+        qh = jac[:, 2, 1]
+        qi = jac[:, 2, 2]
+        det_raw = qa * (qe * qi - qf * qh) - qb * (qd * qi - qf * qg) + qc * (qd * qh - qe * qg)
+        raw_det_abs = torch.abs(det_raw)
+        det_abs = torch.clamp(raw_det_abs, min=det_floor)
+        # Condition surrogate: ||J||_F * ||J^{-1}||_F
+        n_j = torch.sqrt(torch.clamp(torch.sum(jac_reg * jac_reg, dim=(1, 2)), min=1e-18))
+        n_inv = torch.sqrt(torch.clamp(torch.sum(inv_j * inv_j, dim=(1, 2)), min=1e-18))
+        kappa = n_j * n_inv
+        valid = raw_det_abs > det_floor
+        valid = valid & torch.isfinite(kappa) & torch.isfinite(det_abs) & torch.isfinite(det_reg_safe)
+        return inv_j, det_abs, kappa, valid
+
     u, s, vh = torch.linalg.svd(jac)
     s_safe = torch.clamp(s, min=sigma_floor)
     inv_s = torch.diag_embed(1.0 / s_safe)
@@ -367,6 +472,45 @@ def copy_state_dict(state: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
     return {k: v.detach().clone() for k, v in state.items()}
 
 
+def load_chart_id_set(path: Optional[str], n_charts: int, key: str = "chart_ids") -> Optional[set]:
+    if path is None or (not os.path.isfile(path)):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    vals: List[int] = []
+    if isinstance(payload, list):
+        vals = [int(x) for x in payload]
+    elif isinstance(payload, dict):
+        if isinstance(payload.get(key), list):
+            vals = [int(x) for x in payload.get(key, [])]
+        elif isinstance(payload.get("chart_ids"), list):
+            vals = [int(x) for x in payload.get("chart_ids", [])]
+        elif isinstance(payload.get("ids"), list):
+            vals = [int(x) for x in payload.get("ids", [])]
+        elif isinstance(payload.get("trainable_charts"), list):
+            vals = [int(x) for x in payload.get("trainable_charts", [])]
+        elif isinstance(payload.get("freeze_charts"), list):
+            vals = [int(x) for x in payload.get("freeze_charts", [])]
+    out = {i for i in vals if 0 <= i < n_charts}
+    return out
+
+
+def load_new_parent_map(path: Optional[str], n_charts: int) -> Optional[List[int]]:
+    if path is None or (not os.path.isfile(path)):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        return None
+    arr = payload.get("new_parent")
+    if not isinstance(arr, list):
+        return None
+    out = [int(x) for x in arr]
+    if len(out) != n_charts:
+        return None
+    return out
+
+
 def blend_model_with_old(model: torch.nn.Module, old_state: Dict[str, torch.Tensor], omega: float) -> None:
     new_state = model.state_dict()
     blended = {}
@@ -374,6 +518,20 @@ def blend_model_with_old(model: torch.nn.Module, old_state: Dict[str, torch.Tens
         old_v = old_state[k]
         blended[k] = (1.0 - omega) * old_v + omega * v
     model.load_state_dict(blended)
+
+
+def average_state_dicts(states_list: Sequence[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    if len(states_list) == 0:
+        return {}
+    out: Dict[str, torch.Tensor] = {}
+    keys = list(states_list[0].keys())
+    inv_n = 1.0 / float(len(states_list))
+    for k in keys:
+        acc = states_list[0][k].detach().clone()
+        for s in states_list[1:]:
+            acc = acc + s[k]
+        out[k] = acc * inv_n
+    return out
 
 
 def choose_color_groups(meta_json: Optional[str], n_charts: int, membership_np: np.ndarray) -> List[List[int]]:
@@ -478,7 +636,8 @@ def load_atlas_models(
     device: torch.device,
     dtype: torch.dtype,
 ) -> Tuple[List[ChartDecoder], List[MaskNet], Dict[str, object]]:
-    ckpt = torch.load(atlas_checkpoint, map_location=device)
+    # Always deserialize on CPU first so float64 checkpoints can be loaded on MPS.
+    ckpt = torch.load(atlas_checkpoint, map_location=torch.device("cpu"))
 
     dec_kw = ckpt.get("decoder_kwargs", {"width": 64, "depth": 4})
     mask_kw = ckpt.get("mask_kwargs", {"width": 48, "depth": 3})
@@ -520,6 +679,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     run_start = time.time()
     device = resolve_device(args.device)
     dtype = resolve_dtype(args.dtype, device=device)
+    if dtype in (torch.float32, torch.float64):
+        torch.set_default_dtype(dtype)
 
     if args.tf32 and device.type == "cuda":
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -554,6 +715,18 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 "AMP requested but unavailable for this device/dtype; "
                 "continuing without AMP."
             )
+
+    if device.type == "mps" and (
+        bool(args.curvature_adaptive_sampling) or bool(args.curvature_adaptive_interface_sampling)
+    ):
+        print(
+            "Disabling curvature-adaptive sampling on MPS due backend instability in weighted sampling/index ops."
+        )
+        args.curvature_adaptive_sampling = False
+        args.curvature_adaptive_interface_sampling = False
+    if device.type == "mps" and args.interface_normal_mode == "mask_levelset":
+        print("Switching interface normal mode to 'seed' on MPS for stability/speed.")
+        args.interface_normal_mode = "seed"
 
     use_cuda_stream_parallel = bool(
         args.parallel_color_updates and device.type == "cuda" and torch.cuda.device_count() > 0
@@ -623,16 +796,32 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 neighbors[i].append(j)
                 neighbors[j].append(i)
 
+    trainable_include = load_chart_id_set(args.trainable_charts_json, n_charts=n_charts, key="trainable_charts")
+    freeze_set = load_chart_id_set(args.freeze_charts_json, n_charts=n_charts, key="freeze_charts")
     trainable_chart_mask: List[bool] = []
     for i in range(n_charts):
         has_points = point_idx_by_chart[i].numel() > 0
-        if args.chart_train_mode == "all":
+        if trainable_include is not None:
+            trainable = has_points and (i in trainable_include)
+        elif args.chart_train_mode == "all":
             trainable = has_points
         else:
             trainable = has_points and (len(neighbors[i]) >= args.overlap_min_neighbors)
+        if freeze_set is not None and i in freeze_set:
+            trainable = False
         trainable_chart_mask.append(bool(trainable))
     n_trainable = int(sum(1 for x in trainable_chart_mask if x))
     print(f"Chart train mode={args.chart_train_mode} trainable_charts={n_trainable}/{n_charts}")
+    if trainable_include is not None:
+        print(f"  explicit trainable chart list size={len(trainable_include)}")
+    if freeze_set is not None:
+        print(f"  explicit frozen chart list size={len(freeze_set)}")
+    if n_trainable <= 0:
+        raise RuntimeError(
+            "No trainable charts after applying chart train/freeze masks. "
+            "Check --trainable-charts-json/--freeze-charts-json contents; "
+            "supported keys include chart_ids, ids, trainable_charts, freeze_charts."
+        )
 
     # Curvature/detail proxy for adaptive sampling and chart refinement.
     # This emphasizes high-normal-deviation + extremity regions (ears/paws-like zones).
@@ -780,19 +969,49 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 overlap_normals[(i, j)] = torch.cat(n_parts, dim=0)
 
     u_nets = [
-        LocalPoissonPINN(width=args.pinn_width, depth=args.pinn_depth).to(device=device, dtype=dtype)
+        LocalPoissonPINN(
+            width=args.pinn_width,
+            depth=args.pinn_depth,
+            arch=args.pinn_arch,
+            residual_scale=args.pinn_residual_scale,
+            residual_zero_init=bool(args.pinn_residual_zero_init),
+        ).to(device=device, dtype=dtype)
         for _ in range(n_charts)
     ]
     if args.init_u_checkpoint is not None:
-        init_ckpt = torch.load(args.init_u_checkpoint, map_location=device)
+        # Keep checkpoint deserialization on CPU to avoid MPS float64 load failures.
+        init_ckpt = torch.load(args.init_u_checkpoint, map_location=torch.device("cpu"))
         init_states = init_ckpt.get("u_states")
-        if not isinstance(init_states, list) or len(init_states) != n_charts:
+        init_u_kwargs = init_ckpt.get("u_kwargs", {})
+        if isinstance(init_u_kwargs, dict):
+            init_arch = str(init_u_kwargs.get("arch", "mlp")).lower().strip()
+            if init_arch != str(args.pinn_arch).lower().strip():
+                print(
+                    "Init checkpoint u-arch differs from requested architecture; "
+                    f"loading with strict=False (init={init_arch}, requested={args.pinn_arch})."
+                )
+        if not isinstance(init_states, list):
             raise RuntimeError(
                 f"Invalid u_states in init checkpoint: {args.init_u_checkpoint}. "
-                f"Expected {n_charts} chart states."
+                "Expected list of chart states."
             )
-        for i in range(n_charts):
-            u_nets[i].load_state_dict(init_states[i])
+        if len(init_states) == n_charts:
+            for i in range(n_charts):
+                u_nets[i].load_state_dict(init_states[i], strict=False)
+        else:
+            new_parent = load_new_parent_map(args.u_remap_json, n_charts=n_charts)
+            if new_parent is None:
+                raise RuntimeError(
+                    f"Init checkpoint chart-count mismatch: got {len(init_states)} states, expected {n_charts}. "
+                    "Provide --u-remap-json with new_parent mapping for split-child warmstart."
+                )
+            copied = 0
+            for i in range(n_charts):
+                src = int(new_parent[i])
+                if 0 <= src < len(init_states):
+                    u_nets[i].load_state_dict(init_states[src], strict=False)
+                    copied += 1
+            print(f"Loaded remapped initial chart PINNs: copied {copied}/{n_charts} from {len(init_states)} source states")
         print(f"Loaded initial chart PINNs from: {args.init_u_checkpoint}")
 
     opts = [torch.optim.Adam(u.parameters(), lr=args.lr) for u in u_nets]
@@ -823,6 +1042,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "adaptive_flux_multiplier": [],
         "lr": [],
         "iter_rejected": [],
+        "accepted_progress_iter": [],
     }
 
     def sample_chart_point_indices(i: int, n_samples: int, prefer_detail: bool = True) -> Optional[torch.Tensor]:
@@ -830,6 +1050,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         if idx.numel() == 0 or n_samples <= 0:
             return None
         n_take = int(n_samples)
+        if device.type == "mps":
+            # MPS-safe path: avoid weighted sampling/index kernels that can fail nondeterministically.
+            sel = torch.randint(0, idx.numel(), (n_take,), device=device)
+            return idx[sel]
         if not args.curvature_adaptive_sampling:
             sel = torch.randint(0, idx.numel(), (n_take,), device=device)
             return idx[sel]
@@ -964,6 +1188,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         if torch.any(valid):
             res = residual[valid]
         else:
+            if args.skip_pde_if_no_valid:
+                # Keep shape non-empty and differentiable while effectively disabling PDE term for this batch.
+                return residual[:1] * 0.0
             res = residual
         if with_clip and args.pde_clip_quantile < 1.0 and res.numel() >= 8:
             q = float(torch.quantile(torch.abs(res.detach()).reshape(-1), args.pde_clip_quantile).item())
@@ -1086,7 +1313,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     det_floor=args.det_floor,
                     jac_kappa_max=args.jac_kappa_max,
                 )
-                res_eval = select_residual_samples(res, valid, with_clip=False)
+                res_eval = select_residual_samples(res, valid, with_clip=True)
                 pde_terms.append(torch.mean(res_eval**2))
 
                 if args.eval_fixed_cache and i in eval_cache_bc:
@@ -1115,6 +1342,96 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             iv = float(torch.mean(torch.stack(iv_terms)).item()) if iv_terms else 0.0
             iflux = float(torch.mean(torch.stack(if_terms)).item()) if if_terms else 0.0
         return pde, bc, iv, iflux
+
+    def pre_snapshot_u_states() -> List[Dict[str, torch.Tensor]]:
+        return [copy_state_dict(u.state_dict()) for u in u_nets]
+
+    def pre_load_snapshot_u_states(states: List[Dict[str, torch.Tensor]]) -> None:
+        for i in range(n_charts):
+            u_nets[i].load_state_dict(states[i])
+
+    def pre_current_lr() -> float:
+        if not opts or not opts[0].param_groups:
+            return 0.0
+        return float(opts[0].param_groups[0]["lr"])
+
+    def pre_set_lr(new_lr: float) -> None:
+        for opt in opts:
+            for g in opt.param_groups:
+                g["lr"] = float(new_lr)
+
+    swa_candidates: List[Dict[str, object]] = []
+
+    def maybe_add_swa_candidate(rel_l2_eval: float, label: str, states: Optional[List[Dict[str, torch.Tensor]]] = None) -> None:
+        topk = max(0, int(args.swa_topk))
+        if topk <= 0:
+            return
+        use_states = states if states is not None else pre_snapshot_u_states()
+        swa_candidates.append(
+            {
+                "rel_l2_eval": float(rel_l2_eval),
+                "label": str(label),
+                "u_states": use_states,
+            }
+        )
+        swa_candidates.sort(key=lambda x: float(x["rel_l2_eval"]))
+        if len(swa_candidates) > topk:
+            del swa_candidates[topk:]
+
+    pretrain_guard_events: List[Dict[str, object]] = []
+
+    def run_pretrain_guard(stage: str, ep: int) -> None:
+        if not bool(args.pretrain_guard_enable):
+            return
+        eval_every = max(1, int(args.pretrain_guard_eval_every))
+        if (ep % eval_every) != 0 and ep != 1:
+            return
+        nonlocal pretrain_best_rel_l2, pretrain_best_states, pretrain_guard_bad_count
+        rel_eval = eval_rel_l2_subset()
+        maybe_add_swa_candidate(rel_eval, label=f"{stage}_ep{ep}")
+        if rel_eval + 1e-14 < pretrain_best_rel_l2:
+            pretrain_best_rel_l2 = rel_eval
+            pretrain_best_states = pre_snapshot_u_states()
+            pretrain_guard_bad_count = 0
+            pretrain_guard_events.append(
+                {
+                    "stage": stage,
+                    "epoch": int(ep),
+                    "action": "best_update",
+                    "rel_l2_eval": float(rel_eval),
+                    "lr": float(pre_current_lr()),
+                }
+            )
+            return
+        if rel_eval > pretrain_best_rel_l2 + float(args.pretrain_guard_rel_l2_margin):
+            pretrain_guard_bad_count += 1
+        else:
+            pretrain_guard_bad_count = 0
+
+        if pretrain_guard_bad_count >= max(1, int(args.pretrain_guard_patience)):
+            if pretrain_best_states is not None:
+                pre_load_snapshot_u_states(pretrain_best_states)
+            new_lr = max(float(args.pretrain_guard_min_lr), pre_current_lr() * float(args.pretrain_guard_lr_decay))
+            pre_set_lr(new_lr)
+            pretrain_guard_events.append(
+                {
+                    "stage": stage,
+                    "epoch": int(ep),
+                    "action": "restore_and_decay",
+                    "rel_l2_eval": float(rel_eval),
+                    "best_rel_l2": float(pretrain_best_rel_l2),
+                    "lr": float(new_lr),
+                }
+            )
+            print(
+                f"[PretrainGuard] stage={stage} epoch={ep} restore best_rel_l2={pretrain_best_rel_l2:.3e}; "
+                f"rel_l2_eval={rel_eval:.3e} lr={new_lr:.3e}"
+            )
+            pretrain_guard_bad_count = 0
+
+    pretrain_best_rel_l2 = float("inf")
+    pretrain_best_states: Optional[List[Dict[str, torch.Tensor]]] = None
+    pretrain_guard_bad_count = 0
 
     if args.bc_pretrain_epochs > 0:
         print(f"Starting BC warm-start pretraining for {args.bc_pretrain_epochs} epochs")
@@ -1163,12 +1480,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     assert scalers[i] is not None
                     scalers[i].scale(loss).backward()
                     scalers[i].unscale_(opts[i])
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
+                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                     scalers[i].step(opts[i])
                     scalers[i].update()
                 else:
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
+                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                     opts[i].step()
                 losses_ep.append(float(loss.item()))
 
@@ -1177,6 +1494,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     f"[Pretrain] epoch={ep}/{args.bc_pretrain_epochs} "
                     f"loss={np.mean(losses_ep):.3e}"
                 )
+            run_pretrain_guard("bc", ep)
 
     if args.interior_pretrain_epochs > 0:
         print(f"Starting interior supervised pretraining for {args.interior_pretrain_epochs} epochs")
@@ -1223,12 +1541,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     assert scalers[i] is not None
                     scalers[i].scale(loss).backward()
                     scalers[i].unscale_(opts[i])
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
+                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                     scalers[i].step(opts[i])
                     scalers[i].update()
                 else:
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
+                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                     opts[i].step()
                 losses_ep.append(float(loss.item()))
 
@@ -1237,6 +1555,14 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     f"[InteriorPre] epoch={ep}/{args.interior_pretrain_epochs} "
                     f"loss={np.mean(losses_ep):.3e}"
                 )
+            run_pretrain_guard("interior", ep)
+
+    if bool(args.pretrain_guard_enable) and bool(args.pretrain_guard_restore_best_end) and pretrain_best_states is not None:
+        pre_load_snapshot_u_states(pretrain_best_states)
+        print(
+            f"[PretrainGuard] restored best pretrain state at end with rel_l2_eval={pretrain_best_rel_l2:.3e} "
+            f"and lr={pre_current_lr():.3e}"
+        )
 
     def optimize_chart(i: int, w_pde_eff: float, w_if_flux_eff: float) -> None:
         if point_idx_by_chart[i].numel() == 0 or (not trainable_chart_mask[i]):
@@ -1341,12 +1667,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 assert scalers[i] is not None
                 scalers[i].scale(loss).backward()
                 scalers[i].unscale_(opts[i])
-                torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
+                torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                 scalers[i].step(opts[i])
                 scalers[i].update()
             else:
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=5.0)
+                torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                 opts[i].step()
 
         if args.omega < 1.0:
@@ -1380,6 +1706,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     flux_w_min = min(flux_w_start, flux_w_end)
     flux_w_max = max(flux_w_start, flux_w_end)
     reject_lr_decay = min(1.0, max(1e-4, float(args.iter_reject_lr_decay)))
+    rel_accept_margin = max(0.0, float(args.iter_accept_rel_l2_margin))
+    pde_drop_override = max(0.0, float(args.iter_accept_pde_drop))
+    rel_l2_hardcap = max(0.0, float(args.iter_accept_rel_l2_hardcap))
 
     def effective_flux_weight(it: int) -> float:
         if args.flux_ramp_iters <= 0:
@@ -1400,6 +1729,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     stale = 0
     guard_stale = 0
     reject_count = 0
+    accepted_iters = 0
     guard_limit = float(args.guard_rel_l2 if args.guard_rel_l2 > 0.0 else args.target_rel_l2)
     adaptive_flux_mult = 1.0
 
@@ -1413,6 +1743,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         rel_l2_eval: float,
         score: float,
     ) -> None:
+        states_now = snapshot_u_states()
         snapshots[name] = {
             "iter": int(it),
             "pde": float(pde_m),
@@ -1421,16 +1752,20 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             "if_flux": float(if_m),
             "rel_l2_eval": float(rel_l2_eval),
             "score": float(score),
-            "u_states": snapshot_u_states(),
+            "u_states": states_now,
             "lr": current_lr(),
         }
+        maybe_add_swa_candidate(rel_l2_eval, label=f"{name}_iter{it}", states=states_now)
 
     schwarz_start = time.time()
+    current_pde_m, _, _, _ = eval_global_metrics()
+    current_rel_l2 = eval_rel_l2_subset()
 
     for it in range(1, args.max_schwarz_iters + 1):
-        warm = min(1.0, float(it) / max(1.0, float(args.pde_warmup_iters)))
+        progress_it = accepted_iters + 1
+        warm = min(1.0, float(progress_it) / max(1.0, float(args.pde_warmup_iters)))
         w_pde_eff = args.w_pde * warm
-        flux_base = effective_flux_weight(it)
+        flux_base = effective_flux_weight(progress_it)
         if args.adaptive_flux_weight:
             w_if_flux_eff = float(np.clip(flux_base * adaptive_flux_mult, flux_w_min, flux_w_max))
         else:
@@ -1461,8 +1796,22 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
 
         pde_m, bc_m, iv_m, if_m = eval_global_metrics()
         rel_l2_eval = eval_rel_l2_subset()
+        pde_proposed = pde_m
         rel_l2_proposed = rel_l2_eval
-        if args.iter_accept_rel_l2 > 0.0 and rel_l2_proposed > args.iter_accept_rel_l2:
+        rel_accept_limit = float(args.iter_accept_rel_l2)
+        if rel_accept_limit > 0.0:
+            rel_accept_limit = max(rel_accept_limit, current_rel_l2 + rel_accept_margin)
+        should_reject = rel_accept_limit > 0.0 and rel_l2_proposed > rel_accept_limit
+        if should_reject and pde_drop_override > 0.0 and rel_l2_hardcap > 0.0:
+            pde_drop = (current_pde_m - pde_proposed) / max(current_pde_m, 1e-12)
+            if (pde_drop >= pde_drop_override) and (rel_l2_proposed <= rel_l2_hardcap):
+                should_reject = False
+                print(
+                    f"[TrustRegion] iter={it} accepted by PDE override: "
+                    f"pde_drop={pde_drop:.3e} (thr={pde_drop_override:.3e}), "
+                    f"rel_l2_eval={rel_l2_proposed:.3e} (hardcap={rel_l2_hardcap:.3e})"
+                )
+        if should_reject:
             load_snapshot_u_states(iter_state_before)
             new_lr = max(1e-7, iter_lr_before * reject_lr_decay)
             set_lr(new_lr)
@@ -1472,15 +1821,21 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             reject_count += 1
             print(
                 f"[TrustRegion] iter={it} rejected: rel_l2_eval={rel_l2_proposed:.3e} "
-                f"> {args.iter_accept_rel_l2:.3e}; restored state and lr={new_lr:.3e}"
+                f"> {rel_accept_limit:.3e}; pde_proposed={pde_proposed:.3e} "
+                f"pde_restored={pde_m:.3e}; restored state and lr={new_lr:.3e}"
             )
+        current_pde_m = pde_m
+        current_rel_l2 = rel_l2_eval
 
-        if args.adaptive_flux_weight:
+        if args.adaptive_flux_weight and iter_rejected == 0:
             if rel_l2_eval <= args.adaptive_flux_rel_l2_thresh:
                 adaptive_flux_mult *= float(args.adaptive_flux_up)
             else:
                 adaptive_flux_mult *= float(args.adaptive_flux_down)
             adaptive_flux_mult = max(1e-6, adaptive_flux_mult)
+
+        if iter_rejected == 0:
+            accepted_iters += 1
 
         history["global_residual"].append(pde_m)
         history["bc_loss"].append(bc_m)
@@ -1491,29 +1846,32 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         history["adaptive_flux_multiplier"].append(float(adaptive_flux_mult))
         history["lr"].append(current_lr())
         history["iter_rejected"].append(float(iter_rejected))
+        history["accepted_progress_iter"].append(float(accepted_iters))
 
         # Plateau tracking should reflect the effective training objective weights.
+        # Rejected iterations restore the previous state; do not count them as stale progress.
         score = w_pde_eff * pde_m + args.w_interface_value * iv_m + w_if_flux_eff * if_m
-        if score + args.plateau_tol < best_score:
-            best_score = score
-            stale = 0
-            maybe_record_snapshot("best_score", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
-        else:
-            stale += 1
+        if iter_rejected == 0:
+            if score + args.plateau_tol < best_score:
+                best_score = score
+                stale = 0
+                maybe_record_snapshot("best_score", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+            else:
+                stale += 1
 
-        if rel_l2_eval + 1e-14 < best_rel_l2:
-            best_rel_l2 = rel_l2_eval
-            maybe_record_snapshot("best_rel_l2", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+            if rel_l2_eval + 1e-14 < best_rel_l2:
+                best_rel_l2 = rel_l2_eval
+                maybe_record_snapshot("best_rel_l2", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
 
-        if rel_l2_eval <= args.target_rel_l2:
-            target_obj = iv_m + if_m
-            if target_obj + 1e-14 < best_target_obj:
-                best_target_obj = target_obj
-                maybe_record_snapshot("best_target", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+            if rel_l2_eval <= args.target_rel_l2:
+                target_obj = iv_m + if_m
+                if target_obj + 1e-14 < best_target_obj:
+                    best_target_obj = target_obj
+                    maybe_record_snapshot("best_target", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
 
-        if rel_l2_eval <= guard_limit and if_m + 1e-14 < best_flux:
-            best_flux = if_m
-            maybe_record_snapshot("best_flux", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+            if rel_l2_eval <= guard_limit and if_m + 1e-14 < best_flux:
+                best_flux = if_m
+                maybe_record_snapshot("best_flux", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
 
         if it % max(1, args.log_every) == 0:
             elapsed = time.time() - schwarz_start
@@ -1522,6 +1880,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 f"pde={pde_m:.3e} bc={bc_m:.3e} if_val={iv_m:.3e} if_flux={if_m:.3e} "
                 f"rel_l2_eval={rel_l2_eval:.3e} w_if={w_if_flux_eff:.3e} "
                 f"score={score:.3e} stale={stale} rejected={iter_rejected} "
+                f"accepted={accepted_iters} "
                 f"lr={current_lr():.3e} flux_mult={adaptive_flux_mult:.3e} t={elapsed:.1f}s"
             )
 
@@ -1531,7 +1890,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             print(f"Converged at iteration {it}")
             break
 
-        if args.guard_patience > 0:
+        if args.guard_patience > 0 and iter_rejected == 0:
             if rel_l2_eval > guard_limit:
                 guard_stale += 1
             else:
@@ -1567,6 +1926,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         history["adaptive_flux_multiplier"].append(float(adaptive_flux_mult))
         history["lr"].append(current_lr())
         history["iter_rejected"].append(0.0)
+        history["accepted_progress_iter"].append(0.0)
         maybe_record_snapshot("best_score", 0, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
         maybe_record_snapshot("best_rel_l2", 0, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
         if rel_l2_eval <= args.target_rel_l2:
@@ -1610,6 +1970,45 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     if selected_label is not None and snapshots.get(selected_label) is not None:
         load_snapshot_u_states(snapshots[selected_label]["u_states"])  # type: ignore[index]
         print(f"Selected checkpoint-policy state: {selected_label}")
+
+    selected_rel_before_swa = eval_rel_l2_subset()
+    selected_states_before_swa = snapshot_u_states()
+    swa_info: Dict[str, object] = {
+        "enabled": bool(args.swa_topk > 0),
+        "topk": int(max(0, args.swa_topk)),
+        "n_candidates": int(len(swa_candidates)),
+        "selected_rel_before_swa": float(selected_rel_before_swa),
+    }
+    swa_states_for_save: Optional[List[Dict[str, torch.Tensor]]] = None
+    if args.swa_topk > 1 and len(swa_candidates) >= 2:
+        n_use = min(int(args.swa_topk), len(swa_candidates))
+        topk_rel = [float(x["rel_l2_eval"]) for x in swa_candidates[:n_use]]
+        avg_states: List[Dict[str, torch.Tensor]] = []
+        for i in range(n_charts):
+            avg_states.append(average_state_dicts([swa_candidates[k]["u_states"][i] for k in range(n_use)]))  # type: ignore[index]
+        swa_states_for_save = avg_states
+        load_snapshot_u_states(avg_states)
+        swa_rel_eval = eval_rel_l2_subset()
+        swa_info.update(
+            {
+                "used_topk": int(n_use),
+                "topk_rel_l2": topk_rel,
+                "swa_rel_l2_eval": float(swa_rel_eval),
+            }
+        )
+        if bool(args.swa_select_if_better) and swa_rel_eval + 1e-14 < selected_rel_before_swa:
+            selected_label = "swa_topk"
+            print(
+                f"Selected SWA state: rel_l2_eval improved from {selected_rel_before_swa:.3e} "
+                f"to {swa_rel_eval:.3e} with topk={n_use}"
+            )
+        else:
+            load_snapshot_u_states(selected_states_before_swa)
+            swa_info["kept_selected_state"] = True
+            print(
+                f"SWA candidate evaluated (topk={n_use}) rel_l2_eval={swa_rel_eval:.3e}; "
+                f"kept selected state rel_l2_eval={selected_rel_before_swa:.3e}"
+            )
 
     run_stem = build_run_stem(args.run_tag)
 
@@ -1676,6 +2075,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "per_chart": per_chart,
         "device": str(device),
         "dtype": str(dtype).replace("torch.", ""),
+        "pinn_arch": args.pinn_arch,
+        "pinn_width": int(args.pinn_width),
+        "pinn_depth": int(args.pinn_depth),
+        "pinn_residual_scale": float(args.pinn_residual_scale),
+        "pinn_residual_zero_init": bool(args.pinn_residual_zero_init),
+        "grad_clip_max_norm": float(args.grad_clip_max_norm),
         "amp_used": bool(use_amp),
         "amp_backend": amp_backend,
         "tf32_used": bool(args.tf32 and device.type == "cuda"),
@@ -1719,6 +2124,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "schwarz_runtime_seconds": float(time.time() - schwarz_start),
         "trust_region": {
             "iter_accept_rel_l2": float(args.iter_accept_rel_l2),
+            "iter_accept_rel_l2_margin": float(args.iter_accept_rel_l2_margin),
+            "iter_accept_pde_drop": float(args.iter_accept_pde_drop),
+            "iter_accept_rel_l2_hardcap": float(args.iter_accept_rel_l2_hardcap),
             "iter_reject_lr_decay": float(reject_lr_decay),
             "rejected_iterations": int(reject_count),
         },
@@ -1730,6 +2138,18 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             "start": float(flux_w_start),
             "end": float(flux_w_end),
         },
+        "pretrain_guard": {
+            "enabled": bool(args.pretrain_guard_enable),
+            "eval_every": int(args.pretrain_guard_eval_every),
+            "patience": int(args.pretrain_guard_patience),
+            "rel_l2_margin": float(args.pretrain_guard_rel_l2_margin),
+            "lr_decay": float(args.pretrain_guard_lr_decay),
+            "min_lr": float(args.pretrain_guard_min_lr),
+            "restore_best_end": bool(args.pretrain_guard_restore_best_end),
+            "best_rel_l2_eval": (None if not math.isfinite(pretrain_best_rel_l2) else float(pretrain_best_rel_l2)),
+            "events": pretrain_guard_events,
+        },
+        "swa": swa_info,
     }
 
     def snap_summary(name: str) -> Optional[Dict[str, object]]:
@@ -1775,7 +2195,13 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     def save_ckpt(path: str, u_states: List[Dict[str, torch.Tensor]], label: str, fallback_from: Optional[str] = None) -> None:
         payload = {
             "u_states": u_states,
-            "u_kwargs": {"width": args.pinn_width, "depth": args.pinn_depth},
+            "u_kwargs": {
+                "width": args.pinn_width,
+                "depth": args.pinn_depth,
+                "arch": args.pinn_arch,
+                "residual_scale": args.pinn_residual_scale,
+                "residual_zero_init": bool(args.pinn_residual_zero_init),
+            },
             "history": history,
             "metrics": out,
             "atlas_data_path": args.atlas_data,
@@ -1811,6 +2237,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     save_ckpt(ckpt_best_target, best_target_states, "best_target", fallback_from=best_target_fallback)
     save_ckpt(ckpt_best_flux, best_flux_states, "best_flux", fallback_from=best_flux_fallback)
     save_ckpt(ckpt_best_score, best_score_states, "best_score", fallback_from=best_score_fallback)
+    ckpt_swa = None
+    if swa_states_for_save is not None:
+        ckpt_swa = os.path.join(args.output_dir, f"{run_stem}_swa_topk.pt")
+        save_ckpt(ckpt_swa, swa_states_for_save, "swa_topk", fallback_from=None)
 
     out["checkpoint_paths"] = {
         "selected": ckpt_path,
@@ -1819,6 +2249,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "best_flux": ckpt_best_flux,
         "best_score": ckpt_best_score,
     }
+    if ckpt_swa is not None:
+        out["checkpoint_paths"]["swa_topk"] = ckpt_swa
 
     metrics_path = os.path.join(args.output_dir, f"{run_stem}_metrics.json")
     with open(metrics_path, "w", encoding="utf-8") as f:
@@ -1838,6 +2270,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
     print(f"  best_target:  {ckpt_best_target}")
     print(f"  best_flux:    {ckpt_best_flux}")
     print(f"  best_score:   {ckpt_best_score}")
+    if ckpt_swa is not None:
+        print(f"  swa_topk:     {ckpt_swa}")
     print(f"  metrics:      {metrics_path}")
     print(f"  curves:       {curve_path}")
     print(f"  rel_l2:       {out['global']['relative_l2_error']:.6e}")
@@ -1851,6 +2285,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         "best_target_checkpoint": ckpt_best_target,
         "best_flux_checkpoint": ckpt_best_flux,
         "best_score_checkpoint": ckpt_best_score,
+        "swa_topk_checkpoint": ckpt_swa,
         "metrics": metrics_path,
         "history": history_path,
         "curves": curve_path,
@@ -1863,6 +2298,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--atlas-checkpoint", required=True, help="Path to rabbit_atlas_trained.pt")
     parser.add_argument("--atlas-meta", default=None, help="Path to rabbit_atlas_meta.json")
     parser.add_argument("--init-u-checkpoint", default=None, help="Optional warm-start checkpoint with chart PINN states.")
+    parser.add_argument("--u-remap-json", default=None, help="Optional JSON with new_parent mapping for split-child warmstart.")
+    parser.add_argument("--trainable-charts-json", default=None, help="Optional JSON/list specifying trainable chart ids.")
+    parser.add_argument("--freeze-charts-json", default=None, help="Optional JSON/list specifying frozen chart ids.")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--run-tag", default="", help="Suffix tag for stage-specific artifacts.")
     parser.add_argument(
@@ -1886,6 +2324,12 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--pinn-width", type=int, default=64)
     parser.add_argument("--pinn-depth", type=int, default=4)
+    parser.add_argument("--pinn-arch", type=str, choices=["mlp", "resnet"], default="mlp")
+    parser.add_argument("--pinn-residual-scale", type=float, default=0.1)
+    parser.add_argument("--pinn-residual-zero-init", dest="pinn_residual_zero_init", action="store_true")
+    parser.add_argument("--no-pinn-residual-zero-init", dest="pinn_residual_zero_init", action="store_false")
+    parser.set_defaults(pinn_residual_zero_init=True)
+    parser.add_argument("--grad-clip-max-norm", type=float, default=5.0)
     parser.add_argument("--lr", type=float, default=8e-4)
     parser.add_argument(
         "--chart-train-mode",
@@ -1992,6 +2436,19 @@ def parse_args() -> argparse.Namespace:
         help="Huber delta for PDE residual loss (set <=0 for plain MSE).",
     )
     parser.add_argument("--pde-warmup-iters", type=int, default=10, help="Ramp PDE weight over this many Schwarz iterations.")
+    parser.add_argument(
+        "--skip-pde-if-no-valid",
+        dest="skip_pde_if_no_valid",
+        action="store_true",
+        help="If enabled, PDE term is skipped for batches with no valid Jacobian samples.",
+    )
+    parser.add_argument(
+        "--no-skip-pde-if-no-valid",
+        dest="skip_pde_if_no_valid",
+        action="store_false",
+        help="Disable the no-valid Jacobian PDE skip safeguard.",
+    )
+    parser.set_defaults(skip_pde_if_no_valid=True)
 
     parser.add_argument("--bc-pretrain-epochs", type=int, default=300)
     parser.add_argument("--bc-pretrain-batch", type=int, default=256)
@@ -2057,6 +2514,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interior-pretrain-batch", type=int, default=256)
     parser.add_argument("--interior-pretrain-grad-weight", type=float, default=0.5)
     parser.add_argument("--interior-pretrain-log-every", type=int, default=50)
+    parser.add_argument("--pretrain-guard-enable", action="store_true")
+    parser.add_argument("--pretrain-guard-eval-every", type=int, default=50)
+    parser.add_argument("--pretrain-guard-patience", type=int, default=3)
+    parser.add_argument("--pretrain-guard-rel-l2-margin", type=float, default=0.002)
+    parser.add_argument("--pretrain-guard-lr-decay", type=float, default=0.5)
+    parser.add_argument("--pretrain-guard-min-lr", type=float, default=1e-7)
+    parser.add_argument("--pretrain-guard-restore-best-end", action="store_true")
+    parser.add_argument("--swa-topk", type=int, default=0)
+    parser.add_argument("--swa-select-if-better", action="store_true")
 
     parser.add_argument("--w-pde", type=float, default=1.0)
     parser.add_argument("--w-bc", type=float, default=2.0)
@@ -2089,6 +2555,24 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.7,
         help="Learning-rate multiplier after trust-region rejection.",
+    )
+    parser.add_argument(
+        "--iter-accept-rel-l2-margin",
+        type=float,
+        default=0.03,
+        help="Allow temporary rel-L2 increase up to current_rel_l2 + margin before rejecting an iteration.",
+    )
+    parser.add_argument(
+        "--iter-accept-pde-drop",
+        type=float,
+        default=0.10,
+        help="Trust-region override: accept a high-rel-L2 step if PDE drops by at least this relative amount; <=0 disables.",
+    )
+    parser.add_argument(
+        "--iter-accept-rel-l2-hardcap",
+        type=float,
+        default=0.35,
+        help="Maximum rel-L2 allowed when PDE-drop override is active; <=0 disables override.",
     )
     parser.add_argument(
         "--checkpoint-policy",

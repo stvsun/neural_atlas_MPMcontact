@@ -1,0 +1,116 @@
+# Rabbit TI Arruda-Boyce inverse with manufactured solution (MMS)
+
+atlas-data: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_schwarz_20260213_005232/rabbit_atlas_data.npz
+atlas-checkpoint: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_schwarz_20260213_005232/rabbit_atlas_trained.pt
+atlas-meta: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_schwarz_20260213_005232/rabbit_atlas_meta.json
+
+output-dir: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_ti_arruda_boyce_mms_main
+run-tag: main
+
+seed: 42
+device: auto
+dtype: auto
+amp: false
+
+pinn-width: 96
+pinn-depth: 5
+
+# manufactured displacement load family
+load-lambdas: 0.6,1.0,1.4
+mms-disp-amp: 0.05
+
+# inverse stages
+teacher-iters: 30
+stage-a-param-only-iters: 40
+stage-a-iters: 120
+stage-b-iters: 80
+stage-c-iters: 0
+local-steps: 2
+omega: 0.85
+omega-teacher: 0.85
+
+lr-u: 1e-4
+lr-theta-stage-a: 6e-4
+lr-theta-stage-b-fast: 2e-4
+lr-theta-stage-b-slow: 1e-4
+grad-clip: 5.0
+grad-clip-theta: 2.0
+
+int-cache-per-chart: 1200
+if-cache-per-pair: 700
+n-obs-per-chart: 480
+pde-batch: 96
+bc-batch: 128
+if-batch: 96
+xi-noise-scale: 0.05
+normal-noise-boost: 1.1
+
+# inverse weights (PDE reduced to avoid domination)
+w-eq-start: 0.03
+w-eq-end: 0.12
+w-if-val-start: 6.0
+w-if-val-end: 14.0
+w-if-flux-start: 10.0
+w-if-flux-end: 30.0
+w-trac-bc: 140.0
+w-data: 220.0
+w-rbm: 25.0
+w-reg: 2e-2
+huber-delta: 0.02
+
+# stage-B ramps
+w-if-val-stage-b-start: 8.0
+w-if-val-stage-b-end: 20.0
+w-if-flux-stage-b-start: 16.0
+w-if-flux-stage-b-end: 40.0
+w-eq-stage-b-start: 0.06
+w-eq-stage-b-end: 0.20
+
+if-hard-oversample: 2.0
+if-score-flux-factor: 1.0
+if-gate-rel-tol: 0.08
+if-gate-lr-decay: 0.7
+eval-if-samples: 96
+combo-if-weight: 0.2
+combo-param-weight: 0.03
+
+sigma-floor: 1e-6
+detJ-floor: 1e-6
+jac-kappa-max: 1e4
+eq-residual-clip: 80.0
+normalize-eq-by-b: true
+
+kappa-fixed: 80.0
+
+# true params and 1%-offset init
+mu-m-true: 1.80
+N-m-true: 4.80
+k-f-true: 2.20
+N-f-true: 5.20
+
+mu-m-init: 1.782
+N-m-init: 4.752
+k-f-init: 2.178
+N-f-init: 5.148
+
+mu-m-min: 1e-4
+N-m-min: 1.01
+k-f-min: 1e-4
+N-f-min: 1.01
+
+mu-m-prior: 1.80
+N-m-prior: 4.80
+k-f-prior: 2.20
+N-f-prior: 5.20
+
+fiber-a0-x: 0.62
+fiber-a0-y: 0.49
+fiber-a0-z: 0.61
+
+sensitivity-surface-per-chart: 120
+sensitivity-cond-max: 1e5
+sens-eps-rel: 1e-2
+strict-sensitivity-gate: false
+
+blend-temp: 1.0
+export-points-per-chart: 2200

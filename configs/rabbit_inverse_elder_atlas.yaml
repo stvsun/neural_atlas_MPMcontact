@@ -55,6 +55,9 @@ w-data: 8.0
 w-data-p: 1.0
 w-data-c: 1.0
 w-data-u: 0.0
+w-global-field: 0.05
+global-field-pool-per-chart: 512
+global-field-batch: 128
 
 w-reg: 0.5
 w-reg-k0: 1.0

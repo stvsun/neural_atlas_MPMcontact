@@ -1497,6 +1497,55 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
         }
         obs_by_chart.append(obs)
 
+    print("Building global teacher field supervision cache")
+    global_field_by_chart: List[Dict[str, torch.Tensor]] = []
+    for i in range(n_charts):
+        idx = point_idx_by_chart[i]
+        if idx.numel() == 0:
+            global_field_by_chart.append({
+                "xi": torch.zeros((0, 3), device=device, dtype=dtype),
+                "p": torch.zeros((0, 1), device=device, dtype=dtype),
+                "c": torch.zeros((0, 1), device=device, dtype=dtype),
+            })
+            continue
+
+        n_take = min(int(idx.numel()), int(args.global_field_pool_per_chart))
+        if args.curvature_adaptive_sampling:
+            local_w = chart_sampling_weights[i]
+            sel = sample_indices_from_weights(local_w, n_take)
+            pick = idx[sel]
+        else:
+            sel = torch.randint(0, idx.numel(), (n_take,), device=device)
+            pick = idx[sel]
+
+        x_sup = points[pick]
+        xi_sup = local_coords(x_sup, seeds[i], t1[i], t2[i], nvec[i])
+        with torch.enable_grad():
+            st_sup = compute_local_state(
+                p_model=p_teacher[i],
+                c_model=c_teacher[i],
+                decoder=decoders[i],
+                xi=xi_sup,
+                seed=seeds[i],
+                t1=t1[i],
+                t2=t2[i],
+                n=nvec[i],
+                chart_scale=support_r[i],
+                K_tensor=K_true,
+                Ra=args.Ra,
+                Dm=args.Dm,
+                gravity=gravity,
+                sigma_floor=args.sigma_floor,
+                det_floor=args.det_floor,
+                jac_kappa_max=args.jac_kappa_max,
+                create_graph=False,
+            )
+        global_field_by_chart.append({
+            "xi": xi_sup.detach(),
+            "p": st_sup.p.detach(),
+            "c": st_sup.c.detach(),
+        })
+
     # ---------------- Inverse stage ----------------
     p_inv = [LocalScalarPINN(width=args.pinn_width, depth=args.pinn_depth).to(device=device, dtype=dtype) for _ in range(n_charts)]
     c_inv = [LocalScalarPINN(width=args.pinn_width, depth=args.pinn_depth).to(device=device, dtype=dtype) for _ in range(n_charts)]
@@ -1556,6 +1605,10 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
         eval_data_p_den = 0.0
         eval_data_c_num = 0.0
         eval_data_c_den = 0.0
+        eval_global_p_num = 0.0
+        eval_global_p_den = 0.0
+        eval_global_c_num = 0.0
+        eval_global_c_den = 0.0
 
         with torch.enable_grad():
             for i in range(n_charts):
@@ -1599,6 +1652,15 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
                     eval_data_c_num += float(torch.mean((c_hat - obs_i["c"]) ** 2).item())
                     eval_data_c_den += float(torch.mean(obs_i["c"] ** 2).item()) + 1e-12
 
+                g_obs_i = global_field_by_chart[i]
+                if g_obs_i["xi"].numel() > 0:
+                    p_hat_g = p_inv[i](g_obs_i["xi"])
+                    c_hat_g = c_inv[i](g_obs_i["xi"])
+                    eval_global_p_num += float(torch.mean((p_hat_g - g_obs_i["p"]) ** 2).item())
+                    eval_global_p_den += float(torch.mean(g_obs_i["p"] ** 2).item()) + 1e-12
+                    eval_global_c_num += float(torch.mean((c_hat_g - g_obs_i["c"]) ** 2).item())
+                    eval_global_c_den += float(torch.mean(g_obs_i["c"] ** 2).item()) + 1e-12
+
                 for j in neighbors[i]:
                     if j <= i:
                         continue
@@ -1631,6 +1693,9 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
         rel_p = math.sqrt(max(eval_data_p_num, 0.0) / max(eval_data_p_den, 1e-12)) if eval_data_p_den > 0.0 else 0.0
         rel_c = math.sqrt(max(eval_data_c_num, 0.0) / max(eval_data_c_den, 1e-12)) if eval_data_c_den > 0.0 else 0.0
         field_rel = 0.5 * (rel_p + rel_c)
+        global_rel_p = math.sqrt(max(eval_global_p_num, 0.0) / max(eval_global_p_den, 1e-12)) if eval_global_p_den > 0.0 else 0.0
+        global_rel_c = math.sqrt(max(eval_global_c_num, 0.0) / max(eval_global_c_den, 1e-12)) if eval_global_c_den > 0.0 else 0.0
+        field_global_rel = 0.5 * (global_rel_p + global_rel_c)
 
         k0_est = float(perm.k0().item())
         evals_est, evecs_est = sorted_eigh_desc(K_est.detach().cpu())
@@ -1653,6 +1718,9 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
             "rel_p": rel_p,
             "rel_c": rel_c,
             "field_rel": field_rel,
+            "global_rel_p": global_rel_p,
+            "global_rel_c": global_rel_c,
+            "field_global_rel": field_global_rel,
             "k0_est": k0_est,
             "k0_rel": k0_rel,
             "eig1_est": float(evals_est[0].item()),
@@ -1672,6 +1740,7 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
         "if_val": [],
         "if_flux": [],
         "field_rel": [],
+        "field_global": [],
         "k0": [],
         "eig1": [],
         "eig2": [],
@@ -1823,6 +1892,20 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
                                 loss_data_u = torch.mean((st_obs.u - obs_i["u"]) ** 2)
                         loss_data = args.w_data_p * loss_data_p + args.w_data_c * loss_data_c + args.w_data_u * loss_data_u
 
+                        loss_field_global = torch.tensor(0.0, device=device, dtype=dtype)
+                        g_obs_i = global_field_by_chart[i]
+                        if args.w_global_field > 0.0 and g_obs_i["xi"].numel() > 0:
+                            n_g = min(int(g_obs_i["xi"].shape[0]), int(max(1, args.global_field_batch)))
+                            sel_g = torch.randint(0, g_obs_i["xi"].shape[0], (n_g,), device=device)
+                            xi_g = g_obs_i["xi"][sel_g]
+                            p_g_true = g_obs_i["p"][sel_g]
+                            c_g_true = g_obs_i["c"][sel_g]
+                            p_g_hat = p_inv[i](xi_g)
+                            c_g_hat = c_inv[i](xi_g)
+                            p_den = torch.clamp(torch.mean(p_g_true**2), min=torch.as_tensor(1e-12, device=device, dtype=dtype))
+                            c_den = torch.clamp(torch.mean(c_g_true**2), min=torch.as_tensor(1e-12, device=device, dtype=dtype))
+                            loss_field_global = torch.mean((p_g_hat - p_g_true) ** 2) / p_den + torch.mean((c_g_hat - c_g_true) ** 2) / c_den
+
                         iv_terms: List[torch.Tensor] = []
                         if_terms: List[torch.Tensor] = []
                         for j in neighbors[i]:
@@ -1867,6 +1950,7 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
                             + args.w_if_val * loss_if_val
                             + w_if_flux_eff * loss_if_flux
                             + args.w_data * loss_data
+                            + args.w_global_field * loss_field_global
                             + args.w_reg * loss_reg
                         )
 
@@ -1909,6 +1993,7 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
         history["if_val"].append(m["if_val"])
         history["if_flux"].append(m["if_flux"])
         history["field_rel"].append(m["field_rel"])
+        history["field_global"].append(m["field_global_rel"])
         history["k0"].append(m["k0_est"])
         history["eig1"].append(m["eig1_est"])
         history["eig2"].append(m["eig2_est"])
@@ -1929,6 +2014,7 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
             + args.w_if_val * m["if_val"]
             + w_if_flux_eff * m["if_flux"]
             + args.w_data * (m["rel_p"] + m["rel_c"])
+            + args.w_global_field * m["field_global_rel"]
         )
 
         if score + args.plateau_tol < best_score:
@@ -1980,7 +2066,8 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
             print(
                 f"[Inverse] iter={it}/{args.max_schwarz_iters} "
                 f"flow={m['flow']:.3e} trans={m['trans']:.3e} if_val={m['if_val']:.3e} if_flux={m['if_flux']:.3e} "
-                f"field_rel={m['field_rel']:.3e} k0={m['k0_est']:.6f} eig=({m['eig1_est']:.3f},{m['eig2_est']:.3f},{m['eig3_est']:.3f}) "
+                f"field_rel={m['field_rel']:.3e} field_global={m['field_global_rel']:.3e} "
+                f"k0={m['k0_est']:.6f} eig=({m['eig1_est']:.3f},{m['eig2_est']:.3f},{m['eig3_est']:.3f}) "
                 f"axis_mean={m['axis_deg_mean']:.2f}deg w_if={w_if_flux_eff:.2e} stale={stale} rej={iter_rejected} "
                 f"lr={current_lr():.3e}/{current_lr_perm():.3e} t={elapsed:.1f}s"
             )
@@ -2149,6 +2236,7 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
         "final_trans_residual": float(final_m["trans"]),
         "final_interface_value": float(final_m["if_val"]),
         "final_interface_flux": float(final_m["if_flux"]),
+        "final_field_global_cached": float(final_m["field_global_rel"]),
         "lambda_min_est": float(torch.min(evals_est).item()),
         "spd_ok": bool(float(torch.min(evals_est).item()) > 0.0),
         "target_met": target_met,
@@ -2172,6 +2260,12 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
             "start": float(args.w_if_flux_start),
             "end": float(args.w_if_flux_end),
         },
+        "global_field_supervision": {
+            "enabled": bool(args.w_global_field > 0.0),
+            "w_global_field": float(args.w_global_field),
+            "global_field_pool_per_chart": int(args.global_field_pool_per_chart),
+            "global_field_batch": int(args.global_field_batch),
+        },
     }
 
     def snap_summary(name: str) -> Optional[Dict[str, object]]:
@@ -2185,6 +2279,7 @@ def train(args: argparse.Namespace) -> Dict[str, object]:
             "eig_rel_max": float(m["eig_rel_max"]),
             "axis_deg_max": float(m["axis_deg_max"]),
             "field_rel": float(m["field_rel"]),
+            "field_global_rel": float(m["field_global_rel"]),
             "if_flux": float(m["if_flux"]),
             "param_score": float(m["param_score"]),
             "score": float(s["score"]),
@@ -2474,6 +2569,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--w-data-p", type=float, default=1.0)
     parser.add_argument("--w-data-c", type=float, default=1.0)
     parser.add_argument("--w-data-u", type=float, default=0.0)
+    parser.add_argument("--w-global-field", type=float, default=0.05)
+    parser.add_argument("--global-field-pool-per-chart", type=int, default=512)
+    parser.add_argument("--global-field-batch", type=int, default=128)
 
     parser.add_argument("--w-reg", type=float, default=0.5)
     parser.add_argument("--w-reg-k0", type=float, default=1.0)

@@ -1,0 +1,102 @@
+# Canonical config for torus inverse Neo-Hookean with 8 cube charts.
+# Parsed by run_torus_inverse_neohookean_atlas_cube.py via simple key:value loader.
+
+output-dir: /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_cube_main
+run-tag: main
+
+seed: 42
+device: auto
+dtype: auto
+
+# Geometry and chart setup
+n-charts: 8
+overlap-ratio: 0.20
+chart-sigma-scale: 0.65
+major-radius: 1.0
+minor-radius: 0.35
+
+# Boundary partitions (major-angle windows)
+load-phi-center: 1.5707963267948966
+load-phi-halfwidth: 1.0995574287564276
+anchor-phi-halfwidth: 0.6283185307179586
+
+# Manufactured torsion field
+torsion-tau: 0.085
+torsion-z-scale: 0.75
+
+# True and initial inverse parameters (init clamped to within 5%)
+mu-true: 1.8
+K-true: 25.0
+mu-init: 1.746
+K-init: 26.0
+mu-min: 1e-4
+K-min: 1e-4
+mu-prior: 1.8
+K-prior: 25.0
+
+# Sampling
+n-obs: 6000
+n-int-per-chart: 96
+n-bc-load: 768
+n-bc-anchor: 384
+n-bc-free: 768
+n-if-pair: 192
+n-data-batch: 1024
+
+# Deterministic eval cache
+eval-cache-seed: 1234
+eval-n-int-per-chart: 96
+eval-n-if-pair: 128
+eval-n-obs: 2000
+
+# PINN and optimizer
+pinn-width: 96
+pinn-depth: 5
+epochs: 250
+lr: 8e-4
+grad-clip-max-norm: 5.0
+
+# Loss weights
+w-eq: 1.0
+w-bc-load: 2.0
+w-bc-anchor: 2.0
+w-bc-free: 1.0
+w-data-trac: 3.0
+w-if-val: 1.0
+w-if-grad: 0.5
+w-detF: 1e-2
+w-reg: 1e-3
+
+# Jacobian / deformation safeguards
+sigma-floor: 1e-6
+detJ-floor: 1e-6
+jac-kappa-max: 1e4
+detF-floor: 1e-4
+
+traction-noise-std: 0.0
+
+# Runtime controls
+target-loss: 1e-3
+patience: 120
+min-delta: 1e-8
+
+# Optional polish
+use-lbfgs: false
+lbfgs-iters: 10
+lbfgs-lr: 0.8
+lbfgs-n-int-per-chart: 48
+lbfgs-n-bc-load: 256
+
+# Stabilize far-chart evaluations in blended diagnostics
+eta1-clip-train: 1.5
+eta1-clip-eval: 1.5
+
+# ParaView export sizes
+n-export-domain: 80000
+n-export-boundary: 50000
+per-chart-export-weight-threshold: 0.0625
+
+# Acceptance thresholds
+acc-mu-rel-percent: 5.0
+acc-K-rel-percent: 5.0
+acc-traction-rel-l2: 0.08
