@@ -362,19 +362,166 @@ def stabilized_jacobian_ops(
         valid = valid & torch.isfinite(kappa) & torch.isfinite(det_abs) & torch.isfinite(det_reg_safe)
         return inv_j, det_abs, kappa, valid
 
-    u, s, vh = torch.linalg.svd(jac)
-    s_safe = torch.clamp(s, min=sigma_floor)
-    inv_s = torch.diag_embed(1.0 / s_safe)
-    inv_j = torch.bmm(vh.transpose(1, 2), torch.bmm(inv_s, u.transpose(1, 2)))
+    # M3: Use SVD only in no_grad for masking/kappa; invert via LU (torch.linalg.inv).
+    # SVD singular-value backward is unstable when singular values cluster (common for
+    # near-isometric maps). LU inversion has well-defined, numerically stable gradients.
+    with torch.no_grad():
+        s_chk = torch.linalg.svdvals(jac)
+        s_safe_chk = torch.clamp(s_chk, min=sigma_floor)
+        raw_det_abs = torch.abs(torch.linalg.det(jac))
+        kappa = s_safe_chk[:, 0] / torch.clamp(s_safe_chk[:, -1], min=sigma_floor)
+        valid = raw_det_abs > det_floor
+        valid = valid & torch.isfinite(kappa) & torch.isfinite(raw_det_abs)
 
-    raw_det_abs = torch.abs(torch.det(jac))
-    det_abs = torch.clamp(raw_det_abs, min=det_floor)
-    kappa = s_safe[:, 0] / torch.clamp(s_safe[:, -1], min=sigma_floor)
-    valid = raw_det_abs > det_floor
-    valid = valid & torch.isfinite(kappa) & torch.isfinite(det_abs)
+    det_abs = torch.clamp(torch.abs(torch.linalg.det(jac)), min=det_floor)
+    inv_j = torch.linalg.inv(jac)
+    eye3 = torch.eye(3, device=jac.device, dtype=jac.dtype).unsqueeze(0).expand_as(inv_j)
+    inv_j = torch.where(valid.view(-1, 1, 1), inv_j, eye3)
     return inv_j, det_abs, kappa, valid
 
 
+# ---------------------------------------------------------------------------
+# M1 – Direct-coordinate PDE helpers (bypass learned decoder Jacobian)
+# ---------------------------------------------------------------------------
+
+def grad_u_in_physical_tnb(
+    u_model: "LocalPoissonPINN",
+    x_phys: torch.Tensor,
+    seed: torch.Tensor,
+    t1_vec: torch.Tensor,
+    t2_vec: torch.Tensor,
+    n_vec: torch.Tensor,
+) -> torch.Tensor:
+    """Return ∇u in physical (x,y,z) coordinates via the rigid TNB frame.
+
+    The chart coordinate ξ = local_coords(x) is an orthogonal rigid map, so
+    ∂u/∂x = J_TNB^T · ∂u/∂ξ where J_TNB = [t1 | t2 | n] (orthonormal columns).
+    """
+    x = x_phys.clone().detach().requires_grad_(True)
+    xi = local_coords(x, seed, t1_vec, t2_vec, n_vec)
+    u = u_model(xi)
+    grad_xi = torch.autograd.grad(
+        u, xi,
+        grad_outputs=torch.ones_like(u),
+        create_graph=True,
+        retain_graph=True,
+    )[0]  # (N, 3)
+    # J_TNB columns are t1, t2, n (all unit vectors, orthonormal)
+    t1e = t1_vec.unsqueeze(0)   # (1, 3)
+    t2e = t2_vec.unsqueeze(0)
+    ne  = n_vec.unsqueeze(0)
+    grad_x = (
+        grad_xi[:, 0:1] * t1e
+        + grad_xi[:, 1:2] * t2e
+        + grad_xi[:, 2:3] * ne
+    )  # (N, 3)
+    return grad_x
+
+
+def direct_poisson_residual_tnb(
+    u_model: "LocalPoissonPINN",
+    x_in: torch.Tensor,
+    seed: torch.Tensor,
+    t1_vec: torch.Tensor,
+    t2_vec: torch.Tensor,
+    n_vec: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute –Δu – f(x) in physical space via the rigid TNB frame.
+
+    Since the TNB frame is orthogonal (det J = 1, κ = 1), Δ_x u = Δ_ξ u exactly;
+    no learned decoder Jacobian is involved so there is no SVD instability.
+
+    Returns:
+        residual : (N, 1)
+        x_phys   : (N, 3) with grad enabled
+        valid    : bool tensor (N,) – all True for the direct path
+    """
+    x = x_in.clone().detach().requires_grad_(True)
+    xi = local_coords(x, seed, t1_vec, t2_vec, n_vec)
+    u = u_model(xi)
+
+    grad_u = torch.autograd.grad(
+        u, x,
+        grad_outputs=torch.ones_like(u),
+        create_graph=True,
+        retain_graph=True,
+    )[0]  # (N, 3)
+
+    lap = torch.zeros_like(u)
+    for j in range(3):
+        d2 = torch.autograd.grad(
+            grad_u[:, j], x,
+            grad_outputs=torch.ones(grad_u[:, j].shape, device=x.device, dtype=x.dtype),
+            create_graph=True,
+            retain_graph=True,
+        )[0][:, j:j+1]
+        lap = lap + d2
+
+    residual = -lap - forcing_f(x)
+    valid = torch.ones(x.shape[0], dtype=torch.bool, device=x.device)
+    return residual, x, valid
+
+
+# ---------------------------------------------------------------------------
+# M7 – SDF-based hard BC weighting
+# ---------------------------------------------------------------------------
+
+def sdf_hard_bc_scale(
+    x_phys: torch.Tensor,
+    sdf_net: torch.nn.Module,
+    sdf_center: torch.Tensor,
+    sdf_scale_val: float,
+    hard_bc_scale: float,
+) -> torch.Tensor:
+    """Return tanh(max(0, –SDF(x)) / scale) ∈ [0,1].
+
+    This is ≈ 0 near the boundary (SDF ≈ 0) and ≈ 1 deep in the interior,
+    providing a smooth, SDF-driven multiplier for hard BC enforcement.
+    """
+    x_norm = (x_phys - sdf_center.unsqueeze(0)) / sdf_scale_val
+    sdf_val = sdf_net(x_norm)
+    depth = torch.clamp(-sdf_val, min=0.0)
+    return torch.tanh(depth / max(hard_bc_scale, 1e-8)).unsqueeze(-1)
+
+
+# ---------------------------------------------------------------------------
+# M2 – SDF-guided volumetric interior sampling
+# ---------------------------------------------------------------------------
+
+class _SDFNetSchwarz(torch.nn.Module):
+    """Thin wrapper: MLP(in=3, out=1) that returns a signed distance value."""
+    def __init__(self, width: int = 128, depth: int = 6):
+        super().__init__()
+        self.net = MLP(in_dim=3, out_dim=1, width=width, depth=depth)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x).squeeze(-1)
+
+
+def load_sdf_for_schwarz(
+    ckpt_path: str,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> Tuple[torch.nn.Module, torch.Tensor, float]:
+    """Load a trained SDF network from *ckpt_path*.
+
+    Returns:
+        sdf_net    : eval-mode SDF network (x_norm → signed distance)
+        sdf_center : (3,) tensor – domain centre used during SDF training
+        sdf_scale  : float – domain scale used during SDF training
+    """
+    ckpt = torch.load(ckpt_path, map_location=device)
+    width = ckpt.get("width", 128)
+    depth = ckpt.get("depth", 6)
+    sdf_net = _SDFNetSchwarz(width=width, depth=depth).to(device=device, dtype=dtype)
+    sdf_net.load_state_dict(ckpt["model"])
+    sdf_net.eval()
+    center = torch.tensor(ckpt.get("center", [0.0, 0.0, 0.0]), device=device, dtype=dtype)
+    scale  = float(ckpt.get("scale", 1.0))
+    return sdf_net, center, scale
+
+
+# ---------------------------------------------------------------------------
 def mapped_poisson_residual(
     u_model: LocalPoissonPINN,
     decoder: ChartDecoder,
@@ -1014,6 +1161,19 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             print(f"Loaded remapped initial chart PINNs: copied {copied}/{n_charts} from {len(init_states)} source states")
         print(f"Loaded initial chart PINNs from: {args.init_u_checkpoint}")
 
+    # M2: load optional SDF network for interior sampling / M7 hard-BC
+    _sdf_net: Optional[torch.nn.Module] = None
+    _sdf_center: Optional[torch.Tensor] = None
+    _sdf_scale: float = 1.0
+    if getattr(args, "sdf_checkpoint", None):
+        try:
+            _sdf_net, _sdf_center, _sdf_scale = load_sdf_for_schwarz(
+                args.sdf_checkpoint, device=device, dtype=dtype
+            )
+            print(f"Loaded SDF network from: {args.sdf_checkpoint}")
+        except Exception as _sdf_err:
+            print(f"Warning: failed to load SDF checkpoint ({_sdf_err}). Disabling SDF features.")
+
     opts = [torch.optim.Adam(u.parameters(), lr=args.lr) for u in u_nets]
     if use_cuda_amp:
         scalers: List[Optional[torch.cuda.amp.GradScaler]] = [torch.cuda.amp.GradScaler(enabled=True) for _ in range(n_charts)]
@@ -1096,6 +1256,108 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         xi = torch.clamp(xi, min=-max_abs, max=max_abs)
         return xi
 
+    # M2: SDF-guided interior sampling -----------------------------------------
+    def sample_interior_xi_sdf(i: int, n_samples: int) -> torch.Tensor:
+        """Sample PDE collocation points inside the domain using SDF rejection.
+
+        Candidates are drawn uniformly in the chart bounding cube, mapped to
+        physical coordinates via the rigid TNB frame, then accepted only when
+        SDF < sdf_interior_threshold (i.e. inside the domain). Falls back to
+        surface-noise sampling when acceptance rate is too low.
+        """
+        if _sdf_net is None or not getattr(args, "use_sdf_sampling", False):
+            return sample_local_xi(i, n_samples)
+        r = float(support_r[i]) * 1.0
+        factor = max(1, int(getattr(args, "sdf_rejection_factor", 6)))
+        thresh = float(getattr(args, "sdf_interior_threshold", 0.0))
+        n_cand = n_samples * factor
+        seed_i = seeds[i]
+        t1_i   = t1[i]
+        t2_i   = t2[i]
+        n_i    = nvec[i]
+        xi_cand = (2.0 * torch.rand(n_cand, 3, device=device, dtype=dtype) - 1.0) * r
+        x_cand = (
+            seed_i.unsqueeze(0)
+            + xi_cand[:, 0:1] * t1_i.unsqueeze(0)
+            + xi_cand[:, 1:2] * t2_i.unsqueeze(0)
+            + xi_cand[:, 2:3] * n_i.unsqueeze(0)
+        )
+        with torch.no_grad():
+            x_norm = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
+            sdf_vals = _sdf_net(x_norm)
+            inside = sdf_vals < thresh
+        if inside.sum() >= n_samples:
+            xi_ok = xi_cand[inside][:n_samples]
+            return xi_ok
+        # fallback: surface-noise sampling
+        return sample_local_xi(i, n_samples)
+
+    def sample_pde_xi(i: int, n_samples: int) -> torch.Tensor:
+        """Choose PDE sampling strategy: SDF interior or surface-noise."""
+        if _sdf_net is not None and getattr(args, "use_sdf_sampling", False):
+            return sample_interior_xi_sdf(i, n_samples)
+        return sample_local_xi(i, n_samples)
+
+    # M8: Residual-based Adaptive Refinement (RAR) pools ----------------------
+    rar_pool: List[Optional[torch.Tensor]] = [None] * n_charts
+
+    def maybe_update_rar_pools(it: int, w_pde_eff: float) -> None:
+        """Every rar_period iters, refill each chart's RAR pool with top-k residual points."""
+        rar_period = int(getattr(args, "rar_period", 0))
+        if rar_period <= 0 or it % rar_period != 0:
+            return
+        n_cand  = int(getattr(args, "rar_candidates", 512))
+        top_k   = int(getattr(args, "rar_top_k", 64))
+        pool_max = int(getattr(args, "rar_pool_max", 256))
+        direct  = bool(getattr(args, "direct_coord_pde", False))
+        for i in range(n_charts):
+            if not trainable_chart_mask[i]:
+                continue
+            xi_cand = sample_pde_xi(i, n_cand)
+            with torch.no_grad():
+                if direct:
+                    x_phys = (
+                        seeds[i].unsqueeze(0)
+                        + xi_cand[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_cand[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_cand[:, 2:3] * nvec[i].unsqueeze(0)
+                    )
+                    res, _, _ = direct_poisson_residual_tnb(
+                        u_nets[i], x_phys, seeds[i], t1[i], t2[i], nvec[i]
+                    )
+                else:
+                    res, _, _ = mapped_poisson_residual(
+                        u_nets[i], decoders[i], xi_cand,
+                        seeds[i], t1[i], t2[i], nvec[i],
+                        support_r[i],
+                        sigma_floor=args.sigma_floor,
+                        det_floor=args.det_floor,
+                        jac_kappa_max=args.jac_kappa_max,
+                    )
+                scores = res.squeeze(-1).abs()
+            _, top_idx = torch.topk(scores, min(top_k, scores.numel()))
+            new_pts = xi_cand[top_idx].detach()
+            if rar_pool[i] is not None:
+                combined = torch.cat([rar_pool[i], new_pts], dim=0)
+                if combined.shape[0] > pool_max:
+                    perm = torch.randperm(combined.shape[0], device=device)
+                    combined = combined[perm[:pool_max]]
+                rar_pool[i] = combined
+            else:
+                rar_pool[i] = new_pts
+
+    def sample_pde_xi_with_rar(i: int, n_samples: int) -> torch.Tensor:
+        """Mix n_samples from sample_pde_xi with up to rar_mix_n RAR-pool points."""
+        mix_n = int(getattr(args, "rar_mix_n", 32))
+        base = sample_pde_xi(i, n_samples)
+        if rar_pool[i] is None or mix_n <= 0:
+            return base
+        pool = rar_pool[i]
+        n_mix = min(mix_n, pool.shape[0])
+        perm = torch.randperm(pool.shape[0], device=device)[:n_mix]
+        return torch.cat([base, pool[perm]], dim=0)
+
+    # --------------------------------------------------------------------------
     def local_bc_batch(i: int, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
         if pick is None:
@@ -1582,26 +1844,47 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             opts[i].zero_grad()
 
             with amp_ctx():
-                xi_int = sample_local_xi(i, pde_batch_i)
-                res, _, valid = mapped_poisson_residual(
-                    u_nets[i],
-                    decoders[i],
-                    xi_int,
-                    seed=seeds[i],
-                    t1=t1[i],
-                    t2=t2[i],
-                    n=nvec[i],
-                    chart_scale=support_r[i],
-                    sigma_floor=args.sigma_floor,
-                    det_floor=args.det_floor,
-                    jac_kappa_max=args.jac_kappa_max,
-                )
+                # M1/M8: Use RAR-augmented sampling; route through direct or mapped residual
+                xi_int = sample_pde_xi_with_rar(i, pde_batch_i)
+                _direct = bool(getattr(args, "direct_coord_pde", False))
+                if _direct:
+                    x_phys_int = (
+                        seeds[i].unsqueeze(0)
+                        + xi_int[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_int[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_int[:, 2:3] * nvec[i].unsqueeze(0)
+                    )
+                    res, _, valid = direct_poisson_residual_tnb(
+                        u_nets[i], x_phys_int, seeds[i], t1[i], t2[i], nvec[i]
+                    )
+                else:
+                    res, _, valid = mapped_poisson_residual(
+                        u_nets[i],
+                        decoders[i],
+                        xi_int,
+                        seed=seeds[i],
+                        t1=t1[i],
+                        t2=t2[i],
+                        n=nvec[i],
+                        chart_scale=support_r[i],
+                        sigma_floor=args.sigma_floor,
+                        det_floor=args.det_floor,
+                        jac_kappa_max=args.jac_kappa_max,
+                    )
                 res_use = select_residual_samples(res, valid, with_clip=True)
                 loss_pde = pde_loss_fn(res_use)
 
-                xi_bc, u_bc, _ = local_bc_batch(i, bc_batch_i)
+                xi_bc, u_bc, x_bc = local_bc_batch(i, bc_batch_i)
                 u_hat_bc = u_nets[i](xi_bc)
-                loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
+                # M7: weight BC loss by SDF depth so near-boundary points dominate less
+                if getattr(args, "hard_bc", False) and _sdf_net is not None:
+                    _bc_w = sdf_hard_bc_scale(
+                        x_bc, _sdf_net, _sdf_center, _sdf_scale,
+                        float(getattr(args, "hard_bc_scale", 0.05)),
+                    )
+                    loss_bc = torch.mean(_bc_w * (u_hat_bc - u_bc) ** 2)
+                else:
+                    loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
 
                 loss_sup = torch.tensor(0.0, device=device, dtype=dtype)
                 loss_sup_grad = torch.tensor(0.0, device=device, dtype=dtype)
@@ -1774,6 +2057,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         iter_state_before = snapshot_u_states()
         iter_lr_before = current_lr()
         iter_rejected = 0
+
+        # M8: update RAR pools every rar_period Schwarz iterations
+        maybe_update_rar_pools(it, w_pde_eff)
 
         for group in color_groups:
             active = [i for i in group if point_idx_by_chart[i].numel() > 0 and trainable_chart_mask[i]]
@@ -2588,6 +2874,75 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--log-every", type=int, default=1)
+
+    # M1: direct-coordinate PDE mode (bypasses learned decoder Jacobian)
+    parser.add_argument(
+        "--direct-coord-pde",
+        dest="direct_coord_pde",
+        action="store_true",
+        default=False,
+        help="M1: compute Poisson residual directly in physical coords via rigid TNB frame, "
+             "bypassing the learned decoder Jacobian entirely.",
+    )
+
+    # M2: SDF-guided interior sampling
+    parser.add_argument(
+        "--sdf-checkpoint",
+        default=None,
+        help="M2/M7: path to a trained SDF network checkpoint (.pt). "
+             "Enables sdf_hard_bc_scale (M7) and optionally SDF interior sampling (M2).",
+    )
+    parser.add_argument(
+        "--use-sdf-sampling",
+        dest="use_sdf_sampling",
+        action="store_true",
+        default=False,
+        help="M2: sample PDE collocation points in the volumetric interior via SDF rejection.",
+    )
+    parser.add_argument(
+        "--sdf-interior-threshold",
+        type=float,
+        default=0.0,
+        help="M2: accept candidate points with SDF < this value (0 = exactly inside).",
+    )
+    parser.add_argument(
+        "--sdf-rejection-factor",
+        type=int,
+        default=6,
+        help="M2: how many candidate points to draw per required sample for rejection.",
+    )
+
+    # M7: SDF-based hard BC weighting
+    parser.add_argument(
+        "--hard-bc",
+        dest="hard_bc",
+        action="store_true",
+        default=False,
+        help="M7: weight BC loss by tanh(-SDF(x)/scale) so near-boundary points dominate less.",
+    )
+    parser.add_argument(
+        "--hard-bc-scale",
+        type=float,
+        default=0.05,
+        help="M7: length scale for the SDF-based BC weight (tanh argument divisor).",
+    )
+
+    # M8: Residual-based Adaptive Refinement (RAR)
+    parser.add_argument(
+        "--rar-period",
+        type=int,
+        default=0,
+        help="M8: refill RAR pool every N Schwarz iterations (0 = disabled).",
+    )
+    parser.add_argument("--rar-candidates", type=int, default=512,
+                        help="M8: candidate points to evaluate residual on per RAR update.")
+    parser.add_argument("--rar-top-k", type=int, default=64,
+                        help="M8: top-k highest-residual points added to pool per RAR update.")
+    parser.add_argument("--rar-pool-max", type=int, default=256,
+                        help="M8: maximum pool size per chart (older points evicted randomly).")
+    parser.add_argument("--rar-mix-n", type=int, default=32,
+                        help="M8: number of RAR pool points mixed into each PDE batch.")
+
     return parser.parse_args()
 
 
