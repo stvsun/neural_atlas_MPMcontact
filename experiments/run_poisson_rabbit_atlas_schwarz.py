@@ -1451,7 +1451,54 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         return x_if, xi_i, xi_j, n_if
 
     # --------------------------------------------------------------------------
+    def _sample_bc_surface_sdf(i: int, n_samples: int) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """M6/volumetric: sample points near the domain surface (|SDF| < eps_surface)
+        within chart i's support ball.  Returns (xi, target, x_phys) or None on failure.
+        """
+        if _sdf_net is None:
+            return None
+        r_i = float(support_r[i])
+        # Use higher rejection factor: surface is a thin shell
+        factor = max(12, int(getattr(args, "sdf_rejection_factor", 6)) * 3)
+        n_cand = n_samples * factor
+
+        # Uniform-in-ball sampling around seed i
+        u_vec = torch.randn(n_cand, 3, device=device, dtype=dtype)
+        u_vec = u_vec / torch.clamp(torch.linalg.norm(u_vec, dim=1, keepdim=True), min=1e-12)
+        r_rand = r_i * torch.rand(n_cand, 1, device=device, dtype=dtype) ** (1.0 / 3.0)
+        x_cand = seeds[i].unsqueeze(0) + u_vec * r_rand  # (n_cand, 3) in atlas-normalized coords
+
+        with torch.no_grad():
+            x_norm_cand = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
+            sdf_vals = _sdf_net(x_norm_cand)  # (n_cand,)
+            # Accept: near surface |SDF| < eps_surface (SDF=0 on surface)
+            eps_surface = float(getattr(args, "bc_surface_eps", 0.04))
+            mask = sdf_vals.abs() < eps_surface
+            x_ok = x_cand[mask]
+
+        if x_ok.shape[0] == 0:
+            return None  # caller will fall back to interior supervision
+
+        if x_ok.shape[0] >= n_samples:
+            x_bc = x_ok[torch.randperm(x_ok.shape[0], device=device)[:n_samples]]
+        else:
+            rep = x_ok.repeat(math.ceil(n_samples / x_ok.shape[0]), 1)[:n_samples]
+            x_bc = rep + 0.005 * r_i * torch.randn_like(rep)
+
+        xi_bc = local_coords(x_bc, seeds[i], t1[i], t2[i], nvec[i]).detach()
+        target_bc = manufactured_u(x_bc).detach()
+        return xi_bc, target_bc, x_bc.detach()
+
+    # --------------------------------------------------------------------------
     def local_bc_batch(i: int, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # M6: in volumetric mode, BC points should be on the domain surface (SDF ≈ 0),
+        # not interior atlas points. Use SDF rejection sampling near the surface.
+        if getattr(args, "volumetric_atlas", False):
+            result = _sample_bc_surface_sdf(i, n_samples)
+            if result is not None:
+                return result
+            # fallback if SDF surface sampling fails (no SDF or very sparse charts)
+
         pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
         if pick is None:
             z = torch.zeros((n_samples, 3), device=device, dtype=dtype)
@@ -3048,6 +3095,14 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="M6: enable volumetric atlas mode — uses 3-D ball-intersection interface "
              "sampling and forces SDF interior PDE sampling (requires --sdf-checkpoint).",
+    )
+    parser.add_argument(
+        "--bc-surface-eps",
+        type=float,
+        default=0.04,
+        dest="bc_surface_eps",
+        help="M6: SDF band half-width for surface BC sampling in volumetric mode "
+             "(accept points with |SDF| < bc_surface_eps as boundary points).",
     )
 
     return parser.parse_args()
