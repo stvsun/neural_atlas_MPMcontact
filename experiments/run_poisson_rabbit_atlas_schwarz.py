@@ -511,11 +511,22 @@ def load_sdf_for_schwarz(
         sdf_scale  : float – domain scale used during SDF training
     """
     ckpt = torch.load(ckpt_path, map_location=device)
-    width = ckpt.get("width", 128)
-    depth = ckpt.get("depth", 6)
+    # Support two checkpoint formats:
+    #   Format A (train_sdf_rabbit.py): keys "model_state", "model_kwargs", "center", "scale"
+    #   Format B (simplified):         keys "model", "width", "depth", "center", "scale"
+    if "model_state" in ckpt:
+        kw = ckpt.get("model_kwargs", {})
+        width = int(kw.get("width", 128))
+        depth = int(kw.get("depth", 6))
+        state_key = "model_state"
+    else:
+        width = int(ckpt.get("width", 128))
+        depth = int(ckpt.get("depth", 6))
+        state_key = "model"
     sdf_net = _SDFNetSchwarz(width=width, depth=depth).to(device=device, dtype=dtype)
-    sdf_net.load_state_dict(ckpt["model"])
+    sdf_net.load_state_dict(ckpt[state_key])
     sdf_net.eval()
+    sdf_net.requires_grad_(False)
     center = torch.tensor(ckpt.get("center", [0.0, 0.0, 0.0]), device=device, dtype=dtype)
     scale  = float(ckpt.get("scale", 1.0))
     return sdf_net, center, scale
