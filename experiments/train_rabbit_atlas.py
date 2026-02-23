@@ -14,7 +14,7 @@ import json
 import os
 import random
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -108,6 +108,49 @@ def local_coords(
     )
 
 
+# ---------------------------------------------------------------------------
+# M6: SDF network for volumetric atlas training
+# ---------------------------------------------------------------------------
+
+class _SDFNetAtlasTrain(torch.nn.Module):
+    """Thin SDF network wrapper used only during volumetric atlas training."""
+
+    def __init__(self, width: int = 128, depth: int = 6):
+        super().__init__()
+        self.net = MLP(in_dim=3, out_dim=1, width=width, depth=depth)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x).squeeze(-1)
+
+
+def load_sdf_for_atlas(
+    path: str,
+    device: torch.device,
+) -> Tuple["_SDFNetAtlasTrain", torch.Tensor, float]:
+    """Load an SDF network for use in volumetric atlas training.
+
+    Handles two checkpoint formats:
+      Format A (train_sdf_rabbit.py): ``model_state``, ``model_kwargs``, ``center``, ``scale``
+      Format B (simplified):          ``model``, ``width``, ``depth``, ``center``, ``scale``
+
+    Returns (net, center_tensor, scale_float) — net is frozen on *device*.
+    """
+    ckpt = torch.load(path, map_location=device)
+    if "model_state" in ckpt:
+        kw = ckpt.get("model_kwargs", {})
+        net = _SDFNetAtlasTrain(width=int(kw.get("width", 128)), depth=int(kw.get("depth", 6)))
+        net.load_state_dict(ckpt["model_state"])
+    else:
+        net = _SDFNetAtlasTrain(width=int(ckpt.get("width", 128)), depth=int(ckpt.get("depth", 6)))
+        net.load_state_dict(ckpt["model"])
+    net.to(device)
+    net.eval()
+    net.requires_grad_(False)
+    center = torch.tensor(ckpt["center"], dtype=torch.float64, device=device)
+    scale = float(ckpt["scale"])
+    return net, center, scale
+
+
 def jacobian_det(decoder: ChartDecoder, xi: torch.Tensor, seed, t1, t2, n, chart_scale) -> torch.Tensor:
     xi_req = xi.clone().detach().requires_grad_(True)
     x_pred = decoder(xi_req, seed=seed, t1=t1, t2=t2, n=n, chart_scale=chart_scale)
@@ -164,6 +207,18 @@ def train_atlas(args: argparse.Namespace) -> Dict[str, object]:
     primary = primary.to(device)
     support_r = support_r.to(device)
 
+    # M6: optionally load SDF for volumetric training (L_domain replaces L_recon)
+    sdf_net_vol: Optional[_SDFNetAtlasTrain] = None
+    sdf_center_vol: Optional[torch.Tensor] = None
+    sdf_scale_vol: float = 1.0
+    if getattr(args, "volumetric", False):
+        sdf_ckpt_path = getattr(args, "sdf_checkpoint", None)
+        if not sdf_ckpt_path:
+            raise RuntimeError("--volumetric requires --sdf-checkpoint <path>")
+        print(f"[M6] Loading SDF for volumetric atlas training: {sdf_ckpt_path}")
+        sdf_net_vol, sdf_center_vol, sdf_scale_vol = load_sdf_for_atlas(sdf_ckpt_path, device)
+        print(f"[M6] Volumetric training enabled — L_recon replaced by L_domain.")
+
     chart_pos_idx: List[torch.Tensor] = []
     chart_neg_idx: List[torch.Tensor] = []
     for i in range(n_charts):
@@ -210,15 +265,39 @@ def train_atlas(args: argparse.Namespace) -> Dict[str, object]:
             x_pos = points[p_idx]
             xi_pos = local_coords(x_pos, seeds[i], t1[i], t2[i], nvec[i])
 
-            x_hat = decoders[i](
-                xi_pos,
-                seed=seeds[i],
-                t1=t1[i],
-                t2=t2[i],
-                n=nvec[i],
-                chart_scale=support_r[i],
-            )
-            loss_recon = loss_recon + torch.mean((x_hat - x_pos) ** 2)
+            if getattr(args, "volumetric", False) and sdf_net_vol is not None:
+                # M6 L_domain: sample random xi in [-r,r]^3, decode to physical x,
+                # penalise points that exit the domain (SDF >= threshold).
+                r_i = float(support_r[i].item())
+                n_vol = int(getattr(args, "n_vol_sample", 2048))
+                xi_rand = (
+                    2.0 * torch.rand(n_vol, 3, device=device, dtype=torch.float64) - 1.0
+                ) * r_i
+                x_dec = decoders[i](
+                    xi_rand,
+                    seed=seeds[i],
+                    t1=t1[i],
+                    t2=t2[i],
+                    n=nvec[i],
+                    chart_scale=support_r[i],
+                )
+                # sdf_net_vol is frozen; gradient flows only through decoders[i]
+                x_norm_dec = (x_dec - sdf_center_vol.unsqueeze(0)) / sdf_scale_vol
+                sdf_vals = sdf_net_vol(x_norm_dec)
+                viol = torch.nn.functional.relu(
+                    sdf_vals - float(getattr(args, "sdf_threshold", 0.0))
+                )
+                loss_recon = loss_recon + torch.mean(viol ** 2)
+            else:
+                x_hat = decoders[i](
+                    xi_pos,
+                    seed=seeds[i],
+                    t1=t1[i],
+                    t2=t2[i],
+                    n=nvec[i],
+                    chart_scale=support_r[i],
+                )
+                loss_recon = loss_recon + torch.mean((x_hat - x_pos) ** 2)
 
             logits_pos = masks[i](xi_pos, chart_scale=support_r[i])
             loss_mask = loss_mask + torch.mean(torch.nn.functional.softplus(-logits_pos))
@@ -301,8 +380,14 @@ def train_atlas(args: argparse.Namespace) -> Dict[str, object]:
         nll = -torch.log(torch.clamp(pou[torch.arange(bg), pri], min=1e-12))
         loss_cov = loss_cov + torch.mean(nll)
 
+        # M6: use w_domain instead of w_recon in volumetric mode
+        w_recon_eff = (
+            float(getattr(args, "w_domain", args.w_recon))
+            if getattr(args, "volumetric", False)
+            else args.w_recon
+        )
         loss_total = (
-            args.w_recon * loss_recon
+            w_recon_eff * loss_recon
             + args.w_mask * loss_mask
             + args.w_overlap * loss_overlap
             + args.w_jac * loss_jac
@@ -322,9 +407,10 @@ def train_atlas(args: argparse.Namespace) -> Dict[str, object]:
 
         if epoch % max(1, args.log_every) == 0:
             elapsed = time.time() - start
+            recon_label = "domain" if getattr(args, "volumetric", False) else "recon"
             print(
                 f"Epoch {epoch}/{args.epochs} | total={loss_total.item():.4e} "
-                f"recon={loss_recon.item():.3e} mask={loss_mask.item():.3e} "
+                f"{recon_label}={loss_recon.item():.3e} mask={loss_mask.item():.3e} "
                 f"overlap={loss_overlap.item():.3e} jac={loss_jac.item():.3e} cov={loss_cov.item():.3e} "
                 f"time={elapsed:.1f}s"
             )
@@ -400,11 +486,13 @@ def train_atlas(args: argparse.Namespace) -> Dict[str, object]:
         "gate_foldover": fold_ratio <= args.gate_foldover_ratio,
         "gate_rmse": rmse <= args.gate_boundary_rmse,
     }
+    # M6: in volumetric mode, gate_rmse is not meaningful (no surface ground truth)
+    gate_rmse_check = True if getattr(args, "volumetric", False) else gate["gate_rmse"]
     gate["passed"] = bool(
         gate["gate_coverage"]
         and gate["gate_overlap"]
         and gate["gate_foldover"]
-        and gate["gate_rmse"]
+        and gate_rmse_check
     )
 
     ckpt = {
@@ -486,6 +574,39 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--log-every", type=int, default=100)
+
+    # M6: volumetric atlas training flags
+    parser.add_argument(
+        "--volumetric",
+        action="store_true",
+        default=False,
+        help="M6: enable volumetric atlas training — replaces L_recon with L_domain "
+             "(penalise decoder outputs that exit the SDF domain).",
+    )
+    parser.add_argument(
+        "--sdf-checkpoint",
+        default=None,
+        help="M6: path to a trained SDF network checkpoint (.pt). Required with --volumetric.",
+    )
+    parser.add_argument(
+        "--n-vol-sample",
+        type=int,
+        default=2048,
+        help="M6: number of random xi samples per chart per epoch for L_domain.",
+    )
+    parser.add_argument(
+        "--w-domain",
+        type=float,
+        default=1.0,
+        help="M6: weight for L_domain (overrides --w-recon when --volumetric is set).",
+    )
+    parser.add_argument(
+        "--sdf-threshold",
+        type=float,
+        default=0.0,
+        help="M6: SDF acceptance threshold — penalise sdf_val >= this value (0 = exactly inside).",
+    )
+
     return parser.parse_args()
 
 

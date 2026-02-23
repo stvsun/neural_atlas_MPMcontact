@@ -1103,7 +1103,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         return n.detach()
 
     overlap_normals: Dict[Tuple[int, int], torch.Tensor] = {}
-    if args.interface_flux_mode == "projected" and args.interface_normal_mode == "mask_levelset":
+    # M6: volumetric atlas uses seed-direction normals — skip mask_levelset precomputation
+    if (args.interface_flux_mode == "projected"
+            and args.interface_normal_mode == "mask_levelset"
+            and not getattr(args, "volumetric_atlas", False)):
         print("Precomputing interface normals from mask level-set gradients")
         chunk = max(64, int(args.interface_normal_cache_batch))
         with torch.enable_grad():
@@ -1265,7 +1268,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         SDF < sdf_interior_threshold (i.e. inside the domain). Falls back to
         surface-noise sampling when acceptance rate is too low.
         """
-        if _sdf_net is None or not getattr(args, "use_sdf_sampling", False):
+        # M6: also activate when --volumetric-atlas is set
+        _want_sdf = getattr(args, "use_sdf_sampling", False) or getattr(args, "volumetric_atlas", False)
+        if _sdf_net is None or not _want_sdf:
             return sample_local_xi(i, n_samples)
         r = float(support_r[i]) * 1.0
         factor = max(1, int(getattr(args, "sdf_rejection_factor", 6)))
@@ -1294,7 +1299,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
 
     def sample_pde_xi(i: int, n_samples: int) -> torch.Tensor:
         """Choose PDE sampling strategy: SDF interior or surface-noise."""
-        if _sdf_net is not None and getattr(args, "use_sdf_sampling", False):
+        # M6: --volumetric-atlas forces SDF interior sampling
+        use_sdf = (
+            getattr(args, "use_sdf_sampling", False)
+            or getattr(args, "volumetric_atlas", False)
+        )
+        if _sdf_net is not None and use_sdf:
             return sample_interior_xi_sdf(i, n_samples)
         return sample_local_xi(i, n_samples)
 
@@ -1357,6 +1367,74 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         perm = torch.randperm(pool.shape[0], device=device)[:n_mix]
         return torch.cat([base, pool[perm]], dim=0)
 
+    # M6: Volumetric interface sampling ----------------------------------------
+    def sample_interface_volumetric(
+        i: int,
+        j: int,
+        n_samples: int,
+    ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """M6: Sample interface points from the 3-D intersection of chart balls.
+
+        Generates candidate points around the midpoint of seeds[i] and seeds[j],
+        accepts those inside BOTH support balls (and optionally inside the SDF
+        domain), then converts to per-chart local coordinates.  Falls back to a
+        seed-segment fan when the geometric intersection is too sparse.
+        """
+        key = (i, j) if i < j else (j, i)
+        # Check whether i and j are actually neighbours
+        if j not in neighbors[i]:
+            return None
+        r_i = float(support_r[i])
+        r_j = float(support_r[j])
+        s_i = seeds[i]
+        s_j = seeds[j]
+        midpt = 0.5 * (s_i + s_j)
+        r_samp = 0.5 * min(r_i, r_j)
+        factor = max(4, int(getattr(args, "sdf_rejection_factor", 6)))
+        n_cand = n_samples * factor
+
+        # Uniform-in-ball sampling around midpoint (Muller method)
+        u = torch.randn(n_cand, 3, device=device, dtype=dtype)
+        u_norm = torch.linalg.norm(u, dim=1, keepdim=True)
+        u = u / torch.clamp(u_norm, min=1e-12)
+        r_rand = r_samp * torch.rand(n_cand, 1, device=device, dtype=dtype) ** (1.0 / 3.0)
+        x_cand = midpt.unsqueeze(0) + u * r_rand
+
+        with torch.no_grad():
+            d_i = torch.linalg.norm(x_cand - s_i.unsqueeze(0), dim=1)
+            d_j = torch.linalg.norm(x_cand - s_j.unsqueeze(0), dim=1)
+            mask = (d_i <= r_i) & (d_j <= r_j)
+            if _sdf_net is not None:
+                x_norm_cand = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
+                sdf_vals = _sdf_net(x_norm_cand)
+                mask = mask & (sdf_vals < float(getattr(args, "sdf_interior_threshold", 0.0)))
+
+        x_ok = x_cand[mask]
+        if x_ok.shape[0] >= n_samples:
+            perm = torch.randperm(x_ok.shape[0], device=device)[:n_samples]
+            x_if = x_ok[perm]
+        elif x_ok.shape[0] > 0:
+            # Repeat with small noise to reach n_samples
+            reps = math.ceil(n_samples / x_ok.shape[0])
+            rep = x_ok.repeat(reps, 1)[:n_samples]
+            x_if = rep + 0.02 * r_samp * torch.randn_like(rep)
+        else:
+            # Fallback: linear segment between seeds with noise
+            tv = torch.linspace(0.2, 0.8, n_samples, device=device, dtype=dtype).unsqueeze(1)
+            x_if = s_i.unsqueeze(0) + tv * (s_j - s_i).unsqueeze(0)
+            x_if = x_if + 0.05 * r_samp * torch.randn_like(x_if)
+
+        x_if = x_if.detach()
+        xi_i = local_coords(x_if, seeds[i], t1[i], t2[i], nvec[i])
+        xi_j = local_coords(x_if, seeds[j], t1[j], t2[j], nvec[j])
+
+        # Interface normal = direction from seed i to seed j (seed-direction mode)
+        sd = s_j - s_i
+        sd_len = float(torch.linalg.norm(sd).item())
+        n_if = (sd / max(sd_len, 1e-12)).unsqueeze(0).expand(x_if.shape[0], -1).detach()
+
+        return x_if, xi_i, xi_j, n_if
+
     # --------------------------------------------------------------------------
     def local_bc_batch(i: int, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
@@ -1373,6 +1451,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         j: int,
         n_samples: int,
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+        # M6: volumetric atlas uses 3-D ball-intersection interface sampling
+        if getattr(args, "volumetric_atlas", False):
+            return sample_interface_volumetric(i, j, n_samples)
         key = (i, j) if i < j else (j, i)
         shared = overlap_idx_pairs.get(key)
         if shared is None or shared.numel() == 0:
@@ -2942,6 +3023,16 @@ def parse_args() -> argparse.Namespace:
                         help="M8: maximum pool size per chart (older points evicted randomly).")
     parser.add_argument("--rar-mix-n", type=int, default=32,
                         help="M8: number of RAR pool points mixed into each PDE batch.")
+
+    # M6: volumetric atlas mode
+    parser.add_argument(
+        "--volumetric-atlas",
+        dest="volumetric_atlas",
+        action="store_true",
+        default=False,
+        help="M6: enable volumetric atlas mode — uses 3-D ball-intersection interface "
+             "sampling and forces SDF interior PDE sampling (requires --sdf-checkpoint).",
+    )
 
     return parser.parse_args()
 
