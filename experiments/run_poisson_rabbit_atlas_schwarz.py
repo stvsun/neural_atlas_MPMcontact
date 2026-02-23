@@ -510,7 +510,9 @@ def load_sdf_for_schwarz(
         sdf_center : (3,) tensor – domain centre used during SDF training
         sdf_scale  : float – domain scale used during SDF training
     """
-    ckpt = torch.load(ckpt_path, map_location=device)
+    # Always load checkpoint to CPU first to avoid dtype/device mismatches
+    # (e.g. MPS does not support float64; loading float64 weights on MPS raises an error).
+    ckpt = torch.load(ckpt_path, map_location="cpu")
     # Support two checkpoint formats:
     #   Format A (train_sdf_rabbit.py): keys "model_state", "model_kwargs", "center", "scale"
     #   Format B (simplified):         keys "model", "width", "depth", "center", "scale"
@@ -523,8 +525,10 @@ def load_sdf_for_schwarz(
         width = int(ckpt.get("width", 128))
         depth = int(ckpt.get("depth", 6))
         state_key = "model"
-    sdf_net = _SDFNetSchwarz(width=width, depth=depth).to(device=device, dtype=dtype)
+    # Build on CPU first, load weights, then move to target device+dtype (handles float64→float32)
+    sdf_net = _SDFNetSchwarz(width=width, depth=depth)
     sdf_net.load_state_dict(ckpt[state_key])
+    sdf_net = sdf_net.to(device=device, dtype=dtype)
     sdf_net.eval()
     sdf_net.requires_grad_(False)
     center = torch.tensor(ckpt.get("center", [0.0, 0.0, 0.0]), device=device, dtype=dtype)
