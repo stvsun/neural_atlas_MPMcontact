@@ -1657,7 +1657,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     xi_int = eval_cache_pde[i]
                 else:
                     ni = max(16, args.eval_pde_samples_per_chart)
-                    xi_int = sample_local_xi(i, ni)
+                    # M6: use SDF-guided interior sampling for eval in volumetric mode
+                    xi_int = sample_pde_xi(i, ni)
                 res, _, valid = mapped_poisson_residual(
                     u_nets[i],
                     decoders[i],
