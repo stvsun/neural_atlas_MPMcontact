@@ -2018,35 +2018,39 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             opts[i].zero_grad()
 
             with amp_ctx():
-                # M1/M8: Use RAR-augmented sampling; route through direct or mapped residual
-                xi_int = sample_pde_xi_with_rar(i, pde_batch_i)
-                _direct = bool(getattr(args, "direct_coord_pde", False))
-                if _direct:
-                    x_phys_int = (
-                        seeds[i].unsqueeze(0)
-                        + xi_int[:, 0:1] * t1[i].unsqueeze(0)
-                        + xi_int[:, 1:2] * t2[i].unsqueeze(0)
-                        + xi_int[:, 2:3] * nvec[i].unsqueeze(0)
-                    )
-                    res, _, valid = direct_poisson_residual_tnb(
-                        u_nets[i], x_phys_int, seeds[i], t1[i], t2[i], nvec[i]
-                    )
+                # M1/M8: Use RAR-augmented sampling; route through direct or mapped residual.
+                # Guard: skip expensive double-autodiff when PDE weight is zero.
+                if w_pde_eff > 0.0:
+                    xi_int = sample_pde_xi_with_rar(i, pde_batch_i)
+                    _direct = bool(getattr(args, "direct_coord_pde", False))
+                    if _direct:
+                        x_phys_int = (
+                            seeds[i].unsqueeze(0)
+                            + xi_int[:, 0:1] * t1[i].unsqueeze(0)
+                            + xi_int[:, 1:2] * t2[i].unsqueeze(0)
+                            + xi_int[:, 2:3] * nvec[i].unsqueeze(0)
+                        )
+                        res, _, valid = direct_poisson_residual_tnb(
+                            u_nets[i], x_phys_int, seeds[i], t1[i], t2[i], nvec[i]
+                        )
+                    else:
+                        res, _, valid = mapped_poisson_residual(
+                            u_nets[i],
+                            decoders[i],
+                            xi_int,
+                            seed=seeds[i],
+                            t1=t1[i],
+                            t2=t2[i],
+                            n=nvec[i],
+                            chart_scale=support_r[i],
+                            sigma_floor=args.sigma_floor,
+                            det_floor=args.det_floor,
+                            jac_kappa_max=args.jac_kappa_max,
+                        )
+                    res_use = select_residual_samples(res, valid, with_clip=True)
+                    loss_pde = pde_loss_fn(res_use)
                 else:
-                    res, _, valid = mapped_poisson_residual(
-                        u_nets[i],
-                        decoders[i],
-                        xi_int,
-                        seed=seeds[i],
-                        t1=t1[i],
-                        t2=t2[i],
-                        n=nvec[i],
-                        chart_scale=support_r[i],
-                        sigma_floor=args.sigma_floor,
-                        det_floor=args.det_floor,
-                        jac_kappa_max=args.jac_kappa_max,
-                    )
-                res_use = select_residual_samples(res, valid, with_clip=True)
-                loss_pde = pde_loss_fn(res_use)
+                    loss_pde = torch.tensor(0.0, device=device, dtype=dtype)
 
                 xi_bc, u_bc, x_bc = local_bc_batch(i, bc_batch_i)
                 # Guard: interior charts (volumetric mode) may return empty BC tensors
@@ -2099,19 +2103,28 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
 
                 iv_terms: List[torch.Tensor] = []
                 if_terms: List[torch.Tensor] = []
+                _need_flux = w_if_flux_eff > 0.0
                 for j in neighbors[i]:
                     ib = interface_batch(i, j, if_batch_i)
                     if ib is None:
                         continue
                     _, xi_i, xi_j, n_if = ib
-                    liv, _, lif_train = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
                     pair_key = (i, j) if i < j else (j, i)
                     pair_boost = 1.0
                     if args.curvature_adaptive_sampling and args.interface_detail_boost > 1.0:
                         d_pair = overlap_detail_strength.get(pair_key, 0.0)
                         pair_boost = 1.0 + (float(args.interface_detail_boost) - 1.0) * float(d_pair)
+                    if _need_flux:
+                        # Full coupling: value + flux (requires decoder Jacobian via grad_u_in_physical)
+                        liv, _, lif_train = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
+                        if_terms.append(pair_boost * lif_train)
+                    else:
+                        # Fast path: value-only coupling (no decoder Jacobian needed)
+                        ui = u_nets[i](xi_i)
+                        with torch.no_grad():
+                            uj = u_nets[j](xi_j)
+                        liv = torch.mean((ui - uj) ** 2)
                     iv_terms.append(pair_boost * liv)
-                    if_terms.append(pair_boost * lif_train)
 
                 loss_iv = torch.mean(torch.stack(iv_terms)) if iv_terms else torch.tensor(0.0, device=device, dtype=dtype)
                 loss_if = torch.mean(torch.stack(if_terms)) if if_terms else torch.tensor(0.0, device=device, dtype=dtype)
