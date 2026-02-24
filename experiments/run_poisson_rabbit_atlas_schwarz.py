@@ -1880,6 +1880,23 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                         grad_true = manufactured_grad_u(x_bc)
                         loss = loss + args.bc_pretrain_grad_weight * torch.mean((grad_pred - grad_true) ** 2)
 
+                    # Joint interior supervised pretrain: fit manufactured_u at interior SDF points
+                    # simultaneously with BC so neither overwrites the other.
+                    bc_pretrain_sup_weight = float(getattr(args, "bc_pretrain_sup_weight", 0.0))
+                    if bc_pretrain_sup_weight > 0.0:
+                        xi_sup_p = sample_pde_xi(i, int(args.bc_pretrain_batch))
+                        x_sup_p = decoders[i](
+                            xi_sup_p,
+                            seed=seeds[i],
+                            t1=t1[i],
+                            t2=t2[i],
+                            n=nvec[i],
+                            chart_scale=support_r[i],
+                        )
+                        u_sup_p = manufactured_u(x_sup_p).detach()
+                        loss_sup_p = torch.mean((u_nets[i](xi_sup_p) - u_sup_p) ** 2)
+                        loss = loss + bc_pretrain_sup_weight * loss_sup_p
+
                     if args.bc_pretrain_interface_weight > 0.0:
                         iv_terms = []
                         for j in neighbors[i]:
@@ -2902,6 +2919,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bc-pretrain-batch", type=int, default=256)
     parser.add_argument("--bc-pretrain-grad-weight", type=float, default=0.05)
     parser.add_argument("--bc-pretrain-interface-weight", type=float, default=0.2)
+    parser.add_argument(
+        "--bc-pretrain-sup-weight", type=float, default=0.0, dest="bc_pretrain_sup_weight",
+        help="M6/volumetric: weight for joint interior supervision during BC pretrain. "
+             "Simultaneously fits manufactured_u at SDF interior points while BC is fitted "
+             "at surface, preventing the two from overwriting each other.",
+    )
     parser.add_argument("--bc-pretrain-log-every", type=int, default=50)
     parser.add_argument("--manufactured-supervision-batch", type=int, default=128)
     parser.add_argument("--w-manufactured-supervision", type=float, default=0.0)
