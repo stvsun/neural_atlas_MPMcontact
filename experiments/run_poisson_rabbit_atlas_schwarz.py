@@ -1422,8 +1422,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             d_j = torch.linalg.norm(x_cand - s_j.unsqueeze(0), dim=1)
             mask = (d_i <= r_i) & (d_j <= r_j)
             if _sdf_net is not None:
-                x_norm_cand = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
-                sdf_vals = _sdf_net(x_norm_cand)
+                # x_cand is already in SDF-normalised space (midpt is computed from
+                # seeds which are in normalised coords). Pass directly to SDF net.
+                sdf_vals = _sdf_net(x_cand)
                 mask = mask & (sdf_vals < float(getattr(args, "sdf_interior_threshold", 0.0)))
 
         x_ok = x_cand[mask]
@@ -1471,8 +1472,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         x_cand = seeds[i].unsqueeze(0) + u_vec * r_rand  # (n_cand, 3) in atlas-normalized coords
 
         with torch.no_grad():
-            x_norm_cand = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
-            sdf_vals = _sdf_net(x_norm_cand)  # (n_cand,)
+            # x_cand is already in SDF-normalised space (seeds are in normalised coords).
+            # Do NOT apply (x_cand - center) / scale — double-normalisation would
+            # produce wrong SDF values and identify the wrong "surface" region.
+            sdf_vals = _sdf_net(x_cand)  # (n_cand,)
             # Accept: near surface |SDF| < eps_surface (SDF=0 on surface)
             eps_surface = float(getattr(args, "bc_surface_eps", 0.04))
             mask = sdf_vals.abs() < eps_surface
