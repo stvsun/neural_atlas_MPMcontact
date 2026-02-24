@@ -1497,7 +1497,11 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             result = _sample_bc_surface_sdf(i, n_samples)
             if result is not None:
                 return result
-            # fallback if SDF surface sampling fails (no SDF or very sparse charts)
+            # Deep interior chart: no surface contact → return EMPTY tensors so callers
+            # produce zero BC loss for this chart (correct: interior charts don't touch ∂Ω).
+            empty_xi = torch.zeros((0, 3), device=device, dtype=dtype)
+            empty_u  = torch.zeros((0, 1), device=device, dtype=dtype)
+            return empty_xi, empty_u, empty_xi
 
         pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
         if pick is None:
@@ -1726,8 +1730,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     xi_bc, u_bc = eval_cache_bc[i]
                 else:
                     xi_bc, u_bc, _ = local_bc_batch(i, max(16, args.eval_bc_samples_per_chart))
-                u_hat = u_nets[i](xi_bc)
-                bc_terms.append(torch.mean((u_hat - u_bc) ** 2))
+                # Guard: interior charts return empty tensors — skip their BC term
+                if xi_bc.shape[0] > 0:
+                    u_hat = u_nets[i](xi_bc)
+                    bc_terms.append(torch.mean((u_hat - u_bc) ** 2))
 
                 for j in neighbors[i]:
                     if j <= i:
@@ -1851,10 +1857,14 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
 
                 with amp_ctx():
                     xi_bc, u_bc, x_bc = local_bc_batch(i, args.bc_pretrain_batch)
-                    u_hat = u_nets[i](xi_bc)
-                    loss = torch.mean((u_hat - u_bc) ** 2)
+                    # Guard: interior charts return empty tensors (no surface BC to enforce)
+                    if xi_bc.shape[0] > 0:
+                        u_hat = u_nets[i](xi_bc)
+                        loss = torch.mean((u_hat - u_bc) ** 2)
+                    else:
+                        loss = torch.tensor(0.0, device=device, dtype=dtype)
 
-                    if args.bc_pretrain_grad_weight > 0.0:
+                    if args.bc_pretrain_grad_weight > 0.0 and xi_bc.shape[0] > 0:
                         grad_pred = grad_u_in_physical(
                             u_nets[i],
                             decoders[i],
@@ -1882,17 +1892,19 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                         if iv_terms:
                             loss = loss + args.bc_pretrain_interface_weight * torch.mean(torch.stack(iv_terms))
 
-                if use_cuda_amp:
-                    assert scalers[i] is not None
-                    scalers[i].scale(loss).backward()
-                    scalers[i].unscale_(opts[i])
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
-                    scalers[i].step(opts[i])
-                    scalers[i].update()
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
-                    opts[i].step()
+                # Skip backward if loss is zero (e.g. interior charts with no BC samples)
+                if loss.item() != 0.0:
+                    if use_cuda_amp:
+                        assert scalers[i] is not None
+                        scalers[i].scale(loss).backward()
+                        scalers[i].unscale_(opts[i])
+                        torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
+                        scalers[i].step(opts[i])
+                        scalers[i].update()
+                    else:
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
+                        opts[i].step()
                 losses_ep.append(float(loss.item()))
 
             if ep % max(1, args.bc_pretrain_log_every) == 0 and losses_ep:
@@ -1914,7 +1926,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 opts[i].zero_grad()
 
                 with amp_ctx():
-                    xi_sup = sample_local_xi(i, args.interior_pretrain_batch)
+                    # M6: use SDF-guided interior sampling in volumetric mode
+                    xi_sup = sample_pde_xi(i, args.interior_pretrain_batch)
                     x_sup = decoders[i](
                         xi_sup,
                         seed=seeds[i],
@@ -2019,21 +2032,26 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 loss_pde = pde_loss_fn(res_use)
 
                 xi_bc, u_bc, x_bc = local_bc_batch(i, bc_batch_i)
-                u_hat_bc = u_nets[i](xi_bc)
-                # M7: weight BC loss by SDF depth so near-boundary points dominate less
-                if getattr(args, "hard_bc", False) and _sdf_net is not None:
-                    _bc_w = sdf_hard_bc_scale(
-                        x_bc, _sdf_net, _sdf_center, _sdf_scale,
-                        float(getattr(args, "hard_bc_scale", 0.05)),
-                    )
-                    loss_bc = torch.mean(_bc_w * (u_hat_bc - u_bc) ** 2)
+                # Guard: interior charts (volumetric mode) may return empty BC tensors
+                if xi_bc.shape[0] > 0:
+                    u_hat_bc = u_nets[i](xi_bc)
+                    # M7: weight BC loss by SDF depth so near-boundary points dominate less
+                    if getattr(args, "hard_bc", False) and _sdf_net is not None:
+                        _bc_w = sdf_hard_bc_scale(
+                            x_bc, _sdf_net, _sdf_center, _sdf_scale,
+                            float(getattr(args, "hard_bc_scale", 0.05)),
+                        )
+                        loss_bc = torch.mean(_bc_w * (u_hat_bc - u_bc) ** 2)
+                    else:
+                        loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
                 else:
-                    loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
+                    loss_bc = torch.tensor(0.0, device=device, dtype=dtype)
 
                 loss_sup = torch.tensor(0.0, device=device, dtype=dtype)
                 loss_sup_grad = torch.tensor(0.0, device=device, dtype=dtype)
                 if args.w_manufactured_supervision > 0.0 or args.w_manufactured_grad_supervision > 0.0:
-                    xi_sup = sample_local_xi(i, sup_batch_i)
+                    # M6: use SDF-guided interior sampling in volumetric mode
+                    xi_sup = sample_pde_xi(i, sup_batch_i)
                     x_sup = decoders[i](
                         xi_sup,
                         seed=seeds[i],
