@@ -1904,7 +1904,11 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                             if ib is None:
                                 continue
                             _, xi_i, xi_j, n_if = ib
-                            liv, _, _ = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
+                            # Fast value-only path: no decoder Jacobian / grad_u_in_physical needed.
+                            ui_p = u_nets[i](xi_i)
+                            with torch.no_grad():
+                                uj_p = u_nets[j](xi_j)
+                            liv = torch.mean((ui_p - uj_p) ** 2)
                             iv_terms.append(liv)
                         if iv_terms:
                             loss = loss + args.bc_pretrain_interface_weight * torch.mean(torch.stack(iv_terms))
