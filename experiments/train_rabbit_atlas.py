@@ -281,9 +281,12 @@ def train_atlas(args: argparse.Namespace) -> Dict[str, object]:
                     n=nvec[i],
                     chart_scale=support_r[i],
                 )
-                # sdf_net_vol is frozen; gradient flows only through decoders[i]
-                x_norm_dec = (x_dec - sdf_center_vol.unsqueeze(0)) / sdf_scale_vol
-                sdf_vals = sdf_net_vol(x_norm_dec)
+                # sdf_net_vol is frozen; gradient flows only through decoders[i].
+                # x_dec is already in SDF-normalised space (seeds are in normalised
+                # coords; the decoder adds a small residual in the same space).
+                # Do NOT apply (x_dec - center) / scale — that would be
+                # double-normalisation and produce wrong SDF values.
+                sdf_vals = sdf_net_vol(x_dec)
                 viol = torch.nn.functional.relu(
                     sdf_vals - float(getattr(args, "sdf_threshold", 0.0))
                 )

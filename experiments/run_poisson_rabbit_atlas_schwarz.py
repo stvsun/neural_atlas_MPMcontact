@@ -1303,8 +1303,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             + xi_cand[:, 2:3] * n_i.unsqueeze(0)
         )
         with torch.no_grad():
-            x_norm = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
-            sdf_vals = _sdf_net(x_norm)
+            # x_cand is already in SDF-normalised space (same as atlas points).
+            # Do NOT apply (x_cand - _sdf_center) / _sdf_scale — that would be
+            # double-normalisation and produce wrong SDF values.
+            sdf_vals = _sdf_net(x_cand)
             inside = sdf_vals < thresh
         if inside.sum() >= n_samples:
             xi_ok = xi_cand[inside][:n_samples]
@@ -1977,6 +1979,17 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                         grad_true_sup = manufactured_grad_u(x_sup).detach()
                         loss = loss + args.interior_pretrain_grad_weight * torch.mean((grad_pred_sup - grad_true_sup) ** 2)
 
+                    # BC retention: prevent catastrophic forgetting of boundary values.
+                    # Without this, interior pretrain overwrites BC-fitted weights in
+                    # surface-adjacent charts, causing 44× increase in BC error.
+                    _bc_ret_w = float(getattr(args, "interior_pretrain_bc_weight", 0.0))
+                    if _bc_ret_w > 0.0:
+                        xi_bc_ret, u_bc_ret, _ = local_bc_batch(i, max(16, args.interior_pretrain_batch // 4))
+                        if xi_bc_ret.shape[0] > 0:
+                            u_hat_ret = u_nets[i](xi_bc_ret)
+                            loss_bc_ret = torch.mean((u_hat_ret - u_bc_ret) ** 2)
+                            loss = loss + _bc_ret_w * loss_bc_ret
+
                 if use_cuda_amp:
                     assert scalers[i] is not None
                     scalers[i].scale(loss).backward()
@@ -2003,6 +2016,71 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             f"[PretrainGuard] restored best pretrain state at end with rel_l2_eval={pretrain_best_rel_l2:.3e} "
             f"and lr={pre_current_lr():.3e}"
         )
+
+    # -----------------------------------------------------------------------
+    # Option C: H1 volumetric overlap coupling helper
+    # -----------------------------------------------------------------------
+    def sample_chart_overlap_volumetric(
+        i: int,
+        j: int,
+        n_samples: int,
+    ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """Sample random points from the 3-D geometric intersection of the
+        ball-shaped supports of charts i and j.
+
+        Returns (xi_i, xi_j, n_ij) — local coordinates for each chart and the
+        seed-direction interface normal — or None when no points can be found.
+
+        All coordinates are in SDF-normalised space (same as `seeds`, `points`).
+        """
+        if _sdf_net is None and not getattr(args, "volumetric_atlas", False):
+            return None
+        r_i = float(support_r[i])
+        r_j = float(support_r[j])
+        s_i = seeds[i]
+        s_j = seeds[j]
+        dist_ij = float(torch.linalg.norm(s_j - s_i).item())
+        # Quick rejection: balls don't overlap at all
+        if dist_ij > r_i + r_j + 1e-9:
+            return None
+
+        midpt = 0.5 * (s_i + s_j)
+        r_samp = 0.5 * min(r_i, r_j)
+        factor = max(4, int(getattr(args, "overlap_h1_rejection_factor", 8)))
+        n_cand = n_samples * factor
+
+        # Uniform sampling in ball of radius r_samp around midpoint
+        u_dir = torch.randn(n_cand, 3, device=device, dtype=dtype)
+        u_dir = u_dir / torch.clamp(torch.linalg.norm(u_dir, dim=1, keepdim=True), min=1e-12)
+        r_rand = r_samp * torch.rand(n_cand, 1, device=device, dtype=dtype) ** (1.0 / 3.0)
+        x_cand = midpt.unsqueeze(0) + u_dir * r_rand
+
+        with torch.no_grad():
+            d_i = torch.linalg.norm(x_cand - s_i.unsqueeze(0), dim=1)
+            d_j = torch.linalg.norm(x_cand - s_j.unsqueeze(0), dim=1)
+            mask = (d_i <= r_i) & (d_j <= r_j)
+            # Also require interior (SDF < threshold) when SDF net is available.
+            if _sdf_net is not None:
+                thresh = float(getattr(args, "sdf_interior_threshold", 0.0))
+                sdf_vals = _sdf_net(x_cand)   # x_cand already in normalised space
+                mask = mask & (sdf_vals < thresh)
+
+        x_ok = x_cand[mask]
+        if x_ok.shape[0] == 0:
+            return None
+
+        if x_ok.shape[0] >= n_samples:
+            perm = torch.randperm(x_ok.shape[0], device=device)[:n_samples]
+            x_if = x_ok[perm]
+        else:
+            # Pad by repeating with small jitter
+            rep = x_ok.repeat(math.ceil(n_samples / x_ok.shape[0]), 1)[:n_samples]
+            x_if = rep + 0.02 * r_samp * torch.randn_like(rep)
+
+        x_if = x_if.detach()
+        xi_i = local_coords(x_if, seeds[i], t1[i], t2[i], nvec[i])
+        xi_j = local_coords(x_if, seeds[j], t1[j], t2[j], nvec[j])
+        return xi_i, xi_j, None   # normal unused for value-only H1
 
     def optimize_chart(i: int, w_pde_eff: float, w_if_flux_eff: float) -> None:
         if point_idx_by_chart[i].numel() == 0 or (not trainable_chart_mask[i]):
@@ -2133,6 +2211,28 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 loss_iv = torch.mean(torch.stack(iv_terms)) if iv_terms else torch.tensor(0.0, device=device, dtype=dtype)
                 loss_if = torch.mean(torch.stack(if_terms)) if if_terms else torch.tensor(0.0, device=device, dtype=dtype)
 
+                # Option C: H1 volumetric overlap coupling —————————————————————
+                # Enforce u_i ≈ u_j throughout the 3-D volumetric intersection
+                # of chart supports (not just on the interface boundary surface).
+                # This gives a much stronger consistency constraint than classical
+                # interface coupling and is the key idea for overlapping Schwarz.
+                loss_overlap_h1 = torch.tensor(0.0, device=device, dtype=dtype)
+                _w_h1 = float(getattr(args, "w_overlap_h1", 0.0))
+                if _w_h1 > 0.0:
+                    h1_ov_terms: List[torch.Tensor] = []
+                    _ov_batch = int(getattr(args, "overlap_h1_batch", 32))
+                    for j in neighbors[i]:
+                        ov = sample_chart_overlap_volumetric(i, j, _ov_batch)
+                        if ov is None:
+                            continue
+                        xi_i_ov, xi_j_ov, _ = ov
+                        ui_ov = u_nets[i](xi_i_ov)
+                        with torch.no_grad():
+                            uj_ov = u_nets[j](xi_j_ov)
+                        h1_ov_terms.append(torch.mean((ui_ov - uj_ov) ** 2))
+                    if h1_ov_terms:
+                        loss_overlap_h1 = torch.mean(torch.stack(h1_ov_terms))
+
                 loss = (
                     w_pde_eff * loss_pde
                     + args.w_bc * loss_bc
@@ -2140,6 +2240,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     + w_if_flux_eff * loss_if
                     + args.w_manufactured_supervision * loss_sup
                     + args.w_manufactured_grad_supervision * loss_sup_grad
+                    + _w_h1 * loss_overlap_h1
                 )
 
             if use_cuda_amp:
@@ -3002,6 +3103,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interior-pretrain-batch", type=int, default=256)
     parser.add_argument("--interior-pretrain-grad-weight", type=float, default=0.5)
     parser.add_argument("--interior-pretrain-log-every", type=int, default=50)
+    parser.add_argument(
+        "--interior-pretrain-bc-weight", type=float, default=0.0,
+        help="BC retention weight during interior pretrain to prevent catastrophic "
+             "forgetting. Adds w * ||u_net(xi_bc) - u_bc||^2 to the interior "
+             "pretrain loss so boundary-fitted weights are preserved.",
+    )
     parser.add_argument("--pretrain-guard-enable", action="store_true")
     parser.add_argument("--pretrain-guard-eval-every", type=int, default=50)
     parser.add_argument("--pretrain-guard-patience", type=int, default=3)
@@ -3016,6 +3123,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--w-bc", type=float, default=2.0)
     parser.add_argument("--w-interface-value", type=float, default=0.8)
     parser.add_argument("--w-interface-flux", type=float, default=0.2)
+    # Option C: H1 volumetric overlap coupling
+    parser.add_argument(
+        "--w-overlap-h1", type=float, default=0.0,
+        help="Weight for H1 volumetric overlap coupling: enforces u_i ≈ u_j "
+             "throughout the 3-D intersection of chart ball supports (value-only). "
+             "Stronger than classical interface coupling because it samples the "
+             "full volumetric overlap, not just the boundary surface.",
+    )
+    parser.add_argument(
+        "--overlap-h1-batch", type=int, default=32,
+        help="Number of random overlap points sampled per chart-pair per local step.",
+    )
+    parser.add_argument(
+        "--overlap-h1-rejection-factor", type=int, default=8,
+        help="Candidate oversampling factor for volumetric overlap rejection sampling.",
+    )
     parser.add_argument("--w-interface-flux-start", type=float, default=None)
     parser.add_argument("--w-interface-flux-end", type=float, default=None)
     parser.add_argument("--flux-ramp-iters", type=int, default=0)
