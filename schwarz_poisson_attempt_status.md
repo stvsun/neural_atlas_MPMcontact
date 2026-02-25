@@ -370,12 +370,14 @@ Best score:    4428.2            ← score dominated by broken decoder PDE
 ```
 BC pretrain:  300 epochs, loss 6.283e-03
 Interior pretrain: 0 epochs (MISSING!)
-Schwarz iters: 17 total (plateau patience at iter 17)
+Schwarz iters: 60 total (ran to max_schwarz_iters; no plateau fired)
 Best rel_l2:  10.7% at iter 9
 Max error:    20.6%
-Runtime:      566s
+Runtime:      686s (~11 min)
 final_global_residual: 0.0765  ← now correct TNB-frame PDE (W1 fix working)
 ```
+
+Note: PDE residual converged from 46.58 → 0.076 over 60 iters (monotone improvement), but rel_l2_eval peaked at 10.7% (iter 9) and wandered ~13–18% thereafter. The score metric tracked PDE well (no plateau), confirming W1 fix is working — but without pretrain, the solution never got below 10.7%.
 
 **Lesson**: When benchmarking a fix, always reproduce ALL training hyperparameters from the baseline.
 
