@@ -510,12 +510,27 @@ def load_sdf_for_schwarz(
         sdf_center : (3,) tensor – domain centre used during SDF training
         sdf_scale  : float – domain scale used during SDF training
     """
-    ckpt = torch.load(ckpt_path, map_location=device)
-    width = ckpt.get("width", 128)
-    depth = ckpt.get("depth", 6)
-    sdf_net = _SDFNetSchwarz(width=width, depth=depth).to(device=device, dtype=dtype)
-    sdf_net.load_state_dict(ckpt["model"])
+    # Always load checkpoint to CPU first to avoid dtype/device mismatches
+    # (e.g. MPS does not support float64; loading float64 weights on MPS raises an error).
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    # Support two checkpoint formats:
+    #   Format A (train_sdf_rabbit.py): keys "model_state", "model_kwargs", "center", "scale"
+    #   Format B (simplified):         keys "model", "width", "depth", "center", "scale"
+    if "model_state" in ckpt:
+        kw = ckpt.get("model_kwargs", {})
+        width = int(kw.get("width", 128))
+        depth = int(kw.get("depth", 6))
+        state_key = "model_state"
+    else:
+        width = int(ckpt.get("width", 128))
+        depth = int(ckpt.get("depth", 6))
+        state_key = "model"
+    # Build on CPU first, load weights, then move to target device+dtype (handles float64→float32)
+    sdf_net = _SDFNetSchwarz(width=width, depth=depth)
+    sdf_net.load_state_dict(ckpt[state_key])
+    sdf_net = sdf_net.to(device=device, dtype=dtype)
     sdf_net.eval()
+    sdf_net.requires_grad_(False)
     center = torch.tensor(ckpt.get("center", [0.0, 0.0, 0.0]), device=device, dtype=dtype)
     scale  = float(ckpt.get("scale", 1.0))
     return sdf_net, center, scale
@@ -1288,8 +1303,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             + xi_cand[:, 2:3] * n_i.unsqueeze(0)
         )
         with torch.no_grad():
-            x_norm = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
-            sdf_vals = _sdf_net(x_norm)
+            # x_cand is already in SDF-normalised space (same as atlas points).
+            # Do NOT apply (x_cand - _sdf_center) / _sdf_scale — that would be
+            # double-normalisation and produce wrong SDF values.
+            sdf_vals = _sdf_net(x_cand)
             inside = sdf_vals < thresh
         if inside.sum() >= n_samples:
             xi_ok = xi_cand[inside][:n_samples]
@@ -1405,8 +1422,9 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             d_j = torch.linalg.norm(x_cand - s_j.unsqueeze(0), dim=1)
             mask = (d_i <= r_i) & (d_j <= r_j)
             if _sdf_net is not None:
-                x_norm_cand = (x_cand - _sdf_center.unsqueeze(0)) / _sdf_scale
-                sdf_vals = _sdf_net(x_norm_cand)
+                # x_cand is already in SDF-normalised space (midpt is computed from
+                # seeds which are in normalised coords). Pass directly to SDF net.
+                sdf_vals = _sdf_net(x_cand)
                 mask = mask & (sdf_vals < float(getattr(args, "sdf_interior_threshold", 0.0)))
 
         x_ok = x_cand[mask]
@@ -1436,7 +1454,60 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         return x_if, xi_i, xi_j, n_if
 
     # --------------------------------------------------------------------------
+    def _sample_bc_surface_sdf(i: int, n_samples: int) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """M6/volumetric: sample points near the domain surface (|SDF| < eps_surface)
+        within chart i's support ball.  Returns (xi, target, x_phys) or None on failure.
+        """
+        if _sdf_net is None:
+            return None
+        r_i = float(support_r[i])
+        # Use higher rejection factor: surface is a thin shell
+        factor = max(12, int(getattr(args, "sdf_rejection_factor", 6)) * 3)
+        n_cand = n_samples * factor
+
+        # Uniform-in-ball sampling around seed i
+        u_vec = torch.randn(n_cand, 3, device=device, dtype=dtype)
+        u_vec = u_vec / torch.clamp(torch.linalg.norm(u_vec, dim=1, keepdim=True), min=1e-12)
+        r_rand = r_i * torch.rand(n_cand, 1, device=device, dtype=dtype) ** (1.0 / 3.0)
+        x_cand = seeds[i].unsqueeze(0) + u_vec * r_rand  # (n_cand, 3) in atlas-normalized coords
+
+        with torch.no_grad():
+            # x_cand is already in SDF-normalised space (seeds are in normalised coords).
+            # Do NOT apply (x_cand - center) / scale — double-normalisation would
+            # produce wrong SDF values and identify the wrong "surface" region.
+            sdf_vals = _sdf_net(x_cand)  # (n_cand,)
+            # Accept: near surface |SDF| < eps_surface (SDF=0 on surface)
+            eps_surface = float(getattr(args, "bc_surface_eps", 0.04))
+            mask = sdf_vals.abs() < eps_surface
+            x_ok = x_cand[mask]
+
+        if x_ok.shape[0] == 0:
+            return None  # caller will fall back to interior supervision
+
+        if x_ok.shape[0] >= n_samples:
+            x_bc = x_ok[torch.randperm(x_ok.shape[0], device=device)[:n_samples]]
+        else:
+            rep = x_ok.repeat(math.ceil(n_samples / x_ok.shape[0]), 1)[:n_samples]
+            x_bc = rep + 0.005 * r_i * torch.randn_like(rep)
+
+        xi_bc = local_coords(x_bc, seeds[i], t1[i], t2[i], nvec[i]).detach()
+        target_bc = manufactured_u(x_bc).detach()
+        return xi_bc, target_bc, x_bc.detach()
+
+    # --------------------------------------------------------------------------
     def local_bc_batch(i: int, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # M6: in volumetric mode, BC points should be on the domain surface (SDF ≈ 0),
+        # not interior atlas points. Use SDF rejection sampling near the surface.
+        if getattr(args, "volumetric_atlas", False):
+            result = _sample_bc_surface_sdf(i, n_samples)
+            if result is not None:
+                return result
+            # Deep interior chart: no surface contact → return EMPTY tensors so callers
+            # produce zero BC loss for this chart (correct: interior charts don't touch ∂Ω).
+            empty_xi = torch.zeros((0, 3), device=device, dtype=dtype)
+            empty_u  = torch.zeros((0, 1), device=device, dtype=dtype)
+            return empty_xi, empty_u, empty_xi
+
         pick = sample_chart_point_indices(i, n_samples=n_samples, prefer_detail=True)
         if pick is None:
             z = torch.zeros((n_samples, 3), device=device, dtype=dtype)
@@ -1567,29 +1638,36 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         du = ui - uj
         loss_iv = torch.mean(du**2)
 
-        gxi = grad_u_in_physical(
-            u_nets[i],
-            decoders[i],
-            xi_i,
-            seed=seeds[i],
-            t1=t1[i],
-            t2=t2[i],
-            n=nvec[i],
-            chart_scale=support_r[i],
-            sigma_floor=args.sigma_floor,
-            det_floor=args.det_floor,
+        # Reconstruct physical interface points from local coords via rigid TNB map.
+        # xi = local_coords(x, seed) is an orthogonal rigid projection, so the
+        # inverse is exact: x = seed + xi1*t1 + xi2*t2 + xi3*n.
+        x_if_i = (
+            seeds[i].unsqueeze(0)
+            + xi_i[:, 0:1] * t1[i].unsqueeze(0)
+            + xi_i[:, 1:2] * t2[i].unsqueeze(0)
+            + xi_i[:, 2:3] * nvec[i].unsqueeze(0)
         )
-        gxj = grad_u_in_physical(
+        x_if_j = (
+            seeds[j].unsqueeze(0)
+            + xi_j[:, 0:1] * t1[j].unsqueeze(0)
+            + xi_j[:, 1:2] * t2[j].unsqueeze(0)
+            + xi_j[:, 2:3] * nvec[j].unsqueeze(0)
+        )
+        gxi = grad_u_in_physical_tnb(
+            u_nets[i],
+            x_if_i,
+            seed=seeds[i],
+            t1_vec=t1[i],
+            t2_vec=t2[i],
+            n_vec=nvec[i],
+        )
+        gxj = grad_u_in_physical_tnb(
             u_nets[j],
-            decoders[j],
-            xi_j,
+            x_if_j,
             seed=seeds[j],
-            t1=t1[j],
-            t2=t2[j],
-            n=nvec[j],
-            chart_scale=support_r[j],
-            sigma_floor=args.sigma_floor,
-            det_floor=args.det_floor,
+            t1_vec=t1[j],
+            t2_vec=t2[j],
+            n_vec=nvec[j],
         )
         if detach_neighbor:
             gxj = gxj.detach()
@@ -1642,7 +1720,8 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     xi_int = eval_cache_pde[i]
                 else:
                     ni = max(16, args.eval_pde_samples_per_chart)
-                    xi_int = sample_local_xi(i, ni)
+                    # M6: use SDF-guided interior sampling for eval in volumetric mode
+                    xi_int = sample_pde_xi(i, ni)
                 res, _, valid = mapped_poisson_residual(
                     u_nets[i],
                     decoders[i],
@@ -1663,8 +1742,10 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     xi_bc, u_bc = eval_cache_bc[i]
                 else:
                     xi_bc, u_bc, _ = local_bc_batch(i, max(16, args.eval_bc_samples_per_chart))
-                u_hat = u_nets[i](xi_bc)
-                bc_terms.append(torch.mean((u_hat - u_bc) ** 2))
+                # Guard: interior charts return empty tensors — skip their BC term
+                if xi_bc.shape[0] > 0:
+                    u_hat = u_nets[i](xi_bc)
+                    bc_terms.append(torch.mean((u_hat - u_bc) ** 2))
 
                 for j in neighbors[i]:
                     if j <= i:
@@ -1788,24 +1869,41 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
 
                 with amp_ctx():
                     xi_bc, u_bc, x_bc = local_bc_batch(i, args.bc_pretrain_batch)
-                    u_hat = u_nets[i](xi_bc)
-                    loss = torch.mean((u_hat - u_bc) ** 2)
+                    # Guard: interior charts return empty tensors (no surface BC to enforce)
+                    if xi_bc.shape[0] > 0:
+                        u_hat = u_nets[i](xi_bc)
+                        loss = torch.mean((u_hat - u_bc) ** 2)
+                    else:
+                        loss = torch.tensor(0.0, device=device, dtype=dtype)
 
-                    if args.bc_pretrain_grad_weight > 0.0:
-                        grad_pred = grad_u_in_physical(
+                    if args.bc_pretrain_grad_weight > 0.0 and xi_bc.shape[0] > 0:
+                        # Use TNB-frame gradient helper (consistent with eval / rigid-coord PDE path).
+                        grad_pred = grad_u_in_physical_tnb(
                             u_nets[i],
-                            decoders[i],
-                            xi_bc,
+                            x_bc,
                             seed=seeds[i],
-                            t1=t1[i],
-                            t2=t2[i],
-                            n=nvec[i],
-                            chart_scale=support_r[i],
-                            sigma_floor=args.sigma_floor,
-                            det_floor=args.det_floor,
+                            t1_vec=t1[i],
+                            t2_vec=t2[i],
+                            n_vec=nvec[i],
                         )
                         grad_true = manufactured_grad_u(x_bc)
                         loss = loss + args.bc_pretrain_grad_weight * torch.mean((grad_pred - grad_true) ** 2)
+
+                    # Joint interior supervised pretrain: fit manufactured_u at interior SDF points
+                    # simultaneously with BC so neither overwrites the other.
+                    bc_pretrain_sup_weight = float(getattr(args, "bc_pretrain_sup_weight", 0.0))
+                    if bc_pretrain_sup_weight > 0.0:
+                        xi_sup_p = sample_pde_xi(i, int(args.bc_pretrain_batch))
+                        # Use rigid TNB frame (consistent with eval / Schwarz PDE step).
+                        x_sup_p = (
+                            seeds[i].unsqueeze(0)
+                            + xi_sup_p[:, 0:1] * t1[i].unsqueeze(0)
+                            + xi_sup_p[:, 1:2] * t2[i].unsqueeze(0)
+                            + xi_sup_p[:, 2:3] * nvec[i].unsqueeze(0)
+                        )
+                        u_sup_p = manufactured_u(x_sup_p).detach()
+                        loss_sup_p = torch.mean((u_nets[i](xi_sup_p) - u_sup_p) ** 2)
+                        loss = loss + bc_pretrain_sup_weight * loss_sup_p
 
                     if args.bc_pretrain_interface_weight > 0.0:
                         iv_terms = []
@@ -1814,22 +1912,28 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                             if ib is None:
                                 continue
                             _, xi_i, xi_j, n_if = ib
-                            liv, _, _ = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
+                            # Fast value-only path: no decoder Jacobian / grad_u_in_physical needed.
+                            ui_p = u_nets[i](xi_i)
+                            with torch.no_grad():
+                                uj_p = u_nets[j](xi_j)
+                            liv = torch.mean((ui_p - uj_p) ** 2)
                             iv_terms.append(liv)
                         if iv_terms:
                             loss = loss + args.bc_pretrain_interface_weight * torch.mean(torch.stack(iv_terms))
 
-                if use_cuda_amp:
-                    assert scalers[i] is not None
-                    scalers[i].scale(loss).backward()
-                    scalers[i].unscale_(opts[i])
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
-                    scalers[i].step(opts[i])
-                    scalers[i].update()
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
-                    opts[i].step()
+                # Skip backward if loss is zero (e.g. interior charts with no BC samples)
+                if loss.item() != 0.0:
+                    if use_cuda_amp:
+                        assert scalers[i] is not None
+                        scalers[i].scale(loss).backward()
+                        scalers[i].unscale_(opts[i])
+                        torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
+                        scalers[i].step(opts[i])
+                        scalers[i].update()
+                    else:
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
+                        opts[i].step()
                 losses_ep.append(float(loss.item()))
 
             if ep % max(1, args.bc_pretrain_log_every) == 0 and losses_ep:
@@ -1851,34 +1955,46 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 opts[i].zero_grad()
 
                 with amp_ctx():
-                    xi_sup = sample_local_xi(i, args.interior_pretrain_batch)
-                    x_sup = decoders[i](
-                        xi_sup,
-                        seed=seeds[i],
-                        t1=t1[i],
-                        t2=t2[i],
-                        n=nvec[i],
-                        chart_scale=support_r[i],
+                    # M6: use SDF-guided interior sampling in volumetric mode
+                    xi_sup = sample_pde_xi(i, args.interior_pretrain_batch)
+                    # Fix (Attempt 14): use rigid TNB frame to map ξ → x, consistent
+                    # with eval_rel_l2_subset which uses local_coords(x, seed) = x - seed
+                    # (rigid TNB, no decoder residual).  Previous decoder-based mapping
+                    # caused a systematic ~0.08-unit displacement in normalized coords,
+                    # producing ~125% rel_l2 even after Schwarz converged.
+                    x_sup = (
+                        seeds[i].unsqueeze(0)
+                        + xi_sup[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_sup[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_sup[:, 2:3] * nvec[i].unsqueeze(0)
                     )
                     u_true_sup = manufactured_u(x_sup).detach()
                     u_pred_sup = u_nets[i](xi_sup)
                     loss = torch.mean((u_pred_sup - u_true_sup) ** 2)
 
                     if args.interior_pretrain_grad_weight > 0.0:
-                        grad_pred_sup = grad_u_in_physical(
+                        # Use TNB-frame gradient helper (no decoder Jacobian needed).
+                        grad_pred_sup = grad_u_in_physical_tnb(
                             u_nets[i],
-                            decoders[i],
-                            xi_sup,
+                            x_sup,
                             seed=seeds[i],
-                            t1=t1[i],
-                            t2=t2[i],
-                            n=nvec[i],
-                            chart_scale=support_r[i],
-                            sigma_floor=args.sigma_floor,
-                            det_floor=args.det_floor,
+                            t1_vec=t1[i],
+                            t2_vec=t2[i],
+                            n_vec=nvec[i],
                         )
                         grad_true_sup = manufactured_grad_u(x_sup).detach()
                         loss = loss + args.interior_pretrain_grad_weight * torch.mean((grad_pred_sup - grad_true_sup) ** 2)
+
+                    # BC retention: prevent catastrophic forgetting of boundary values.
+                    # Without this, interior pretrain overwrites BC-fitted weights in
+                    # surface-adjacent charts, causing 44× increase in BC error.
+                    _bc_ret_w = float(getattr(args, "interior_pretrain_bc_weight", 0.0))
+                    if _bc_ret_w > 0.0:
+                        xi_bc_ret, u_bc_ret, _ = local_bc_batch(i, max(16, args.interior_pretrain_batch // 4))
+                        if xi_bc_ret.shape[0] > 0:
+                            u_hat_ret = u_nets[i](xi_bc_ret)
+                            loss_bc_ret = torch.mean((u_hat_ret - u_bc_ret) ** 2)
+                            loss = loss + _bc_ret_w * loss_bc_ret
 
                 if use_cuda_amp:
                     assert scalers[i] is not None
@@ -1907,6 +2023,71 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             f"and lr={pre_current_lr():.3e}"
         )
 
+    # -----------------------------------------------------------------------
+    # Option C: H1 volumetric overlap coupling helper
+    # -----------------------------------------------------------------------
+    def sample_chart_overlap_volumetric(
+        i: int,
+        j: int,
+        n_samples: int,
+    ) -> Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """Sample random points from the 3-D geometric intersection of the
+        ball-shaped supports of charts i and j.
+
+        Returns (xi_i, xi_j, n_ij) — local coordinates for each chart and the
+        seed-direction interface normal — or None when no points can be found.
+
+        All coordinates are in SDF-normalised space (same as `seeds`, `points`).
+        """
+        if _sdf_net is None and not getattr(args, "volumetric_atlas", False):
+            return None
+        r_i = float(support_r[i])
+        r_j = float(support_r[j])
+        s_i = seeds[i]
+        s_j = seeds[j]
+        dist_ij = float(torch.linalg.norm(s_j - s_i).item())
+        # Quick rejection: balls don't overlap at all
+        if dist_ij > r_i + r_j + 1e-9:
+            return None
+
+        midpt = 0.5 * (s_i + s_j)
+        r_samp = 0.5 * min(r_i, r_j)
+        factor = max(4, int(getattr(args, "overlap_h1_rejection_factor", 8)))
+        n_cand = n_samples * factor
+
+        # Uniform sampling in ball of radius r_samp around midpoint
+        u_dir = torch.randn(n_cand, 3, device=device, dtype=dtype)
+        u_dir = u_dir / torch.clamp(torch.linalg.norm(u_dir, dim=1, keepdim=True), min=1e-12)
+        r_rand = r_samp * torch.rand(n_cand, 1, device=device, dtype=dtype) ** (1.0 / 3.0)
+        x_cand = midpt.unsqueeze(0) + u_dir * r_rand
+
+        with torch.no_grad():
+            d_i = torch.linalg.norm(x_cand - s_i.unsqueeze(0), dim=1)
+            d_j = torch.linalg.norm(x_cand - s_j.unsqueeze(0), dim=1)
+            mask = (d_i <= r_i) & (d_j <= r_j)
+            # Also require interior (SDF < threshold) when SDF net is available.
+            if _sdf_net is not None:
+                thresh = float(getattr(args, "sdf_interior_threshold", 0.0))
+                sdf_vals = _sdf_net(x_cand)   # x_cand already in normalised space
+                mask = mask & (sdf_vals < thresh)
+
+        x_ok = x_cand[mask]
+        if x_ok.shape[0] == 0:
+            return None
+
+        if x_ok.shape[0] >= n_samples:
+            perm = torch.randperm(x_ok.shape[0], device=device)[:n_samples]
+            x_if = x_ok[perm]
+        else:
+            # Pad by repeating with small jitter
+            rep = x_ok.repeat(math.ceil(n_samples / x_ok.shape[0]), 1)[:n_samples]
+            x_if = rep + 0.02 * r_samp * torch.randn_like(rep)
+
+        x_if = x_if.detach()
+        xi_i = local_coords(x_if, seeds[i], t1[i], t2[i], nvec[i])
+        xi_j = local_coords(x_if, seeds[j], t1[j], t2[j], nvec[j])
+        return xi_i, xi_j, None   # normal unused for value-only H1
+
     def optimize_chart(i: int, w_pde_eff: float, w_if_flux_eff: float) -> None:
         if point_idx_by_chart[i].numel() == 0 or (not trainable_chart_mask[i]):
             return
@@ -1925,69 +2106,26 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             opts[i].zero_grad()
 
             with amp_ctx():
-                # M1/M8: Use RAR-augmented sampling; route through direct or mapped residual
-                xi_int = sample_pde_xi_with_rar(i, pde_batch_i)
-                _direct = bool(getattr(args, "direct_coord_pde", False))
-                if _direct:
-                    x_phys_int = (
-                        seeds[i].unsqueeze(0)
-                        + xi_int[:, 0:1] * t1[i].unsqueeze(0)
-                        + xi_int[:, 1:2] * t2[i].unsqueeze(0)
-                        + xi_int[:, 2:3] * nvec[i].unsqueeze(0)
-                    )
-                    res, _, valid = direct_poisson_residual_tnb(
-                        u_nets[i], x_phys_int, seeds[i], t1[i], t2[i], nvec[i]
-                    )
-                else:
-                    res, _, valid = mapped_poisson_residual(
-                        u_nets[i],
-                        decoders[i],
-                        xi_int,
-                        seed=seeds[i],
-                        t1=t1[i],
-                        t2=t2[i],
-                        n=nvec[i],
-                        chart_scale=support_r[i],
-                        sigma_floor=args.sigma_floor,
-                        det_floor=args.det_floor,
-                        jac_kappa_max=args.jac_kappa_max,
-                    )
-                res_use = select_residual_samples(res, valid, with_clip=True)
-                loss_pde = pde_loss_fn(res_use)
-
-                xi_bc, u_bc, x_bc = local_bc_batch(i, bc_batch_i)
-                u_hat_bc = u_nets[i](xi_bc)
-                # M7: weight BC loss by SDF depth so near-boundary points dominate less
-                if getattr(args, "hard_bc", False) and _sdf_net is not None:
-                    _bc_w = sdf_hard_bc_scale(
-                        x_bc, _sdf_net, _sdf_center, _sdf_scale,
-                        float(getattr(args, "hard_bc_scale", 0.05)),
-                    )
-                    loss_bc = torch.mean(_bc_w * (u_hat_bc - u_bc) ** 2)
-                else:
-                    loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
-
-                loss_sup = torch.tensor(0.0, device=device, dtype=dtype)
-                loss_sup_grad = torch.tensor(0.0, device=device, dtype=dtype)
-                if args.w_manufactured_supervision > 0.0 or args.w_manufactured_grad_supervision > 0.0:
-                    xi_sup = sample_local_xi(i, sup_batch_i)
-                    x_sup = decoders[i](
-                        xi_sup,
-                        seed=seeds[i],
-                        t1=t1[i],
-                        t2=t2[i],
-                        n=nvec[i],
-                        chart_scale=support_r[i],
-                    )
-                    u_sup_true = manufactured_u(x_sup).detach()
-                    u_sup_pred = u_nets[i](xi_sup)
-                    loss_sup = torch.mean((u_sup_pred - u_sup_true) ** 2)
-
-                    if args.w_manufactured_grad_supervision > 0.0:
-                        grad_sup_pred = grad_u_in_physical(
+                # M1/M8: Use RAR-augmented sampling; route through direct or mapped residual.
+                # Guard: skip expensive double-autodiff when PDE weight is zero.
+                if w_pde_eff > 0.0:
+                    xi_int = sample_pde_xi_with_rar(i, pde_batch_i)
+                    _direct = bool(getattr(args, "direct_coord_pde", False))
+                    if _direct:
+                        x_phys_int = (
+                            seeds[i].unsqueeze(0)
+                            + xi_int[:, 0:1] * t1[i].unsqueeze(0)
+                            + xi_int[:, 1:2] * t2[i].unsqueeze(0)
+                            + xi_int[:, 2:3] * nvec[i].unsqueeze(0)
+                        )
+                        res, _, valid = direct_poisson_residual_tnb(
+                            u_nets[i], x_phys_int, seeds[i], t1[i], t2[i], nvec[i]
+                        )
+                    else:
+                        res, _, valid = mapped_poisson_residual(
                             u_nets[i],
                             decoders[i],
-                            xi_sup,
+                            xi_int,
                             seed=seeds[i],
                             t1=t1[i],
                             t2=t2[i],
@@ -1995,28 +2133,107 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                             chart_scale=support_r[i],
                             sigma_floor=args.sigma_floor,
                             det_floor=args.det_floor,
+                            jac_kappa_max=args.jac_kappa_max,
+                        )
+                    res_use = select_residual_samples(res, valid, with_clip=True)
+                    loss_pde = pde_loss_fn(res_use)
+                else:
+                    loss_pde = torch.tensor(0.0, device=device, dtype=dtype)
+
+                xi_bc, u_bc, x_bc = local_bc_batch(i, bc_batch_i)
+                # Guard: interior charts (volumetric mode) may return empty BC tensors
+                if xi_bc.shape[0] > 0:
+                    u_hat_bc = u_nets[i](xi_bc)
+                    # M7: weight BC loss by SDF depth so near-boundary points dominate less
+                    if getattr(args, "hard_bc", False) and _sdf_net is not None:
+                        _bc_w = sdf_hard_bc_scale(
+                            x_bc, _sdf_net, _sdf_center, _sdf_scale,
+                            float(getattr(args, "hard_bc_scale", 0.05)),
+                        )
+                        loss_bc = torch.mean(_bc_w * (u_hat_bc - u_bc) ** 2)
+                    else:
+                        loss_bc = torch.mean((u_hat_bc - u_bc) ** 2)
+                else:
+                    loss_bc = torch.tensor(0.0, device=device, dtype=dtype)
+
+                loss_sup = torch.tensor(0.0, device=device, dtype=dtype)
+                loss_sup_grad = torch.tensor(0.0, device=device, dtype=dtype)
+                if args.w_manufactured_supervision > 0.0 or args.w_manufactured_grad_supervision > 0.0:
+                    # M6: use SDF-guided interior sampling in volumetric mode.
+                    # Use rigid TNB frame (consistent with eval_rel_l2_subset).
+                    xi_sup = sample_pde_xi(i, sup_batch_i)
+                    x_sup = (
+                        seeds[i].unsqueeze(0)
+                        + xi_sup[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_sup[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_sup[:, 2:3] * nvec[i].unsqueeze(0)
+                    )
+                    u_sup_true = manufactured_u(x_sup).detach()
+                    u_sup_pred = u_nets[i](xi_sup)
+                    loss_sup = torch.mean((u_sup_pred - u_sup_true) ** 2)
+
+                    if args.w_manufactured_grad_supervision > 0.0:
+                        # Use TNB-frame gradient helper (no decoder Jacobian needed).
+                        grad_sup_pred = grad_u_in_physical_tnb(
+                            u_nets[i],
+                            x_sup,
+                            seed=seeds[i],
+                            t1_vec=t1[i],
+                            t2_vec=t2[i],
+                            n_vec=nvec[i],
                         )
                         grad_sup_true = manufactured_grad_u(x_sup).detach()
                         loss_sup_grad = torch.mean((grad_sup_pred - grad_sup_true) ** 2)
 
                 iv_terms: List[torch.Tensor] = []
                 if_terms: List[torch.Tensor] = []
+                _need_flux = w_if_flux_eff > 0.0
                 for j in neighbors[i]:
                     ib = interface_batch(i, j, if_batch_i)
                     if ib is None:
                         continue
                     _, xi_i, xi_j, n_if = ib
-                    liv, _, lif_train = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
                     pair_key = (i, j) if i < j else (j, i)
                     pair_boost = 1.0
                     if args.curvature_adaptive_sampling and args.interface_detail_boost > 1.0:
                         d_pair = overlap_detail_strength.get(pair_key, 0.0)
                         pair_boost = 1.0 + (float(args.interface_detail_boost) - 1.0) * float(d_pair)
+                    if _need_flux:
+                        # Full coupling: value + flux (requires decoder Jacobian via grad_u_in_physical)
+                        liv, _, lif_train = interface_coupling_terms(i, j, xi_i, xi_j, n_if, detach_neighbor=True)
+                        if_terms.append(pair_boost * lif_train)
+                    else:
+                        # Fast path: value-only coupling (no decoder Jacobian needed)
+                        ui = u_nets[i](xi_i)
+                        with torch.no_grad():
+                            uj = u_nets[j](xi_j)
+                        liv = torch.mean((ui - uj) ** 2)
                     iv_terms.append(pair_boost * liv)
-                    if_terms.append(pair_boost * lif_train)
 
                 loss_iv = torch.mean(torch.stack(iv_terms)) if iv_terms else torch.tensor(0.0, device=device, dtype=dtype)
                 loss_if = torch.mean(torch.stack(if_terms)) if if_terms else torch.tensor(0.0, device=device, dtype=dtype)
+
+                # Option C: H1 volumetric overlap coupling —————————————————————
+                # Enforce u_i ≈ u_j throughout the 3-D volumetric intersection
+                # of chart supports (not just on the interface boundary surface).
+                # This gives a much stronger consistency constraint than classical
+                # interface coupling and is the key idea for overlapping Schwarz.
+                loss_overlap_h1 = torch.tensor(0.0, device=device, dtype=dtype)
+                _w_h1 = float(getattr(args, "w_overlap_h1", 0.0))
+                if _w_h1 > 0.0:
+                    h1_ov_terms: List[torch.Tensor] = []
+                    _ov_batch = int(getattr(args, "overlap_h1_batch", 32))
+                    for j in neighbors[i]:
+                        ov = sample_chart_overlap_volumetric(i, j, _ov_batch)
+                        if ov is None:
+                            continue
+                        xi_i_ov, xi_j_ov, _ = ov
+                        ui_ov = u_nets[i](xi_i_ov)
+                        with torch.no_grad():
+                            uj_ov = u_nets[j](xi_j_ov)
+                        h1_ov_terms.append(torch.mean((ui_ov - uj_ov) ** 2))
+                    if h1_ov_terms:
+                        loss_overlap_h1 = torch.mean(torch.stack(h1_ov_terms))
 
                 loss = (
                     w_pde_eff * loss_pde
@@ -2025,6 +2242,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     + w_if_flux_eff * loss_if
                     + args.w_manufactured_supervision * loss_sup
                     + args.w_manufactured_grad_supervision * loss_sup_grad
+                    + _w_h1 * loss_overlap_h1
                 )
 
             if use_cuda_amp:
@@ -2821,6 +3039,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bc-pretrain-batch", type=int, default=256)
     parser.add_argument("--bc-pretrain-grad-weight", type=float, default=0.05)
     parser.add_argument("--bc-pretrain-interface-weight", type=float, default=0.2)
+    parser.add_argument(
+        "--bc-pretrain-sup-weight", type=float, default=0.0, dest="bc_pretrain_sup_weight",
+        help="M6/volumetric: weight for joint interior supervision during BC pretrain. "
+             "Simultaneously fits manufactured_u at SDF interior points while BC is fitted "
+             "at surface, preventing the two from overwriting each other.",
+    )
     parser.add_argument("--bc-pretrain-log-every", type=int, default=50)
     parser.add_argument("--manufactured-supervision-batch", type=int, default=128)
     parser.add_argument("--w-manufactured-supervision", type=float, default=0.0)
@@ -2881,6 +3105,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interior-pretrain-batch", type=int, default=256)
     parser.add_argument("--interior-pretrain-grad-weight", type=float, default=0.5)
     parser.add_argument("--interior-pretrain-log-every", type=int, default=50)
+    parser.add_argument(
+        "--interior-pretrain-bc-weight", type=float, default=0.0,
+        help="BC retention weight during interior pretrain to prevent catastrophic "
+             "forgetting. Adds w * ||u_net(xi_bc) - u_bc||^2 to the interior "
+             "pretrain loss so boundary-fitted weights are preserved.",
+    )
     parser.add_argument("--pretrain-guard-enable", action="store_true")
     parser.add_argument("--pretrain-guard-eval-every", type=int, default=50)
     parser.add_argument("--pretrain-guard-patience", type=int, default=3)
@@ -2895,6 +3125,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--w-bc", type=float, default=2.0)
     parser.add_argument("--w-interface-value", type=float, default=0.8)
     parser.add_argument("--w-interface-flux", type=float, default=0.2)
+    # Option C: H1 volumetric overlap coupling
+    parser.add_argument(
+        "--w-overlap-h1", type=float, default=0.0,
+        help="Weight for H1 volumetric overlap coupling: enforces u_i ≈ u_j "
+             "throughout the 3-D intersection of chart ball supports (value-only). "
+             "Stronger than classical interface coupling because it samples the "
+             "full volumetric overlap, not just the boundary surface.",
+    )
+    parser.add_argument(
+        "--overlap-h1-batch", type=int, default=32,
+        help="Number of random overlap points sampled per chart-pair per local step.",
+    )
+    parser.add_argument(
+        "--overlap-h1-rejection-factor", type=int, default=8,
+        help="Candidate oversampling factor for volumetric overlap rejection sampling.",
+    )
     parser.add_argument("--w-interface-flux-start", type=float, default=None)
     parser.add_argument("--w-interface-flux-end", type=float, default=None)
     parser.add_argument("--flux-ramp-iters", type=int, default=0)
@@ -3032,6 +3278,14 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="M6: enable volumetric atlas mode — uses 3-D ball-intersection interface "
              "sampling and forces SDF interior PDE sampling (requires --sdf-checkpoint).",
+    )
+    parser.add_argument(
+        "--bc-surface-eps",
+        type=float,
+        default=0.04,
+        dest="bc_surface_eps",
+        help="M6: SDF band half-width for surface BC sampling in volumetric mode "
+             "(accept points with |SDF| < bc_surface_eps as boundary points).",
     )
 
     return parser.parse_args()
