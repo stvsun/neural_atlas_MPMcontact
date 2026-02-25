@@ -1,0 +1,30 @@
+You are continuing an ongoing research codebase on mapped-domain PINNs for complex 3D geometry.
+
+Project root:
+/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry
+
+Load these handoff artifacts first:
+1) /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/docs/chatgpt52_handoff_mindmap.md
+2) /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/docs/chatgpt52_context_pack.json
+3) /Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/run_ranking_latest.json
+
+Instructions for this continuation:
+- Prioritize publication-ready benchmarks and writing support.
+- Treat torus inverse Neo-Hookean (original + Schwarz dual) as strongest evidence.
+- Treat rabbit inverse Elder as secondary strong benchmark.
+- Treat rabbit Arruda-Boyce inverse as exploratory/high-risk unless identifiability gates pass.
+- Respect Apple Silicon MPS constraints (float32, fallback for fragile ops).
+- Preserve fixed-atlas approach unless a stronger justification is provided.
+
+Immediate tasks:
+1) Build a paper-ready results table template (metrics + runtime + seed stats) from the top successful families.
+2) Propose one conservative, low-risk final experiment matrix (3 seeds each for primary/secondary benchmarks).
+3) Draft a Methods + Experimental Setup outline that matches the implemented code paths under src.
+4) Draft a Risks/Limitations subsection explicitly covering rabbit seam artifacts and MPS limitations.
+
+Output format requested:
+- concise action plan
+- exact file/script references (absolute paths)
+- reproducible command blocks
+- publication figure checklist
+
