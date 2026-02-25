@@ -1638,29 +1638,36 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         du = ui - uj
         loss_iv = torch.mean(du**2)
 
-        gxi = grad_u_in_physical(
-            u_nets[i],
-            decoders[i],
-            xi_i,
-            seed=seeds[i],
-            t1=t1[i],
-            t2=t2[i],
-            n=nvec[i],
-            chart_scale=support_r[i],
-            sigma_floor=args.sigma_floor,
-            det_floor=args.det_floor,
+        # Reconstruct physical interface points from local coords via rigid TNB map.
+        # xi = local_coords(x, seed) is an orthogonal rigid projection, so the
+        # inverse is exact: x = seed + xi1*t1 + xi2*t2 + xi3*n.
+        x_if_i = (
+            seeds[i].unsqueeze(0)
+            + xi_i[:, 0:1] * t1[i].unsqueeze(0)
+            + xi_i[:, 1:2] * t2[i].unsqueeze(0)
+            + xi_i[:, 2:3] * nvec[i].unsqueeze(0)
         )
-        gxj = grad_u_in_physical(
+        x_if_j = (
+            seeds[j].unsqueeze(0)
+            + xi_j[:, 0:1] * t1[j].unsqueeze(0)
+            + xi_j[:, 1:2] * t2[j].unsqueeze(0)
+            + xi_j[:, 2:3] * nvec[j].unsqueeze(0)
+        )
+        gxi = grad_u_in_physical_tnb(
+            u_nets[i],
+            x_if_i,
+            seed=seeds[i],
+            t1_vec=t1[i],
+            t2_vec=t2[i],
+            n_vec=nvec[i],
+        )
+        gxj = grad_u_in_physical_tnb(
             u_nets[j],
-            decoders[j],
-            xi_j,
+            x_if_j,
             seed=seeds[j],
-            t1=t1[j],
-            t2=t2[j],
-            n=nvec[j],
-            chart_scale=support_r[j],
-            sigma_floor=args.sigma_floor,
-            det_floor=args.det_floor,
+            t1_vec=t1[j],
+            t2_vec=t2[j],
+            n_vec=nvec[j],
         )
         if detach_neighbor:
             gxj = gxj.detach()
@@ -1870,17 +1877,14 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                         loss = torch.tensor(0.0, device=device, dtype=dtype)
 
                     if args.bc_pretrain_grad_weight > 0.0 and xi_bc.shape[0] > 0:
-                        grad_pred = grad_u_in_physical(
+                        # Use TNB-frame gradient helper (consistent with eval / rigid-coord PDE path).
+                        grad_pred = grad_u_in_physical_tnb(
                             u_nets[i],
-                            decoders[i],
-                            xi_bc,
+                            x_bc,
                             seed=seeds[i],
-                            t1=t1[i],
-                            t2=t2[i],
-                            n=nvec[i],
-                            chart_scale=support_r[i],
-                            sigma_floor=args.sigma_floor,
-                            det_floor=args.det_floor,
+                            t1_vec=t1[i],
+                            t2_vec=t2[i],
+                            n_vec=nvec[i],
                         )
                         grad_true = manufactured_grad_u(x_bc)
                         loss = loss + args.bc_pretrain_grad_weight * torch.mean((grad_pred - grad_true) ** 2)
@@ -1890,13 +1894,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     bc_pretrain_sup_weight = float(getattr(args, "bc_pretrain_sup_weight", 0.0))
                     if bc_pretrain_sup_weight > 0.0:
                         xi_sup_p = sample_pde_xi(i, int(args.bc_pretrain_batch))
-                        x_sup_p = decoders[i](
-                            xi_sup_p,
-                            seed=seeds[i],
-                            t1=t1[i],
-                            t2=t2[i],
-                            n=nvec[i],
-                            chart_scale=support_r[i],
+                        # Use rigid TNB frame (consistent with eval / Schwarz PDE step).
+                        x_sup_p = (
+                            seeds[i].unsqueeze(0)
+                            + xi_sup_p[:, 0:1] * t1[i].unsqueeze(0)
+                            + xi_sup_p[:, 1:2] * t2[i].unsqueeze(0)
+                            + xi_sup_p[:, 2:3] * nvec[i].unsqueeze(0)
                         )
                         u_sup_p = manufactured_u(x_sup_p).detach()
                         loss_sup_p = torch.mean((u_nets[i](xi_sup_p) - u_sup_p) ** 2)
@@ -1954,30 +1957,30 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 with amp_ctx():
                     # M6: use SDF-guided interior sampling in volumetric mode
                     xi_sup = sample_pde_xi(i, args.interior_pretrain_batch)
-                    x_sup = decoders[i](
-                        xi_sup,
-                        seed=seeds[i],
-                        t1=t1[i],
-                        t2=t2[i],
-                        n=nvec[i],
-                        chart_scale=support_r[i],
+                    # Fix (Attempt 14): use rigid TNB frame to map ξ → x, consistent
+                    # with eval_rel_l2_subset which uses local_coords(x, seed) = x - seed
+                    # (rigid TNB, no decoder residual).  Previous decoder-based mapping
+                    # caused a systematic ~0.08-unit displacement in normalized coords,
+                    # producing ~125% rel_l2 even after Schwarz converged.
+                    x_sup = (
+                        seeds[i].unsqueeze(0)
+                        + xi_sup[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_sup[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_sup[:, 2:3] * nvec[i].unsqueeze(0)
                     )
                     u_true_sup = manufactured_u(x_sup).detach()
                     u_pred_sup = u_nets[i](xi_sup)
                     loss = torch.mean((u_pred_sup - u_true_sup) ** 2)
 
                     if args.interior_pretrain_grad_weight > 0.0:
-                        grad_pred_sup = grad_u_in_physical(
+                        # Use TNB-frame gradient helper (no decoder Jacobian needed).
+                        grad_pred_sup = grad_u_in_physical_tnb(
                             u_nets[i],
-                            decoders[i],
-                            xi_sup,
+                            x_sup,
                             seed=seeds[i],
-                            t1=t1[i],
-                            t2=t2[i],
-                            n=nvec[i],
-                            chart_scale=support_r[i],
-                            sigma_floor=args.sigma_floor,
-                            det_floor=args.det_floor,
+                            t1_vec=t1[i],
+                            t2_vec=t2[i],
+                            n_vec=nvec[i],
                         )
                         grad_true_sup = manufactured_grad_u(x_sup).detach()
                         loss = loss + args.interior_pretrain_grad_weight * torch.mean((grad_pred_sup - grad_true_sup) ** 2)
@@ -2156,32 +2159,28 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 loss_sup = torch.tensor(0.0, device=device, dtype=dtype)
                 loss_sup_grad = torch.tensor(0.0, device=device, dtype=dtype)
                 if args.w_manufactured_supervision > 0.0 or args.w_manufactured_grad_supervision > 0.0:
-                    # M6: use SDF-guided interior sampling in volumetric mode
+                    # M6: use SDF-guided interior sampling in volumetric mode.
+                    # Use rigid TNB frame (consistent with eval_rel_l2_subset).
                     xi_sup = sample_pde_xi(i, sup_batch_i)
-                    x_sup = decoders[i](
-                        xi_sup,
-                        seed=seeds[i],
-                        t1=t1[i],
-                        t2=t2[i],
-                        n=nvec[i],
-                        chart_scale=support_r[i],
+                    x_sup = (
+                        seeds[i].unsqueeze(0)
+                        + xi_sup[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_sup[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_sup[:, 2:3] * nvec[i].unsqueeze(0)
                     )
                     u_sup_true = manufactured_u(x_sup).detach()
                     u_sup_pred = u_nets[i](xi_sup)
                     loss_sup = torch.mean((u_sup_pred - u_sup_true) ** 2)
 
                     if args.w_manufactured_grad_supervision > 0.0:
-                        grad_sup_pred = grad_u_in_physical(
+                        # Use TNB-frame gradient helper (no decoder Jacobian needed).
+                        grad_sup_pred = grad_u_in_physical_tnb(
                             u_nets[i],
-                            decoders[i],
-                            xi_sup,
+                            x_sup,
                             seed=seeds[i],
-                            t1=t1[i],
-                            t2=t2[i],
-                            n=nvec[i],
-                            chart_scale=support_r[i],
-                            sigma_floor=args.sigma_floor,
-                            det_floor=args.det_floor,
+                            t1_vec=t1[i],
+                            t2_vec=t2[i],
+                            n_vec=nvec[i],
                         )
                         grad_sup_true = manufactured_grad_u(x_sup).detach()
                         loss_sup_grad = torch.mean((grad_sup_pred - grad_sup_true) ** 2)
