@@ -2262,6 +2262,12 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     + _w_h1 * loss_overlap_h1
                 )
 
+            _use_pcgrad = (
+                bool(getattr(args, "use_pcgrad", False))
+                and args.w_manufactured_supervision > 0.0
+                and not use_cuda_amp  # AMP path uses scaler; fall back to combined loss
+            )
+
             if use_cuda_amp:
                 assert scalers[i] is not None
                 scalers[i].scale(loss).backward()
@@ -2269,6 +2275,69 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                 torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
                 scalers[i].step(opts[i])
                 scalers[i].update()
+            elif _use_pcgrad:
+                # W4: PCGrad K=2 — de-conflict L_pde vs L_sup gradients.
+                # Three separate backward passes (pde, sup, other); no retain_graph
+                # needed because each loss uses an independent forward sub-graph.
+
+                # --- Pass 1: PDE gradient only ---
+                opts[i].zero_grad()
+                (w_pde_eff * loss_pde).backward()
+                params_list = list(u_nets[i].parameters())
+                g_pde = [
+                    p.grad.clone() if p.grad is not None else torch.zeros_like(p)
+                    for p in params_list
+                ]
+
+                # --- Pass 2: supervision gradient only ---
+                opts[i].zero_grad()
+                (args.w_manufactured_supervision * loss_sup).backward()
+                g_sup = [
+                    p.grad.clone() if p.grad is not None else torch.zeros_like(p)
+                    for p in params_list
+                ]
+
+                # --- Pass 3: remaining losses (BC + interface value + interface flux
+                #             + H1 overlap + grad supervision) ---
+                opts[i].zero_grad()
+                loss_other = (
+                    args.w_bc * loss_bc
+                    + args.w_interface_value * loss_iv
+                    + w_if_flux_eff * loss_if
+                    + args.w_manufactured_grad_supervision * loss_sup_grad
+                    + _w_h1 * loss_overlap_h1
+                )
+                loss_other.backward()
+
+                # --- PCGrad symmetric projection ---
+                # For each parameter: project g_pde ⊥ g_sup and g_sup ⊥ g_pde_orig.
+                # Accumulate projected pde+sup gradients into param.grad (which holds g_other).
+                for p, gp, gs in zip(params_list, g_pde, g_sup):
+                    gp_orig = gp  # keep reference before in-place modification
+                    gs_orig = gs
+
+                    # Project g_pde away from g_sup direction
+                    gs_sq = (gs_orig * gs_orig).sum()
+                    if gs_sq > 1e-30:
+                        dot_pg = (gp * gs_orig).sum()
+                        if dot_pg < 0:
+                            gp = gp - (dot_pg / gs_sq) * gs_orig
+
+                    # Project g_sup away from original g_pde direction
+                    gp_sq = (gp_orig * gp_orig).sum()
+                    if gp_sq > 1e-30:
+                        dot_sp = (gs * gp_orig).sum()
+                        if dot_sp < 0:
+                            gs = gs - (dot_sp / gp_sq) * gp_orig
+
+                    # Accumulate into param.grad (already contains g_other from pass 3)
+                    if p.grad is None:
+                        p.grad = gp + gs
+                    else:
+                        p.grad.add_(gp + gs)
+
+                torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
+                opts[i].step()
             else:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(u_nets[i].parameters(), max_norm=float(args.grad_clip_max_norm))
@@ -3078,6 +3147,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manufactured-supervision-batch", type=int, default=128)
     parser.add_argument("--w-manufactured-supervision", type=float, default=0.0)
     parser.add_argument("--w-manufactured-grad-supervision", type=float, default=0.0)
+    parser.add_argument(
+        "--use-pcgrad",
+        action="store_true",
+        default=False,
+        help="W4: PCGrad K=2 gradient surgery — project ∇L_pde onto the orthogonal complement of "
+             "∇L_sup (and vice-versa) when they conflict (negative cosine similarity). "
+             "Requires w_manufactured_supervision > 0. Uses 3 backward passes per local step "
+             "(pde, sup, other) instead of 1. Falls back to standard combined loss when AMP is used.",
+    )
 
     parser.add_argument(
         "--parallel-color-updates",
