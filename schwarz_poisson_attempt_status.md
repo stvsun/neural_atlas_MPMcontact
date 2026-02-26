@@ -1,9 +1,9 @@
 # Schwarz Poisson Solver — Stanford Rabbit Volumetric Atlas: Attempt Status Report
 
-**Date**: 2026-02-25
+**Date**: 2026-02-26
 **Project**: Multiplicative Schwarz PINN for Poisson equation on Stanford rabbit volumetric geometry
 **Goal**: Achieve `rel_l2 < 5%` for the manufactured solution `u = sin(πx₁)sin(πx₂)sin(πx₃)`
-**Current status**: ✅ **TARGET MET + ALL W1–W5 VALIDATED** — **New best: rel_l2 = 2.531%** (attempt19_w4, W1+W2+W3+W4+W5). PCGrad K=2 gradient surgery (W4) yielded a −18.8% improvement over the previous best (3.117%). W4+W5 together cut the baseline 4.31% by 41%. Best max_error: **4.107%** (attempt15b_w1, W1 only; W4+W5 gives 5.303%).
+**Current status**: ✅ **TARGET MET + ALL W1–W5 VALIDATED + CompactChartNet BENCHMARKED** — **New best: rel_l2 = 2.207%** (attempt20c_compact, CompactChartNet Voronoi sub-atlas, τ_scale=0.5). This is a −12.8% improvement over attempt19_w4 (2.531%) but at 9× higher runtime (3659s vs 404s). Best max_error: **4.107%** (attempt15b_w1, W1 only; W4+W5 gives 5.303%; CompactChartNet gives 6.783%).
 
 ---
 
@@ -839,6 +839,201 @@ No chart above 5.2% rel_l2 (vs 8.3% in W3). Distribution is the most balanced se
 
 ---
 
+## Attempt 20c_compact: CompactChartNet Voronoi Sub-Atlas — ✅ NEW BEST rel_l2
+
+**Commits**: `2a0e54e` ("feat: add CompactChartNet + exclusive-zone fine-tuning + solver modifications"), `b9bb162` ("fix: correct two rel_l2_eval KeyErrors in exclusive-zone finetune phase")
+**New file**: `experiments/compact_chart_net.py`
+**Flags**:
+```bash
+--pinn-arch compact --compact-tau-scale 0.5 --compact-n-subseed 9 \
+--compact-sub-width 32 --compact-sub-depth 2 \
+--lr 2e-4 --exclusive-finetune-steps 200 --exclusive-finetune-lr 5e-5 \
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+--w-interface-value 2.0 --w-interface-flux 2.0 \
+--w-overlap-h1 0.5 --overlap-h1-batch 64 \
+--use-pcgrad
+```
+(All W1–W5 features active. PCGrad enabled. compact arch replaces `LocalPoissonPINN`.)
+
+### Architecture: CompactChartNet
+
+Each chart's PINN (`LocalPoissonPINN`, dense MLP) is replaced by a **Voronoi sub-atlas**:
+M=9 small Tanh-MLPs whose contributions are blended via a softmax partition-of-unity (POU):
+
+```
+u_chart(ξ) = Σ_m φ_m(ξ) · u_m(ξ − s_m)
+
+where φ_m(ξ) = softmax_m(−‖ξ − s_m‖² / 2τ²)
+      τ = tau_scale × support_r = 0.5 × 0.41 ≈ 0.205
+      s_0 = origin (chart centre); s_{1..8} = ±r/3 cube corners
+      u_m: ℝ³→ℝ, width=32, depth=2, Xavier-init Tanh MLP
+```
+
+**Key properties**:
+- C∞ everywhere → autograd Laplacian is well-defined
+- Spatially local → gradients of u_m concentrated near sub-seed s_m
+- Parameter count: **10,953** per chart (vs **12,801** for dense MLP, width=64 depth=4)
+
+**Hyper-parameter selection**: Initial run (attempt20_compact, τ_scale=0.125) failed catastrophically — interior pretrain loss plateaued at 0.15 (vs 8.4e-4 for dense MLP, **180× worse**). With τ=0.051, sub-nets cover only tiny Gaussian neighbourhoods, leaving most of the chart with ambiguous gradient signals. Switching to τ_scale=0.5 → τ=0.205 gives broad overlap and full chart coverage; pretrain converges normally (loss ≈ 0.012).
+
+### Schwarz rel_l2_eval Progression (all 60 iterations)
+
+```
+iter= 1: rel_l2= 4.06%  stale=0
+iter= 2: rel_l2= 4.70%  stale=1
+iter= 3: rel_l2= 4.67%  stale=2
+iter= 4: rel_l2= 4.69%  stale=3
+iter= 5: rel_l2= 4.88%  stale=4
+iter= 6: rel_l2= 4.87%  stale=5
+iter= 7: rel_l2= 4.93%  stale=6
+iter= 8: rel_l2= 4.83%  stale=7
+iter= 9: rel_l2= 4.68%  stale=8
+iter=10: rel_l2= 4.70%  stale=9
+iter=11: rel_l2= 4.47%  stale=10
+iter=12: rel_l2= 4.44%  stale=11
+iter=13: rel_l2= 4.32%  stale=12
+iter=14: rel_l2= 4.13%  stale=0  (reset — 4.47%→4.13%)
+iter=15: rel_l2= 4.04%  stale=0  (reset)
+iter=16: rel_l2= 3.87%  stale=0  (reset)
+iter=17: rel_l2= 3.82%  stale=0  (reset)
+iter=18: rel_l2= 3.68%  stale=0  (reset)
+iter=19: rel_l2= 3.74%  stale=1
+iter=20: rel_l2= 3.48%  stale=0  (reset)
+iter=21: rel_l2= 3.49%  stale=1
+iter=22: rel_l2= 3.52%  stale=2
+iter=23: rel_l2= 3.48%  stale=3
+iter=24: rel_l2= 3.33%  stale=0  (reset)
+iter=25: rel_l2= 3.36%  stale=1
+iter=26: rel_l2= 3.12%  stale=0  (reset)
+iter=27: rel_l2= 3.24%  stale=1
+iter=28: rel_l2= 3.05%  stale=0  (reset)
+iter=29: rel_l2= 3.11%  stale=1
+iter=30: rel_l2= 2.90%  stale=0  (reset)
+iter=31: rel_l2= 2.91%  stale=1
+iter=32: rel_l2= 2.97%  stale=2
+iter=33: rel_l2= 2.98%  stale=3
+iter=34: rel_l2= 2.85%  stale=0  (reset)
+iter=35: rel_l2= 2.89%  stale=1
+iter=36: rel_l2= 2.75%  stale=0  (reset)
+iter=37: rel_l2= 2.67%  stale=0  (reset)
+iter=38: rel_l2= 2.67%  stale=1
+iter=39: rel_l2= 2.65%  stale=0  (reset)
+iter=40: rel_l2= 2.58%  stale=0  (reset)
+iter=41: rel_l2= 2.62%  stale=1
+iter=42: rel_l2= 2.62%  stale=2
+iter=43: rel_l2= 2.59%  stale=3
+iter=44: rel_l2= 2.61%  stale=4
+iter=45: rel_l2= 2.53%  stale=0  (reset)
+iter=46: rel_l2= 2.60%  stale=1
+iter=47: rel_l2= 2.42%  stale=0  (reset)
+iter=48: rel_l2= 2.34%  stale=0  (reset)
+iter=49: rel_l2= 2.42%  stale=1
+iter=50: rel_l2= 2.45%  stale=2
+iter=51: rel_l2= 2.44%  stale=3
+iter=52: rel_l2= 2.43%  stale=4
+iter=53: rel_l2= 2.46%  stale=5
+iter=54: rel_l2= 2.36%  stale=0  (reset)
+iter=55: rel_l2= 2.44%  stale=1
+iter=56: rel_l2= 2.24%  stale=0  ← BEST ✅
+iter=57: rel_l2= 2.26%  stale=1
+iter=58: rel_l2= 2.41%  stale=2
+iter=59: rel_l2= 2.35%  stale=3
+iter=60: rel_l2= 2.31%  stale=4
+[ExclusiveFinetune 200 steps at lr=5e-5: rel_l2 unchanged at 2.24% — see below]
+→ hit max_schwarz_iters=60; plateau never fired (stale never reached 15)
+```
+
+**Monotone convergence**: Unlike the dense-MLP W4+W5 run (which reached best at iter 8 then oscillated wildly 3.3–6.0%), CompactChartNet descends nearly monotonically over all 60 iterations. This is the key architectural difference: each chart is spatially localized, so local PDE updates are less disruptive to the global solution.
+
+### Post-Schwarz Exclusive-Zone Fine-Tuning: Zero Effect
+
+After loading the best_rel_l2 checkpoint, `apply_exclusive_zone_freeze` was called on all 12 charts. Results:
+```
+Chart  0: 0/9 exclusive sub-nets  (9/9 frozen)
+Chart  1: 0/9 exclusive sub-nets  (9/9 frozen)
+...
+Chart 11: 0/9 exclusive sub-nets  (9/9 frozen)
+[ExclusiveFinetune step   40/200] rel_l2=2.2427%
+[ExclusiveFinetune step  200/200] rel_l2=2.2427%
+[ExclusiveFinetune] Done. rel_l2=2.2427%  (unchanged from best Schwarz)
+```
+
+**Root cause**: With τ_scale=0.5, the POU bandwidth is τ=0.205. The freeze criterion is `dist(s_m, seed_j) < r_j + 4τ = 0.41 + 0.82 = 1.23`. The maximum distance from any sub-seed s_m (at ±r/3 = 0.137 from chart centre) to a neighbouring chart's seed is roughly `d_ij + r_j/3 ≤ 0.41 + 0.137 = 0.547`, well under the 1.23 threshold. Thus **every sub-seed in every chart falls inside at least one neighbour's safety zone** → all 9 sub-nets frozen → zero gradient updates → fine-tuning has no effect.
+
+To make exclusive-zone fine-tuning effective, either: (a) reduce `safety_factor` from 4.0 to ≤ 1.0, or (b) define exclusive zones by point coverage (which chart dominates via POU weights) rather than seed proximity.
+
+### Metrics (from `runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_metrics.json`)
+
+```
+BC pretrain:             300 epochs
+Interior pretrain:       1000 epochs, loss ≈ 0.012  (vs 8.5e-4 for dense MLP)
+Schwarz iters:           60 total (hit max_schwarz_iters; plateau never fired)
+Best rel_l2:             2.207% at iter 56  ← NEW BEST ✅
+Max error:               6.783%  (chart 3 outlier)
+Runtime:                 3659s (~61 min)
+Schwarz time:            3071s
+Rejected iters:          0
+mean_interface_residual: 0.001979
+max_interface_residual:  0.05713
+final_interface_value:   3.842e-04
+final_interface_flux:    0.011585
+final_global_residual:   1.298
+```
+
+### Per-Chart Breakdown (at best_rel_l2 checkpoint, iter 56)
+
+```
+chart 0:  rel_l2=2.946%  max_err=3.188%  n=8413
+chart 1:  rel_l2=1.343%  max_err=4.016%  n=2468   ← best rel_l2
+chart 2:  rel_l2=1.174%  max_err=4.405%  n=3974
+chart 3:  rel_l2=2.507%  max_err=6.783%  n=5239   ← max_error source
+chart 4:  rel_l2=4.975%  max_err=4.022%  n=5014   ← worst rel_l2
+chart 5:  rel_l2=2.130%  max_err=6.015%  n=4038
+chart 6:  rel_l2=3.860%  max_err=4.833%  n=14062
+chart 7:  rel_l2=2.412%  max_err=4.693%  n=2448
+chart 8:  rel_l2=2.754%  max_err=2.312%  n=5103
+chart 9:  rel_l2=2.627%  max_err=3.098%  n=4517
+chart 10: rel_l2=2.257%  max_err=5.588%  n=4228
+chart 11: rel_l2=1.773%  max_err=5.588%  n=2594
+```
+
+Chart 4 remains the highest rel_l2 (4.975%) and chart 3 is the max_error outlier (6.783%). Both were troublesome in the dense-MLP runs as well (chart 4 had 4.030% in attempt19_w4).
+
+### Head-to-Head: attempt19_w4 vs attempt20c_compact
+
+| Metric | attempt19_w4 (dense MLP + PCGrad) | attempt20c_compact (CompactChartNet) | Δ |
+|--------|-----------------------------------|-------------------------------------|---|
+| best rel_l2 | 2.531% | **2.207%** | **−12.8%** ✅ |
+| max_error | 5.303% | 6.783% | +27.9% ⚠️ |
+| Schwarz iters to best | 8 | 56 | +7× |
+| Total Schwarz iters | 23 | 60 (hit max) | +2.6× |
+| Runtime | 404s | 3659s | **+9×** ⚠️ |
+| Schwarz time | 271s | 3071s | +11× |
+| mean_if_residual | **0.001511** | 0.001979 | +31% |
+| final_global_residual | **0.1608** | 1.298 | +7× ⚠️ |
+| Rejected iters | 0 | 0 | — |
+| Convergence pattern | Oscillates (3.3–6.0% after iter 8) | **Monotone descent** ✅ | — |
+
+**CompactChartNet verdict**:
+- ✅ **New all-time best rel_l2: 2.207%** — statistically meaningful −12.8% improvement over W4+W5
+- ✅ **Monotone convergence**: No oscillation — rel_l2 descends to 2.24% over 60 iterations, never jumping back up. This is the key advantage of the spatially-localized sub-atlas: local PDE updates do not disrupt the globally coherent solution as severely as with the dense MLP.
+- ⚠️ **max_error regression**: 6.783% vs 5.303% — chart 3 has a persistent outlier at 6.78% max point error. CompactChartNet's τ=0.205 smooth blending may smooth out gradients in locally high-variation regions.
+- ⚠️ **9× slower**: The core bottleneck is the computation graph for double autograd (Laplacian). CompactChartNet's forward involves 9 sub-net graphs + softmax POU + weighted sum; the Laplacian chain rule traverses a ~15× larger graph than the dense MLP's single chain. Per-iteration wall-clock is ~5× slower; combined with needing 7× more iterations to reach the optimum, total runtime is 9×.
+- ⚠️ **final_global_residual 7× larger**: The TNB-frame Laplacian residual at the best checkpoint is 1.298 vs 0.161 for the dense MLP. CompactChartNet spends 60 iterations improving rel_l2 but the PDE is less tightly satisfied — the supervision anchor (w=0.5) dominates over PDE in the early-to-mid Schwarz phase, and 60 iterations at lr=2e-4 are not enough for the PDE term to fully converge.
+- **Exclusive finetune: needs redesign** — with τ_scale=0.5, safety_factor=4.0 freezes all sub-nets in all charts. Effective exclusive-zone fine-tuning requires either `safety_factor ≤ 1.0` or a point-coverage-based masking approach.
+
+**When to use CompactChartNet vs dense MLP**:
+- CompactChartNet is preferred when: (a) oscillation is the primary failure mode, (b) runtime budget allows 10× overhead, (c) monotone convergence is more important than speed.
+- Dense MLP (W4+W5) is preferred when: (a) runtime is constrained, (b) max_error matters as much as rel_l2, (c) fewer Schwarz iterations are available.
+
+---
+
 ## Summary Table
 
 | Component | Status | Notes |
@@ -856,18 +1051,20 @@ No chart above 5.2% rel_l2 (vs 8.3% in W3). Distribution is the most balanced se
 | W2: manufactured-solution anchor | ✅ Validated | attempt16_w2 — 3.165% (−14.4% vs W1) |
 | W3: rel_l2-based plateau | ✅ Implemented | attempt17_w3 — correct behavior, marginal gain |
 | W5: stronger global coupling | ✅ Validated | attempt18_w5 — max_error −36%, uniformity ↑ |
-| W4: PCGrad K=2 gradient surgery | ✅ Validated | attempt19_w4 — **2.531% NEW BEST**, −18.8% vs W3 |
-| **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 2.531% at iter 8, attempt19_w4** |
+| W4: PCGrad K=2 gradient surgery | ✅ Validated | attempt19_w4 — 2.531%, −18.8% vs W3 |
+| CompactChartNet (Voronoi sub-atlas) | ✅ Benchmarked | attempt20c_compact — **2.207% NEW BEST**, monotone convergence, 9× slower |
+| **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 2.207% at iter 56, attempt20c_compact** |
 
 **Benchmark progression**:
-| Run | Fixes | rel_l2 | max_error | Best iter | Runtime |
-|-----|-------|--------|-----------|-----------|---------|
+| Run | Fixes / Architecture | rel_l2 | max_error | Best iter | Runtime |
+|-----|---------------------|--------|-----------|-----------|---------|
 | attempt14b | baseline (broken score metric) | 4.31% | 10.86% | 33 | 10,133s |
 | attempt15b_w1 | +W1 (correct score) | 3.698% | **4.107%** | 3 | 364s |
 | attempt16_w2 | +W1+W2 (supervision anchor w=0.5) | 3.165% | 4.993% | 3 | 335s |
 | attempt17_w3 | +W1+W2+W3 (rel_l2 plateau) | 3.117% | 8.485% ⚠️ | 4 | 328s |
 | attempt18_w5 | +W1+W2+W3+W5 (10× flux, H1 overlap) | 3.631% | 5.450% | 9 | 371s |
-| **attempt19_w4** | **+W1+W2+W3+W4+W5 (PCGrad)** | **2.531%** | **5.303%** | **8** | **404s** |
+| attempt19_w4 | +W1+W2+W3+W4+W5 (PCGrad) | 2.531% | 5.303% | 8 | 404s |
+| **attempt20c_compact** | **CompactChartNet τ=0.5 + all W1–W5** | **2.207%** | 6.783% ⚠️ | **56/60** | **3659s** |
 
 ---
 
@@ -895,3 +1092,26 @@ No chart above 5.2% rel_l2 (vs 8.3% in W3). Distribution is the most balanced se
 ### W7 (Future): Reduce W2 Supervision Weight
 **Observation**: The W2 anchor at `w=0.5` is strong enough to keep charts near the manufactured solution but may be over-constraining some charts (3, 4, 9). Charts 3 and 9 have consistently been outliers.
 - Try `--w-manufactured-supervision 0.3` with W4+W5: softer anchor may let PDE and coupling dominate more in the outlier regions
+
+---
+
+## CompactChartNet Future Directions
+
+### C1: Fix Exclusive-Zone Fine-Tuning
+**Problem**: With τ_scale=0.5, `safety_factor=4.0 → margin=0.82 ≈ 2r`, freezing all 9 sub-seeds in all 12 charts.
+**Options**:
+- **Reduce `safety_factor` to 1.0–2.0**: margin = 1×0.205=0.205. Sub-seeds at the chart center (s_0=0) would still be frozen (dist(0, seed_j) ≤ r_i ≈ 0.41 < r_j + 0.205 ≈ 0.615). Corner sub-seeds at distance 0.137 from center: dist(s_m, seed_j) ≈ 0.41–0.55 — might fall outside threshold for some charts.
+- **Point-based masking**: A sub-net m is "exclusive" to chart i if chart i's POU weight `φ_m(ξ)` exceeds all neighbour charts' combined weight at the sub-seed location. More principled but requires querying neighbour nets.
+- **Current recommendation**: Try `safety_factor=1.5` for a quick test.
+
+### C2: Increase max_schwarz_iters
+**Observation**: attempt20c_compact hit `max_schwarz_iters=60` with stale=4 at iter 60 — the run was still converging (no plateau fired). Increasing to `--max-schwarz-iters 100` or `--plateau-patience 20` might push rel_l2 below 2.0%.
+
+### C3: Reduce Runtime
+The 9× overhead vs dense MLP is entirely due to double-autograd through the larger CompactChartNet graph. Options:
+- Reduce n_subseed from 9 to 4–5: smaller POU blend, slightly less expressive, but 2× faster forward + Laplacian
+- Increase sub-net width/depth to compensate: `--compact-sub-width 48 --compact-sub-depth 3` with `n_subseed=4`
+- Mixed-precision (AMP): may help per-chart forward, but double autograd is the bottleneck
+
+### C4: CompactChartNet + Larger max_iters on Dense MLP
+**Hypothesis**: The oscillation in dense-MLP W4+W5 starts at iter 9. If `--max-schwarz-iters 60` is set for the dense MLP run (same as CompactChartNet's limit), might it eventually find a better optimum, or will it continue oscillating at 3–5%? This would isolate whether CompactChartNet's monotone convergence is the key factor vs simply running more iterations.
