@@ -102,8 +102,11 @@ poisson_schwarz:
   hard_bc: false
   hard_bc_scale: 0.05
 
-  # M1: direct-coordinate PDE mode (set true to bypass learned decoder Jacobian)
-  direct_coord_pde: false
+  # M1/W1: direct-coordinate PDE mode — bypasses the learned decoder Jacobian
+  # and computes the Laplacian in the rigid TNB frame instead.  Must be true so
+  # that training, eval_global_metrics, and eval_rel_l2_subset all operate on
+  # the same coordinate frame as the pretrain supervision (TNB-based).
+  direct_coord_pde: true
 
   # M2: SDF-guided interior sampling
   sdf_checkpoint: null

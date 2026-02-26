@@ -1722,19 +1722,36 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     ni = max(16, args.eval_pde_samples_per_chart)
                     # M6: use SDF-guided interior sampling for eval in volumetric mode
                     xi_int = sample_pde_xi(i, ni)
-                res, _, valid = mapped_poisson_residual(
-                    u_nets[i],
-                    decoders[i],
-                    xi_int,
-                    seed=seeds[i],
-                    t1=t1[i],
-                    t2=t2[i],
-                    n=nvec[i],
-                    chart_scale=support_r[i],
-                    sigma_floor=args.sigma_floor,
-                    det_floor=args.det_floor,
-                    jac_kappa_max=args.jac_kappa_max,
-                )
+                # W1 fix: use the same PDE operator as training so that the
+                # eval PDE residual (which drives `score` and plateau tracking)
+                # measures what is actually being optimised.
+                # direct_coord_pde=True  → TNB-frame Laplacian (no decoder Jacobian)
+                # direct_coord_pde=False → decoder-based mapped Laplacian (legacy)
+                _eval_direct = bool(getattr(args, "direct_coord_pde", False))
+                if _eval_direct:
+                    x_phys_eval = (
+                        seeds[i].unsqueeze(0)
+                        + xi_int[:, 0:1] * t1[i].unsqueeze(0)
+                        + xi_int[:, 1:2] * t2[i].unsqueeze(0)
+                        + xi_int[:, 2:3] * nvec[i].unsqueeze(0)
+                    )
+                    res, _, valid = direct_poisson_residual_tnb(
+                        u_nets[i], x_phys_eval, seeds[i], t1[i], t2[i], nvec[i]
+                    )
+                else:
+                    res, _, valid = mapped_poisson_residual(
+                        u_nets[i],
+                        decoders[i],
+                        xi_int,
+                        seed=seeds[i],
+                        t1=t1[i],
+                        t2=t2[i],
+                        n=nvec[i],
+                        chart_scale=support_r[i],
+                        sigma_floor=args.sigma_floor,
+                        det_floor=args.det_floor,
+                        jac_kappa_max=args.jac_kappa_max,
+                    )
                 res_eval = select_residual_samples(res, valid, with_clip=True)
                 pde_terms.append(torch.mean(res_eval**2))
 
