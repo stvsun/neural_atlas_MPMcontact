@@ -25,6 +25,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+# CompactChartNet lives in the same experiments/ directory.
+import sys as _sys
+import os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from compact_chart_net import (
+    CompactChartNet,
+    build_compact_u_nets,
+    apply_exclusive_zone_freeze,
+)
+
 
 torch.set_default_dtype(torch.float64)
 
@@ -1133,16 +1143,34 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
                     n_parts.append(mask_interface_normals(i, j, x_all[s:e]))
                 overlap_normals[(i, j)] = torch.cat(n_parts, dim=0)
 
-    u_nets = [
-        LocalPoissonPINN(
-            width=args.pinn_width,
-            depth=args.pinn_depth,
-            arch=args.pinn_arch,
-            residual_scale=args.pinn_residual_scale,
-            residual_zero_init=bool(args.pinn_residual_zero_init),
-        ).to(device=device, dtype=dtype)
-        for _ in range(n_charts)
-    ]
+    if str(args.pinn_arch).lower() == "compact":
+        u_nets = build_compact_u_nets(
+            n_charts=n_charts,
+            support_r=support_r,
+            device=device,
+            dtype=dtype,
+            n_subseed=args.compact_n_subseed,
+            sub_width=args.compact_sub_width,
+            sub_depth=args.compact_sub_depth,
+            tau_scale=args.compact_tau_scale,
+        )
+        _compact_params = u_nets[0].count_parameters()
+        print(
+            f"[CompactChartNet] M={args.compact_n_subseed} sub-seeds, "
+            f"sub_width={args.compact_sub_width}, sub_depth={args.compact_sub_depth}, "
+            f"tau_scale={args.compact_tau_scale}  →  {_compact_params:,d} params/chart"
+        )
+    else:
+        u_nets = [
+            LocalPoissonPINN(
+                width=args.pinn_width,
+                depth=args.pinn_depth,
+                arch=args.pinn_arch,
+                residual_scale=args.pinn_residual_scale,
+                residual_zero_init=bool(args.pinn_residual_zero_init),
+            ).to(device=device, dtype=dtype)
+            for _ in range(n_charts)
+        ]
     if args.init_u_checkpoint is not None:
         # Keep checkpoint deserialization on CPU to avoid MPS float64 load failures.
         init_ckpt = torch.load(args.init_u_checkpoint, map_location=torch.device("cpu"))
@@ -2594,6 +2622,141 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
             print(f"Stopped by plateau patience at iteration {it}")
             break
 
+    # -------------------------------------------------------------------------
+    # Exclusive-zone fine-tuning (post-Schwarz, CompactChartNet only)
+    # -------------------------------------------------------------------------
+    # After the main Schwarz loop converges, optionally run additional
+    # optimisation steps per chart where only the spatially-exclusive
+    # sub-nets (those whose seeds do NOT lie inside any neighbour's support
+    # ball) receive gradient updates.  The overlapping sub-nets are frozen
+    # via CompactChartNet._frozen_mask so their outputs are detached;
+    # predictions in the overlap region still blend both frozen and live
+    # sub-nets, preserving continuity across chart boundaries.
+    _excl_steps = int(getattr(args, "exclusive_finetune_steps", 0))
+    _excl_lr    = float(getattr(args, "exclusive_finetune_lr", 2e-4))
+    if _excl_steps > 0 and str(args.pinn_arch).lower() == "compact":
+        print(
+            f"\n[ExclusiveFinetune] Starting {_excl_steps} fine-tuning steps "
+            f"(lr={_excl_lr:.2e}) on exclusive zones …"
+        )
+        # Reload the best rel-l2 checkpoint so fine-tuning starts from the
+        # best Schwarz solution.
+        _best_snap = snapshots.get("best_rel_l2") or snapshots.get("best_score")
+        if _best_snap is not None:
+            load_snapshot_u_states(_best_snap["u_states"])
+            print(f"  Loaded best snapshot (iter={_best_snap['iter']}, "
+                  f"rel_l2={_best_snap['rel_l2']:.4%})")
+
+        # Build overlap-pair list from neighbors adjacency.
+        _overlap_pairs = [
+            (i, j)
+            for i in range(n_charts)
+            for j in neighbors[i]
+            if i < j
+        ]
+
+        # Freeze overlapping sub-nets in each CompactChartNet.
+        _freeze_stats = apply_exclusive_zone_freeze(
+            u_nets=u_nets,        # type: ignore[arg-type]
+            seeds=seeds,
+            support_r=support_r,
+            t1=t1,
+            t2=t2,
+            nvec=nvec,
+            overlap_pairs=_overlap_pairs,
+        )
+        for _ci, (_nf, _ne) in _freeze_stats.items():
+            print(f"  Chart {_ci:2d}: {_ne}/{u_nets[_ci].n_subseed} exclusive sub-nets, "  # type: ignore[union-attr]
+                  f"{_nf} frozen")
+
+        # Create fresh optimisers with the reduced fine-tune LR.
+        _ft_opts = [
+            torch.optim.Adam(u.parameters(), lr=_excl_lr)
+            for u in u_nets
+        ]
+
+        _direct_ft = bool(getattr(args, "direct_coord_pde", False))
+        _w_pde_ft  = float(args.w_pde)
+        _w_sup_ft  = float(args.w_manufactured_supervision)
+        _w_bc_ft   = float(args.w_bc)
+
+        for _ft_step in range(_excl_steps):
+            for _i in range(n_charts):
+                if not trainable_chart_mask[_i]:
+                    continue
+                u_nets[_i].train()
+                _ft_opts[_i].zero_grad()
+
+                # PDE loss via direct TNB path (avoids decoder instability).
+                _xi_pde = sample_pde_xi(_i, args.pde_batch)
+                _x_pde = (
+                    seeds[_i].unsqueeze(0)
+                    + _xi_pde[:, 0:1] * t1[_i].unsqueeze(0)
+                    + _xi_pde[:, 1:2] * t2[_i].unsqueeze(0)
+                    + _xi_pde[:, 2:3] * nvec[_i].unsqueeze(0)
+                )
+                _res, _, _valid = direct_poisson_residual_tnb(
+                    u_nets[_i], _x_pde, seeds[_i], t1[_i], t2[_i], nvec[_i]
+                )
+                _res_use = _res[_valid] if _valid.any() else _res
+                _loss_ft = _w_pde_ft * torch.mean(_res_use ** 2)
+
+                # Manufactured-solution supervision (if enabled).
+                if _w_sup_ft > 0.0:
+                    _xi_sup = sample_pde_xi(_i, args.manufactured_supervision_batch)
+                    _x_sup = (
+                        seeds[_i].unsqueeze(0)
+                        + _xi_sup[:, 0:1] * t1[_i].unsqueeze(0)
+                        + _xi_sup[:, 1:2] * t2[_i].unsqueeze(0)
+                        + _xi_sup[:, 2:3] * nvec[_i].unsqueeze(0)
+                    )
+                    _u_sup_true = manufactured_u(_x_sup).detach()
+                    _u_sup_pred = u_nets[_i](_xi_sup)
+                    _loss_ft = _loss_ft + _w_sup_ft * torch.mean((_u_sup_pred - _u_sup_true) ** 2)
+
+                # BC loss.
+                _xi_bc, _u_bc, _ = local_bc_batch(_i, args.bc_batch)
+                if _xi_bc.shape[0] > 0 and _w_bc_ft > 0.0:
+                    _u_hat_bc = u_nets[_i](_xi_bc)
+                    _loss_ft = _loss_ft + _w_bc_ft * torch.mean((_u_hat_bc - _u_bc) ** 2)
+
+                _loss_ft.backward()
+                torch.nn.utils.clip_grad_norm_(u_nets[_i].parameters(), args.grad_clip_max_norm)
+                _ft_opts[_i].step()
+
+            # Periodic progress logging.
+            if (_ft_step + 1) % max(1, _excl_steps // 5) == 0 or _ft_step == _excl_steps - 1:
+                _rel_ft = eval_rel_l2_subset()
+                print(f"  [ExclusiveFinetune step {_ft_step+1:4d}/{_excl_steps}] "
+                      f"rel_l2={_rel_ft:.4%}")
+
+        # Unfreeze all sub-nets and do a final eval.
+        for _net in u_nets:
+            if isinstance(_net, CompactChartNet):
+                _net.unfreeze_all_subnets()
+
+        _pde_ft, _bc_ft, _iv_ft, _if_ft = eval_global_metrics()
+        _rel_l2_ft = eval_rel_l2_subset()
+        _wif_ft = effective_flux_weight(len(history["global_residual"]))
+        _score_ft = args.w_pde * _pde_ft + args.w_interface_value * _iv_ft + _wif_ft * _if_ft
+        history["global_residual"].append(_pde_ft)
+        history["bc_loss"].append(_bc_ft)
+        history["interface_value"].append(_iv_ft)
+        history["interface_flux"].append(_if_ft)
+        history["rel_l2_eval"].append(_rel_l2_ft)
+        history["w_interface_flux_eff"].append(_wif_ft)
+        history["adaptive_flux_multiplier"].append(float(adaptive_flux_mult))
+        history["lr"].append(_excl_lr)
+        history["iter_rejected"].append(0.0)
+        history["accepted_progress_iter"].append(0.0)
+        _ft_iter = len(history["global_residual"])
+        maybe_record_snapshot("best_rel_l2", _ft_iter, _pde_ft, _bc_ft, _iv_ft, _if_ft, _rel_l2_ft, _score_ft)
+        maybe_record_snapshot("best_score",  _ft_iter, _pde_ft, _bc_ft, _iv_ft, _if_ft, _rel_l2_ft, _score_ft)
+        if _rel_l2_ft <= args.target_rel_l2:
+            maybe_record_snapshot("best_target", _ft_iter, _pde_ft, _bc_ft, _iv_ft, _if_ft, _rel_l2_ft, _score_ft)
+        _schwarz_best_str = f"best Schwarz={_best_snap['rel_l2_eval']:.4%}" if _best_snap else "no snapshot"
+        print(f"\n[ExclusiveFinetune] Done. rel_l2={_rel_l2_ft:.4%}  ({_schwarz_best_str})")
+
     if len(history["global_residual"]) == 0:
         # Pretrain-only runs still produce one deterministic metric snapshot.
         pde_m, bc_m, iv_m, if_m = eval_global_metrics()
@@ -3007,11 +3170,26 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--pinn-width", type=int, default=64)
     parser.add_argument("--pinn-depth", type=int, default=4)
-    parser.add_argument("--pinn-arch", type=str, choices=["mlp", "resnet"], default="mlp")
+    parser.add_argument("--pinn-arch", type=str, choices=["mlp", "resnet", "compact"], default="mlp")
     parser.add_argument("--pinn-residual-scale", type=float, default=0.1)
     parser.add_argument("--pinn-residual-zero-init", dest="pinn_residual_zero_init", action="store_true")
     parser.add_argument("--no-pinn-residual-zero-init", dest="pinn_residual_zero_init", action="store_false")
     parser.set_defaults(pinn_residual_zero_init=True)
+    # CompactChartNet-specific hyper-parameters
+    parser.add_argument("--compact-n-subseed", type=int, default=9,
+                        help="Number of Voronoi sub-seeds per chart (CompactChartNet).")
+    parser.add_argument("--compact-sub-width", type=int, default=32,
+                        help="Hidden width of each sub-net (CompactChartNet).")
+    parser.add_argument("--compact-sub-depth", type=int, default=2,
+                        help="Hidden depth of each sub-net (CompactChartNet).")
+    parser.add_argument("--compact-tau-scale", type=float, default=0.125,
+                        help="POU bandwidth: τ = tau_scale × support_r (CompactChartNet).")
+    # Exclusive-zone fine-tuning (post-Schwarz phase, only meaningful with compact arch)
+    parser.add_argument("--exclusive-finetune-steps", type=int, default=0,
+                        help="Number of fine-tuning steps on the exclusive zone after main Schwarz "
+                             "loop.  0 = disabled (default).")
+    parser.add_argument("--exclusive-finetune-lr", type=float, default=2e-4,
+                        help="Learning rate for the exclusive-zone fine-tuning phase.")
     parser.add_argument("--grad-clip-max-norm", type=float, default=5.0)
     parser.add_argument("--lr", type=float, default=8e-4)
     parser.add_argument(
