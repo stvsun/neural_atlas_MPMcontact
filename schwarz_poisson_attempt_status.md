@@ -514,6 +514,103 @@ at the cost of PDE accuracy. Global rel_l2 still improved (3.698% → 3.165%).
 
 ---
 
+## Attempt 17_w3: W1+W2+W3 Benchmark
+
+**Commit**: `2a2dbd6` ("fix(W3): decouple plateau stale counter from composite score — track rel_l2_eval")
+**Flags**: Same as attempt16_w2 plus `--plateau-use-rel-l2`:
+```bash
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2
+```
+
+**W3 fix** (12 lines changed in `run_poisson_rabbit_atlas_schwarz.py`):
+When `--plateau-use-rel-l2` is set, the stale counter resets when
+`rel_l2_eval + plateau_tol < best_rel_l2` (comparing against the previous iteration's best).
+`best_score` tracking is preserved independently for the `"best_score"` snapshot.
+`plateau_use_rel_l2: true` added to YAML as new default.
+
+**Schwarz rel_l2_eval progression** (full log):
+```
+iter=1:  rel_l2_eval=10.90%  stale=0  (reset — better than inf)
+iter=2:  rel_l2_eval= 4.470% stale=0  (reset — 10.90%→4.47%)
+iter=3:  rel_l2_eval= 3.385% stale=0  (reset — 4.47%→3.39%)
+iter=4:  rel_l2_eval= 3.149% stale=0  (reset — 3.39%→3.15%) ← BEST ✅  [W3 key: stale reset here]
+iter=5:  rel_l2_eval= 3.345% stale=1
+iter=6:  rel_l2_eval= 3.663% stale=2
+iter=7:  rel_l2_eval= 4.464% stale=3
+iter=8:  rel_l2_eval= 3.977% stale=4
+iter=9:  rel_l2_eval= 3.803% stale=5
+iter=10: rel_l2_eval= 4.312% stale=6
+iter=11: rel_l2_eval= 3.685% stale=7
+iter=12: rel_l2_eval= 4.342% stale=8
+iter=13: rel_l2_eval= 4.727% stale=9
+iter=14: rel_l2_eval= 4.779% stale=10
+iter=15: rel_l2_eval= 4.820% stale=11
+iter=16: rel_l2_eval= 5.358% stale=12
+iter=17: rel_l2_eval= 5.139% stale=13
+iter=18: rel_l2_eval= 4.592% stale=14
+iter=19: rel_l2_eval= 5.324% stale=15 → plateau fires ✅
+```
+W3 correctly reset stale at iter 4, extending Schwarz by 2 iterations vs W1+W2 (plateau at 19 vs 17).
+After iter 4, rel_l2_eval oscillates 3.3–5.4% — W2 anchor at w=0.5 stabilizes but doesn't keep improving.
+
+**Metrics** (from `runs/attempt17_w3/rabbit_poisson_schwarz_attempt17_w3_metrics.json`):
+```
+BC pretrain:        300 epochs, loss 6.283e-03
+Interior pretrain:  1000 epochs, loss 8.465e-04
+Schwarz iters:      19 total (plateau fires at stale=15 from iter 4)
+Best rel_l2:        3.117% at iter 4  (rel_l2_eval at iter 4: 3.149%)
+Max error:          8.485%            ← regression vs W1+W2's 4.993%
+Runtime:            328s (~5.5 min)
+Schwarz time:       196.6s
+final_global_residual: 0.142          ← TNB-frame Laplacian
+mean_interface_residual: 0.00217      ← slightly worse than W1+W2's 0.00185
+Rejected iters:     0
+```
+
+**Per-chart breakdown** (at best_rel_l2 checkpoint, iter 4):
+```
+chart 0: rel_l2=3.991%  max_err=3.100%  n=8413
+chart 1: rel_l2=1.435%  max_err=4.810%  n=2468
+chart 2: rel_l2=1.746%  max_err=3.736%  n=3974
+chart 3: rel_l2=2.040%  max_err=3.885%  n=5239
+chart 4: rel_l2=6.570%  max_err=8.485%  n=5014  ← OUTLIER (new)
+chart 5: rel_l2=2.080%  max_err=4.124%  n=4038
+chart 6: rel_l2=4.434%  max_err=4.072%  n=14062
+chart 7: rel_l2=4.806%  max_err=3.100%  n=2448
+chart 8: rel_l2=4.851%  max_err=3.359%  n=5103  (was 11.3% in W1+W2 — fixed!)
+chart 9: rel_l2=8.290%  max_err=8.485%  n=4517  ← OUTLIER (new)
+chart 10: rel_l2=3.447% max_err=4.078%  n=4228
+chart 11: rel_l2=1.818% max_err=3.436%  n=2594
+```
+Chart 8 (the W1+W2 outlier at 11.3%) improved to 4.85%. But Charts 4 and 9 are now outliers at 6.6% and 8.3% resp.  The extra Schwarz iterations shifted the error distribution rather than uniformly reducing it.
+
+**Head-to-head: W1+W2 vs W1+W2+W3**:
+
+| Metric | attempt16_w2 (W1+W2) | attempt17_w3 (W1+W2+W3) | Δ |
+|--------|---------------------|------------------------|---|
+| best rel_l2 | 3.165% | 3.117% | −1.5% |
+| max_error | **4.993%** | 8.485% | **+70%** ⚠️ |
+| Best iter | 3 | 4 | +1 |
+| Total Schwarz iters | 17 | 19 | +2 |
+| Runtime | 335s | **328s** | −2% |
+| mean_if_residual | **0.00185** | 0.00217 | +17% |
+
+**W3 verdict**:
+- ✅ W3 logic is **correct**: stale counter now properly resets when rel_l2 improves (iter 4 reset confirmed)
+- ✅ W3 lets Schwarz run 2 more useful iterations (plateau at 19 vs 17)
+- ⚠️ **max_error regression**: Chart 8 improved (11.3%→4.85%) but Charts 4 & 9 became new outliers (6.6%, 8.3%)
+- ⚠️ rel_l2 improvement is negligible (3.165%→3.117%, within noise)
+- **Root cause**: After iter 4, Schwarz still oscillates without converging. W2 anchor (w=0.5) prevents catastrophic drift but the extra iterations shift error between charts rather than reducing it globally.
+- **Implication**: W3 is a correct improvement to the plateau mechanism but the **real bottleneck is Schwarz coherence** — local per-chart updates + w=0.5 anchor do not provide enough global coupling to sustain improvement past iter 4.
+
+---
+
 ## Summary Table
 
 | Component | Status | Notes |
@@ -529,14 +626,16 @@ at the cost of PDE accuracy. Global rel_l2 still improved (3.698% → 3.165%).
 | Training/eval coordinate consistency | ✅ Fixed | Commit 074e126 — eliminated 125% → 3.58% |
 | W1: eval_global_metrics PDE operator | ✅ Fixed | Commit fc33ec2 — 28× faster, 62% max_error ↓ |
 | W2: manufactured-solution anchor | ✅ Validated | attempt16_w2 — 3.165% (−14.4% vs W1) |
-| **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 3.165% at iter 3, attempt16_w2** |
+| W3: rel_l2-based plateau | ✅ Implemented | attempt17_w3 — correct behavior, marginal gain |
+| **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 3.117% at iter 4, attempt17_w3** |
 
 **Benchmark progression**:
 | Run | Fixes | rel_l2 | max_error | Runtime |
 |-----|-------|--------|-----------|---------|
 | attempt14b | baseline (broken score metric) | 4.31% | 10.86% | 10,133s |
 | attempt15b_w1 | +W1 (correct score) | 3.698% | 4.107% | 364s |
-| attempt16_w2 | +W1+W2 (supervision anchor) | **3.165%** | 4.993% | 335s |
+| attempt16_w2 | +W1+W2 (supervision anchor w=0.5) | 3.165% | 4.993% | 335s |
+| attempt17_w3 | +W1+W2+W3 (rel_l2 plateau) | **3.117%** | 8.485% ⚠️ | 328s |
 
 ---
 
@@ -544,37 +643,23 @@ at the cost of PDE accuracy. Global rel_l2 still improved (3.698% → 3.165%).
 
 ### ✅ W2 (Done): Manufactured-Solution Anchor During Schwarz
 **Result**: `--w-manufactured-supervision 0.5` → 3.165% rel_l2 (−14.4% vs W1 alone).
-**Remaining issue**: Schwarz still degrades after iter 3 (same plateau pattern as W1).
-**Observation**: W2 helped pretrain-to-iter-3 transition but did not prevent post-iter-3 drift.
 
-### W3: Plateau Metric Decoupled from Solution Quality
-**Problem**: `score = w_pde * pde_m + ...` is set at first accepted iteration (iter 2). Since score
-gets worse monotonically after iter 2 (PDE term keeps growing while local steps push individual charts
-toward PDE minima that conflict with inter-chart coherence), `stale` always increments and plateau
-fires at `patience=15` even though rel_l2_eval improves at iter 3 (3.305% → 3.165%).
-
-**Proposed fix (Option A — preferred)**:
-Track `rel_l2_eval` directly for plateau detection. Replace the stale counter logic:
-```python
-# Current: stale increments when score > best_score
-# Fix: stale increments when rel_l2_eval > best_rel_l2_eval + margin
-```
-This would let the plateau correctly recognize iter 3 as the best, and potentially allow further
-improvement at iter 4, 5, etc. if W2 anchor is helping.
-
-**Option B**: `--plateau-patience 0` disables plateau → Schwarz runs to `--max-schwarz-iters`.
-
-**Option C**: `--max-schwarz-iters 4` hard-stop after iter 4, skipping the degradation phase.
+### ✅ W3 (Done): Rel-L2-Based Plateau Detection
+**Result**: Stale counter now tracks rel_l2_eval. Correct behavior confirmed — resets at iter 4 when rel_l2 improves. Gain is marginal (3.165%→3.117%) and max_error regressed (+70%).
+**Takeaway**: W3 is a necessary correctness fix but not sufficient to overcome the fundamental Schwarz coherence problem. Need stronger coupling (W4 or W5).
 
 ### W4: Tune W2 Supervision Weight
-**Observation**: w=0.5 caused Chart 8 max_error regression (11.3% vs 4.4%). Try lower weight:
-- `--w-manufactured-supervision 0.1` (softer anchor, less interference with PDE)
-- `--w-manufactured-supervision 1.0` (stronger anchor, may reduce Schwarz degradation further)
+**Observation**: w=0.5 shifts chart errors around without converging. The extra iterations enabled by W3 expose this oscillation over a wider range of charts.
+- **Try w=1.0**: stronger anchor may keep charts closer to the manufactured solution through more Schwarz iters
+- **Try w=0.1**: softer anchor, reduces interference with PDE, may reduce max_error regression
+- **Expected best outcome**: w=1.0 may reduce oscillation amplitude at the cost of PDE fidelity
 
-### W5 (Future): H1 Volumetric Overlap Coupling
-Test `--w-overlap-h1 0.5` now that training/eval consistency is fixed. May help inter-chart
-consistency during Schwarz by penalizing disagreement in the overlap volume (not just interface).
+### W5: Stronger Global Coupling
+**Problem**: Local Schwarz updates break global coherence even with the manufactured-solution anchor.
+**Options**:
+- `--w-overlap-h1 0.5` (H1 volumetric overlap — penalizes chart disagreement in volume, not just surface)
+- `--w-interface-flux 5.0` (stronger flux matching — enforces ∇u continuity more aggressively)
+- Both: combine H1 overlap + higher flux weight for maximum coupling
 
-### W6 (Future): Interface Flux Weight Tuning
-Current `w_interface_flux = 2.0`. May benefit from higher value to enforce flux continuity more
-strongly, reducing the degradation observed after iter 3.
+### W6 (Future): Hard Stop at Best Iter
+After W4 tuning, if best is consistently at iter 3–5, consider `--max-schwarz-iters 5` to prevent degradation from later iterations contributing to max_error.
