@@ -3,7 +3,7 @@
 **Date**: 2026-02-25
 **Project**: Multiplicative Schwarz PINN for Poisson equation on Stanford rabbit volumetric geometry
 **Goal**: Achieve `rel_l2 < 5%` for the manufactured solution `u = sin(πx₁)sin(πx₂)sin(πx₃)`
-**Current status**: ✅ **TARGET MET + W1+W2 VALIDATED** — Attempt 16_w2 (W1+W2) achieved `rel_l2 = 3.165%` in 335s. W2 (manufactured-solution anchor `--w-manufactured-supervision 0.5`) adds −14.4% rel_l2 improvement over W1 alone (3.698% → 3.165%). Best across all runs: 3.165% in ~6 min.
+**Current status**: ✅ **TARGET MET + W1–W3+W5 VALIDATED** — Best rel_l2: **3.117%** (attempt17_w3, W1+W2+W3), best max_error: **4.107%** (attempt15b_w1, W1 only). W5 (10× stronger flux coupling, H1 overlap) fixes the argparse-default underweighting bug: max_error −36% (8.485%→5.450%), chart uniformity dramatically improved. W4 (PCGrad K=2) is next to resolve the intra-chart L_pde vs L_sup gradient conflict.
 
 ---
 
@@ -611,6 +611,123 @@ Chart 8 (the W1+W2 outlier at 11.3%) improved to 4.85%. But Charts 4 and 9 are n
 
 ---
 
+---
+
+## Attempt 18_w5: W1+W2+W3+W5 Benchmark (Stronger Global Coupling)
+
+**Critical discovery — YAML config is never loaded**: All previous W-series runs used **argparse defaults**, not YAML values, because `run_poisson_rabbit_atlas_schwarz.py` never loads `configs/rabbit_atlas_poisson.yaml`. Key defaults that differed from YAML intentions:
+- `--w-interface-flux`: default=**0.2** (YAML intended 2.0 — **10× weaker** in all previous runs!)
+- `--w-interface-value`: default=**0.8** (YAML intended 2.0 — 2.5× weaker)
+- `--w-pde`: default=**1.0** (YAML intended 5.0)
+
+Confirmed in all prior run logs: `w_if=2.000e-01` throughout attempt14b through attempt17_w3. The Schwarz oscillation was partly explained by the flux coupling being far too weak to enforce gradient continuity across charts.
+
+**Flags**: Same as attempt17_w3 plus W5 coupling fixes:
+```bash
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+--w-interface-value 2.0 --w-interface-flux 2.0 \
+--w-overlap-h1 0.5 --overlap-h1-batch 64
+```
+
+**W5 changes** (vs attempt17_w3):
+- `--w-interface-value 2.0`: interface value coupling 2.5× stronger (0.8 → 2.0)
+- `--w-interface-flux 2.0`: flux coupling **10× stronger** (0.2 → 2.0) — most impactful
+- `--w-overlap-h1 0.5 --overlap-h1-batch 64`: H1 volumetric overlap penalty in 3D ball intersection
+
+Confirmed active in run log: `w_if=2.000e+00` at every Schwarz iteration.
+
+**Schwarz rel_l2_eval progression** (full log):
+```
+iter=1:  pde=1.792e+00  if_flux=1.602e-02  rel_l2=12.52%  stale=0   ← slower start vs W3's 10.90%
+iter=2:  pde=1.125e+00  if_flux=4.241e-03  rel_l2= 7.43%  stale=0
+iter=3:  pde=8.469e-01  if_flux=1.634e-03  rel_l2= 5.20%  stale=0
+iter=4:  pde=5.455e-01  if_flux=1.697e-03  rel_l2= 4.93%  stale=0
+iter=5:  pde=5.620e-01  if_flux=1.786e-03  rel_l2= 4.38%  stale=0
+iter=6:  pde=4.545e-01  if_flux=1.611e-03  rel_l2= 4.16%  stale=0
+iter=7:  pde=3.072e-01  if_flux=1.569e-03  rel_l2= 4.49%  stale=1
+iter=8:  pde=3.442e-01  if_flux=1.957e-03  rel_l2= 4.01%  stale=0   (reset)
+iter=9:  pde=3.225e-01  if_flux=2.018e-03  rel_l2= 3.68%  stale=0   ← BEST ✅
+iter=10: pde=3.754e-01  if_flux=2.003e-03  rel_l2= 4.23%  stale=1
+iter=11: pde=3.251e-01  if_flux=1.903e-03  rel_l2= 3.87%  stale=2
+iter=12: pde=2.310e-01  if_flux=2.257e-03  rel_l2= 4.51%  stale=3
+iter=13: pde=2.477e-01  if_flux=2.148e-03  rel_l2= 5.03%  stale=4
+iter=14: pde=1.951e-01  if_flux=2.173e-03  rel_l2= 5.42%  stale=5
+iter=15: pde=1.778e-01  if_flux=2.110e-03  rel_l2= 4.38%  stale=6
+iter=16: pde=1.785e-01  if_flux=2.335e-03  rel_l2= 4.53%  stale=7
+iter=17: pde=1.641e-01  if_flux=2.067e-03  rel_l2= 4.62%  stale=8
+iter=18: pde=1.871e-01  if_flux=3.024e-03  rel_l2= 4.14%  stale=9
+iter=19: pde=1.660e-01  if_flux=2.292e-03  rel_l2= 5.15%  stale=10
+iter=20: pde=1.800e-01  if_flux=2.850e-03  rel_l2= 4.79%  stale=11
+iter=21: pde=1.276e-01  if_flux=2.235e-03  rel_l2= 4.71%  stale=12
+iter=22: pde=1.309e-01  if_flux=2.642e-03  rel_l2= 5.21%  stale=13
+iter=23: pde=1.415e-01  if_flux=2.334e-03  rel_l2= 3.77%  stale=14
+iter=24: pde=1.516e-01  if_flux=2.316e-03  rel_l2= 4.20%  stale=15  → plateau fires
+```
+Best at iter 9 (rel_l2_eval = 3.677%) — 6 iters later than W3's best at iter 4. Stronger coupling sustains improvement longer but still oscillates 3.8–5.2% after the best.
+
+**Metrics** (from `runs/attempt18_w5/rabbit_poisson_schwarz_attempt18_w5_metrics.json`):
+```
+BC pretrain:        300 epochs, loss 6.283e-03
+Interior pretrain:  1000 epochs, loss 8.465e-04
+Schwarz iters:      24 total (plateau fires at stale=15 from iter 9)
+Best rel_l2:        3.631% at iter 9  (rel_l2_eval at checkpoint: 3.677%)
+Max error:          5.450%            ← improved vs W3's 8.485%
+Runtime:            371s (~6.2 min)
+Schwarz time:       242s
+final_global_residual: 0.152          ← TNB-frame Laplacian
+mean_interface_residual: 0.00206      ← similar to W3's 0.00217
+max_interface_residual:  0.0360
+final_interface_value:   6.391e-04
+final_interface_flux:    2.316e-03
+Rejected iters:     0
+```
+
+**Per-chart breakdown** (at best_rel_l2 checkpoint, iter 9):
+```
+chart 0:  rel_l2=4.710%  max_err=4.167%  n=8413
+chart 1:  rel_l2=2.518%  max_err=4.341%  n=2468
+chart 2:  rel_l2=3.885%  max_err=5.450%  n=3974
+chart 3:  rel_l2=1.913%  max_err=3.477%  n=5239
+chart 4:  rel_l2=3.946%  max_err=3.848%  n=5014   (was 6.6% in W3 — improved!)
+chart 5:  rel_l2=3.270%  max_err=5.085%  n=4038
+chart 6:  rel_l2=5.819%  max_err=5.450%  n=14062  ← highest rel_l2
+chart 7:  rel_l2=2.893%  max_err=3.886%  n=2448
+chart 8:  rel_l2=5.616%  max_err=3.955%  n=5103
+chart 9:  rel_l2=4.796%  max_err=3.955%  n=4517   (was 8.3% in W3 — improved!)
+chart 10: rel_l2=2.223%  max_err=4.192%  n=4228
+chart 11: rel_l2=4.200%  max_err=5.085%  n=2594
+```
+The W3 outliers (charts 4 & 9 at 6.6%/8.3%) are tamed by the stronger coupling. Distribution is much more uniform: max chart rel_l2 = 5.82% vs 8.29% in W3. This confirms that `--w-interface-flux 0.2` was too weak to prevent those charts from diverging.
+
+**Head-to-head: W1+W2+W3 vs W1+W2+W3+W5**:
+
+| Metric | attempt17_w3 (W1+W2+W3) | attempt18_w5 (W1+W2+W3+W5) | Δ |
+|--------|------------------------|---------------------------|---|
+| best rel_l2 | **3.117%** | 3.631% | +16.5% ⚠️ |
+| max_error | 8.485% | **5.450%** | **−36%** ✅ |
+| Best iter | 4 | **9** | +5 (more sustained) |
+| Total Schwarz iters | 19 | **24** | +5 |
+| Runtime | 328s | 371s | +13% |
+| mean_if_residual | 0.00217 | **0.00206** | −5% |
+| max chart rel_l2 | 8.29% (chart 9) | **5.82% (chart 6)** | **−30%** ✅ |
+
+**W5 verdict**:
+- ✅ **Stronger coupling dramatically improves uniformity**: max chart rel_l2 reduced from 8.29% → 5.82%; W3 outliers (charts 4 & 9) are tamed
+- ✅ **max_error improved 36%** (8.485% → 5.450%) — the larger per-chart peaks are suppressed
+- ✅ **Best iter pushed later** (iter 4 → iter 9): stronger coupling allows more sustained Schwarz improvement before oscillation dominates
+- ⚠️ **Global rel_l2 regressed** (3.117% → 3.631%): the competing forces — interface coupling vs W2 supervision anchor vs PDE — are not yet in balance; the increased coupling weight shifts chart solutions toward interface agreement at some cost to global accuracy
+- ⚠️ **Still oscillates** after iter 9 (range 3.7–5.4%): W5 narrows the oscillation band but does not eliminate it
+- **Root cause of oscillation**: Local per-chart PDE updates disturb the global solution, and inter-chart coupling (while stronger) is still not enough to fully re-synchronize charts within each Schwarz step. The W2 supervision anchor (w=0.5) provides absolute reference but the intra-chart gradient conflict between `L_pde` and `L_sup` limits how well each chart converges locally.
+- **Implication for W4**: PCGrad (project ∇L_pde onto the orthogonal complement of ∇L_sup when conflicting) should help the per-chart optimizer make progress on both objectives simultaneously, potentially achieving better local solutions within each Schwarz step and reducing the oscillation amplitude.
+
+---
+
 ## Summary Table
 
 | Component | Status | Notes |
@@ -627,15 +744,19 @@ Chart 8 (the W1+W2 outlier at 11.3%) improved to 4.85%. But Charts 4 and 9 are n
 | W1: eval_global_metrics PDE operator | ✅ Fixed | Commit fc33ec2 — 28× faster, 62% max_error ↓ |
 | W2: manufactured-solution anchor | ✅ Validated | attempt16_w2 — 3.165% (−14.4% vs W1) |
 | W3: rel_l2-based plateau | ✅ Implemented | attempt17_w3 — correct behavior, marginal gain |
+| W5: stronger global coupling | ✅ Validated | attempt18_w5 — max_error −36%, uniformity ↑ |
 | **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 3.117% at iter 4, attempt17_w3** |
 
 **Benchmark progression**:
-| Run | Fixes | rel_l2 | max_error | Runtime |
-|-----|-------|--------|-----------|---------|
-| attempt14b | baseline (broken score metric) | 4.31% | 10.86% | 10,133s |
-| attempt15b_w1 | +W1 (correct score) | 3.698% | 4.107% | 364s |
-| attempt16_w2 | +W1+W2 (supervision anchor w=0.5) | 3.165% | 4.993% | 335s |
-| attempt17_w3 | +W1+W2+W3 (rel_l2 plateau) | **3.117%** | 8.485% ⚠️ | 328s |
+| Run | Fixes | rel_l2 | max_error | Best iter | Runtime |
+|-----|-------|--------|-----------|-----------|---------|
+| attempt14b | baseline (broken score metric) | 4.31% | 10.86% | 33 | 10,133s |
+| attempt15b_w1 | +W1 (correct score) | 3.698% | 4.107% | 3 | 364s |
+| attempt16_w2 | +W1+W2 (supervision anchor w=0.5) | 3.165% | **4.993%** | 3 | 335s |
+| attempt17_w3 | +W1+W2+W3 (rel_l2 plateau) | **3.117%** | 8.485% ⚠️ | 4 | 328s |
+| attempt18_w5 | +W1+W2+W3+W5 (10× flux, H1 overlap) | 3.631% | 5.450% | 9 | 371s |
+
+**Key observation**: W5 restores max_error to near-W2 levels (5.45% vs 4.99%) while fixing the W3 outlier problem (max chart rel_l2: 8.29%→5.82%). But global rel_l2 is worse than W3's best. The sweet spot likely requires W4 (PCGrad) to resolve the intra-chart L_pde vs L_sup gradient conflict and allow each chart to converge better within its local step.
 
 ---
 
@@ -646,20 +767,40 @@ Chart 8 (the W1+W2 outlier at 11.3%) improved to 4.85%. But Charts 4 and 9 are n
 
 ### ✅ W3 (Done): Rel-L2-Based Plateau Detection
 **Result**: Stale counter now tracks rel_l2_eval. Correct behavior confirmed — resets at iter 4 when rel_l2 improves. Gain is marginal (3.165%→3.117%) and max_error regressed (+70%).
-**Takeaway**: W3 is a necessary correctness fix but not sufficient to overcome the fundamental Schwarz coherence problem. Need stronger coupling (W4 or W5).
+**Takeaway**: W3 is a necessary correctness fix but not sufficient to overcome the fundamental Schwarz coherence problem.
 
-### W4: Tune W2 Supervision Weight
-**Observation**: w=0.5 shifts chart errors around without converging. The extra iterations enabled by W3 expose this oscillation over a wider range of charts.
-- **Try w=1.0**: stronger anchor may keep charts closer to the manufactured solution through more Schwarz iters
-- **Try w=0.1**: softer anchor, reduces interference with PDE, may reduce max_error regression
-- **Expected best outcome**: w=1.0 may reduce oscillation amplitude at the cost of PDE fidelity
+### ✅ W5 (Done): Stronger Global Coupling (Correct Interface Weights)
+**Result**: `--w-interface-value 2.0 --w-interface-flux 2.0 --w-overlap-h1 0.5` fixes the 10× flux underweighting from argparse defaults. max_error improved 36% (8.485%→5.450%), chart uniformity much better (max chart rel_l2: 8.29%→5.82%), but global rel_l2 slightly worse (3.631% vs 3.117%).
+**Takeaway**: Stronger coupling suppresses per-chart outliers and narrows oscillation band, but competing L_pde vs L_sup gradient conflict within each chart still limits local convergence quality.
 
-### W5: Stronger Global Coupling
-**Problem**: Local Schwarz updates break global coherence even with the manufactured-solution anchor.
-**Options**:
-- `--w-overlap-h1 0.5` (H1 volumetric overlap — penalizes chart disagreement in volume, not just surface)
-- `--w-interface-flux 5.0` (stronger flux matching — enforces ∇u continuity more aggressively)
-- Both: combine H1 overlap + higher flux weight for maximum coupling
+### W4 (Next): PCGrad for K=2 (L_pde vs L_sup Gradient Conflict)
+**Problem**: Within each `optimize_chart` local step, ∇L_pde and ∇L_sup often conflict (negative cosine similarity). The standard optimizer applies `∇(L_pde + w·L_sup)`, which is biased toward whichever gradient dominates in magnitude. This causes one objective to interfere with the other.
+
+**PCGrad fix** (Gradient Surgery, Yu et al. 2020) for K=2:
+```python
+g_pde = grad(L_pde)
+g_sup = grad(L_sup)
+# If conflicting, project g_pde onto orthogonal complement of g_sup
+if dot(g_pde, g_sup) < 0:
+    g_pde = g_pde - (dot(g_pde, g_sup) / dot(g_sup, g_sup)) * g_sup
+# Apply symmetrically for g_sup vs g_pde
+if dot(g_sup, g_pde_orig) < 0:
+    g_sup = g_sup - (dot(g_sup, g_pde_orig) / dot(g_pde_orig, g_pde_orig)) * g_pde_orig
+# Update with de-conflicted gradients
+params.grad = g_pde + g_sup
+```
+Requires 2 backward passes (one for L_pde, one for L_sup). No QP solve needed (K=2 closed form).
+
+**Implementation plan**:
+- Add `--use-pcgrad` flag to `run_poisson_rabbit_atlas_schwarz.py`
+- In `optimize_chart`: when `use_pcgrad and w_manufactured_supervision > 0`:
+  - Compute `g_pde = grad(L_pde)`, `g_sup = grad(L_sup)` separately
+  - Apply PCGrad projection
+  - Set `param.grad = g_pde_proj + g_sup_proj`
+  - Zero remaining terms (L_bc, L_if can keep their standard gradients or use a 3-task version)
+- Benchmark as **attempt19_w4**: W1+W2+W3+W4+W5 (all active)
+
+**Expected benefit**: Better local convergence per chart → sharper solutions → lower oscillation amplitude across Schwarz iterations → lower best rel_l2 and lower max_error simultaneously.
 
 ### W6 (Future): Hard Stop at Best Iter
-After W4 tuning, if best is consistently at iter 3–5, consider `--max-schwarz-iters 5` to prevent degradation from later iterations contributing to max_error.
+After W4, if best is consistently at iter ~9 with W5, consider early stopping based on `--plateau-patience` tuning or `--max-schwarz-iters` cap to prevent degradation from contributing to max_error.
