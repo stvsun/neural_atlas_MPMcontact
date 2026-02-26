@@ -2454,12 +2454,24 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         # Rejected iterations restore the previous state; do not count them as stale progress.
         score = w_pde_eff * pde_m + args.w_interface_value * iv_m + w_if_flux_eff * if_m
         if iter_rejected == 0:
-            if score + args.plateau_tol < best_score:
-                best_score = score
-                stale = 0
-                maybe_record_snapshot("best_score", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+            if args.plateau_use_rel_l2:
+                # W3: decouple stale counter from composite score.  Use rel_l2_eval directly.
+                # best_rel_l2 has not been updated yet this iteration, so the comparison is
+                # against the best seen in all *previous* accepted iterations.
+                if score + args.plateau_tol < best_score:
+                    best_score = score
+                    maybe_record_snapshot("best_score", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+                if rel_l2_eval + args.plateau_tol < best_rel_l2:
+                    stale = 0
+                else:
+                    stale += 1
             else:
-                stale += 1
+                if score + args.plateau_tol < best_score:
+                    best_score = score
+                    stale = 0
+                    maybe_record_snapshot("best_score", it, pde_m, bc_m, iv_m, if_m, rel_l2_eval, score)
+                else:
+                    stale += 1
 
             if rel_l2_eval + 1e-14 < best_rel_l2:
                 best_rel_l2 = rel_l2_eval
@@ -3171,6 +3183,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interface-flux-tol", type=float, default=1.5e-2)
     parser.add_argument("--plateau-patience", type=int, default=15)
     parser.add_argument("--plateau-tol", type=float, default=5e-5)
+    parser.add_argument("--plateau-use-rel-l2", action="store_true", default=False,
+                        help="W3: use rel_l2_eval (instead of composite score) to drive the "
+                             "plateau stale counter.  Prevents premature stopping when score "
+                             "degrades due to PDE warmup while rel_l2 is still improving.")
     parser.add_argument("--target-rel-l2", type=float, default=1.5e-1)
     parser.add_argument("--guard-rel-l2", type=float, default=0.0, help="L2 guard threshold (<=0 uses target-rel-l2).")
     parser.add_argument("--guard-patience", type=int, default=0, help="Rollback after this many consecutive guard violations.")
