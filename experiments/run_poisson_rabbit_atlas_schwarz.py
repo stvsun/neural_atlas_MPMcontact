@@ -2645,7 +2645,7 @@ def train_schwarz(args: argparse.Namespace) -> Dict[str, object]:
         if _best_snap is not None:
             load_snapshot_u_states(_best_snap["u_states"])
             print(f"  Loaded best snapshot (iter={_best_snap['iter']}, "
-                  f"rel_l2={_best_snap['rel_l2']:.4%})")
+                  f"rel_l2={_best_snap['rel_l2_eval']:.4%})")
 
         # Build overlap-pair list from neighbors adjacency.
         _overlap_pairs = [
