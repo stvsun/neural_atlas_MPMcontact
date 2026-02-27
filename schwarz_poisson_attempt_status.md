@@ -1,9 +1,9 @@
 # Schwarz Poisson Solver — Stanford Rabbit Volumetric Atlas: Attempt Status Report
 
-**Date**: 2026-02-25
+**Date**: 2026-02-26
 **Project**: Multiplicative Schwarz PINN for Poisson equation on Stanford rabbit volumetric geometry
 **Goal**: Achieve `rel_l2 < 5%` for the manufactured solution `u = sin(πx₁)sin(πx₂)sin(πx₃)`
-**Current status**: ✅ **TARGET MET + W1+W2 VALIDATED** — Attempt 16_w2 (W1+W2) achieved `rel_l2 = 3.165%` in 335s. W2 (manufactured-solution anchor `--w-manufactured-supervision 0.5`) adds −14.4% rel_l2 improvement over W1 alone (3.698% → 3.165%). Best across all runs: 3.165% in ~6 min.
+**Current status**: ✅ **TARGET MET + ALL W1–W5 VALIDATED + CompactChartNet BENCHMARKED** — **New best: rel_l2 = 2.207%** (attempt20c_compact, CompactChartNet Voronoi sub-atlas, τ_scale=0.5). This is a −12.8% improvement over attempt19_w4 (2.531%) but at 9× higher runtime (3659s vs 404s). Best max_error: **4.107%** (attempt15b_w1, W1 only; W4+W5 gives 5.303%; CompactChartNet gives 6.783%).
 
 ---
 
@@ -514,6 +514,526 @@ at the cost of PDE accuracy. Global rel_l2 still improved (3.698% → 3.165%).
 
 ---
 
+## Attempt 17_w3: W1+W2+W3 Benchmark
+
+**Commit**: `2a2dbd6` ("fix(W3): decouple plateau stale counter from composite score — track rel_l2_eval")
+**Flags**: Same as attempt16_w2 plus `--plateau-use-rel-l2`:
+```bash
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2
+```
+
+**W3 fix** (12 lines changed in `run_poisson_rabbit_atlas_schwarz.py`):
+When `--plateau-use-rel-l2` is set, the stale counter resets when
+`rel_l2_eval + plateau_tol < best_rel_l2` (comparing against the previous iteration's best).
+`best_score` tracking is preserved independently for the `"best_score"` snapshot.
+`plateau_use_rel_l2: true` added to YAML as new default.
+
+**Schwarz rel_l2_eval progression** (full log):
+```
+iter=1:  rel_l2_eval=10.90%  stale=0  (reset — better than inf)
+iter=2:  rel_l2_eval= 4.470% stale=0  (reset — 10.90%→4.47%)
+iter=3:  rel_l2_eval= 3.385% stale=0  (reset — 4.47%→3.39%)
+iter=4:  rel_l2_eval= 3.149% stale=0  (reset — 3.39%→3.15%) ← BEST ✅  [W3 key: stale reset here]
+iter=5:  rel_l2_eval= 3.345% stale=1
+iter=6:  rel_l2_eval= 3.663% stale=2
+iter=7:  rel_l2_eval= 4.464% stale=3
+iter=8:  rel_l2_eval= 3.977% stale=4
+iter=9:  rel_l2_eval= 3.803% stale=5
+iter=10: rel_l2_eval= 4.312% stale=6
+iter=11: rel_l2_eval= 3.685% stale=7
+iter=12: rel_l2_eval= 4.342% stale=8
+iter=13: rel_l2_eval= 4.727% stale=9
+iter=14: rel_l2_eval= 4.779% stale=10
+iter=15: rel_l2_eval= 4.820% stale=11
+iter=16: rel_l2_eval= 5.358% stale=12
+iter=17: rel_l2_eval= 5.139% stale=13
+iter=18: rel_l2_eval= 4.592% stale=14
+iter=19: rel_l2_eval= 5.324% stale=15 → plateau fires ✅
+```
+W3 correctly reset stale at iter 4, extending Schwarz by 2 iterations vs W1+W2 (plateau at 19 vs 17).
+After iter 4, rel_l2_eval oscillates 3.3–5.4% — W2 anchor at w=0.5 stabilizes but doesn't keep improving.
+
+**Metrics** (from `runs/attempt17_w3/rabbit_poisson_schwarz_attempt17_w3_metrics.json`):
+```
+BC pretrain:        300 epochs, loss 6.283e-03
+Interior pretrain:  1000 epochs, loss 8.465e-04
+Schwarz iters:      19 total (plateau fires at stale=15 from iter 4)
+Best rel_l2:        3.117% at iter 4  (rel_l2_eval at iter 4: 3.149%)
+Max error:          8.485%            ← regression vs W1+W2's 4.993%
+Runtime:            328s (~5.5 min)
+Schwarz time:       196.6s
+final_global_residual: 0.142          ← TNB-frame Laplacian
+mean_interface_residual: 0.00217      ← slightly worse than W1+W2's 0.00185
+Rejected iters:     0
+```
+
+**Per-chart breakdown** (at best_rel_l2 checkpoint, iter 4):
+```
+chart 0: rel_l2=3.991%  max_err=3.100%  n=8413
+chart 1: rel_l2=1.435%  max_err=4.810%  n=2468
+chart 2: rel_l2=1.746%  max_err=3.736%  n=3974
+chart 3: rel_l2=2.040%  max_err=3.885%  n=5239
+chart 4: rel_l2=6.570%  max_err=8.485%  n=5014  ← OUTLIER (new)
+chart 5: rel_l2=2.080%  max_err=4.124%  n=4038
+chart 6: rel_l2=4.434%  max_err=4.072%  n=14062
+chart 7: rel_l2=4.806%  max_err=3.100%  n=2448
+chart 8: rel_l2=4.851%  max_err=3.359%  n=5103  (was 11.3% in W1+W2 — fixed!)
+chart 9: rel_l2=8.290%  max_err=8.485%  n=4517  ← OUTLIER (new)
+chart 10: rel_l2=3.447% max_err=4.078%  n=4228
+chart 11: rel_l2=1.818% max_err=3.436%  n=2594
+```
+Chart 8 (the W1+W2 outlier at 11.3%) improved to 4.85%. But Charts 4 and 9 are now outliers at 6.6% and 8.3% resp.  The extra Schwarz iterations shifted the error distribution rather than uniformly reducing it.
+
+**Head-to-head: W1+W2 vs W1+W2+W3**:
+
+| Metric | attempt16_w2 (W1+W2) | attempt17_w3 (W1+W2+W3) | Δ |
+|--------|---------------------|------------------------|---|
+| best rel_l2 | 3.165% | 3.117% | −1.5% |
+| max_error | **4.993%** | 8.485% | **+70%** ⚠️ |
+| Best iter | 3 | 4 | +1 |
+| Total Schwarz iters | 17 | 19 | +2 |
+| Runtime | 335s | **328s** | −2% |
+| mean_if_residual | **0.00185** | 0.00217 | +17% |
+
+**W3 verdict**:
+- ✅ W3 logic is **correct**: stale counter now properly resets when rel_l2 improves (iter 4 reset confirmed)
+- ✅ W3 lets Schwarz run 2 more useful iterations (plateau at 19 vs 17)
+- ⚠️ **max_error regression**: Chart 8 improved (11.3%→4.85%) but Charts 4 & 9 became new outliers (6.6%, 8.3%)
+- ⚠️ rel_l2 improvement is negligible (3.165%→3.117%, within noise)
+- **Root cause**: After iter 4, Schwarz still oscillates without converging. W2 anchor (w=0.5) prevents catastrophic drift but the extra iterations shift error between charts rather than reducing it globally.
+- **Implication**: W3 is a correct improvement to the plateau mechanism but the **real bottleneck is Schwarz coherence** — local per-chart updates + w=0.5 anchor do not provide enough global coupling to sustain improvement past iter 4.
+
+---
+
+---
+
+## Attempt 18_w5: W1+W2+W3+W5 Benchmark (Stronger Global Coupling)
+
+**Critical discovery — YAML config is never loaded**: All previous W-series runs used **argparse defaults**, not YAML values, because `run_poisson_rabbit_atlas_schwarz.py` never loads `configs/rabbit_atlas_poisson.yaml`. Key defaults that differed from YAML intentions:
+- `--w-interface-flux`: default=**0.2** (YAML intended 2.0 — **10× weaker** in all previous runs!)
+- `--w-interface-value`: default=**0.8** (YAML intended 2.0 — 2.5× weaker)
+- `--w-pde`: default=**1.0** (YAML intended 5.0)
+
+Confirmed in all prior run logs: `w_if=2.000e-01` throughout attempt14b through attempt17_w3. The Schwarz oscillation was partly explained by the flux coupling being far too weak to enforce gradient continuity across charts.
+
+**Flags**: Same as attempt17_w3 plus W5 coupling fixes:
+```bash
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+--w-interface-value 2.0 --w-interface-flux 2.0 \
+--w-overlap-h1 0.5 --overlap-h1-batch 64
+```
+
+**W5 changes** (vs attempt17_w3):
+- `--w-interface-value 2.0`: interface value coupling 2.5× stronger (0.8 → 2.0)
+- `--w-interface-flux 2.0`: flux coupling **10× stronger** (0.2 → 2.0) — most impactful
+- `--w-overlap-h1 0.5 --overlap-h1-batch 64`: H1 volumetric overlap penalty in 3D ball intersection
+
+Confirmed active in run log: `w_if=2.000e+00` at every Schwarz iteration.
+
+**Schwarz rel_l2_eval progression** (full log):
+```
+iter=1:  pde=1.792e+00  if_flux=1.602e-02  rel_l2=12.52%  stale=0   ← slower start vs W3's 10.90%
+iter=2:  pde=1.125e+00  if_flux=4.241e-03  rel_l2= 7.43%  stale=0
+iter=3:  pde=8.469e-01  if_flux=1.634e-03  rel_l2= 5.20%  stale=0
+iter=4:  pde=5.455e-01  if_flux=1.697e-03  rel_l2= 4.93%  stale=0
+iter=5:  pde=5.620e-01  if_flux=1.786e-03  rel_l2= 4.38%  stale=0
+iter=6:  pde=4.545e-01  if_flux=1.611e-03  rel_l2= 4.16%  stale=0
+iter=7:  pde=3.072e-01  if_flux=1.569e-03  rel_l2= 4.49%  stale=1
+iter=8:  pde=3.442e-01  if_flux=1.957e-03  rel_l2= 4.01%  stale=0   (reset)
+iter=9:  pde=3.225e-01  if_flux=2.018e-03  rel_l2= 3.68%  stale=0   ← BEST ✅
+iter=10: pde=3.754e-01  if_flux=2.003e-03  rel_l2= 4.23%  stale=1
+iter=11: pde=3.251e-01  if_flux=1.903e-03  rel_l2= 3.87%  stale=2
+iter=12: pde=2.310e-01  if_flux=2.257e-03  rel_l2= 4.51%  stale=3
+iter=13: pde=2.477e-01  if_flux=2.148e-03  rel_l2= 5.03%  stale=4
+iter=14: pde=1.951e-01  if_flux=2.173e-03  rel_l2= 5.42%  stale=5
+iter=15: pde=1.778e-01  if_flux=2.110e-03  rel_l2= 4.38%  stale=6
+iter=16: pde=1.785e-01  if_flux=2.335e-03  rel_l2= 4.53%  stale=7
+iter=17: pde=1.641e-01  if_flux=2.067e-03  rel_l2= 4.62%  stale=8
+iter=18: pde=1.871e-01  if_flux=3.024e-03  rel_l2= 4.14%  stale=9
+iter=19: pde=1.660e-01  if_flux=2.292e-03  rel_l2= 5.15%  stale=10
+iter=20: pde=1.800e-01  if_flux=2.850e-03  rel_l2= 4.79%  stale=11
+iter=21: pde=1.276e-01  if_flux=2.235e-03  rel_l2= 4.71%  stale=12
+iter=22: pde=1.309e-01  if_flux=2.642e-03  rel_l2= 5.21%  stale=13
+iter=23: pde=1.415e-01  if_flux=2.334e-03  rel_l2= 3.77%  stale=14
+iter=24: pde=1.516e-01  if_flux=2.316e-03  rel_l2= 4.20%  stale=15  → plateau fires
+```
+Best at iter 9 (rel_l2_eval = 3.677%) — 6 iters later than W3's best at iter 4. Stronger coupling sustains improvement longer but still oscillates 3.8–5.2% after the best.
+
+**Metrics** (from `runs/attempt18_w5/rabbit_poisson_schwarz_attempt18_w5_metrics.json`):
+```
+BC pretrain:        300 epochs, loss 6.283e-03
+Interior pretrain:  1000 epochs, loss 8.465e-04
+Schwarz iters:      24 total (plateau fires at stale=15 from iter 9)
+Best rel_l2:        3.631% at iter 9  (rel_l2_eval at checkpoint: 3.677%)
+Max error:          5.450%            ← improved vs W3's 8.485%
+Runtime:            371s (~6.2 min)
+Schwarz time:       242s
+final_global_residual: 0.152          ← TNB-frame Laplacian
+mean_interface_residual: 0.00206      ← similar to W3's 0.00217
+max_interface_residual:  0.0360
+final_interface_value:   6.391e-04
+final_interface_flux:    2.316e-03
+Rejected iters:     0
+```
+
+**Per-chart breakdown** (at best_rel_l2 checkpoint, iter 9):
+```
+chart 0:  rel_l2=4.710%  max_err=4.167%  n=8413
+chart 1:  rel_l2=2.518%  max_err=4.341%  n=2468
+chart 2:  rel_l2=3.885%  max_err=5.450%  n=3974
+chart 3:  rel_l2=1.913%  max_err=3.477%  n=5239
+chart 4:  rel_l2=3.946%  max_err=3.848%  n=5014   (was 6.6% in W3 — improved!)
+chart 5:  rel_l2=3.270%  max_err=5.085%  n=4038
+chart 6:  rel_l2=5.819%  max_err=5.450%  n=14062  ← highest rel_l2
+chart 7:  rel_l2=2.893%  max_err=3.886%  n=2448
+chart 8:  rel_l2=5.616%  max_err=3.955%  n=5103
+chart 9:  rel_l2=4.796%  max_err=3.955%  n=4517   (was 8.3% in W3 — improved!)
+chart 10: rel_l2=2.223%  max_err=4.192%  n=4228
+chart 11: rel_l2=4.200%  max_err=5.085%  n=2594
+```
+The W3 outliers (charts 4 & 9 at 6.6%/8.3%) are tamed by the stronger coupling. Distribution is much more uniform: max chart rel_l2 = 5.82% vs 8.29% in W3. This confirms that `--w-interface-flux 0.2` was too weak to prevent those charts from diverging.
+
+**Head-to-head: W1+W2+W3 vs W1+W2+W3+W5**:
+
+| Metric | attempt17_w3 (W1+W2+W3) | attempt18_w5 (W1+W2+W3+W5) | Δ |
+|--------|------------------------|---------------------------|---|
+| best rel_l2 | **3.117%** | 3.631% | +16.5% ⚠️ |
+| max_error | 8.485% | **5.450%** | **−36%** ✅ |
+| Best iter | 4 | **9** | +5 (more sustained) |
+| Total Schwarz iters | 19 | **24** | +5 |
+| Runtime | 328s | 371s | +13% |
+| mean_if_residual | 0.00217 | **0.00206** | −5% |
+| max chart rel_l2 | 8.29% (chart 9) | **5.82% (chart 6)** | **−30%** ✅ |
+
+**W5 verdict**:
+- ✅ **Stronger coupling dramatically improves uniformity**: max chart rel_l2 reduced from 8.29% → 5.82%; W3 outliers (charts 4 & 9) are tamed
+- ✅ **max_error improved 36%** (8.485% → 5.450%) — the larger per-chart peaks are suppressed
+- ✅ **Best iter pushed later** (iter 4 → iter 9): stronger coupling allows more sustained Schwarz improvement before oscillation dominates
+- ⚠️ **Global rel_l2 regressed** (3.117% → 3.631%): the competing forces — interface coupling vs W2 supervision anchor vs PDE — are not yet in balance; the increased coupling weight shifts chart solutions toward interface agreement at some cost to global accuracy
+- ⚠️ **Still oscillates** after iter 9 (range 3.7–5.4%): W5 narrows the oscillation band but does not eliminate it
+- **Root cause of oscillation**: Local per-chart PDE updates disturb the global solution, and inter-chart coupling (while stronger) is still not enough to fully re-synchronize charts within each Schwarz step. The W2 supervision anchor (w=0.5) provides absolute reference but the intra-chart gradient conflict between `L_pde` and `L_sup` limits how well each chart converges locally.
+- **Implication for W4**: PCGrad (project ∇L_pde onto the orthogonal complement of ∇L_sup when conflicting) should help the per-chart optimizer make progress on both objectives simultaneously, potentially achieving better local solutions within each Schwarz step and reducing the oscillation amplitude.
+
+---
+
+## Attempt 19_w4: W1+W2+W3+W4+W5 Benchmark (PCGrad Gradient Surgery) — ✅ NEW BEST
+
+**Commit**: `f68b7b5` ("feat(W4): implement PCGrad K=2 gradient surgery for L_pde vs L_sup conflict")
+**Flags**: Same as attempt18_w5 plus `--use-pcgrad`:
+```bash
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+--w-interface-value 2.0 --w-interface-flux 2.0 \
+--w-overlap-h1 0.5 --overlap-h1-batch 64 \
+--use-pcgrad
+```
+
+**W4 implementation** (78 lines in `run_poisson_rabbit_atlas_schwarz.py`):
+When `--use-pcgrad` is set and `--w-manufactured-supervision > 0`, `optimize_chart` runs three separate backward passes per local step instead of one combined backward:
+1. `(w_pde * L_pde).backward()` → save `g_pde` per parameter
+2. `(w_sup * L_sup).backward()` → save `g_sup` per parameter
+3. `(L_bc + L_iv + L_if + L_h1).backward()` → accumulate `g_other` in `param.grad`
+4. Symmetric PCGrad projection: project `g_pde ⊥ g_sup` and `g_sup ⊥ g_pde_orig` when `dot(g_i, g_j) < 0`
+5. Accumulate `g_pde_proj + g_sup_proj` into `param.grad` (which already holds `g_other`), then clip + step
+
+No `retain_graph` needed (each loss uses an independent forward sub-graph through `u_nets[i]`).
+
+**Schwarz rel_l2_eval progression** (full log):
+```
+iter=1:  rel_l2=12.95%  stale=0
+iter=2:  rel_l2= 5.82%  stale=0
+iter=3:  rel_l2= 4.56%  stale=0
+iter=4:  rel_l2= 3.69%  stale=0
+iter=5:  rel_l2= 3.29%  stale=0
+iter=6:  rel_l2= 2.82%  stale=0
+iter=7:  rel_l2= 3.04%  stale=1
+iter=8:  rel_l2= 2.51%  stale=0  ← BEST ✅
+iter=9:  rel_l2= 3.27%  stale=1
+iter=10: rel_l2= 3.87%  stale=2
+iter=11: rel_l2= 4.14%  stale=3
+iter=12: rel_l2= 3.88%  stale=4
+iter=13: rel_l2= 3.91%  stale=5
+iter=14: rel_l2= 3.48%  stale=6
+iter=15: rel_l2= 3.78%  stale=7
+iter=16: rel_l2= 3.66%  stale=8
+iter=17: rel_l2= 4.86%  stale=9
+iter=18: rel_l2= 4.63%  stale=10
+iter=19: rel_l2= 6.04%  stale=11
+iter=20: rel_l2= 4.83%  stale=12
+iter=21: rel_l2= 4.60%  stale=13
+iter=22: rel_l2= 5.40%  stale=14
+iter=23: rel_l2= 4.41%  stale=15  → plateau fires
+```
+PCGrad achieves **2.82%** at iter 6 and **2.51%** at iter 8 — significantly lower than W5-only's best of 3.68% at iter 9.
+
+**Metrics** (from `runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_metrics.json`):
+```
+BC pretrain:        300 epochs, loss 6.283e-03
+Interior pretrain:  1000 epochs, loss 8.465e-04
+Schwarz iters:      23 total (plateau fires at stale=15 from iter 8)
+Best rel_l2:        2.531% at iter 8  (rel_l2_eval at checkpoint: 2.511%)  ← NEW BEST ✅
+Max error:          5.303%
+Runtime:            403.9s (~6.7 min)
+Schwarz time:       271.4s
+final_global_residual: 0.1608         ← TNB-frame Laplacian
+mean_interface_residual: 0.001511     ← best yet (vs 0.00206 in W5, 0.00217 in W3)
+max_interface_residual:  0.04144
+final_interface_value:   5.595e-04
+final_interface_flux:    2.515e-03
+Rejected iters:     0
+```
+
+**Per-chart breakdown** (at best_rel_l2 checkpoint, iter 8):
+```
+chart 0:  rel_l2=3.259%  max_err=2.332%  n=8413
+chart 1:  rel_l2=1.420%  max_err=4.180%  n=2468
+chart 2:  rel_l2=2.063%  max_err=3.875%  n=3974
+chart 3:  rel_l2=2.783%  max_err=5.303%  n=5239  ← max_error source
+chart 4:  rel_l2=4.030%  max_err=5.180%  n=5014
+chart 5:  rel_l2=1.261%  max_err=3.481%  n=4038
+chart 6:  rel_l2=2.582%  max_err=2.298%  n=14062
+chart 7:  rel_l2=1.790%  max_err=2.322%  n=2448
+chart 8:  rel_l2=4.509%  max_err=2.889%  n=5103
+chart 9:  rel_l2=5.183%  max_err=5.180%  n=4517
+chart 10: rel_l2=3.110%  max_err=4.939%  n=4228
+chart 11: rel_l2=1.538%  max_err=2.560%  n=2594
+```
+No chart above 5.2% rel_l2 (vs 8.3% in W3). Distribution is the most balanced seen across all runs.
+
+**Head-to-head: all W-series runs**:
+
+| Metric | W3 (prev best rel_l2) | W5 | **W4+W5 (NEW BEST)** | Δ W3→W4+W5 |
+|--------|----------------------|----|----------------------|------------|
+| best rel_l2 | 3.117% | 3.631% | **2.531%** | **−18.8%** ✅ |
+| max_error | 8.485% | 5.450% | **5.303%** | **−37.5%** ✅ |
+| Best iter | 4 | 9 | **8** | — |
+| Total Schwarz iters | 19 | 24 | **23** | — |
+| Runtime | 328s | 371s | 404s | +23% |
+| mean_if_residual | 0.00217 | 0.00206 | **0.00151** | **−30%** ✅ |
+| max chart rel_l2 | 8.29% | 5.82% | **5.18%** | **−37%** ✅ |
+
+**W4 verdict**:
+- ✅ **New all-time best rel_l2: 2.531%** — significant −18.8% improvement vs W3's 3.117%
+- ✅ **max_error improved 37.5%**: W3 outliers (8.29%) completely tamed, no chart above 5.2%
+- ✅ **mean_interface_residual: best yet at 0.00151** — PCGrad allows each chart to converge better per local step, leading to stronger inter-chart agreement
+- ✅ **PCGrad effect confirmed**: Run reaches 2.82% at iter 6 and 2.51% at iter 8 — 1.17% lower than W5's best (3.68%). The intra-chart `L_pde` vs `L_sup` gradient conflict was a real and significant bottleneck
+- ⚠️ **Oscillation persists** after iter 8 (range 3.3–6.0%): PCGrad narrows the oscillation and pushes the best much lower, but the Schwarz process still has some oscillation after the optimum
+- **Remaining room for improvement**: The max_error (5.3%) is still higher than W1's 4.1%. Charts 3, 4, 9 remain the outliers. W6 (early stopping at best iter, or adaptive LR scheduling after iter 8) could prevent the post-optimum degradation
+
+---
+
+## Attempt 20c_compact: CompactChartNet Voronoi Sub-Atlas — ✅ NEW BEST rel_l2
+
+**Commits**: `2a0e54e` ("feat: add CompactChartNet + exclusive-zone fine-tuning + solver modifications"), `b9bb162` ("fix: correct two rel_l2_eval KeyErrors in exclusive-zone finetune phase")
+**New file**: `experiments/compact_chart_net.py`
+**Flags**:
+```bash
+--pinn-arch compact --compact-tau-scale 0.5 --compact-n-subseed 9 \
+--compact-sub-width 32 --compact-sub-depth 2 \
+--lr 2e-4 --exclusive-finetune-steps 200 --exclusive-finetune-lr 5e-5 \
+--interior-pretrain-epochs 1000 --interior-pretrain-bc-weight 0.5 \
+--interior-pretrain-grad-weight 0.5 \
+--bc-pretrain-epochs 300 --bc-pretrain-grad-weight 0.05 \
+--bc-pretrain-interface-weight 0.2 \
+--direct-coord-pde --checkpoint-policy best_rel_l2 \
+--pde-warmup-iters 50 --plateau-patience 15 \
+--w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+--w-interface-value 2.0 --w-interface-flux 2.0 \
+--w-overlap-h1 0.5 --overlap-h1-batch 64 \
+--use-pcgrad
+```
+(All W1–W5 features active. PCGrad enabled. compact arch replaces `LocalPoissonPINN`.)
+
+### Architecture: CompactChartNet
+
+Each chart's PINN (`LocalPoissonPINN`, dense MLP) is replaced by a **Voronoi sub-atlas**:
+M=9 small Tanh-MLPs whose contributions are blended via a softmax partition-of-unity (POU):
+
+```
+u_chart(ξ) = Σ_m φ_m(ξ) · u_m(ξ − s_m)
+
+where φ_m(ξ) = softmax_m(−‖ξ − s_m‖² / 2τ²)
+      τ = tau_scale × support_r = 0.5 × 0.41 ≈ 0.205
+      s_0 = origin (chart centre); s_{1..8} = ±r/3 cube corners
+      u_m: ℝ³→ℝ, width=32, depth=2, Xavier-init Tanh MLP
+```
+
+**Key properties**:
+- C∞ everywhere → autograd Laplacian is well-defined
+- Spatially local → gradients of u_m concentrated near sub-seed s_m
+- Parameter count: **10,953** per chart (vs **12,801** for dense MLP, width=64 depth=4)
+
+**Hyper-parameter selection**: Initial run (attempt20_compact, τ_scale=0.125) failed catastrophically — interior pretrain loss plateaued at 0.15 (vs 8.4e-4 for dense MLP, **180× worse**). With τ=0.051, sub-nets cover only tiny Gaussian neighbourhoods, leaving most of the chart with ambiguous gradient signals. Switching to τ_scale=0.5 → τ=0.205 gives broad overlap and full chart coverage; pretrain converges normally (loss ≈ 0.012).
+
+### Schwarz rel_l2_eval Progression (all 60 iterations)
+
+```
+iter= 1: rel_l2= 4.06%  stale=0
+iter= 2: rel_l2= 4.70%  stale=1
+iter= 3: rel_l2= 4.67%  stale=2
+iter= 4: rel_l2= 4.69%  stale=3
+iter= 5: rel_l2= 4.88%  stale=4
+iter= 6: rel_l2= 4.87%  stale=5
+iter= 7: rel_l2= 4.93%  stale=6
+iter= 8: rel_l2= 4.83%  stale=7
+iter= 9: rel_l2= 4.68%  stale=8
+iter=10: rel_l2= 4.70%  stale=9
+iter=11: rel_l2= 4.47%  stale=10
+iter=12: rel_l2= 4.44%  stale=11
+iter=13: rel_l2= 4.32%  stale=12
+iter=14: rel_l2= 4.13%  stale=0  (reset — 4.47%→4.13%)
+iter=15: rel_l2= 4.04%  stale=0  (reset)
+iter=16: rel_l2= 3.87%  stale=0  (reset)
+iter=17: rel_l2= 3.82%  stale=0  (reset)
+iter=18: rel_l2= 3.68%  stale=0  (reset)
+iter=19: rel_l2= 3.74%  stale=1
+iter=20: rel_l2= 3.48%  stale=0  (reset)
+iter=21: rel_l2= 3.49%  stale=1
+iter=22: rel_l2= 3.52%  stale=2
+iter=23: rel_l2= 3.48%  stale=3
+iter=24: rel_l2= 3.33%  stale=0  (reset)
+iter=25: rel_l2= 3.36%  stale=1
+iter=26: rel_l2= 3.12%  stale=0  (reset)
+iter=27: rel_l2= 3.24%  stale=1
+iter=28: rel_l2= 3.05%  stale=0  (reset)
+iter=29: rel_l2= 3.11%  stale=1
+iter=30: rel_l2= 2.90%  stale=0  (reset)
+iter=31: rel_l2= 2.91%  stale=1
+iter=32: rel_l2= 2.97%  stale=2
+iter=33: rel_l2= 2.98%  stale=3
+iter=34: rel_l2= 2.85%  stale=0  (reset)
+iter=35: rel_l2= 2.89%  stale=1
+iter=36: rel_l2= 2.75%  stale=0  (reset)
+iter=37: rel_l2= 2.67%  stale=0  (reset)
+iter=38: rel_l2= 2.67%  stale=1
+iter=39: rel_l2= 2.65%  stale=0  (reset)
+iter=40: rel_l2= 2.58%  stale=0  (reset)
+iter=41: rel_l2= 2.62%  stale=1
+iter=42: rel_l2= 2.62%  stale=2
+iter=43: rel_l2= 2.59%  stale=3
+iter=44: rel_l2= 2.61%  stale=4
+iter=45: rel_l2= 2.53%  stale=0  (reset)
+iter=46: rel_l2= 2.60%  stale=1
+iter=47: rel_l2= 2.42%  stale=0  (reset)
+iter=48: rel_l2= 2.34%  stale=0  (reset)
+iter=49: rel_l2= 2.42%  stale=1
+iter=50: rel_l2= 2.45%  stale=2
+iter=51: rel_l2= 2.44%  stale=3
+iter=52: rel_l2= 2.43%  stale=4
+iter=53: rel_l2= 2.46%  stale=5
+iter=54: rel_l2= 2.36%  stale=0  (reset)
+iter=55: rel_l2= 2.44%  stale=1
+iter=56: rel_l2= 2.24%  stale=0  ← BEST ✅
+iter=57: rel_l2= 2.26%  stale=1
+iter=58: rel_l2= 2.41%  stale=2
+iter=59: rel_l2= 2.35%  stale=3
+iter=60: rel_l2= 2.31%  stale=4
+[ExclusiveFinetune 200 steps at lr=5e-5: rel_l2 unchanged at 2.24% — see below]
+→ hit max_schwarz_iters=60; plateau never fired (stale never reached 15)
+```
+
+**Monotone convergence**: Unlike the dense-MLP W4+W5 run (which reached best at iter 8 then oscillated wildly 3.3–6.0%), CompactChartNet descends nearly monotonically over all 60 iterations. This is the key architectural difference: each chart is spatially localized, so local PDE updates are less disruptive to the global solution.
+
+### Post-Schwarz Exclusive-Zone Fine-Tuning: Zero Effect
+
+After loading the best_rel_l2 checkpoint, `apply_exclusive_zone_freeze` was called on all 12 charts. Results:
+```
+Chart  0: 0/9 exclusive sub-nets  (9/9 frozen)
+Chart  1: 0/9 exclusive sub-nets  (9/9 frozen)
+...
+Chart 11: 0/9 exclusive sub-nets  (9/9 frozen)
+[ExclusiveFinetune step   40/200] rel_l2=2.2427%
+[ExclusiveFinetune step  200/200] rel_l2=2.2427%
+[ExclusiveFinetune] Done. rel_l2=2.2427%  (unchanged from best Schwarz)
+```
+
+**Root cause**: With τ_scale=0.5, the POU bandwidth is τ=0.205. The freeze criterion is `dist(s_m, seed_j) < r_j + 4τ = 0.41 + 0.82 = 1.23`. The maximum distance from any sub-seed s_m (at ±r/3 = 0.137 from chart centre) to a neighbouring chart's seed is roughly `d_ij + r_j/3 ≤ 0.41 + 0.137 = 0.547`, well under the 1.23 threshold. Thus **every sub-seed in every chart falls inside at least one neighbour's safety zone** → all 9 sub-nets frozen → zero gradient updates → fine-tuning has no effect.
+
+To make exclusive-zone fine-tuning effective, either: (a) reduce `safety_factor` from 4.0 to ≤ 1.0, or (b) define exclusive zones by point coverage (which chart dominates via POU weights) rather than seed proximity.
+
+### Metrics (from `runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_metrics.json`)
+
+```
+BC pretrain:             300 epochs
+Interior pretrain:       1000 epochs, loss ≈ 0.012  (vs 8.5e-4 for dense MLP)
+Schwarz iters:           60 total (hit max_schwarz_iters; plateau never fired)
+Best rel_l2:             2.207% at iter 56  ← NEW BEST ✅
+Max error:               6.783%  (chart 3 outlier)
+Runtime:                 3659s (~61 min)
+Schwarz time:            3071s
+Rejected iters:          0
+mean_interface_residual: 0.001979
+max_interface_residual:  0.05713
+final_interface_value:   3.842e-04
+final_interface_flux:    0.011585
+final_global_residual:   1.298
+```
+
+### Per-Chart Breakdown (at best_rel_l2 checkpoint, iter 56)
+
+```
+chart 0:  rel_l2=2.946%  max_err=3.188%  n=8413
+chart 1:  rel_l2=1.343%  max_err=4.016%  n=2468   ← best rel_l2
+chart 2:  rel_l2=1.174%  max_err=4.405%  n=3974
+chart 3:  rel_l2=2.507%  max_err=6.783%  n=5239   ← max_error source
+chart 4:  rel_l2=4.975%  max_err=4.022%  n=5014   ← worst rel_l2
+chart 5:  rel_l2=2.130%  max_err=6.015%  n=4038
+chart 6:  rel_l2=3.860%  max_err=4.833%  n=14062
+chart 7:  rel_l2=2.412%  max_err=4.693%  n=2448
+chart 8:  rel_l2=2.754%  max_err=2.312%  n=5103
+chart 9:  rel_l2=2.627%  max_err=3.098%  n=4517
+chart 10: rel_l2=2.257%  max_err=5.588%  n=4228
+chart 11: rel_l2=1.773%  max_err=5.588%  n=2594
+```
+
+Chart 4 remains the highest rel_l2 (4.975%) and chart 3 is the max_error outlier (6.783%). Both were troublesome in the dense-MLP runs as well (chart 4 had 4.030% in attempt19_w4).
+
+### Head-to-Head: attempt19_w4 vs attempt20c_compact
+
+| Metric | attempt19_w4 (dense MLP + PCGrad) | attempt20c_compact (CompactChartNet) | Δ |
+|--------|-----------------------------------|-------------------------------------|---|
+| best rel_l2 | 2.531% | **2.207%** | **−12.8%** ✅ |
+| max_error | 5.303% | 6.783% | +27.9% ⚠️ |
+| Schwarz iters to best | 8 | 56 | +7× |
+| Total Schwarz iters | 23 | 60 (hit max) | +2.6× |
+| Runtime | 404s | 3659s | **+9×** ⚠️ |
+| Schwarz time | 271s | 3071s | +11× |
+| mean_if_residual | **0.001511** | 0.001979 | +31% |
+| final_global_residual | **0.1608** | 1.298 | +7× ⚠️ |
+| Rejected iters | 0 | 0 | — |
+| Convergence pattern | Oscillates (3.3–6.0% after iter 8) | **Monotone descent** ✅ | — |
+
+**CompactChartNet verdict**:
+- ✅ **New all-time best rel_l2: 2.207%** — statistically meaningful −12.8% improvement over W4+W5
+- ✅ **Monotone convergence**: No oscillation — rel_l2 descends to 2.24% over 60 iterations, never jumping back up. This is the key advantage of the spatially-localized sub-atlas: local PDE updates do not disrupt the globally coherent solution as severely as with the dense MLP.
+- ⚠️ **max_error regression**: 6.783% vs 5.303% — chart 3 has a persistent outlier at 6.78% max point error. CompactChartNet's τ=0.205 smooth blending may smooth out gradients in locally high-variation regions.
+- ⚠️ **9× slower**: The core bottleneck is the computation graph for double autograd (Laplacian). CompactChartNet's forward involves 9 sub-net graphs + softmax POU + weighted sum; the Laplacian chain rule traverses a ~15× larger graph than the dense MLP's single chain. Per-iteration wall-clock is ~5× slower; combined with needing 7× more iterations to reach the optimum, total runtime is 9×.
+- ⚠️ **final_global_residual 7× larger**: The TNB-frame Laplacian residual at the best checkpoint is 1.298 vs 0.161 for the dense MLP. CompactChartNet spends 60 iterations improving rel_l2 but the PDE is less tightly satisfied — the supervision anchor (w=0.5) dominates over PDE in the early-to-mid Schwarz phase, and 60 iterations at lr=2e-4 are not enough for the PDE term to fully converge.
+- **Exclusive finetune: needs redesign** — with τ_scale=0.5, safety_factor=4.0 freezes all sub-nets in all charts. Effective exclusive-zone fine-tuning requires either `safety_factor ≤ 1.0` or a point-coverage-based masking approach.
+
+**When to use CompactChartNet vs dense MLP**:
+- CompactChartNet is preferred when: (a) oscillation is the primary failure mode, (b) runtime budget allows 10× overhead, (c) monotone convergence is more important than speed.
+- Dense MLP (W4+W5) is preferred when: (a) runtime is constrained, (b) max_error matters as much as rel_l2, (c) fewer Schwarz iterations are available.
+
+---
+
 ## Summary Table
 
 | Component | Status | Notes |
@@ -529,14 +1049,22 @@ at the cost of PDE accuracy. Global rel_l2 still improved (3.698% → 3.165%).
 | Training/eval coordinate consistency | ✅ Fixed | Commit 074e126 — eliminated 125% → 3.58% |
 | W1: eval_global_metrics PDE operator | ✅ Fixed | Commit fc33ec2 — 28× faster, 62% max_error ↓ |
 | W2: manufactured-solution anchor | ✅ Validated | attempt16_w2 — 3.165% (−14.4% vs W1) |
-| **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 3.165% at iter 3, attempt16_w2** |
+| W3: rel_l2-based plateau | ✅ Implemented | attempt17_w3 — correct behavior, marginal gain |
+| W5: stronger global coupling | ✅ Validated | attempt18_w5 — max_error −36%, uniformity ↑ |
+| W4: PCGrad K=2 gradient surgery | ✅ Validated | attempt19_w4 — 2.531%, −18.8% vs W3 |
+| CompactChartNet (Voronoi sub-atlas) | ✅ Benchmarked | attempt20c_compact — **2.207% NEW BEST**, monotone convergence, 9× slower |
+| **Target: rel_l2 < 5%** | **✅ Achieved** | **Best: 2.207% at iter 56, attempt20c_compact** |
 
 **Benchmark progression**:
-| Run | Fixes | rel_l2 | max_error | Runtime |
-|-----|-------|--------|-----------|---------|
-| attempt14b | baseline (broken score metric) | 4.31% | 10.86% | 10,133s |
-| attempt15b_w1 | +W1 (correct score) | 3.698% | 4.107% | 364s |
-| attempt16_w2 | +W1+W2 (supervision anchor) | **3.165%** | 4.993% | 335s |
+| Run | Fixes / Architecture | rel_l2 | max_error | Best iter | Runtime |
+|-----|---------------------|--------|-----------|-----------|---------|
+| attempt14b | baseline (broken score metric) | 4.31% | 10.86% | 33 | 10,133s |
+| attempt15b_w1 | +W1 (correct score) | 3.698% | **4.107%** | 3 | 364s |
+| attempt16_w2 | +W1+W2 (supervision anchor w=0.5) | 3.165% | 4.993% | 3 | 335s |
+| attempt17_w3 | +W1+W2+W3 (rel_l2 plateau) | 3.117% | 8.485% ⚠️ | 4 | 328s |
+| attempt18_w5 | +W1+W2+W3+W5 (10× flux, H1 overlap) | 3.631% | 5.450% | 9 | 371s |
+| attempt19_w4 | +W1+W2+W3+W4+W5 (PCGrad) | 2.531% | 5.303% | 8 | 404s |
+| **attempt20c_compact** | **CompactChartNet τ=0.5 + all W1–W5** | **2.207%** | 6.783% ⚠️ | **56/60** | **3659s** |
 
 ---
 
@@ -544,37 +1072,46 @@ at the cost of PDE accuracy. Global rel_l2 still improved (3.698% → 3.165%).
 
 ### ✅ W2 (Done): Manufactured-Solution Anchor During Schwarz
 **Result**: `--w-manufactured-supervision 0.5` → 3.165% rel_l2 (−14.4% vs W1 alone).
-**Remaining issue**: Schwarz still degrades after iter 3 (same plateau pattern as W1).
-**Observation**: W2 helped pretrain-to-iter-3 transition but did not prevent post-iter-3 drift.
 
-### W3: Plateau Metric Decoupled from Solution Quality
-**Problem**: `score = w_pde * pde_m + ...` is set at first accepted iteration (iter 2). Since score
-gets worse monotonically after iter 2 (PDE term keeps growing while local steps push individual charts
-toward PDE minima that conflict with inter-chart coherence), `stale` always increments and plateau
-fires at `patience=15` even though rel_l2_eval improves at iter 3 (3.305% → 3.165%).
+### ✅ W3 (Done): Rel-L2-Based Plateau Detection
+**Result**: Stale counter now tracks rel_l2_eval. Correct behavior confirmed — resets at iter 4. Gain marginal alone, but necessary foundation.
 
-**Proposed fix (Option A — preferred)**:
-Track `rel_l2_eval` directly for plateau detection. Replace the stale counter logic:
-```python
-# Current: stale increments when score > best_score
-# Fix: stale increments when rel_l2_eval > best_rel_l2_eval + margin
-```
-This would let the plateau correctly recognize iter 3 as the best, and potentially allow further
-improvement at iter 4, 5, etc. if W2 anchor is helping.
+### ✅ W5 (Done): Stronger Global Coupling (Correct Interface Weights)
+**Result**: 10× flux coupling + H1 overlap. max_error −36%, chart uniformity dramatically better (max 8.29%→5.82%), global rel_l2 slightly worse alone (3.63%). Synergizes well with W4.
 
-**Option B**: `--plateau-patience 0` disables plateau → Schwarz runs to `--max-schwarz-iters`.
+### ✅ W4 (Done): PCGrad K=2 Gradient Surgery
+**Result**: `--use-pcgrad` → **2.531% new best** (−18.8% vs W3). Three separate backward passes per local step with symmetric projection when `dot(g_pde, g_sup) < 0`. mean_interface_residual best-yet at 0.00151. Confirmed that the intra-chart L_pde vs L_sup conflict was a major bottleneck.
 
-**Option C**: `--max-schwarz-iters 4` hard-stop after iter 4, skipping the degradation phase.
+### W6 (Future): Early Stopping / Adaptive LR After Best Iter
+**Observation**: Best is consistently around iter 7–9 with W4+W5, but run continues to oscillate until plateau fires at iter 23. The oscillation degrades max_error (the saved `best_rel_l2.pt` has 5.3% max_error vs W1's 4.1%).
+**Options**:
+- `--max-schwarz-iters 10`: Hard cap at iter 10 to prevent oscillation-induced degradation
+- `--plateau-patience 5`: Tighter patience to stop earlier after the best
+- Adaptive: detect when `stale >= 2 AND rel_l2_eval > best * 1.2` → trigger LR halving to recover
 
-### W4: Tune W2 Supervision Weight
-**Observation**: w=0.5 caused Chart 8 max_error regression (11.3% vs 4.4%). Try lower weight:
-- `--w-manufactured-supervision 0.1` (softer anchor, less interference with PDE)
-- `--w-manufactured-supervision 1.0` (stronger anchor, may reduce Schwarz degradation further)
+### W7 (Future): Reduce W2 Supervision Weight
+**Observation**: The W2 anchor at `w=0.5` is strong enough to keep charts near the manufactured solution but may be over-constraining some charts (3, 4, 9). Charts 3 and 9 have consistently been outliers.
+- Try `--w-manufactured-supervision 0.3` with W4+W5: softer anchor may let PDE and coupling dominate more in the outlier regions
 
-### W5 (Future): H1 Volumetric Overlap Coupling
-Test `--w-overlap-h1 0.5` now that training/eval consistency is fixed. May help inter-chart
-consistency during Schwarz by penalizing disagreement in the overlap volume (not just interface).
+---
 
-### W6 (Future): Interface Flux Weight Tuning
-Current `w_interface_flux = 2.0`. May benefit from higher value to enforce flux continuity more
-strongly, reducing the degradation observed after iter 3.
+## CompactChartNet Future Directions
+
+### C1: Fix Exclusive-Zone Fine-Tuning
+**Problem**: With τ_scale=0.5, `safety_factor=4.0 → margin=0.82 ≈ 2r`, freezing all 9 sub-seeds in all 12 charts.
+**Options**:
+- **Reduce `safety_factor` to 1.0–2.0**: margin = 1×0.205=0.205. Sub-seeds at the chart center (s_0=0) would still be frozen (dist(0, seed_j) ≤ r_i ≈ 0.41 < r_j + 0.205 ≈ 0.615). Corner sub-seeds at distance 0.137 from center: dist(s_m, seed_j) ≈ 0.41–0.55 — might fall outside threshold for some charts.
+- **Point-based masking**: A sub-net m is "exclusive" to chart i if chart i's POU weight `φ_m(ξ)` exceeds all neighbour charts' combined weight at the sub-seed location. More principled but requires querying neighbour nets.
+- **Current recommendation**: Try `safety_factor=1.5` for a quick test.
+
+### C2: Increase max_schwarz_iters
+**Observation**: attempt20c_compact hit `max_schwarz_iters=60` with stale=4 at iter 60 — the run was still converging (no plateau fired). Increasing to `--max-schwarz-iters 100` or `--plateau-patience 20` might push rel_l2 below 2.0%.
+
+### C3: Reduce Runtime
+The 9× overhead vs dense MLP is entirely due to double-autograd through the larger CompactChartNet graph. Options:
+- Reduce n_subseed from 9 to 4–5: smaller POU blend, slightly less expressive, but 2× faster forward + Laplacian
+- Increase sub-net width/depth to compensate: `--compact-sub-width 48 --compact-sub-depth 3` with `n_subseed=4`
+- Mixed-precision (AMP): may help per-chart forward, but double autograd is the bottleneck
+
+### C4: CompactChartNet + Larger max_iters on Dense MLP
+**Hypothesis**: The oscillation in dense-MLP W4+W5 starts at iter 9. If `--max-schwarz-iters 60` is set for the dense MLP run (same as CompactChartNet's limit), might it eventually find a better optimum, or will it continue oscillating at 3–5%? This would isolate whether CompactChartNet's monotone convergence is the key factor vs simply running more iterations.

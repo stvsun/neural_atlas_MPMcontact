@@ -1,204 +1,701 @@
-# PINN Coordinate Chart Framework for 3D Complex Geometry
+# PINN Coordinate-Chart Framework for 3D Complex Geometry
 
-A meshfree, atlas-based Physics-Informed Neural Network (PINN) framework for solving **forward and inverse PDEs on complex three-dimensional geometries** using overlapping coordinate charts, Schwarz domain decomposition, and automatic differentiation.
+A **meshfree**, atlas-based Physics-Informed Neural Network (PINN) framework for solving
+**forward and inverse PDEs on complex three-dimensional geometries** using overlapping
+coordinate charts, multiplicative Schwarz domain decomposition, and automatic differentiation.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Mathematical Theory](#mathematical-theory)
-   - [Coordinate Charts and Atlas](#coordinate-charts-and-atlas)
-   - [PDE Formulation in Chart Coordinates](#pde-formulation-in-chart-coordinates)
-   - [Multiplicative Schwarz Coupling](#multiplicative-schwarz-coupling)
-   - [Multi-Objective PINN Loss](#multi-objective-pinn-loss)
-3. [Numerical Examples](#numerical-examples)
-   - [Manufactured Solution (Poisson)](#manufactured-solution-poisson)
-   - [Forward Poisson on the Rabbit Geometry](#forward-poisson-on-the-rabbit-geometry)
-   - [Inverse Neo-Hookean Elasticity (Torus)](#inverse-neo-hookean-elasticity-torus)
-   - [Inverse Elder-Like Flow (Rabbit)](#inverse-elder-like-flow-rabbit)
-4. [Repository Structure](#repository-structure)
-5. [Prerequisites and Installation](#prerequisites-and-installation)
-6. [Geometry Preparation](#geometry-preparation)
-   - [Training a Neural SDF](#training-a-neural-sdf)
-   - [Building the Atlas](#building-the-atlas)
-   - [Training the Atlas Decoder Networks](#training-the-atlas-decoder-networks)
-7. [Running the Solvers](#running-the-solvers)
-   - [Forward Poisson (Schwarz)](#forward-poisson-schwarz)
-   - [Inverse Neo-Hookean Elasticity](#inverse-neo-hookean-elasticity)
-   - [Inverse Elder Flow](#inverse-elder-flow)
-8. [Configuration Reference](#configuration-reference)
-9. [Recent Improvements (M1–M8)](#recent-improvements-m1m8)
+2. [Mathematical Formulation](#mathematical-formulation)
+   - [Domain and SDF Representation](#1-domain-and-sdf-representation)
+   - [Coordinate Charts and Atlas](#2-coordinate-charts-and-atlas)
+   - [Chart Decoder and TNB Frame](#3-chart-decoder-and-tnb-frame)
+   - [PDE Pullback to Chart Coordinates](#4-pde-pullback-to-chart-coordinates)
+   - [Direct-Coordinate Mode (TNB)](#5-direct-coordinate-mode-tnb)
+   - [Multiplicative Schwarz Decomposition](#6-multiplicative-schwarz-decomposition)
+   - [Multi-Objective PINN Loss](#7-multi-objective-pinn-loss)
+   - [PCGrad Gradient Surgery](#8-pcgrad-gradient-surgery)
+   - [CompactChartNet — Voronoi Sub-Atlas](#9-compactchartnet--voronoi-sub-atlas)
+3. [Key Algorithms — Pseudocode](#key-algorithms--pseudocode)
+   - [Algorithm 1: Neural SDF Training](#algorithm-1-neural-sdf-training)
+   - [Algorithm 2: Atlas Construction](#algorithm-2-atlas-construction)
+   - [Algorithm 3: Multiplicative Schwarz PINN Loop](#algorithm-3-multiplicative-schwarz-pinn-loop)
+   - [Algorithm 4: PCGrad K=2 per Chart Step](#algorithm-4-pcgrad-k2-per-chart-step)
+   - [Algorithm 5: CompactChartNet Forward Pass](#algorithm-5-compactchartnet-forward-pass)
+4. [Numerical Examples](#numerical-examples)
+   - [Example 1: Forward Poisson — 3D Ellipsoid / Star Domain](#example-1-forward-poisson--3d-ellipsoid--star-domain)
+   - [Example 2: Forward Poisson — Stanford Rabbit (Schwarz)](#example-2-forward-poisson--stanford-rabbit-schwarz)
+   - [Example 3: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)](#example-3-inverse-neo-hookean-elasticity--torus-original-atlas)
+   - [Example 4: Inverse Neo-Hookean Elasticity — Torus (Schwarz Dual)](#example-4-inverse-neo-hookean-elasticity--torus-schwarz-dual)
+   - [Example 5: Inverse Elder-Like Flow — Stanford Rabbit](#example-5-inverse-elder-like-flow--stanford-rabbit)
+5. [Repository Structure](#repository-structure)
+6. [Prerequisites and Installation](#prerequisites-and-installation)
+7. [Geometry Preparation Pipeline](#geometry-preparation-pipeline)
+8. [Running the Solvers](#running-the-solvers)
+9. [Configuration Reference](#configuration-reference)
 10. [Post-Processing and Visualization](#post-processing-and-visualization)
-11. [Known Limitations and Open Problems](#known-limitations-and-open-problems)
+11. [Known Limitations](#known-limitations)
 12. [Citation](#citation)
 
 ---
 
 ## Overview
 
-Solving PDEs on geometries as complex as a rabbit surface, a torus with a fillet, or a three-dimensional star domain is challenging for classical mesh-based methods because mesh generation is expensive and mesh quality is hard to control. This codebase takes a **meshfree** approach: the geometry is represented implicitly by a learned **Signed Distance Function (SDF)**, which is then used to define a set of overlapping **coordinate charts** that together cover the entire domain. On each chart, a small PINN solves a local version of the PDE; the charts are coupled together through a **Schwarz alternating procedure** that enforces value and flux continuity across chart boundaries.
+Solving PDEs on geometries as complex as a Stanford rabbit interior, a torus, or a
+three-dimensional star domain is challenging for classical mesh-based methods because
+mesh generation is expensive and mesh quality is hard to control. This codebase takes a
+**fully meshfree** approach:
 
-**Key capabilities:**
-- Meshfree: no structured mesh is required
-- Multi-chart atlas: naturally handles genus-0 and multiply-connected 3D bodies
-- Forward problems: Poisson equation as a verification benchmark
-- Inverse problems: recover spatially varying material parameters (shear/bulk modulus, anisotropic permeability, transversely-isotropic Arruda–Boyce parameters) from sparse observations
-- Hardware-portable: runs on CUDA GPUs, Apple MPS (M1/M4), and CPU
-- Tested geometries: Stanford rabbit, torus, star domain, ellipsoid
+1. The geometry is represented implicitly by a learned **Signed Distance Function (SDF)**.
+2. The SDF is used to construct a set of overlapping **coordinate charts** (a smooth atlas)
+   that together cover the entire domain.
+3. On each chart, a small PINN — either a dense MLP or a spatially-localized
+   **CompactChartNet** (Voronoi sub-atlas) — solves a local version of the PDE in
+   chart-local coordinates.
+4. The local solvers are coupled through a **multiplicative Schwarz alternating procedure**
+   that enforces value and normal-derivative continuity across chart boundaries.
+
+**Key capabilities**
+
+| Feature | Description |
+|---------|-------------|
+| Meshfree | No structured mesh; geometry encoded by neural SDF |
+| Multi-chart atlas | Handles genus-0 and multiply-connected 3D bodies |
+| Forward problems | Poisson equation as verification benchmark |
+| Inverse problems | Recover spatially varying material parameters (shear/bulk modulus, permeability tensor) |
+| Two PINN architectures | Dense MLP (`--pinn-arch mlp`) or CompactChartNet (`--pinn-arch compact`) |
+| PCGrad gradient surgery | Resolves L_pde vs L_sup gradient conflicts per chart |
+| Hardware-portable | CUDA GPU, Apple MPS (M1–M4), or CPU |
+| Tested geometries | Stanford rabbit, torus (genus-1), 3D star, 3D ellipsoid |
 
 ---
 
-## Mathematical Theory
+## Mathematical Formulation
 
-### Coordinate Charts and Atlas
+### 1. Domain and SDF Representation
 
-Let Ω ⊂ ℝ³ be the physical domain. We cover it with *N* **coordinate charts** {(U_i, φ_i)}. Each chart consists of:
-
-- **Chart seed** s_i ∈ ∂Ω — a surface point that anchors the chart
-- **TNB frame** (t₁_i, t₂_i, n_i) — orthonormal tangent, co-tangent, and normal vectors at s_i
-- **Local chart coordinates** ξ_i = (ξ, η, ζ) ∈ B_r ⊂ ℝ³, where B_r is a ball of radius r_i (the *support radius*)
-- **Chart decoder** φ_i : B_r → ℝ³, a learned neural network that maps local coordinates to physical space:
+Let **Ω ⊂ ℝ³** be the physical domain with boundary **∂Ω**. The geometry is
+represented by a neural Signed Distance Function:
 
 ```
-x = φ_i(ξ) = s_i + [t₁_i | t₂_i | n_i] · ξ  +  Δφ_i(ξ)
+SDF_θ : ℝ³ → ℝ,   SDF_θ(x) < 0 ⟺ x ∈ Ω,   SDF_θ(x) = 0 ⟺ x ∈ ∂Ω
 ```
 
-where Δφ_i is a small nonlinear residual learned by the MLP, with tanh activations ensuring the map stays injective near the origin. The TNB frame is computed from the SDF surface normals.
-
-**Partition of unity.** Each chart carries a soft mask w_i(x) ≥ 0 implemented as a learned MaskNet. The masks satisfy ∑_i w_i(x) ≈ 1 everywhere in Ω and are used to blend solutions across overlapping regions.
-
-**Atlas construction** (Poisson-disk sampling):
-1. Sample *N* seeds on the surface ∂Ω via Poisson-disk sampling with mutual separation ≥ d_min
-2. For each seed, compute the TNB frame from the local SDF gradient and a consistent tangent frame
-3. Initialize decoder φ_i as the identity map in the TNB basis; train to minimize reconstruction error + Jacobian smoothness + coverage loss
-
-### PDE Formulation in Chart Coordinates
-
-Consider the Poisson equation on Ω:
+The SDF network is trained to satisfy the **Eikonal equation** with surface and normal
+constraints:
 
 ```
-−Δ_x u(x) = f(x),    x ∈ Ω
-u(x) = g(x),          x ∈ ∂Ω
+‖∇ SDF_θ(x)‖ = 1                    (eikonal)
+SDF_θ(x_s)   = 0  for x_s ∈ ∂Ω     (surface constraint)
+∇ SDF_θ(x_s) = n_s                  (normal alignment)
 ```
 
-On chart i, the PDE is pulled back to local coordinates via the chain rule. Let **J**_i = ∂φ_i/∂ξ be the 3×3 Jacobian of the decoder. Then:
+Coordinates are normalized so that the bounding box of Ω maps to ≈ [−0.55, 0.55]³.
+
+---
+
+### 2. Coordinate Charts and Atlas
+
+We cover Ω with **N overlapping coordinate charts** {(Ω_i, φ_i)}_{i=1}^N. Each chart consists of:
+
+- **Chart seed** `s_i ∈ ∂Ω` — a surface point that anchors the chart
+- **Support ball** `Ω_i = B(s_i, r_i) ∩ Ω` — the subdomain associated with chart *i*
+- **Support radius** `r_i` — chosen so that the N balls achieve ≥99% coverage with ~20% overlap
+- **Chart coordinate space** `ξ ∈ B̄(0, r_i) ⊂ ℝ³` — the local parameter domain
+
+**Atlas construction** uses **Poisson-disk sampling** to place N seeds on ∂Ω with mutual
+separation ≥ d_min, then assigns support radii to ensure full volumetric coverage:
 
 ```
-Δ_x u = Σ_{j,k} a_{jk}(ξ) · ∂²u/∂ξ_j∂ξ_k  +  lower-order terms
+Seeds: {s_i}_{i=1}^N ⊂ ∂Ω,   ‖s_i − s_j‖ ≥ d_min for all i ≠ j
+Neighbors: 𝒩(i) = { j ≠ i : B(s_i, r_i) ∩ B(s_j, r_j) ≠ ∅ }
 ```
 
-where the metric tensor coefficients are:
+---
+
+### 3. Chart Decoder and TNB Frame
+
+Each seed `s_i` carries a local **Tangent-Normal-Binormal (TNB) frame**:
 
 ```
-a(ξ) = |det J| · (J⁻ᵀ J⁻¹)
+t₁ᵢ, t₂ᵢ  — tangent vectors at s_i (computed from SDF gradient)
+nᵢ         — inward surface normal = −∇SDF_θ(s_i) / ‖∇SDF_θ(s_i)‖
+Fᵢ = [t₁ᵢ | t₂ᵢ | nᵢ]  — orthonormal frame matrix (3×3)
 ```
 
-**Jacobian inversion.** Computing **J**⁻¹ for backpropagation requires a numerically stable method. We use `torch.linalg.inv` (LU decomposition) for the inversion gradient path, reserving `svdvals` for condition-number diagnostics under `torch.no_grad()`. This avoids the backward singularity of SVD when two singular values coincide — which is common for near-isometric coordinate maps.
-
-**Direct-coordinate mode (M1).** For diagnosis, the PDE can also be evaluated directly in physical space using only the rigid TNB frame (no learned decoder). Since the TNB frame is orthogonal with det J = 1 and condition number κ = 1:
+The **chart decoder** φ_i maps local chart coordinates ξ ∈ ℝ³ to physical space x ∈ ℝ³:
 
 ```
-Δ_x u = Σ_j ∂²u/∂ξ_j²    (exact identity for orthogonal frames)
+φᵢ(ξ) = sᵢ  +  Fᵢ · ξ  +  Δφᵢ(ξ)
 ```
 
-This mode eliminates all Jacobian issues and lets you test whether the Schwarz decomposition itself is correct, independently of decoder quality.
+where `Δφᵢ` is a small nonlinear correction learned by a MLP with amplitude
+`≈ 0.20 · tanh(raw_scale) · rᵢ ≈ 0.08` in normalized coordinates.
+The Jacobian `Jᵢ(ξ) = ∂φᵢ/∂ξ ∈ ℝ^{3×3}` is used for coordinate transformations.
 
-### Multiplicative Schwarz Coupling
+---
 
-The Schwarz method decomposes the global PDE into local sub-problems on each chart's subdomain Ω_i, coupled through interface conditions on the overlapping regions Ω_i ∩ Ω_j.
+### 4. PDE Pullback to Chart Coordinates
 
-**Interface value continuity** (Robin-penalty form):
-
-```
-loss_iv(i,j) = Σ_{x ∈ Ω_i ∩ Ω_j} [u_i(x) − u_j(x)]²
-```
-
-**Interface flux continuity** (normal derivative matching):
+The **Poisson equation** on Ω:
 
 ```
-loss_if(i,j) = Σ_{x ∈ Ω_i ∩ Ω_j} [(∇u_i · n_ij) − (∇u_j · n_ij)]²
+−Δₓ u(x) = f(x),    x ∈ Ω
+u(x)       = g(x),    x ∈ ∂Ω
 ```
 
-where n_ij is a consistent normal computed from the mask-level-set gradient.
-
-**Multiplicative Schwarz update** proceeds in a graph-colored sequence: charts are grouped into non-adjacent color classes, and within each color all charts are updated simultaneously (or in parallel using CUDA streams). Each update performs `local_steps` gradient steps of Adam with the current neighbor solutions held fixed.
-
-**Relaxation:** After each full sweep, a damped update `u_i ← ω · u_i^new + (1-ω) · u_i^old` is optionally applied (default ω = 0.8) to stabilize convergence.
-
-### Multi-Objective PINN Loss
-
-On each chart i the total loss is:
+is pulled back to local chart coordinates via the chain rule.
+Let **Jᵢ = ∂φᵢ/∂ξ** be the 3×3 Jacobian. Then the Laplacian transforms as:
 
 ```
-L_i = w_pde · L_pde_i  +  w_bc · L_bc_i  +  w_iv · L_iv_i  +  w_if · L_if_i
+Δₓ u = Σⱼₖ aⱼₖ(ξ) · ∂²u/∂ξⱼ∂ξₖ  +  lower-order terms
+
+where the metric tensor is:  a(ξ) = |det Jᵢ| · (Jᵢ⁻ᵀ Jᵢ⁻¹)
 ```
 
-where:
-- **L_pde** — Huber-clipped mean of |residual|² over interior collocation points
-- **L_bc** — mean squared error of u against the Dirichlet condition on boundary points
-- **L_iv** — interface value continuity (Robin penalty)
-- **L_if** — interface flux continuity (normal derivative penalty)
+The PDE residual in chart coordinates is:
 
-**Recommended weights (M4):** `w_pde = 5`, `w_bc = 1`, `w_iv = 2`, `w_if = 2`. The PDE term must dominate for the solver to behave as a PDE solver rather than a regression problem; the original default of w_pde = 1 < w_bc = 2 was the primary cause of elevated interior residuals.
+```
+R_pde(ξ) = Δₓ u_net(ξ) + f(φᵢ(ξ))
+```
 
-**PDE warmup:** The PDE weight is ramped from 0 to w_pde over `pde_warmup_iters` Schwarz iterations, giving the boundary conditions time to settle before the interior residual dominates.
+**Jacobian inversion** uses `torch.linalg.inv` (LU decomposition) in the backward pass
+for numerical stability. SVD is reserved for condition-number diagnostics under
+`torch.no_grad()` to avoid gradient instability when singular values coincide.
+
+---
+
+### 5. Direct-Coordinate Mode (TNB)
+
+Since the TNB frame `Fᵢ` is **orthonormal** (det Jᵢ = 1, condition number κ = 1 for the
+rigid part), the Laplacian simplifies exactly when the decoder residual Δφᵢ is dropped:
+
+```
+Δₓ u = Σⱼ ∂²u/∂ξⱼ²          (exact for orthogonal frames)
+```
+
+Enabled with `--direct-coord-pde`. This eliminates all Jacobian issues and permits
+isolating the Schwarz convergence from decoder quality. All training and evaluation in
+the Schwarz Poisson experiments (W1–W5, CompactChartNet) use this mode.
+
+---
+
+### 6. Multiplicative Schwarz Decomposition
+
+The Schwarz method decomposes the global problem into local sub-problems on each
+subdomain Ω_i, coupled through interface conditions on overlapping regions:
+
+**Interface value continuity** (Robin-penalty):
+```
+L_iv(i,j) = E_{x ∈ Ω_i ∩ Ω_j} [ (uᵢ(ξᵢ(x)) − uⱼ(ξⱼ(x)))² ]
+```
+
+**Interface flux continuity** (normal-derivative matching):
+```
+L_if(i,j) = E_{x ∈ Ω_i ∩ Ω_j} [ (∇uᵢ · nᵢⱼ − ∇uⱼ · nᵢⱼ)² ]
+```
+
+**Multiplicative Schwarz sweep**: charts are updated sequentially (or in graph-colored
+groups). At iteration `k`, chart i's PINN is retrained with all neighbor solutions
+`{u_j}_{j ∈ 𝒩(i)}` held fixed:
+
+```
+uᵢᵏ⁺¹ = argmin_{uᵢ} [ Lᵢ(uᵢ; {uⱼᵏ}_{j ∈ 𝒩(i)}) ]    for i = 1, …, N
+```
+
+A **trust-region filter** rejects Schwarz updates that increase the global rel_l2 error
+beyond a threshold; the learning rate is halved on rejection.
+
+**Plateau detection** (W3): the stale counter increments when `rel_l2_eval` does not
+improve by more than `plateau_tol`; training stops when `stale ≥ plateau_patience`.
+
+---
+
+### 7. Multi-Objective PINN Loss
+
+On each chart *i* the total loss at Schwarz iteration *k* is:
+
+```
+Lᵢ  =  w_pde · L_pde  +  w_bc · L_bc  +  w_sup · L_sup
+     +  w_iv  · Σⱼ∈𝒩(i) L_iv(i,j)
+     +  w_if  · Σⱼ∈𝒩(i) L_if(i,j)
+     +  w_h1  · Σⱼ∈𝒩(i) L_h1(i,j)
+```
+
+| Term | Expression | Role |
+|------|-----------|------|
+| **L_pde** | `E_ξ[ (Δₓuᵢ + f)² ]` | PDE residual over interior points |
+| **L_bc** | `E_ξ[ (uᵢ(ξ_bc) − g(x_bc))² ]` | Dirichlet boundary condition |
+| **L_sup** | `E_ξ[ (uᵢ(ξ) − u*(φ_rig(ξ)))² ]` | Manufactured-solution anchor (W2) |
+| **L_iv** | `E_{Ω_i∩Ω_j}[ (uᵢ − uⱼ)² ]` | Interface value continuity |
+| **L_if** | `E_{Ω_i∩Ω_j}[ (∂_n uᵢ − ∂_n uⱼ)² ]` | Interface flux continuity |
+| **L_h1** | `E_{B_i∩B_j,vol}[ (uᵢ − uⱼ)² ]` | Volumetric H1 overlap penalty (W5) |
+
+**Recommended weights** (validated in attempt19_w4):
+`w_pde=5, w_bc=1, w_sup=0.5, w_iv=2, w_if=2, w_h1=0.5`
+
+**PDE warmup**: `w_pde` is ramped from 0 to its target value over `pde_warmup_iters`
+Schwarz iterations to allow boundary conditions to settle first.
+
+---
+
+### 8. PCGrad Gradient Surgery
+
+When L_pde and L_sup have **conflicting gradients** (dot product < 0), naïve combined
+minimization makes one objective worse. **PCGrad** (K=2) resolves this per-chart:
+
+```
+For each parameter θ:
+  g_pde ← ∇_θ (w_pde · L_pde)       # backward pass 1
+  g_sup ← ∇_θ (w_sup · L_sup)       # backward pass 2
+  g_oth ← ∇_θ (L_bc + L_iv + L_if + L_h1)  # backward pass 3
+
+  # Symmetric projection when conflicting:
+  if g_pde · g_sup < 0:
+    g_pde ← g_pde − (g_pde·g_sup / ‖g_sup‖²) · g_sup
+    g_sup ← g_sup − (g_sup·g_pde_orig / ‖g_pde_orig‖²) · g_pde_orig
+
+  θ.grad ← g_pde + g_sup + g_oth
+```
+
+PCGrad requires 3 backward passes per local step (vs 1 for the combined loss) but
+enables simultaneous progress on both the PDE and supervision objectives, reducing
+Schwarz oscillation amplitude. Enabled with `--use-pcgrad`.
+
+---
+
+### 9. CompactChartNet — Voronoi Sub-Atlas
+
+Instead of a single dense MLP per chart, **CompactChartNet** uses M=9 small Tanh-MLPs
+whose outputs are blended by a **softmax partition-of-unity (POU)**:
+
+```
+u_chart(ξ) = Σ_{m=0}^{M-1} φₘ(ξ) · uₘ(ξ − sₘ)
+
+φₘ(ξ)  = softmax_m( −‖ξ − sₘ‖² / 2τ² )       # POU weights (C∞)
+
+τ = τ_scale × r_i                               # POU bandwidth
+sₘ  — sub-seed positions in local frame:
+       s₀ = 0  (chart centre)
+       s₁…s₈ = ±r_i/3 cube corners (8 vertices)
+uₘ  — small Tanh MLP:  ℝ³ → ℝ,  width=32,  depth=2
+```
+
+**Key properties**:
+- Smooth (C∞) everywhere → autograd Laplacian well-defined
+- Spatially localized → gradients of `uₘ` concentrated near sub-seed `sₘ`
+- Parameter count: 10,953 per chart vs 12,801 for the dense MLP (width=64, depth=4)
+- **Critical hyper-parameter**: τ_scale must be ≥ 0.5 for full chart coverage;
+  τ_scale=0.125 (τ ≈ 0.051) leaves isolated Gaussian neighbourhoods → pretrain diverges
+
+**Monotone convergence property**: spatial localization means local PDE updates disturb
+neighboring charts less than a dense MLP, yielding monotone Schwarz descent over 60
+iterations vs oscillation with the dense MLP.
+
+---
+
+## Key Algorithms — Pseudocode
+
+### Algorithm 1: Neural SDF Training
+
+```
+Input:  surface point cloud {x_s, n_s}, volume exterior points {x_ext}
+Output: SDF network SDF_θ : ℝ³ → ℝ
+
+Initialize θ (MLP, width=128, depth=6, Softplus activations)
+
+for epoch = 1 to E_sdf:
+    Sample x_s (surface), x_int (interior random), x_ext (exterior random)
+
+    loss_surface  = mean( SDF_θ(x_s)² )                    # SDF = 0 on surface
+    loss_eikonal  = mean( (‖∇SDF_θ(x)‖ − 1)² )            # |∇SDF| = 1 everywhere
+    loss_normal   = mean( ‖∇SDF_θ(x_s) − n_s‖² )          # normal alignment
+    loss_exterior = mean( ReLU(−SDF_θ(x_ext)) )            # sign anchor
+
+    loss = w_surf*loss_surface + w_eik*loss_eikonal
+         + w_norm*loss_normal + w_ext*loss_exterior
+
+    Update θ via Adam(loss, lr=8e-4)
+
+return SDF_θ
+```
+
+---
+
+### Algorithm 2: Atlas Construction
+
+```
+Input:  surface point cloud {x_s}, SDF_θ, N (number of charts)
+Output: seeds {sᵢ}, frames {Fᵢ}, radii {rᵢ}, neighbor sets {𝒩(i)}
+
+1. SEED SELECTION (Poisson-disk):
+   Start with random seed s₁ ∈ {x_s}
+   While |seeds| < N:
+     Candidate c ~ Uniform({x_s})
+     If min_{sᵢ already placed} ‖c − sᵢ‖ ≥ d_min:
+       Accept c as new seed sₖ
+
+2. TNB FRAME CONSTRUCTION (per seed sᵢ):
+   nᵢ ← −∇SDF_θ(sᵢ) / ‖∇SDF_θ(sᵢ)‖          # inward normal
+   t₁ᵢ ← unit vector ⊥ nᵢ  (stable Gram-Schmidt)
+   t₂ᵢ ← nᵢ × t₁ᵢ
+   Fᵢ ← [t₁ᵢ | t₂ᵢ | nᵢ]
+
+3. SUPPORT RADIUS:
+   rᵢ ← radius such that ball B(sᵢ, rᵢ) covers all interior points
+         within the Voronoi cell of sᵢ, plus overlap_target fraction
+
+4. NEIGHBOR GRAPH:
+   𝒩(i) ← { j ≠ i : B(sᵢ, rᵢ) ∩ B(sⱼ, rⱼ) ≠ ∅ }
+
+5. QUALITY GATES:
+   Check: coverage ≥ 99%, max_chart_rel_l2_init < 20%, zero foldover
+
+return {sᵢ, Fᵢ, rᵢ, 𝒩(i)}
+```
+
+---
+
+### Algorithm 3: Multiplicative Schwarz PINN Loop
+
+```
+Input:  atlas {sᵢ, Fᵢ, rᵢ, 𝒩(i)}, pretrained u_nets = {uᵢ_θ}
+        loss weights, local_steps, max_iters, plateau_patience
+Output: trained u_nets, best_rel_l2 checkpoint
+
+# --- Pretrain phase ---
+BC warm-start: minimize L_bc over 300 epochs for all charts
+Interior supervised pretrain: minimize L_sup over 1000 epochs (all charts)
+
+# --- PDE warmup schedule ---
+for k = 1 to pde_warmup_iters:
+    w_pde_k ← w_pde * k / pde_warmup_iters
+
+best_rel_l2 ← ∞,  stale ← 0
+
+# --- Schwarz outer loop ---
+for k = 1 to max_schwarz_iters:
+
+    # Update each chart in sequence
+    for i = 1 to N:
+        Sample ξ_pde (interior of Ω_i, SDF rejection)
+        Sample ξ_bc  (near ∂Ω ∩ B(sᵢ, rᵢ))
+        Sample ξ_if  (interface Ω_i ∩ Ω_j for each j ∈ 𝒩(i))
+
+        for step = 1 to local_steps:
+            Compute L_i(uᵢ_θ; {uⱼ_θ_fixed}_{j∈𝒩(i)})
+
+            if use_pcgrad:
+                Run Algorithm 4 (PCGrad)
+            else:
+                L_i.backward(); clip grads; Adam step
+
+    # Evaluate global error
+    rel_l2 ← eval_rel_l2(u_nets, x_interior_50K, u_true)
+
+    # Trust-region filter
+    if rel_l2 > best_rel_l2_so_far * trust_factor:
+        Restore u_nets from best_rel_l2 checkpoint
+        lr ← lr * 0.7          # decay on rejection
+        continue
+
+    # Update best checkpoint
+    if rel_l2 < best_rel_l2:
+        best_rel_l2 ← rel_l2
+        Save u_nets → best_rel_l2.pt
+        stale ← 0
+    else:
+        stale ← stale + 1
+
+    # Plateau detection (W3)
+    if stale ≥ plateau_patience:
+        break
+
+return u_nets, best_rel_l2.pt
+```
+
+---
+
+### Algorithm 4: PCGrad K=2 per Chart Step
+
+```
+Input:  u_net_i, batch (ξ_pde, ξ_bc, ξ_sup, ξ_iv, ξ_if, ξ_h1)
+        neighbor solutions {uⱼ} (detached)
+
+# Three separate forward+backward passes (no retain_graph needed)
+
+g_pde ← ∇_θ (w_pde · L_pde)          # Pass 1: PDE only
+g_sup ← ∇_θ (w_sup · L_sup)          # Pass 2: supervision only
+g_oth ← ∇_θ (L_bc + L_iv + L_if + L_h1)  # Pass 3: boundary + interface terms
+
+# PCGrad symmetric projection
+g_pde_orig ← copy(g_pde)
+for each parameter p:
+    dot ← g_pde[p] · g_sup[p]
+    if dot < 0:
+        # Project g_pde onto orthogonal complement of g_sup
+        g_pde[p] ← g_pde[p] − dot / ‖g_sup[p]‖² · g_sup[p]
+        # Project g_sup onto orthogonal complement of g_pde_orig
+        g_sup[p] ← g_sup[p] − (g_sup[p]·g_pde_orig[p]) / ‖g_pde_orig[p]‖² · g_pde_orig[p]
+
+# Accumulate into θ.grad and step
+θ.grad ← g_pde + g_sup + g_oth
+clip_grad_norm(θ, max_norm=1.0)
+Adam.step()
+```
+
+---
+
+### Algorithm 5: CompactChartNet Forward Pass
+
+```
+Input:  ξ ∈ ℝ^{N×3}  (N query points in local chart frame)
+        sub-seeds {sₘ}_{m=0}^{M-1} ∈ ℝ^{M×3}  (fixed, precomputed)
+        sub-nets {uₘ_θ}  (M small Tanh-MLPs)
+        τ (POU bandwidth)
+
+# Step 1: Compute POU weights
+dist² ← ‖ξ.unsqueeze(1) − sₘ.unsqueeze(0)‖²    # shape (N, M)
+logits ← −dist² / (2τ²)                          # shape (N, M)
+φ      ← softmax(logits, dim=1)                   # shape (N, M), sums to 1
+
+# Step 2: Evaluate each sub-net (with optional freezing in exclusive zones)
+for m = 0 to M-1:
+    vₘ ← uₘ_θ(ξ − sₘ)           # translate input to sub-seed frame; shape (N,1)
+    if frozen[m]:
+        vₘ ← vₘ.detach()         # no gradient through frozen sub-nets
+
+vals ← stack([v₀, …, v_{M-1}], dim=1)            # shape (N, M, 1)
+
+# Step 3: Weighted sum (partition-of-unity blend)
+u ← (φ.unsqueeze(-1) * vals).sum(dim=1)          # shape (N, 1)
+
+return u
+```
 
 ---
 
 ## Numerical Examples
 
-### Manufactured Solution (Poisson)
+### Example 1: Forward Poisson — 3D Ellipsoid / Star Domain
 
-All Poisson experiments use a manufactured solution with known closed form:
+**Description**: Baseline verification of the chart decoder + PINN pipeline on
+analytic domains (no Schwarz coupling needed). A single chart covers the full domain.
+
+**Domain**: 3D ellipsoid `x²/a² + y²/b² + z²/c² ≤ 1` (a=1.2, b=0.9, c=0.7);
+3D star domain with 5-pointed star cross-section.
+
+**PDE**: Poisson equation with manufactured solution
+`u*(x,y,z) = sin(πx)sin(πy)sin(πz)`, RHS `f = 3π²u*`.
+
+**Method**: Single MLP PINN, sphere-mapping coordinate chart, no Schwarz coupling.
+
+**Results**:
+
+| Domain | Metric | Value |
+|--------|--------|-------|
+| 3D Ellipsoid | rel_L2 | < 1% after 5000 epochs |
+| 3D Star domain | rel_L2 | < 2% after 5000 epochs |
+
+**Scripts**: `src/pinn_3d_ellipsoid_mapped_sphere.py`, `src/run_poisson_star3d_mapped.py`
+
+---
+
+### Example 2: Forward Poisson — Stanford Rabbit (Schwarz)
+
+**Description**: Poisson equation inside the Stanford rabbit volumetric interior,
+solved by a 12-chart Schwarz PINN. Two PINN architectures are benchmarked.
+
+**Domain**: Stanford rabbit volumetric interior, SDF-normalized coordinates ≈ [−0.55, 0.55]³.
+Atlas: 12 interior ball-charts, support radius r ≈ 0.41, ~20% overlap, 100% coverage.
+
+**PDE**: `−Δu = 3π² sin(πx₁)sin(πx₂)sin(πx₃)` with Dirichlet BC `u = 0` on ∂Ω.
+Evaluation: `rel_l2 = ‖u_PINN − u*‖₂ / ‖u*‖₂` over 50K interior reference points.
+
+**Validated improvements** (W-series):
+
+| ID | Improvement | Effect |
+|----|------------|--------|
+| W1 | Consistent PDE operator in eval (TNB-frame Laplacian) | 28× speedup, −14% rel_l2 |
+| W2 | Manufactured-solution anchor during Schwarz (`w_sup=0.5`) | −14.4% rel_l2 vs W1 |
+| W3 | Plateau detection tracks rel_l2 (not composite score) | Correct stale counter |
+| W4 | PCGrad K=2 gradient surgery (L_pde vs L_sup) | **−18.8% rel_l2 vs W3** |
+| W5 | Stronger coupling (`w_if=2.0`, H1 volumetric overlap) | max_error −36%, uniformity ↑ |
+
+**Architecture A — Dense MLP (W1+W2+W3+W4+W5)**:
 
 ```
-u*(x, y, z) = sin(πx) · sin(πy) · sin(πz)
-f(x, y, z)  = 3π² · u*(x, y, z)
+PINN:       width=64, depth=4 Tanh MLP per chart, 12,801 params/chart
+Algorithm:  PCGrad K=2, 15 local Adam steps per Schwarz iter, lr=2e-4
+Schwarz:    23 iterations total, best at iter 8
 ```
 
-This satisfies the homogeneous Dirichlet condition u* = 0 on the faces of the unit cube [0,1]³. The exact solution is used to compute the relative L² error:
+| Metric | Value |
+|--------|-------|
+| **rel_l2** | **2.531%** |
+| max_error | 5.303% |
+| mean_interface_residual | 0.001511 |
+| Runtime | 404 s (~7 min, Apple M4) |
+| Schwarz iters | 23 (plateau patience=15) |
+
+**Architecture B — CompactChartNet (Voronoi sub-atlas, τ_scale=0.5)**:
 
 ```
-rel_L2 = ‖u_PINN − u*‖₂ / ‖u*‖₂
+PINN:       9 sub-nets per chart (M=9, width=32, depth=2, Tanh), 10,953 params/chart
+POU:        φₘ = softmax(−‖ξ−sₘ‖²/2τ²), τ = 0.5 × 0.41 ≈ 0.205
+Algorithm:  PCGrad K=2 + CompactChartNet, lr=2e-4
+Schwarz:    60 iterations (monotone descent), best at iter 56
 ```
 
-Typical achieved accuracy on 12-chart rabbit atlas: **rel L² ≈ 7–8%** after 60 Schwarz iterations at default settings; improves to **< 5%** with M3+M4 rebalancing.
+| Metric | Value |
+|--------|-------|
+| **rel_l2** | **2.207%** ← all-time best |
+| max_error | 6.783% |
+| mean_interface_residual | 0.001979 |
+| Runtime | 3659 s (~61 min, Apple M4) |
+| Schwarz iters | 60 (hit max_schwarz_iters, plateau never fired) |
+| Convergence | Monotone — no oscillation |
 
-### Forward Poisson on the Rabbit Geometry
+**Benchmark progression**:
 
-The Stanford rabbit surface encloses a simply-connected 3D domain. The Poisson equation −Δu = f is solved inside the rabbit body with:
-- 12 overlapping coordinate charts (Poisson-disk sampled seeds, overlap ~20%)
-- 15 Adam steps per chart per Schwarz iteration
-- Batch size: 192 PDE points + 192 BC points + 128 interface points per chart
+| Run | Architecture / Features | rel_l2 | max_error | Runtime |
+|-----|------------------------|--------|-----------|---------|
+| attempt14b | Dense MLP baseline (broken plateau) | 4.31% | 10.86% | 10,133 s |
+| attempt15b_w1 | Dense MLP + W1 | 3.698% | **4.107%** | 364 s |
+| attempt16_w2 | Dense MLP + W1+W2 | 3.165% | 4.993% | 335 s |
+| attempt17_w3 | Dense MLP + W1+W2+W3 | 3.117% | 8.485% | 328 s |
+| attempt18_w5 | Dense MLP + W1+W2+W3+W5 | 3.631% | 5.450% | 371 s |
+| attempt19_w4 | Dense MLP + W1+W2+W3+W4+W5 | 2.531% | 5.303% | 404 s |
+| **attempt20c_compact** | **CompactChartNet + all W1–W5** | **2.207%** | 6.783% | 3659 s |
 
-The solution is validated against the manufactured solution. Seam artifacts near chart boundaries are the dominant error source; M1 (direct-coordinate mode) isolates whether these originate from the Schwarz decomposition or from the learned decoder.
+**Script**: `experiments/run_poisson_rabbit_atlas_schwarz.py`
+**Best checkpoint**: `runs/attempt20c_compact/`
 
-### Inverse Neo-Hookean Elasticity (Torus)
+---
 
-The **torus** (major radius R = 1.0, minor radius r = 0.35) with multiply-connected topology is the primary inverse benchmark:
+### Example 3: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)
 
-**Forward model:** incompressible neo-Hookean elasticity
+**Description**: Recover shear modulus μ and bulk modulus K of an incompressible
+neo-Hookean solid from traction observations on the torus surface.
+
+**Domain**: Torus (major radius R=1.0, minor radius r=0.35, genus-1 topology).
+Atlas: 8 coordinate charts covering the torus surface.
+
+**Forward model** (incompressible neo-Hookean):
 ```
-P = μ F − μ F⁻ᵀ + K(J−1) J F⁻ᵀ
-Div P = 0  in Ω,    P·N = t  on ∂Ω_N,    u = 0  on ∂Ω_D
+P = μ F − μ F⁻ᵀ + K(J−1) J F⁻ᵀ      (1st Piola-Kirchhoff stress)
+Div P = 0   in Ω,     P·N = t   on ∂Ω_N
 ```
 
-**Inverse problem:** given sparse displacement or traction observations, recover the shear modulus μ and bulk modulus K as spatially homogeneous unknowns (or piecewise constant by chart).
+**Inverse problem**: Given boundary traction observations `t_obs` on ∂Ω,
+find scalar parameters μ and K.
 
-**Typical results:** parameter recovery to within 0.01% relative error on the torus, composite score ~4×10⁻⁷ at best.
+**True parameters**: μ = 1.8, K = 25.0
 
-### Inverse Elder-Like Flow (Rabbit)
+**Method**: Joint PINN optimization — minimize
+`L = w_pde · L_pde + w_bc · L_traction + w_param · ‖{μ,K}‖_reg`
+with μ, K as trainable scalars initialized near the true values.
 
-**Forward model:** Darcy flow + species transport with anisotropic permeability:
+**Results** (run: `torus_inverse_mps`, 300 epochs, Apple M4 MPS):
+
+| Parameter | True | Estimated | Rel. Error |
+|-----------|------|-----------|-----------|
+| μ (shear modulus) | 1.800 | 1.7999998 | **9.3 × 10⁻⁶ %** |
+| K (bulk modulus) | 25.00 | 25.0000057 | **2.3 × 10⁻⁵ %** |
+| traction rel_l2 | — | — | 2.35 × 10⁻⁷ |
+
+| Metric | Value |
+|--------|-------|
+| Epochs | 300 |
+| Runtime | 201 s |
+| Composite score | **3.96 × 10⁻⁷** |
+
+**Script**: `src/run_torus_inverse_neohookean_atlas.py`
+
+---
+
+### Example 4: Inverse Neo-Hookean Elasticity — Torus (Schwarz Dual)
+
+**Description**: Same inverse problem on the torus but with a Schwarz-coupled
+multi-chart solver supporting two observation types: displacement observations
+and traction observations.
+
+**True parameters**: μ = 1.8, K = 25.0
+
+#### Variant A — Displacement observations
+
+| Parameter | True | Estimated | Rel. Error |
+|-----------|------|-----------|-----------|
+| μ | 1.800 | 1.8000000 | **4.1 × 10⁻¹² %** |
+| K | 25.00 | 25.2498 | 1.00% |
+
+| Metric | Value |
+|--------|-------|
+| Best epoch | 405 |
+| Displacement rel_l2 | 0.174% |
+| Traction rel_l2 | 0.959% |
+| Runtime | 38.6 s |
+| Target met | ✅ |
+
+#### Variant B — Traction observations
+
+| Parameter | True | Estimated | Rel. Error |
+|-----------|------|-----------|-----------|
+| μ | 1.800 | 1.7938 | **0.345%** |
+| K | 25.00 | 25.135 | 0.541% |
+
+| Metric | Value |
+|--------|-------|
+| Best epoch | 300 |
+| Traction rel_l2 | 0.580% |
+| Displacement rel_l2 | 0.336% |
+| Runtime | 76.9 s |
+| Target met | ✅ |
+
+**Script**: `src/run_torus_inverse_neohookean_schwarz_dual.py`
+
+---
+
+### Example 5: Inverse Elder-Like Flow — Stanford Rabbit
+
+**Description**: Recover the **anisotropic permeability tensor** K(x) of a porous medium
+inside the Stanford rabbit from sparse pressure and concentration observations.
+This is a coupled inverse problem for Darcy flow + species transport.
+
+**Forward model**:
 ```
-−∇·(K(x)∇p) = 0          (pressure)
-−∇·(D∇c − Ra·K(x)c∇p) = 0  (concentration)
+−∇·(K(x)∇p) = 0                         (pressure, Darcy flow)
+−∇·(D∇c − Ra · K(x)c∇p) = 0             (concentration, Elder-like transport)
 ```
 
-**Inverse problem:** recover the permeability tensor K(x) = k₀ R(q) Λ Rᵀ(q) where R(q) is a rotation parameterized by quaternion q and Λ is a diagonal matrix, from sparse pressure/concentration observations on the rabbit geometry.
+**Permeability parameterization**:
+```
+K(x) = k₀ · R(q) Λ Rᵀ(q)
+```
+where `k₀` is the isotropic scale, `R(q)` is a rotation matrix parameterized by
+quaternion `q`, and `Λ = diag(λ₁, λ₂, λ₃)` is a diagonal anisotropy matrix.
 
-**Typical results:** parameter metric ~0.04 relative error; strong performance on concentration field recovery.
+**Inverse problem**: Given sparse `(p, c)` observations, recover `k₀, q, Λ`.
+
+**Domain**: Stanford rabbit volumetric interior, 12 atlas charts.
+
+**Results** (run: `rabbit_inverse_elder_globalfield_small`, CPU float64):
+
+| Metric | Value |
+|--------|-------|
+| k₀ relative error | **3.0%** |
+| Eigenvalue rel. error (mean) | 2.97% |
+| Eigenvalue rel. error (max) | 6.22% |
+| Axis orientation error (mean) | **2.70°** |
+| Axis orientation error (max) | 3.35° |
+| Pressure field rel_l2 | 0.0% (teacher-student locked) |
+| Runtime | 642 s |
+| Target met | ✅ |
+
+**Script**: `src/run_rabbit_inverse_elder_atlas_schwarz.py`
 
 ---
 
@@ -208,55 +705,45 @@ Div P = 0  in Ω,    P·N = t  on ∂Ω_N,    u = 0  on ∂Ω_D
 PINN_coordinate_chart_3Dgeometry/
 │
 ├── src/                              # Core verified solvers
-│   ├── pinn_3d_ellipsoid_mapped_sphere.py     # Poisson on 3D ellipsoid (sphere mapping)
-│   ├── pinn_gradient_surgery.py               # 2D PINN with PCGrad conflict resolution
-│   ├── run_poisson_star3d_mapped.py           # Poisson on 3D star domain
-│   ├── run_torus_inverse_neohookean_atlas.py  # Inverse neo-Hookean elasticity (torus atlas)
-│   ├── run_torus_inverse_neohookean_schwarz_dual.py  # Schwarz-coupled torus inverse
-│   ├── run_rabbit_inverse_elder_atlas_schwarz.py     # Inverse Elder-like flow on rabbit
+│   ├── pinn_3d_ellipsoid_mapped_sphere.py     # Forward Poisson on 3D ellipsoid
+│   ├── pinn_gradient_surgery.py               # 2D PINN with PCGrad (reference impl)
+│   ├── run_poisson_star3d_mapped.py           # Forward Poisson on 3D star domain
+│   ├── run_torus_inverse_neohookean_atlas.py  # Inverse neo-Hookean on torus (Example 3)
+│   ├── run_torus_inverse_neohookean_schwarz_dual.py  # Schwarz dual torus inverse (Example 4)
+│   ├── run_rabbit_inverse_elder_atlas_schwarz.py     # Inverse Elder flow on rabbit (Example 5)
 │   ├── run_rabbit_inverse_neohookean_mapped.py       # Neo-Hookean inverse on rabbit
-│   ├── train_sdf_rabbit.py                    # Neural SDF training for arbitrary geometry
+│   ├── train_sdf_rabbit.py                    # Neural SDF training (Algorithm 1)
 │   ├── train_mapping_from_sdf.py              # Sphere-to-domain mapping network
 │   └── export_rabbit_elder_inverse_paraview.py
 │
-├── experiments/                      # Research-stage and advanced variants
-│   ├── run_poisson_rabbit_atlas_schwarz.py    # ← MAIN Schwarz Poisson solver (modified by M1–M8)
+├── experiments/                      # Research-stage solvers
+│   ├── run_poisson_rabbit_atlas_schwarz.py    # ← MAIN Schwarz Poisson solver (Example 2)
+│   ├── compact_chart_net.py                   # CompactChartNet (Algorithm 5)
 │   ├── train_rabbit_atlas.py                  # Atlas decoder + mask network training
-│   ├── build_rabbit_atlas_poissondisk.py      # Atlas seed selection (Poisson disk)
-│   ├── run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz.py       # TI Arruda-Boyce inverse
-│   ├── run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz_mms.py   #   ↳ manufactured solution
-│   ├── run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz_normal_ramp.py
-│   ├── run_rabbit_inverse_neohookean_atlas_schwarz_normal_disp.py
-│   ├── run_torus_inverse_neohookean_atlas_cube.py
-│   ├── run_torus_inverse_neohookean_atlas_fillet_inn.py
+│   ├── build_rabbit_atlas_poissondisk.py      # Atlas seed selection (Algorithm 2)
+│   ├── build_rabbit_atlas_volumetric.py       # Volumetric interior-seed atlas build
+│   ├── run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz.py  # TI Arruda-Boyce inverse
 │   ├── postprocess_rabbit_poisson_dense_fields.py
 │   ├── export_rabbit_atlas_paraview.py
 │   ├── export_rabbit_error_paraview.py
-│   ├── export_rabbit_ti_inverse_interface_diagnostics.py
 │   └── experimental_ideas/                    # Archived exploratory variants
-│       ├── atlas_split/
-│       └── fixed_focus/
 │
 ├── configs/                          # YAML configuration files
-│   ├── rabbit_atlas_poisson.yaml              # Schwarz Poisson solver config
-│   ├── rabbit_inverse_elder_atlas.yaml        # Elder flow inverse config
-│   ├── rabbit_inverse_ti_arruda_boyce.yaml    # TI Arruda-Boyce config
-│   ├── rabbit_inverse_neohookean_normal_disp.yaml
-│   ├── rabbit_sdf_inverse.yaml
-│   ├── torus_inverse_neohookean_atlas_cube.yaml
-│   ├── torus_inverse_neohookean_atlas_fillet_inn.yaml
-│   └── rabbit_data_source.yaml                # Paths to geometry data
+│   ├── rabbit_atlas_poisson.yaml
+│   ├── rabbit_inverse_elder_atlas.yaml
+│   └── rabbit_inverse_ti_arruda_boyce.yaml
 │
-├── docs/                             # Research notes and paper skeleton
-│   ├── chatgpt52_paper_starter.md             # Draft paper outline
-│   └── chatgpt52_handoff_mindmap.md           # Method overview and decisions
+├── docs/
+│   ├── chatgpt52_paper_starter.md             # Paper outline (draft)
+│   └── chatgpt52_handoff_mindmap.md           # Research mindmap
 │
-├── scripts/
-│   └── check_mps_feasibility.py              # Apple MPS compatibility check
-│
-├── pinn_only_improvement_plan.md     # Detailed roadmap: architecture, training, sampling
-├── benchmark_smoke.json              # Quick smoke-test results
-└── runs/                             # Saved checkpoints, metrics, and exports
+├── schwarz_poisson_attempt_status.md  # Detailed Schwarz Poisson attempt log
+├── pinn_only_improvement_plan.md      # W-series and architecture roadmap
+└── runs/                              # Saved checkpoints and metrics
+    ├── attempt19_w4/                  # Dense MLP best run (rel_l2=2.531%)
+    ├── attempt20c_compact/            # CompactChartNet best run (rel_l2=2.207%)
+    ├── torus_inverse_mps/             # Torus inverse best run (score=3.96e-7)
+    └── rabbit_inverse_elder_globalfield_small/  # Elder inverse best run
 ```
 
 ---
@@ -265,15 +752,15 @@ PINN_coordinate_chart_3Dgeometry/
 
 ### Python Version
 
-Python ≥ 3.9 is required (3.10 or 3.11 recommended).
+Python ≥ 3.9 (3.10 or 3.11 recommended).
 
 ### Required Libraries
 
-Install via pip:
-
 ```bash
+# CUDA (NVIDIA GPU):
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-# or for Apple Silicon (MPS backend):
+
+# Apple Silicon (MPS):
 pip install torch torchvision
 ```
 
@@ -281,28 +768,22 @@ pip install torch torchvision
 |---------|---------|---------|
 | `torch` | ≥ 2.0 | Neural networks, autograd, linear algebra |
 | `numpy` | ≥ 1.24 | Array operations, point cloud I/O |
-| `matplotlib` | ≥ 3.7 | Convergence plots, field visualization |
+| `matplotlib` | ≥ 3.7 | Convergence plots |
 | `scipy` | ≥ 1.10 | (optional) Poisson-disk sampling utilities |
 
-No mesh generation library (Gmsh, FEniCS, etc.) is required — the method is fully meshfree.
+No mesh generation library required — the method is fully meshfree.
 
 ### Hardware
 
 | Platform | Notes |
 |----------|-------|
-| **NVIDIA GPU (CUDA)** | Recommended; float64 fully supported; AMP (`--amp`) reduces memory |
-| **Apple M1/M2/M3/M4 (MPS)** | Supported; **must use `--dtype float32`**; some linalg kernels have occasional MPS-specific instabilities |
+| **NVIDIA GPU (CUDA)** | Recommended; float64 supported; `--amp` reduces memory |
+| **Apple M1–M4 (MPS)** | Supported; use `--dtype float32`; some linalg ops use CPU fallback |
 | **CPU** | Works; float64 default; slow for large runs |
 
-**Auto-detection:** pass `--device auto` (the default) to automatically select CUDA → MPS → CPU.
+Pass `--device auto` (default) to automatically select CUDA → MPS → CPU.
 
-### Optional: ParaView
-
-For 3D visualization of solution fields:
-- Download ParaView ≥ 5.11 from https://www.paraview.org/download/
-- Export scripts in `experiments/` write `.vtu` / `.vtp` files readable by ParaView
-
-### Clone the Repository
+### Clone
 
 ```bash
 git clone https://github.com/stvsun/PINN_coordinate_chart_3Dgeometry.git
@@ -311,384 +792,256 @@ cd PINN_coordinate_chart_3Dgeometry
 
 ---
 
-## Geometry Preparation
+## Geometry Preparation Pipeline
 
-The full pipeline to run the Schwarz Poisson solver on a new geometry has three stages.
-
-### Stage 0: Obtain a Point Cloud
-
-For the **Stanford rabbit**, download the PLY file and convert it to a NumPy point cloud:
+### Stage 0: Point Cloud
 
 ```bash
-# Download
-wget https://graphics.stanford.edu/pub/3Dscanrep/bunny.tar.gz
-tar -xf bunny.tar.gz
-
-# Convert PLY → NPZ (or use Open3D / trimesh in Python)
+# Stanford rabbit: download PLY, convert to NPZ
 python - <<'EOF'
 import open3d as o3d, numpy as np
 mesh = o3d.io.read_triangle_mesh("bunny/reconstruction/bun_zipper.ply")
-pcd  = mesh.sample_points_uniformly(number_of_points=30000)
-pts  = np.asarray(pcd.points)
-nrm  = np.asarray(pcd.normals)
-np.savez("rabbit_pointcloud.npz", points=pts, normals=nrm)
+pcd  = mesh.sample_points_uniformly(30000)
+np.savez("rabbit_pointcloud.npz",
+         points=np.asarray(pcd.points),
+         normals=np.asarray(pcd.normals))
 EOF
 ```
 
-For analytic domains (torus, ellipsoid, star), point clouds are generated inside the respective training scripts.
+Analytic domains (torus, ellipsoid, star) generate their own point clouds internally.
 
-### Stage 1: Training a Neural SDF
-
-The neural SDF provides an implicit volumetric representation of the geometry. It is used for:
-- SDF-guided interior sampling (M2)
-- Hard BC weighting (M7)
-- Boundary distance information during atlas construction
+### Stage 1: Train Neural SDF
 
 ```bash
 python src/train_sdf_rabbit.py \
-    --point-cloud  rabbit_pointcloud.npz \
-    --output-dir   runs/sdf_rabbit \
-    --epochs       5000 \
-    --width        128 \
-    --depth        6 \
-    --lr           8e-4 \
-    --device       auto \
-    --seed         42
+    --point-cloud rabbit_pointcloud.npz \
+    --output-dir  runs/sdf_rabbit \
+    --epochs      5000  --width 128  --depth 6 \
+    --lr 8e-4     --device auto  --seed 42
 ```
 
-**Key outputs:**
-- `runs/sdf_rabbit/sdf_rabbit_final.pt` — SDF network checkpoint
-  Format: `{"model": state_dict, "center": [cx,cy,cz], "scale": s, "width": 128, "depth": 6}`
+Output: `runs/sdf_rabbit/rabbit_sdf.pt`
 
-**Loss terms during SDF training:**
-- Surface constraint: `|SDF(x_surf)| = 0`
-- Eikonal: `|∇SDF(x)| = 1`
-- Normal alignment: `∇SDF(x_surf) ≈ n_surf`
-- Sign anchor: `SDF(x_far) > 0` for exterior points
-
-### Stage 2: Building the Atlas
-
-The atlas construction selects Poisson-disk sampled seeds, computes TNB frames, and stores membership assignments:
+### Stage 2: Build Atlas
 
 ```bash
-python experiments/build_rabbit_atlas_poissondisk.py \
-    --point-cloud    rabbit_pointcloud.npz \
-    --output-dir     runs/rabbit_atlas_data \
+python experiments/build_rabbit_atlas_volumetric.py \
+    --sdf-checkpoint runs/sdf_rabbit/rabbit_sdf.pt \
+    --output-dir     runs/atlas_vol \
     --n-charts       12 \
     --overlap-target 0.20 \
-    --frame-k        96 \
-    --normal-k       32 \
     --seed           42
 ```
 
-**Key outputs:**
-- `runs/rabbit_atlas_data/rabbit_atlas_data.npz`
-  Arrays: `seed_points`, `support_radii`, `t1`, `t2`, `normals`, `membership`
-- `runs/rabbit_atlas_data/meta.json` — color groups for graph-colored Schwarz updates
+Output: `runs/atlas_vol/rabbit_atlas_data.npz`, `meta.json`
 
-### Stage 3: Training the Atlas Decoder Networks
-
-Each chart's decoder (MLP: ξ → x_phys) and MaskNet (MLP: ξ → w_i) are trained jointly:
+### Stage 3: Train Atlas Decoder
 
 ```bash
 python experiments/train_rabbit_atlas.py \
-    --atlas-data     runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-meta     runs/rabbit_atlas_data/meta.json \
-    --output-dir     runs/rabbit_atlas_trained \
-    --epochs         3000 \
-    --width          64 \
-    --depth          4 \
-    --mask-width     48 \
-    --mask-depth     3 \
-    --lr             8e-4 \
-    --device         auto \
-    --seed           42
+    --atlas-data  runs/atlas_vol/rabbit_atlas_data.npz \
+    --sdf-checkpoint runs/sdf_rabbit/rabbit_sdf.pt \
+    --output-dir  runs/atlas_vol_trained \
+    --epochs      3000  --width 64  --depth 4 \
+    --lr 8e-4     --device auto  --seed 42
 ```
 
-**Training losses:**
-- `w_recon = 1.0`: reconstruction error ‖φ_i(ξ_surf) − x_surf‖²
-- `w_mask = 0.5`: mask normalization ∑_i w_i(x) ≈ 1
-- `w_overlap = 0.8`: overlap coverage loss
-- `w_jac = 2.0`: Jacobian barrier (det J > δ to prevent folding)
-- `w_coverage = 0.7`: ensure sufficient interior coverage
-
-**Atlas quality gates** (checked before running PDE solvers):
-- Coverage fraction > 99%
-- Overlap consistency < 2.5%
-- Foldover ratio = 0%
-- Boundary RMSE < 3%
-
-**Key outputs:**
-- `runs/rabbit_atlas_trained/atlas_checkpoint.pt` — decoder + mask state dicts
+Output: `runs/atlas_vol_trained/rabbit_atlas_trained.pt`
 
 ---
 
 ## Running the Solvers
 
-### Forward Poisson (Schwarz)
-
-The main Schwarz Poisson solver is `experiments/run_poisson_rabbit_atlas_schwarz.py`.
-
-**Minimal run using YAML config:**
+### Forward Poisson — Dense MLP + PCGrad (W1–W5 recommended)
 
 ```bash
 python experiments/run_poisson_rabbit_atlas_schwarz.py \
-    --config          configs/rabbit_atlas_poisson.yaml \
-    --atlas-data      runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-meta      runs/rabbit_atlas_data/meta.json \
-    --atlas-checkpoint runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir      runs/poisson_schwarz_rabbit \
-    --device          auto \
-    --seed            42
-```
-
-**With all M1–M8 features enabled:**
-
-```bash
-python experiments/run_poisson_rabbit_atlas_schwarz.py \
-    --config               configs/rabbit_atlas_poisson.yaml \
-    --atlas-data           runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-meta           runs/rabbit_atlas_data/meta.json \
-    --atlas-checkpoint     runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir           runs/poisson_m1_m8 \
-    --device               auto \
-    --seed                 42 \
+    --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
+    --atlas-trained       runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --sdf-checkpoint      runs/sdf_rabbit/rabbit_sdf.pt \
+    --output-dir          runs/my_poisson_run \
+    --device auto --seed 42 \
     \
-    --direct-coord-pde              \  # M1: bypass decoder Jacobian
-    --sdf-checkpoint       runs/sdf_rabbit/sdf_rabbit_final.pt \
-    --use-sdf-sampling              \  # M2: interior collocation via SDF rejection
-    --sdf-interior-threshold  0.0   \
-    --sdf-rejection-factor    6     \
-    --hard-bc                       \  # M7: SDF-based hard BC weighting
-    --hard-bc-scale           0.05  \
-    --rar-period              10    \  # M8: RAR adaptive sampling every 10 Schwarz iters
-    --rar-candidates          512   \
-    --rar-top-k               64    \
-    --rar-pool-max            256   \
-    --rar-mix-n               32
+    --pinn-arch mlp \
+    --pinn-width 64 --pinn-depth 4 \
+    --lr 2e-4 \
+    --direct-coord-pde \
+    --interior-pretrain-epochs 1000 \
+    --interior-pretrain-bc-weight 0.5 \
+    --interior-pretrain-grad-weight 0.5 \
+    --bc-pretrain-epochs 300 \
+    --bc-pretrain-grad-weight 0.05 \
+    --bc-pretrain-interface-weight 0.2 \
+    --pde-warmup-iters 50 --plateau-patience 15 \
+    --w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+    --w-interface-value 2.0 --w-interface-flux 2.0 \
+    --w-overlap-h1 0.5 --overlap-h1-batch 64 \
+    --checkpoint-policy best_rel_l2 \
+    --use-pcgrad
 ```
 
-**Key argparse flags for the Poisson solver:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--config` | — | Path to YAML config (values overridden by CLI flags) |
-| `--atlas-data` | — | `.npz` from `build_rabbit_atlas_poissondisk.py` |
-| `--atlas-meta` | — | `meta.json` from atlas build |
-| `--atlas-checkpoint` | — | `.pt` from `train_rabbit_atlas.py` |
-| `--output-dir` | — | Directory for checkpoints and metrics |
-| `--device` | `auto` | `auto` / `cuda` / `mps` / `cpu` |
-| `--dtype` | `auto` | `auto` / `float32` / `float64` |
-| `--amp` | off | Mixed-precision (CUDA autocast + GradScaler) |
-| `--seed` | 42 | Global random seed |
-| `--pinn-width` | 64 | Hidden width of each chart PINN |
-| `--pinn-depth` | 4 | Number of hidden layers |
-| `--lr` | `8e-4` | Adam learning rate |
-| `--max-schwarz-iters` | 60 | Total Schwarz outer iterations |
-| `--local-steps` | 15 | Adam steps per chart per Schwarz iteration |
-| `--pde-batch` | 192 | PDE collocation points per chart per step |
-| `--bc-batch` | 192 | Boundary condition points per chart per step |
-| `--if-batch` | 128 | Interface points per chart-pair per step |
-| `--w-pde` | 5.0 | PDE loss weight |
-| `--w-bc` | 1.0 | BC loss weight |
-| `--w-interface-value` | 2.0 | Interface value continuity weight |
-| `--w-interface-flux` | 2.0 | Interface flux continuity weight |
-| `--pde-warmup-iters` | 50 | Ramp PDE weight over this many Schwarz iters |
-| `--direct-coord-pde` | off | M1: bypass decoder Jacobian |
-| `--sdf-checkpoint` | None | M2/M7: SDF network path |
-| `--use-sdf-sampling` | off | M2: SDF rejection interior sampling |
-| `--hard-bc` | off | M7: SDF-based BC weighting |
-| `--hard-bc-scale` | 0.05 | M7: tanh length scale |
-| `--rar-period` | 0 | M8: RAR update period (0 = disabled) |
-| `--log-every` | 1 | Log metrics every N Schwarz iters |
-
-### Inverse Neo-Hookean Elasticity
+### Forward Poisson — CompactChartNet (monotone convergence)
 
 ```bash
-# Torus geometry — atlas variant (most stable)
-python src/run_torus_inverse_neohookean_atlas.py \
-    --output-dir  runs/torus_inv_mu_K \
-    --device      auto \
-    --dtype       float32 \
-    --seed        42 \
-    --epochs      250
-
-# Schwarz dual-physics variant (displacement + traction)
-python src/run_torus_inverse_neohookean_schwarz_dual.py \
-    --output-dir  runs/torus_schwarz_dual \
-    --device      auto \
-    --seed        42
-
-# Rabbit geometry
-python experiments/run_rabbit_inverse_neohookean_atlas_schwarz_normal_disp.py \
-    --config      configs/rabbit_inverse_neohookean_normal_disp.yaml \
-    --atlas-data  runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-checkpoint runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir  runs/rabbit_inv_neohookean
+python experiments/run_poisson_rabbit_atlas_schwarz.py \
+    --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
+    --atlas-trained       runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --sdf-checkpoint      runs/sdf_rabbit/rabbit_sdf.pt \
+    --output-dir          runs/my_compact_run \
+    --device auto --seed 42 \
+    \
+    --pinn-arch compact \
+    --compact-n-subseed 9 \
+    --compact-sub-width 32 --compact-sub-depth 2 \
+    --compact-tau-scale 0.5 \
+    --lr 2e-4 \
+    --max-schwarz-iters 60 \
+    --exclusive-finetune-steps 200 \
+    --exclusive-finetune-lr 5e-5 \
+    --direct-coord-pde \
+    --interior-pretrain-epochs 1000 \
+    --interior-pretrain-bc-weight 0.5 \
+    --interior-pretrain-grad-weight 0.5 \
+    --bc-pretrain-epochs 300 \
+    --pde-warmup-iters 50 --plateau-patience 15 \
+    --w-manufactured-supervision 0.5 --plateau-use-rel-l2 \
+    --w-interface-value 2.0 --w-interface-flux 2.0 \
+    --w-overlap-h1 0.5 --overlap-h1-batch 64 \
+    --checkpoint-policy best_rel_l2 \
+    --use-pcgrad
 ```
 
-### Inverse Elder Flow
+### Inverse Neo-Hookean Elasticity (Torus)
+
+```bash
+# Original atlas (fastest, most accurate)
+python src/run_torus_inverse_neohookean_atlas.py \
+    --output-dir  runs/torus_inv \
+    --device auto --dtype float32 --seed 42 --epochs 300
+
+# Schwarz dual — displacement observations
+python src/run_torus_inverse_neohookean_schwarz_dual.py \
+    --inverse-mode displacement \
+    --output-dir   runs/torus_schwarz_disp \
+    --device auto  --seed 42
+
+# Schwarz dual — traction observations
+python src/run_torus_inverse_neohookean_schwarz_dual.py \
+    --inverse-mode traction \
+    --output-dir   runs/torus_schwarz_trac \
+    --device auto  --seed 42
+```
+
+### Inverse Elder-Like Flow (Rabbit)
 
 ```bash
 python src/run_rabbit_inverse_elder_atlas_schwarz.py \
-    --config      configs/rabbit_inverse_elder_atlas.yaml \
-    --atlas-data  runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-meta  runs/rabbit_atlas_data/meta.json \
-    --atlas-checkpoint runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir  runs/rabbit_inv_elder \
-    --device      auto \
-    --seed        42
+    --atlas-data     runs/atlas_vol/rabbit_atlas_data.npz \
+    --atlas-trained  runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --output-dir     runs/rabbit_elder \
+    --device cpu --dtype float64 --seed 42
 ```
 
-### 3D Ellipsoid / Star Domain (Simpler Baselines)
+### Simpler Baselines (No Schwarz)
 
 ```bash
-# Ellipsoid (sphere mapping — no atlas needed)
-python src/pinn_3d_ellipsoid_mapped_sphere.py \
-    --output-dir runs/ellipsoid_poisson \
-    --device     auto
-
-# 3D star domain
-python src/run_poisson_star3d_mapped.py \
-    --output-dir runs/star_poisson \
-    --device     auto
+python src/pinn_3d_ellipsoid_mapped_sphere.py  --output-dir runs/ellipsoid --device auto
+python src/run_poisson_star3d_mapped.py        --output-dir runs/star      --device auto
 ```
 
 ---
 
 ## Configuration Reference
 
-All major hyperparameters can be set in YAML and overridden on the command line.
+Key flags for `run_poisson_rabbit_atlas_schwarz.py`:
 
-**`configs/rabbit_atlas_poisson.yaml`** (annotated excerpt):
-
-```yaml
-run:
-  seed: 42
-  n_charts: 12            # Number of atlas charts
-  overlap_target: 0.20    # Target fraction of points in ≥ 2 charts
-
-atlas_train:
-  epochs: 3000
-  lr: 8.0e-4
-  width: 64               # Decoder MLP hidden width
-  depth: 4                # Decoder MLP depth
-  mask_width: 48          # MaskNet hidden width
-  mask_depth: 3
-  w_recon: 1.0            # Reconstruction loss weight
-  w_jac: 2.0              # Jacobian determinant barrier
-
-poisson_schwarz:
-  pinn_width: 64          # Chart PINN hidden width
-  pinn_depth: 4
-  lr: 8.0e-4
-  max_schwarz_iters: 60   # Total Schwarz outer iterations
-  local_steps: 15         # Adam steps per chart per iteration
-  omega: 0.8              # Schwarz relaxation parameter
-
-  pde_batch: 192          # PDE collocation batch size
-  bc_batch: 192           # Boundary condition batch size
-  if_batch: 128           # Interface batch size
-
-  pde_warmup_iters: 50    # Ramp PDE weight over N iters
-  w_pde: 5.0              # PDE residual weight (dominant)
-  w_bc: 1.0               # Dirichlet BC weight
-  w_interface_value: 2.0  # Schwarz value continuity weight
-  w_interface_flux: 2.0   # Schwarz flux continuity weight
-
-  sigma_floor: 1.0e-3     # Minimum singular value for Jacobian masking
-  det_floor: 1.0e-6       # Minimum |det J| for valid chart points
-  jac_kappa_max: 1.0e3    # Maximum condition number κ = σ_max/σ_min
-
-  # M1: direct-coordinate PDE (bypass learned decoder Jacobian)
-  direct_coord_pde: false
-
-  # M2: SDF-guided interior sampling
-  sdf_checkpoint: null
-  use_sdf_sampling: false
-  sdf_interior_threshold: 0.0    # Accept points with SDF < this value
-  sdf_rejection_factor: 6        # Oversampling factor for rejection
-
-  # M7: SDF-based hard BC weighting
-  hard_bc: false
-  hard_bc_scale: 0.05            # tanh length scale
-
-  # M8: Residual-based Adaptive Refinement (RAR)
-  rar_period: 0                  # Update RAR pool every N Schwarz iters (0=off)
-  rar_candidates: 512            # Candidate points to score per RAR update
-  rar_top_k: 64                  # Top-k residual points added to pool
-  rar_pool_max: 256              # Maximum pool size per chart
-  rar_mix_n: 32                  # RAR pool points mixed per training batch
-```
-
----
-
-## Recent Improvements (M1–M8)
-
-The following improvements were applied to `experiments/run_poisson_rabbit_atlas_schwarz.py` and `configs/rabbit_atlas_poisson.yaml` in the current version. Each is individually opt-in (except M3 and M4 which are always active):
-
-| ID | Name | Status | Effect |
-|----|------|--------|--------|
-| **M3** | Stable Jacobian inversion | Always-on | Replace SVD backward with `torch.linalg.inv` (LU). Eliminates gradient NaN/inf when singular values cluster. |
-| **M4** | Rebalanced loss weights | Always-on | `w_pde 1→5`, `w_bc 2→1`, `w_iv 0.8→2`, `w_if 0.2→2`, `warmup 10→50`. PDE now correctly dominates. |
-| **M1** | Direct-coordinate PDE | `--direct-coord-pde` | Compute Δu directly via rigid TNB frame. Since the TNB frame is orthogonal, Δ_x u = Δ_ξ u exactly — no learned Jacobian, no SVD. |
-| **M2** | SDF interior sampling | `--use-sdf-sampling` | Sample collocation points in the volumetric interior using SDF rejection, fixing the fundamental bug where surface-noise sampling only covers a thin surface shell. |
-| **M7** | Hard BC via SDF weight | `--hard-bc` | Weight BC loss by `tanh(−SDF(x)/scale)`: smooth zero at boundary, one in interior. Prevents near-boundary BC points from dominating the gradient. |
-| **M8** | Residual-based Adaptive Refinement (RAR) | `--rar-period N` | Every N Schwarz iters, evaluate residual on candidate points and add top-k highest-residual points to a persistent pool that is mixed into training batches. Focuses training on high-error regions. |
-
-**M5** (PCGrad gradient surgery for multi-objective Schwarz) and **M6** (volumetric atlas rebuild) are planned for a future release.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pinn-arch` | `mlp` | `mlp` / `resnet` / `compact` |
+| `--pinn-width` | 64 | Hidden width (dense MLP) |
+| `--pinn-depth` | 4 | Hidden layers (dense MLP) |
+| `--compact-n-subseed` | 9 | Sub-seeds in CompactChartNet |
+| `--compact-sub-width` | 32 | Sub-net hidden width |
+| `--compact-tau-scale` | 0.125 | POU bandwidth (use ≥ 0.5 in practice) |
+| `--lr` | `8e-4` | Adam learning rate |
+| `--max-schwarz-iters` | 60 | Schwarz outer iterations |
+| `--local-steps` | 15 | Adam steps per chart per Schwarz iter |
+| `--pde-warmup-iters` | 50 | Ramp w_pde over this many iters |
+| `--plateau-patience` | 15 | Stop after this many stale Schwarz iters |
+| `--plateau-use-rel-l2` | off | W3: track rel_l2_eval for plateau |
+| `--direct-coord-pde` | off | W1: bypass decoder Jacobian |
+| `--w-manufactured-supervision` | 0.0 | W2: supervision anchor weight |
+| `--w-interface-value` | 2.0 | Interface value coupling weight |
+| `--w-interface-flux` | 2.0 | Interface flux coupling weight |
+| `--w-overlap-h1` | 0.0 | W5: H1 volumetric overlap weight |
+| `--use-pcgrad` | off | W4: PCGrad K=2 gradient surgery |
+| `--checkpoint-policy` | `best_rel_l2` | `best_rel_l2` / `last` |
+| `--exclusive-finetune-steps` | 0 | Post-Schwarz exclusive-zone fine-tuning |
+| `--exclusive-finetune-lr` | `5e-5` | Learning rate for exclusive-zone finetune |
 
 ---
 
 ## Post-Processing and Visualization
 
-**Export to ParaView:**
-
 ```bash
-# Poisson solution field
+# Export solution to ParaView (.vtu / .vtp)
 python experiments/export_rabbit_atlas_paraview.py \
-    --schwarz-checkpoint  runs/poisson_schwarz_rabbit/schwarz_checkpoint.pt \
-    --atlas-data          runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-checkpoint    runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir          runs/poisson_schwarz_rabbit/paraview
+    --schwarz-checkpoint  runs/my_poisson_run/checkpoint.pt \
+    --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
+    --atlas-trained       runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --output-dir          runs/my_poisson_run/paraview
 
-# Error field (requires reference manufactured solution)
-python experiments/export_rabbit_error_paraview.py \
-    --schwarz-checkpoint  runs/poisson_schwarz_rabbit/schwarz_checkpoint.pt \
-    --atlas-data          runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-checkpoint    runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir          runs/poisson_schwarz_rabbit/paraview_error
-
-# Dense post-processed field
+# Dense post-processed field (50K query points)
 python experiments/postprocess_rabbit_poisson_dense_fields.py \
-    --schwarz-checkpoint  runs/poisson_schwarz_rabbit/schwarz_checkpoint.pt \
-    --atlas-data          runs/rabbit_atlas_data/rabbit_atlas_data.npz \
-    --atlas-checkpoint    runs/rabbit_atlas_trained/atlas_checkpoint.pt \
-    --output-dir          runs/poisson_schwarz_rabbit/dense_field \
-    --n-query             50000
+    --schwarz-checkpoint  runs/my_poisson_run/checkpoint.pt \
+    --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
+    --n-query             50000 \
+    --output-dir          runs/my_poisson_run/dense_field
+
+# Elder inverse — export to ParaView
+python src/export_rabbit_elder_inverse_paraview.py \
+    --checkpoint  runs/rabbit_elder/best_target.pt \
+    --atlas-data  runs/atlas_vol/rabbit_atlas_data.npz \
+    --output-dir  runs/rabbit_elder/paraview
 ```
 
-**Output files written per solver run:**
-- `schwarz_checkpoint.pt` — per-chart PINN weights and optimizer state
-- `metrics.json` — per-iteration: `global_residual`, `bc_loss`, `interface_value`, `interface_flux`, `rel_l2_eval`, `lr`
-- `training_curve.png` — matplotlib convergence plot
-- `*.vtu` / `*.vtp` — ParaView field exports (if export scripts are run)
+**Output files per solver run:**
+
+| File | Contents |
+|------|----------|
+| `*_checkpoint.pt` | Per-chart PINN weights + optimizer state |
+| `*_best_rel_l2.pt` | Weights at best global rel_l2 checkpoint |
+| `*_metrics.json` | Per-iteration: rel_l2, PDE residual, BC loss, interface residuals, runtime |
+| `*_history.json` | Full time-series of all logged quantities |
+| `*_curves.png` | Matplotlib convergence plot |
+| `*.vtu` / `*.vtp` | ParaView export (requires running export script) |
 
 ---
 
-## Known Limitations and Open Problems
+## Known Limitations
 
-1. **Volumetric sampling gap (M2).** The default `sample_local_xi` places points by adding Gaussian noise to surface point coordinates, which covers only a thin shell near ∂Ω. The M2 SDF-rejection sampler (`--use-sdf-sampling`) fixes this but requires a pre-trained SDF network.
+1. **CompactChartNet runtime**: 9× slower than dense MLP due to M=9 sub-nets in the
+   double-autograd computation graph for the Laplacian. Reduce `--compact-n-subseed` to
+   4–5 for a 2× speedup at some loss of expressiveness.
 
-2. **Seam artifacts in gradient fields.** The partition-of-unity blending is C⁰ but not C¹; gradient-based observables (velocity = −K∇p, stress) show visible seams at chart boundaries. Addressed in M1 (TNB diagnostic) but not yet fully resolved.
+2. **CompactChartNet exclusive-zone fine-tuning**: With `tau_scale=0.5`, the safety margin
+   is too large and all sub-nets are frozen. Requires `safety_factor ≤ 1.5` or a
+   point-coverage-based masking approach to have any effect.
 
-3. **MPS float32 only.** Apple MPS does not support float64 reliably. The MPS code path uses a hand-written adjugate-based Jacobian inverse to avoid unstable MPS `linalg.inv` kernels, but some edge cases may still produce NaN on very ill-conditioned charts.
+3. **Schwarz oscillation (dense MLP)**: After reaching the best iterate (~iter 8 for W4+W5),
+   the dense MLP Schwarz oscillates at 3–6%. Hard-capping with `--max-schwarz-iters 10`
+   or tighter `--plateau-patience 5` helps preserve the optimum.
 
-4. **TI Arruda-Boyce identifiability.** The transversely-isotropic material inverse problem has near-degenerate parameter directions; small changes in the fibre-direction parameter q produce nearly identical observations, causing parameter drift and high variance.
+4. **MPS float32 only**: Apple MPS does not reliably support float64. Inverse problems
+   are run on CPU with float64 for accuracy. Forward Poisson runs on MPS with float32.
 
-5. **M6 (volumetric atlas rebuild).** The current atlas seeds are placed on the surface ∂Ω with normals pointing inward. A fully volumetric atlas would place additional seed points in the interior, with local coordinate frames decoupled from the surface TNB frame. This requires rewriting `build_rabbit_atlas_poissondisk.py` and `train_rabbit_atlas.py`.
+5. **TI Arruda-Boyce identifiability**: The transversely-isotropic material inverse
+   problem has near-degenerate parameter directions; single traction load families may
+   be insufficient for four-parameter identification.
 
-6. **M5 (PCGrad for Schwarz).** Project Conflicting Gradients resolves multi-objective conflicts but adds roughly 4× backward computation cost per Schwarz step. Validate M1–M4 accuracy improvements first before enabling.
+6. **Seam artifacts in gradient fields**: The partition-of-unity blending is C⁰ but not
+   C¹; gradient-based observables (Darcy velocity = −K∇p) show visible seams at chart
+   boundaries. Use `weighted_detached` blending policy for visualization.
 
 ---
 

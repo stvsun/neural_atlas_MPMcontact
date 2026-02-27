@@ -93,6 +93,7 @@ poisson_schwarz:
   interface_flux_tol: 1.5e-2
   plateau_patience: 15
   plateau_tol: 5.0e-5
+  plateau_use_rel_l2: true
   target_rel_l2: 1.5e-1
   guard_rel_l2: 0.0
   guard_patience: 0
