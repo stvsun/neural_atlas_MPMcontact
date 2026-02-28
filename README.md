@@ -833,7 +833,7 @@ python experiments/build_rabbit_atlas_volumetric.py \
     --seed           42
 ```
 
-Output: `runs/atlas_vol/rabbit_atlas_data.npz`, `meta.json`
+Output: `runs/atlas_vol/rabbit_atlas_data.npz`, `runs/atlas_vol/rabbit_atlas_meta.json`
 
 ### Stage 3: Train Atlas Decoder
 
@@ -841,12 +841,13 @@ Output: `runs/atlas_vol/rabbit_atlas_data.npz`, `meta.json`
 python experiments/train_rabbit_atlas.py \
     --atlas-data  runs/atlas_vol/rabbit_atlas_data.npz \
     --sdf-checkpoint runs/sdf_rabbit/rabbit_sdf.pt \
+    --volumetric \
     --output-dir  runs/atlas_vol_trained \
     --epochs      3000  --width 64  --depth 4 \
     --lr 8e-4     --device auto  --seed 42
 ```
 
-Output: `runs/atlas_vol_trained/rabbit_atlas_trained.pt`
+Output: `runs/atlas_vol_trained/rabbit_atlas_trained.pt`, `runs/atlas_vol_trained/rabbit_atlas_gate_report.json`
 
 ---
 
@@ -857,8 +858,10 @@ Output: `runs/atlas_vol_trained/rabbit_atlas_trained.pt`
 ```bash
 python experiments/run_poisson_rabbit_atlas_schwarz.py \
     --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
-    --atlas-trained       runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --atlas-checkpoint    runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --atlas-meta          runs/atlas_vol/rabbit_atlas_meta.json \
     --sdf-checkpoint      runs/sdf_rabbit/rabbit_sdf.pt \
+    --volumetric-atlas \
     --output-dir          runs/my_poisson_run \
     --device auto --seed 42 \
     \
@@ -885,8 +888,10 @@ python experiments/run_poisson_rabbit_atlas_schwarz.py \
 ```bash
 python experiments/run_poisson_rabbit_atlas_schwarz.py \
     --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
-    --atlas-trained       runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --atlas-checkpoint    runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --atlas-meta          runs/atlas_vol/rabbit_atlas_meta.json \
     --sdf-checkpoint      runs/sdf_rabbit/rabbit_sdf.pt \
+    --volumetric-atlas \
     --output-dir          runs/my_compact_run \
     --device auto --seed 42 \
     \
@@ -937,7 +942,7 @@ python src/run_torus_inverse_neohookean_schwarz_dual.py \
 ```bash
 python src/run_rabbit_inverse_elder_atlas_schwarz.py \
     --atlas-data     runs/atlas_vol/rabbit_atlas_data.npz \
-    --atlas-trained  runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --atlas-checkpoint  runs/atlas_vol_trained/rabbit_atlas_trained.pt \
     --output-dir     runs/rabbit_elder \
     --device cpu --dtype float64 --seed 42
 ```
@@ -953,10 +958,13 @@ python src/run_poisson_star3d_mapped.py        --output-dir runs/star      --dev
 
 ## Configuration Reference
 
-Key flags for `run_poisson_rabbit_atlas_schwarz.py`:
+Key flags for `run_poisson_rabbit_atlas_schwarz.py` (parser defaults):
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--atlas-data` | required | Path to `rabbit_atlas_data.npz` |
+| `--atlas-checkpoint` | required | Path to `rabbit_atlas_trained.pt` |
+| `--atlas-meta` | none | Optional atlas metadata (`rabbit_atlas_meta.json`) |
 | `--pinn-arch` | `mlp` | `mlp` / `resnet` / `compact` |
 | `--pinn-width` | 64 | Hidden width (dense MLP) |
 | `--pinn-depth` | 4 | Hidden layers (dense MLP) |
@@ -966,18 +974,20 @@ Key flags for `run_poisson_rabbit_atlas_schwarz.py`:
 | `--lr` | `8e-4` | Adam learning rate |
 | `--max-schwarz-iters` | 60 | Schwarz outer iterations |
 | `--local-steps` | 15 | Adam steps per chart per Schwarz iter |
-| `--pde-warmup-iters` | 50 | Ramp w_pde over this many iters |
+| `--pde-warmup-iters` | 10 | Ramp `w_pde` over this many iters |
 | `--plateau-patience` | 15 | Stop after this many stale Schwarz iters |
 | `--plateau-use-rel-l2` | off | W3: track rel_l2_eval for plateau |
 | `--direct-coord-pde` | off | W1: bypass decoder Jacobian |
 | `--w-manufactured-supervision` | 0.0 | W2: supervision anchor weight |
-| `--w-interface-value` | 2.0 | Interface value coupling weight |
-| `--w-interface-flux` | 2.0 | Interface flux coupling weight |
+| `--w-interface-value` | 0.8 | Interface value coupling weight |
+| `--w-interface-flux` | 0.2 | Interface flux coupling weight |
 | `--w-overlap-h1` | 0.0 | W5: H1 volumetric overlap weight |
 | `--use-pcgrad` | off | W4: PCGrad K=2 gradient surgery |
-| `--checkpoint-policy` | `best_rel_l2` | `best_rel_l2` / `last` |
+| `--volumetric-atlas` | off | Enables volumetric overlap sampling and SDF interior sampling |
+| `--use-sdf-sampling` | off | SDF-based interior collocation sampling |
+| `--checkpoint-policy` | `last` | `last` / `best_rel_l2` / `best_target` / `best_flux` / `best_score` / `best_pareto` |
 | `--exclusive-finetune-steps` | 0 | Post-Schwarz exclusive-zone fine-tuning |
-| `--exclusive-finetune-lr` | `5e-5` | Learning rate for exclusive-zone finetune |
+| `--exclusive-finetune-lr` | `2e-4` | Learning rate for exclusive-zone finetune |
 
 ---
 
@@ -986,16 +996,14 @@ Key flags for `run_poisson_rabbit_atlas_schwarz.py`:
 ```bash
 # Export solution to ParaView (.vtu / .vtp)
 python experiments/export_rabbit_atlas_paraview.py \
-    --schwarz-checkpoint  runs/my_poisson_run/checkpoint.pt \
-    --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
-    --atlas-trained       runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --solution-npz        runs/my_poisson_run/rabbit_poisson_schwarz_solution.npz \
     --output-dir          runs/my_poisson_run/paraview
 
-# Dense post-processed field (50K query points)
+# Dense post-processed pressure/velocity fields
 python experiments/postprocess_rabbit_poisson_dense_fields.py \
-    --schwarz-checkpoint  runs/my_poisson_run/checkpoint.pt \
     --atlas-data          runs/atlas_vol/rabbit_atlas_data.npz \
-    --n-query             50000 \
+    --atlas-checkpoint    runs/atlas_vol_trained/rabbit_atlas_trained.pt \
+    --solver-checkpoint   runs/my_poisson_run/rabbit_poisson_schwarz_best_rel_l2.pt \
     --output-dir          runs/my_poisson_run/dense_field
 
 # Elder inverse — export to ParaView
@@ -1011,6 +1019,8 @@ python src/export_rabbit_elder_inverse_paraview.py \
 |------|----------|
 | `*_checkpoint.pt` | Per-chart PINN weights + optimizer state |
 | `*_best_rel_l2.pt` | Weights at best global rel_l2 checkpoint |
+| `*_best_target.pt` / `*_best_flux.pt` / `*_best_score.pt` | Alternative checkpoint-policy snapshots |
+| `*_solution.npz` | Merged field arrays used by exporters (`points`, `u_pred`, `u_true`, `u_error`, `chart_weights`, etc.) |
 | `*_metrics.json` | Per-iteration: rel_l2, PDE residual, BC loss, interface residuals, runtime |
 | `*_history.json` | Full time-series of all logged quantities |
 | `*_curves.png` | Matplotlib convergence plot |
