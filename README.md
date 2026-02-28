@@ -559,6 +559,19 @@ Schwarz:    60 iterations (monotone descent), best at iter 56
 | Schwarz iters | 60 (hit max_schwarz_iters, plateau never fired) |
 | Convergence | Monotone — no oscillation |
 
+**Per-chart "U-net" (`u_nets`) used by the solver**:
+
+In the Poisson rabbit code, `u_nets` denotes the list of local chart solution networks
+(one per chart). This is the field model optimized inside Schwarz iterations.
+
+- Implementation location: `experiments/run_poisson_rabbit_atlas_schwarz.py`
+- Runtime selection: `--pinn-arch {mlp,resnet,compact}`
+- Stored in checkpoints as chart `u_states` and recoverable by warm-start flags
+  (`--init-u-checkpoint`, optional `--u-remap-json`)
+
+Note: in this script, `u_nets` is a per-chart PINN collection (MLP/ResNet/CompactChartNet),
+not a convolutional image U-Net encoder-decoder.
+
 **Benchmark progression**:
 
 | Run | Architecture / Features | rel_l2 | max_error | Runtime |

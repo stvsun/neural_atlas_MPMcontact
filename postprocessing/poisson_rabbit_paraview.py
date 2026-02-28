@@ -190,7 +190,7 @@ def parse_args() -> argparse.Namespace:
         "--surface-smooth-sigma", type=float, default=1.2,
         help="Gaussian smoothing sigma (voxels) applied before marching cubes "
              "for --surface.  Reduces staircase artefacts and triangle count. "
-             "Default 1.5; set to 0 to disable.",
+             "Default 1.2; set to 0 to disable.",
     )
     return p.parse_args()
 
