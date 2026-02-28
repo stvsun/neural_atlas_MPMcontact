@@ -297,6 +297,102 @@ def pyvista_two_scalars(pts: np.ndarray,
     print(f"  Saved PyVista two-scalar: {output_path}")
 
 
+def pyvista_rabbit_surface(pts: np.ndarray, scalars: np.ndarray,
+                            scalar_name: str, cmap: str, scalar_label: str,
+                            title: str, output_path: str,
+                            y_up: bool = True,
+                            alpha: Optional[float] = None) -> None:
+    """Reconstruct the rabbit surface from interior points using Delaunay 3D
+    alpha-shapes, then render the resulting surface mesh coloured by the
+    scalar field.
+
+    The Delaunay 3-D alpha-shape keeps only those tetrahedra whose circumsphere
+    radius ≤ ``alpha``.  Extracting the outer boundary of the tetrahedral mesh
+    gives a tight triangulated surface that follows all concavities of the
+    rabbit (neck, inter-ear gap, paws).  Scalar values are mapped from the
+    original cloud to the surface vertices by nearest-neighbour look-up.
+
+    Parameters
+    ----------
+    alpha : float or None
+        Alpha-shape parameter (VTK units).  ``None`` (default) estimates it
+        automatically from point density: alpha ≈ 4 × average point spacing.
+    y_up : bool
+        Use Y as the vertical axis (Stanford bunny convention).
+    """
+    import pyvista as pv
+    from scipy.spatial import cKDTree
+
+    pv.global_theme.background = "white"
+    pv.global_theme.font.color = "black"
+
+    # ---- Estimate alpha from point density if not given --------------------
+    if alpha is None:
+        extent      = pts.max(axis=0) - pts.min(axis=0)
+        volume_est  = np.prod(extent) * 0.45          # ~45 % fill for rabbit
+        avg_spacing = (volume_est / max(len(pts), 1)) ** (1.0 / 3.0)
+        alpha = 4.0 * avg_spacing
+        print(f"  Alpha-shape: auto alpha = {alpha:.4f}  "
+              f"({len(pts)} pts, avg spacing ≈ {avg_spacing:.4f})")
+
+    cloud = pv.PolyData(pts.astype(np.float32))
+    cloud[scalar_name] = scalars.astype(np.float32)
+
+    # ---- Surface reconstruction --------------------------------------------
+    print(f"  Building Delaunay 3-D alpha-shape (alpha={alpha:.4f}) …")
+    tet     = cloud.delaunay_3d(alpha=alpha)
+    surface = tet.extract_surface(algorithm=None).clean()
+    print(f"  Surface: {surface.n_points} vertices, {surface.n_cells} cells")
+
+    # Map scalars to surface by nearest-neighbour (alpha-shape may add vertices
+    # whose exact position isn't in the original cloud)
+    tree     = cKDTree(pts)
+    _, idx   = tree.query(np.asarray(surface.points))
+    surface[scalar_name] = scalars[idx].astype(np.float32)
+
+    # ---- Camera configurations ---------------------------------------------
+    if y_up:
+        view_fns = [
+            ("Isometric",  lambda p: p.view_vector([1, 0.7, 1], viewup=(0, 1, 0))),
+            ("Front (Z-)", lambda p: p.view_vector([0, 0, 1],   viewup=(0, 1, 0))),
+            ("Side (X+)",  lambda p: p.view_vector([1, 0, 0],   viewup=(0, 1, 0))),
+            ("Top (Y↑)",   lambda p: p.view_vector([0, 1, 0],   viewup=(0, 0, -1))),
+        ]
+    else:
+        view_fns = [
+            ("Isometric",  lambda p: p.view_isometric()),
+            ("Top (Z↑)",   lambda p: p.view_xy()),
+            ("Front (Y)",  lambda p: p.view_xz()),
+            ("Side (X)",   lambda p: p.view_yz()),
+        ]
+
+    plot_kwargs = dict(
+        scalars=scalar_name,
+        cmap=cmap,
+        show_scalar_bar=True,
+        scalar_bar_args={"title": scalar_label, "n_labels": 5,
+                         "fmt": "%.2e", "title_font_size": 14,
+                         "label_font_size": 11},
+        smooth_shading=True,
+    )
+
+    pl = pv.Plotter(shape=(2, 2), off_screen=True, window_size=(1600, 1200))
+    pl.set_background("white")
+
+    for idx, (name, view_fn) in enumerate(view_fns):
+        r, c = divmod(idx, 2)
+        pl.subplot(r, c)
+        pl.add_mesh(surface, **plot_kwargs)
+        view_fn(pl)
+        pl.reset_camera()
+        pl.add_text(name, font_size=10, color="black")
+
+    pl.add_title(title, font_size=12, color="black")
+    pl.screenshot(output_path, transparent_background=False)
+    pl.close()
+    print(f"  Saved PyVista rabbit surface: {output_path}")
+
+
 def pyvista_point_slices(pts: np.ndarray, scalars: np.ndarray,
                           scalar_name: str, cmap: str, scalar_label: str,
                           title: str, output_path: str,
@@ -412,7 +508,8 @@ def plotly_scatter3d(pts: np.ndarray, scalars: np.ndarray,
                       title: str, output_html: str,
                       output_png: Optional[str] = None,
                       marker_size: int = 2,
-                      log_color: bool = False) -> None:
+                      log_color: bool = False,
+                      opacity: float = 0.85) -> None:
     """Create an interactive Plotly 3-D scatter plot."""
     import plotly.graph_objects as go
 
@@ -427,7 +524,7 @@ def plotly_scatter3d(pts: np.ndarray, scalars: np.ndarray,
             color=color_vals,
             colorscale=colorscale,
             colorbar=dict(title=color_label, thickness=15),
-            opacity=0.85,
+            opacity=opacity,
         ),
         hovertemplate=(
             "x=%{x:.3f}<br>y=%{y:.3f}<br>z=%{z:.3f}"
@@ -463,7 +560,8 @@ def plotly_chart_scatter3d(pts: np.ndarray, chart_id: np.ndarray,
                             n_charts: int, colors: List[str],
                             title: str, output_html: str,
                             output_png: Optional[str] = None,
-                            marker_size: int = 2) -> None:
+                            marker_size: int = 2,
+                            opacity: float = 0.8) -> None:
     """Plotly 3-D scatter with one trace per atlas chart."""
     import plotly.graph_objects as go
 
@@ -480,7 +578,7 @@ def plotly_chart_scatter3d(pts: np.ndarray, chart_id: np.ndarray,
             marker=dict(
                 size=marker_size,
                 color=colors[cid % len(colors)],
-                opacity=0.8,
+                opacity=opacity,
             ),
         ))
 
@@ -768,46 +866,23 @@ def render_rabbit_poisson(args: argparse.Namespace) -> None:
     out = args.output_dir
     os.makedirs(out, exist_ok=True)
 
-    # Matplotlib 2-D projections — primary static figures for the volumetric
-    # Poisson data.  Projecting all interior points onto each face plane and
-    # binning by mean scalar value gives clean "CT scan" style views where the
-    # rabbit boundary is visible as the outer edge of coloured bins.
-    matplotlib_volume_projections(
-        pts, u_error_mag,
-        scalar_label="|u error|", cmap="hot_r",
-        title="Rabbit Poisson — solution error projections (physical space)",
-        output_path=os.path.join(out, "rabbit_poisson_error_proj.png"),
-        n_bins=80, y_up=True,
-    )
-    matplotlib_volume_projections(
-        pts, u_pred,
-        scalar_label="u predicted", cmap="viridis",
-        title="Rabbit Poisson — predicted solution projections (physical space)",
-        output_path=os.path.join(out, "rabbit_poisson_upred_proj.png"),
-        n_bins=80, y_up=True,
-    )
-    matplotlib_chart_projections(
-        pts, chart_id, n_charts, _CHART_COLORS_12,
-        title="Rabbit Poisson — volumetric atlas charts (physical space)",
-        output_path=os.path.join(out, "rabbit_poisson_charts_proj.png"),
-        n_bins=80, y_up=True,
-    )
-
-    # PyVista — 3-D views: isometric + side + front + top with Y-up camera.
+    # PyVista — reconstruct the rabbit surface from interior points using
+    # Delaunay 3-D alpha-shapes, then render as a solid coloured surface mesh.
+    # This gives a proper 3-D rabbit geometry rather than an opaque point blob.
     if _pv_available() and not args.no_pyvista:
-        pyvista_4panel(
+        pyvista_rabbit_surface(
             pts, u_error_mag, "u_error_mag",
             cmap="hot_r", scalar_label="|u error|",
             title="Rabbit Poisson — solution error (physical space)",
-            output_path=os.path.join(out, "rabbit_poisson_error_4panel.png"),
-            log_scale=False, point_size=2, y_up=True,
+            output_path=os.path.join(out, "rabbit_poisson_error_surface.png"),
+            y_up=True,
         )
-        pyvista_4panel(
+        pyvista_rabbit_surface(
             pts, u_pred, "u_pred",
             cmap="viridis", scalar_label="u predicted",
             title="Rabbit Poisson — predicted solution (physical space)",
-            output_path=os.path.join(out, "rabbit_poisson_upred_4panel.png"),
-            log_scale=False, point_size=2, y_up=True,
+            output_path=os.path.join(out, "rabbit_poisson_upred_surface.png"),
+            y_up=True,
         )
         pyvista_chart_mosaic(
             pts, chart_id, n_charts, _CHART_COLORS_12,
@@ -816,20 +891,33 @@ def render_rabbit_poisson(args: argparse.Namespace) -> None:
             point_size=2, y_up=True,
         )
 
-    # Plotly
+    # Plotly — interactive 3-D point cloud.  Using opacity=0.25 so the 50k
+    # interior points form a semi-transparent cloud: the outer shell is denser
+    # and appears brighter, naturally revealing the 3-D rabbit geometry without
+    # collapsing to an opaque blob.
     if not args.no_plotly:
         plotly_scatter3d(
             pts, u_error_mag, "u_error_mag",
             colorscale="Hot",
-            title="Rabbit Poisson — |u error| (interactive)",
+            title="Rabbit Poisson — |u error| (interactive 3-D)",
             output_html=os.path.join(out, "rabbit_poisson_error.html"),
             output_png=os.path.join(out, "rabbit_poisson_error_plotly.png"),
+            opacity=0.25,
+        )
+        plotly_scatter3d(
+            pts, u_pred, "u_pred",
+            colorscale="Viridis",
+            title="Rabbit Poisson — predicted solution (interactive 3-D)",
+            output_html=os.path.join(out, "rabbit_poisson_upred.html"),
+            output_png=os.path.join(out, "rabbit_poisson_upred_plotly.png"),
+            opacity=0.25,
         )
         plotly_chart_scatter3d(
             pts, chart_id, n_charts, _CHART_COLORS_12,
-            title="Rabbit Poisson — atlas charts (interactive)",
+            title="Rabbit Poisson — atlas charts (interactive 3-D)",
             output_html=os.path.join(out, "rabbit_poisson_charts.html"),
             output_png=os.path.join(out, "rabbit_poisson_charts_plotly.png"),
+            opacity=0.25,
         )
 
 
