@@ -1,0 +1,32 @@
+{
+  "solution_npz": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_solution.npz",
+  "atlas_npz": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_vol/rabbit_atlas_data.npz",
+  "sdf_center": [
+    0.06104138150512661,
+    0.1824995130863875,
+    -9.92466660790503e-05
+  ],
+  "sdf_scale": 1.6416931388054408,
+  "n_points": 50000,
+  "n_charts": 12,
+  "rel_l2_error": 0.022065360361000666,
+  "max_error": 0.06783068180084229,
+  "coords": "physical",
+  "merged_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_merged.vtu",
+  "per_chart_vtu": [
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_00.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_01.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_02.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_03.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_04.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_05.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_06.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_07.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_08.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_09.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_10.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_chart_11.vtu"
+  ],
+  "grid_vtr": null,
+  "surface_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_compact/rabbit_poisson_compact_surface.vtu"
+}

@@ -1,0 +1,37 @@
+{
+  "atlas_direct": {
+    "type": "atlas_direct",
+    "npz": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_obs.npz",
+    "n_points": 16000,
+    "n_charts": 8,
+    "merged_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_surface.vtu",
+    "per_chart_vtu": [
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_00.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_01.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_02.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_03.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_04.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_05.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_06.vtu",
+      "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_chart_07.vtu"
+    ],
+    "deformed_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_atlas_deformed.vtu"
+  },
+  "schwarz_displacement": {
+    "type": "schwarz_disp",
+    "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200",
+    "source_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_best_boundary_fields.vtu",
+    "output_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_disp_boundary.vtu",
+    "mu_rel_error_pct": 4.083153568343631e-12,
+    "K_rel_error_pct": 0.9992696429789589
+  },
+  "schwarz_traction": {
+    "type": "schwarz_tract",
+    "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800",
+    "source_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_best_boundary_fields.vtu",
+    "output_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/torus_inverse/torus_inverse_tract_boundary.vtu",
+    "mu_rel_error_pct": 0.3452891949412315,
+    "K_rel_error_pct": 0.5411622600986306
+  },
+  "coords": "physical"
+}

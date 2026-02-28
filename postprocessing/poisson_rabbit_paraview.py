@@ -176,17 +176,18 @@ def parse_args() -> argparse.Namespace:
              "marching cubes.  No SDF checkpoint needed.",
     )
     p.add_argument(
-        "--surface-grid", type=int, default=80,
+        "--surface-grid", type=int, default=50,
         help="Resolution of the voxel occupancy grid for --surface (NxNxN). "
-             "Default 80; increase to 120 for higher fidelity.",
+             "Default 50.  Voxel edge ≈ 0.022 normalised units for the 50k-point "
+             "rabbit run; binary-closing bridges the remaining gaps.",
     )
     p.add_argument(
-        "--surface-close-iters", type=int, default=2,
+        "--surface-close-iters", type=int, default=3,
         help="Morphological binary-closing iterations for --surface.  "
-             "Higher values fill larger gaps in sparse thin regions (ears, legs).",
+             "Default 3 bridges ~1-voxel gaps between isolated occupied voxels.",
     )
     p.add_argument(
-        "--surface-smooth-sigma", type=float, default=1.5,
+        "--surface-smooth-sigma", type=float, default=1.2,
         help="Gaussian smoothing sigma (voxels) applied before marching cubes "
              "for --surface.  Reduces staircase artefacts and triangle count. "
              "Default 1.5; set to 0 to disable.",
@@ -201,35 +202,44 @@ def parse_args() -> argparse.Namespace:
 def extract_surface_from_points(
     points_norm: np.ndarray,
     *,
-    grid_size: int = 80,
-    padding: float = 0.01,
-    close_iters: int = 2,
-    smooth_sigma: float = 1.5,
+    grid_size: int = 50,
+    padding: float = 0.005,
+    close_iters: int = 3,
+    smooth_sigma: float = 1.2,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Voxelise interior points and run marching cubes to recover the surface.
 
     The interior solution points were filtered to lie inside the rabbit domain
     (SDF < 0) during the PINN solve.  Their outer envelope therefore traces
-    the true rabbit surface.  This function voxelises those points on a
-    ``grid_size³`` occupancy grid, fills holes, applies Gaussian smoothing to
-    reduce triangle count, and extracts the boundary via marching cubes.
+    the true rabbit surface.
+
+    Key constraint: the voxel size must be ≥ the average inter-point spacing
+    of the solution point cloud (~0.026 in normalised units for 50k points).
+    grid_size=40 (voxel ≈ 0.028) gives >99% of filled voxels in one connected
+    component; finer grids produce thousands of isolated floating voxels.
+
+    Pipeline:
+      1. Voxelise onto a grid_size³ occupancy grid.
+      2. Extract the LARGEST connected component (discards isolated noise voxels).
+      3. Apply binary_fill_holes to close enclosed bubbles.
+      4. Apply binary_closing (close_iters) to bridge thin gaps (ears, legs).
+      5. Apply Gaussian smoothing (smooth_sigma voxels) to eliminate staircase
+         artefacts and reduce triangle count.
+      6. Run marching_cubes at level=0.5.
 
     Parameters
     ----------
     points_norm:
         (N, 3) interior point cloud in SDF-normalised coordinates.
     grid_size:
-        Resolution of the occupancy grid along each axis.  Default 80.
+        Resolution of the occupancy grid along each axis.  Default 40.
+        Must be small enough that the voxel edge length ≥ inter-point spacing.
     padding:
-        Small margin (normalised units) around the point-cloud bounding box
-        so the mesh closes cleanly at the edges.
+        Small margin (normalised units) around the point-cloud bounding box.
     close_iters:
-        Number of binary-closing iterations to bridge gaps in sparsely-
-        sampled thin regions (ears, hind legs).
+        Binary-closing iterations to bridge gaps in thin regions.
     smooth_sigma:
-        Standard deviation (in voxels) of the Gaussian filter applied to the
-        binary volume before marching cubes.  Smoothing eliminates staircase
-        artefacts and reduces the triangle count dramatically.  Default 1.5.
+        Gaussian smoothing sigma (voxels) before marching cubes.
 
     Returns
     -------
@@ -244,26 +254,40 @@ def extract_surface_from_points(
         raise ImportError(
             "scikit-image is required for --surface: pip install scikit-image"
         )
-    from scipy.ndimage import binary_fill_holes, binary_closing, gaussian_filter
+    from scipy.ndimage import (
+        binary_fill_holes, binary_closing, gaussian_filter, label
+    )
 
     lo = points_norm.min(axis=0) - padding
     hi = points_norm.max(axis=0) + padding
     ranges = [(lo[i], hi[i]) for i in range(3)]
     spacing = tuple(float((hi[i] - lo[i]) / (grid_size - 1)) for i in range(3))
 
-    # Build binary occupancy volume
+    # 1. Build binary occupancy volume
     occupancy, _ = np.histogramdd(points_norm, bins=grid_size, range=ranges)
     binary = occupancy > 0
+
+    # 2. Keep only the largest connected component (removes isolated noise)
+    lbl, n_features = label(binary)
+    if n_features > 1:
+        comp_sizes = np.bincount(lbl.ravel())
+        comp_sizes[0] = 0          # ignore background
+        largest_label = int(comp_sizes.argmax())
+        binary = lbl == largest_label
+        print(f"  Connected components: {n_features}, "
+              f"kept largest ({comp_sizes[largest_label]} voxels, "
+              f"{comp_sizes[largest_label]/binary.sum()*100:.0f}% of filled)")
+
+    # 3. Fill enclosed holes, then morphological close for thin features
     binary = binary_fill_holes(binary)
     binary = binary_closing(binary, iterations=close_iters)
 
-    # Gaussian smoothing turns the binary 0/1 volume into a smooth 0→1 field;
-    # marching cubes at 0.5 extracts the smooth boundary with far fewer triangles
+    # 4. Gaussian smoothing: eliminates staircase, reduces triangle count
     smooth = gaussian_filter(binary.astype(np.float64), sigma=smooth_sigma)
 
+    # 5. Marching cubes at level=0.5
     verts, faces, _, _ = marching_cubes(smooth, level=0.5, spacing=spacing)
-    # marching_cubes origin is (0,0,0); shift to normalised lo[]
-    verts = verts + lo
+    verts = verts + lo   # shift from index-origin to normalised lo[]
     print(
         f"  Voxel occupancy surface: {len(verts)} vertices, {len(faces)} triangles"
         f"  (grid {grid_size}³, sigma={smooth_sigma}, close_iters={close_iters})"
