@@ -55,6 +55,7 @@ from postprocessing.utils import PUB_COLORS, set_pub_style
 # Defaults
 # ---------------------------------------------------------------------------
 _POISSON_NPZ   = "runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_solution.npz"
+_POISSON_VTR   = "runs/attempt20c_compact/paraview/rabbit_poisson_compact_grid.vtr"
 _ATLAS_NPZ     = "runs/atlas_vol/rabbit_atlas_data.npz"
 _ELDER_DIR     = "runs/rabbit_inverse_elder_globalfield_small"
 _ELDER_ATLAS   = "runs/atlas_schwarz_20260213_002517/rabbit_atlas_data.npz"
@@ -96,6 +97,8 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--poisson-npz",  default=_POISSON_NPZ)
+    p.add_argument("--poisson-vtr",  default=_POISSON_VTR,
+                   help="VTR rectilinear grid for Poisson volume-slice renders")
     p.add_argument("--atlas-npz",    default=_ATLAS_NPZ)
     p.add_argument("--elder-dir",    default=_ELDER_DIR)
     p.add_argument("--elder-atlas",  default=_ELDER_ATLAS)
@@ -130,11 +133,18 @@ def pyvista_4panel(pts: np.ndarray, scalars: np.ndarray, scalar_name: str,
                    cmap: str, scalar_label: str,
                    title: str, output_path: str,
                    log_scale: bool = False,
-                   point_size: float = 3.0) -> None:
+                   point_size: float = 3.0,
+                   y_up: bool = False) -> None:
     """Render a 4-panel (iso, top, front, side) view of a point cloud.
 
     Camera is auto-fitted to the actual data bounds so the geometry fills
     the viewport regardless of coordinate scale.
+
+    Parameters
+    ----------
+    y_up : bool
+        When True the camera uses Y as the up axis (Stanford bunny convention).
+        When False (default) the standard Z-up convention is used.
     """
     import pyvista as pv
     pv.global_theme.background = "white"
@@ -143,12 +153,23 @@ def pyvista_4panel(pts: np.ndarray, scalars: np.ndarray, scalar_name: str,
     cloud = _make_pv_cloud(pts, scalars, scalar_name)
 
     # View methods: each panel uses a different orthographic angle
-    view_fns = [
-        ("Isometric",  lambda p: p.view_isometric()),
-        ("Top (Z↑)",   lambda p: p.view_xy()),
-        ("Front (Y)",  lambda p: p.view_xz()),
-        ("Side (X)",   lambda p: p.view_yz()),
-    ]
+    if y_up:
+        # Y is the vertical axis (ears point +Y, feet at -Y).
+        # view_vector(direction, viewup) looks from that direction; reset_camera
+        # then auto-fits the zoom while preserving the orientation.
+        view_fns = [
+            ("Isometric",  lambda p: p.view_vector([1, 0.7, 1],  viewup=(0, 1, 0))),
+            ("Front (Z-)", lambda p: p.view_vector([0, 0, 1],    viewup=(0, 1, 0))),
+            ("Side (X+)",  lambda p: p.view_vector([1, 0, 0],    viewup=(0, 1, 0))),
+            ("Top (Y↑)",   lambda p: p.view_vector([0, 1, 0],    viewup=(0, 0, -1))),
+        ]
+    else:
+        view_fns = [
+            ("Isometric",  lambda p: p.view_isometric()),
+            ("Top (Z↑)",   lambda p: p.view_xy()),
+            ("Front (Y)",  lambda p: p.view_xz()),
+            ("Side (X)",   lambda p: p.view_yz()),
+        ]
 
     pl = pv.Plotter(shape=(2, 2), off_screen=True,
                     window_size=(1600, 1200))
@@ -183,7 +204,8 @@ def pyvista_4panel(pts: np.ndarray, scalars: np.ndarray, scalar_name: str,
 def pyvista_chart_mosaic(pts: np.ndarray, chart_id: np.ndarray,
                           n_charts: int, colors: List[str],
                           title: str, output_path: str,
-                          point_size: float = 3.0) -> None:
+                          point_size: float = 3.0,
+                          y_up: bool = False) -> None:
     """One sub-plot per chart in its assigned colour.
 
     Each sub-panel shows the FULL point cloud (gray, small) so the chart
@@ -215,7 +237,10 @@ def pyvista_chart_mosaic(pts: np.ndarray, chart_id: np.ndarray,
                         color=colors[cid % len(colors)],
                         point_size=point_size,
                         render_points_as_spheres=True)
-        pl.view_isometric()
+        if y_up:
+            pl.view_vector([1, 0.7, 1], viewup=(0, 1, 0))
+        else:
+            pl.view_isometric()
         pl.reset_camera()
         pl.add_text(f"Chart {cid}", font_size=9, color="black")
 
@@ -235,7 +260,8 @@ def pyvista_two_scalars(pts: np.ndarray,
                          scalar1: np.ndarray, name1: str, cmap1: str,
                          scalar2: np.ndarray, name2: str, cmap2: str,
                          suptitle: str, output_path: str,
-                         point_size: float = 3.0) -> None:
+                         point_size: float = 3.0,
+                         y_up: bool = False) -> None:
     """Two-panel side-by-side view of the same point cloud with different scalars."""
     import pyvista as pv
     pv.global_theme.background = "white"
@@ -258,7 +284,10 @@ def pyvista_two_scalars(pts: np.ndarray,
                                      "fmt": "%.2e",
                                      "title_font_size": 13,
                                      "label_font_size": 10})
-        pl.view_isometric()
+        if y_up:
+            pl.view_vector([1, 0.7, 1], viewup=(0, 1, 0))
+        else:
+            pl.view_isometric()
         pl.reset_camera()
         pl.add_text(sname.replace("_", " "), font_size=11, color="black")
 
@@ -266,6 +295,112 @@ def pyvista_two_scalars(pts: np.ndarray,
     pl.screenshot(output_path, transparent_background=False)
     pl.close()
     print(f"  Saved PyVista two-scalar: {output_path}")
+
+
+def pyvista_point_slices(pts: np.ndarray, scalars: np.ndarray,
+                          scalar_name: str, cmap: str, scalar_label: str,
+                          title: str, output_path: str,
+                          y_up: bool = True,
+                          slab_fraction: float = 0.12,
+                          point_size: float = 5.0) -> None:
+    """Render 3 orthogonal cross-section slices of an interior point cloud.
+
+    The approach uses a thin slab of the original interior points around each
+    midplane.  Because these points are already filtered to lie INSIDE the
+    domain, the rabbit boundary appears naturally as the outer edge of the
+    coloured region (blank/white outside the rabbit, coloured inside).
+
+    Layout: 2×2
+      [0,0] YZ slab (x≈mid) — viewed face-on from +X
+      [0,1] XZ slab (y≈mid) — viewed face-on from +Y (top-down)
+      [1,0] XY slab (z≈mid) — viewed face-on from +Z (front)
+      [1,1] Isometric of all three slabs together
+
+    Parameters
+    ----------
+    pts : ndarray, shape (N, 3)
+        Interior point coordinates in physical space.
+    scalars : ndarray, shape (N,)
+        Scalar field values at each point.
+    slab_fraction : float
+        Half-thickness of each slab as a fraction of the axis range.
+        Increase to include more points; decrease for sharper slices.
+    y_up : bool
+        Use Y as up axis (default True for Stanford bunny).
+    """
+    import pyvista as pv
+    pv.global_theme.background = "white"
+    pv.global_theme.font.color = "black"
+
+    mn  = pts.min(axis=0)
+    mx  = pts.max(axis=0)
+    rng = mx - mn
+    mid = (mn + mx) / 2
+
+    clim = [float(scalars.min()), float(scalars.max())]
+
+    # Each slab: axis index, view direction, viewup vector, label
+    if y_up:
+        slab_defs = [
+            (0, "YZ slab\n(x = mid)", [1, 0, 0], (0, 1, 0)),   # view from +X
+            (1, "XZ slab\n(y = mid)", [0, 1, 0], (0, 0, -1)),  # view from +Y (top)
+            (2, "XY slab\n(z = mid)", [0, 0, 1], (0, 1, 0)),   # view from +Z (front)
+        ]
+    else:
+        slab_defs = [
+            (0, "YZ slab\n(x = mid)", [1, 0, 0], (0, 0, 1)),
+            (1, "XZ slab\n(y = mid)", [0, 1, 0], (0, 0, 1)),
+            (2, "XY slab\n(z = mid)", [0, 0, 1], (0, 1, 0)),
+        ]
+
+    iso_up = (0, 1, 0) if y_up else (0, 0, 1)
+
+    plot_kwargs = dict(
+        scalars=scalar_name,
+        cmap=cmap,
+        clim=clim,
+        point_size=point_size,
+        render_points_as_spheres=True,
+        show_scalar_bar=True,
+        scalar_bar_args={"title": scalar_label, "n_labels": 5,
+                         "fmt": "%.2e", "title_font_size": 14,
+                         "label_font_size": 11},
+    )
+
+    pl = pv.Plotter(shape=(2, 2), off_screen=True, window_size=(1600, 1200))
+    pl.set_background("white")
+
+    slab_clouds: list = []
+
+    for idx, (axis, name, view_dir, up) in enumerate(slab_defs):
+        half = slab_fraction * rng[axis]
+        mask = np.abs(pts[:, axis] - mid[axis]) <= half
+        slab_pts = pts[mask].astype(np.float32)
+        slab_sc  = scalars[mask].astype(np.float32)
+
+        cloud = pv.PolyData(slab_pts)
+        cloud[scalar_name] = slab_sc
+        slab_clouds.append(cloud)
+
+        r, c = divmod(idx, 2)
+        pl.subplot(r, c)
+        pl.add_mesh(cloud, **plot_kwargs)
+        pl.view_vector(view_dir, viewup=up)
+        pl.reset_camera()
+        pl.add_text(f"{name}  ({mask.sum()} pts)", font_size=9, color="black")
+
+    # Panel [1,1]: all 3 slabs together, isometric view
+    pl.subplot(1, 1)
+    for cloud in slab_clouds:
+        pl.add_mesh(cloud, **plot_kwargs)
+    pl.view_vector([1, 0.7, 1], viewup=iso_up)
+    pl.reset_camera()
+    pl.add_text("All slabs (isometric)", font_size=9, color="black")
+
+    pl.add_title(title, font_size=12, color="black")
+    pl.screenshot(output_path, transparent_background=False)
+    pl.close()
+    print(f"  Saved PyVista point slices: {output_path}")
 
 
 # ===========================================================================
@@ -429,6 +564,186 @@ def plotly_two_scalars_3d(pts: np.ndarray,
 
 
 # ===========================================================================
+# Matplotlib 2-D projection helpers (for volumetric interior point clouds)
+# ===========================================================================
+
+def matplotlib_volume_projections(
+        pts: np.ndarray, scalars: np.ndarray,
+        scalar_label: str, cmap: str,
+        title: str, output_path: str,
+        n_bins: int = 80,
+        log_scale: bool = False,
+        y_up: bool = True) -> None:
+    """Render three 2-D mean-projection views of a volumetric interior point cloud.
+
+    For each of the three face directions, all interior points are projected
+    onto that plane and binned into a 2-D grid.  Each bin is coloured by the
+    **mean** scalar value of the points that project into it; bins with no
+    points appear white, making the rabbit boundary immediately visible.
+
+    Unlike a 3-D scatter which forms an opaque solid mass, this gives a clean
+    "CT-slice projection" style view that clearly shows both the domain shape
+    and the field distribution.
+
+    Layout (y_up=True, Stanford bunny with Y vertical):
+      [0] Side view  — project onto YZ plane  (view from +X)
+      [1] Front view — project onto XY plane  (view from +Z)
+      [2] Top view   — project onto XZ plane  (view from +Y)
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+
+    mn  = pts.min(axis=0)
+    mx  = pts.max(axis=0)
+
+    # Axes for each projection: (horiz_axis, vert_axis, xlabel, ylabel, title)
+    if y_up:
+        projections = [
+            (2, 1, "z", "y", "Side view\n(project onto YZ, view from +X)"),
+            (0, 1, "x", "y", "Front view\n(project onto XY, view from +Z)"),
+            (0, 2, "x", "z", "Top view\n(project onto XZ, view from +Y)"),
+        ]
+    else:
+        projections = [
+            (0, 1, "x", "y", "XY plane (view from +Z)"),
+            (0, 2, "x", "z", "XZ plane (view from +Y)"),
+            (1, 2, "y", "z", "YZ plane (view from +X)"),
+        ]
+
+    sc = np.log10(scalars + 1e-14) if log_scale else scalars
+    vmin, vmax = sc.min(), sc.max()
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle(title, fontsize=13)
+
+    for ax, (ha, va, xl, yl, sub_title) in zip(axes, projections):
+        h_vals = pts[:, ha]
+        v_vals = pts[:, va]
+
+        # Build bin edges
+        h_edges = np.linspace(mn[ha], mx[ha], n_bins + 1)
+        v_edges = np.linspace(mn[va], mx[va], n_bins + 1)
+
+        # Digitise: bin index for each point (0 = out of range, clamp)
+        hi = np.clip(np.searchsorted(h_edges, h_vals, side='right') - 1, 0, n_bins - 1)
+        vi = np.clip(np.searchsorted(v_edges, v_vals, side='right') - 1, 0, n_bins - 1)
+
+        # Accumulate sum and count
+        grid_sum   = np.zeros((n_bins, n_bins), dtype=float)
+        grid_count = np.zeros((n_bins, n_bins), dtype=int)
+        np.add.at(grid_sum,   (vi, hi), sc)
+        np.add.at(grid_count, (vi, hi), 1)
+
+        # Mean: NaN where no data
+        with np.errstate(invalid='ignore'):
+            grid_mean = np.where(grid_count > 0, grid_sum / grid_count, np.nan)
+
+        im = ax.imshow(
+            grid_mean,
+            extent=[mn[ha], mx[ha], mn[va], mx[va]],
+            origin="lower",
+            aspect="equal",
+            cmap=cmap,
+            vmin=vmin, vmax=vmax,
+            interpolation="nearest",
+        )
+        plt.colorbar(im, ax=ax, label=scalar_label, shrink=0.85)
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.set_title(sub_title, fontsize=10)
+        ax.set_facecolor("white")
+
+    fig.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved matplotlib projections: {output_path}")
+
+
+def matplotlib_chart_projections(
+        pts: np.ndarray, chart_id: np.ndarray,
+        n_charts: int, colors: List[str],
+        title: str, output_path: str,
+        n_bins: int = 80,
+        y_up: bool = True) -> None:
+    """Side-view and front-view 2-D projections of the volumetric atlas charts.
+
+    Each chart is shown with its colour (density = fraction of bins occupied
+    by that chart), on a light-gray background of the full cloud, giving a
+    clear picture of how the 12 volumetric charts partition the rabbit interior.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+
+    mn = pts.min(axis=0)
+    mx = pts.max(axis=0)
+
+    # Two projections: side (YZ) and front (XY)
+    if y_up:
+        projs = [
+            (2, 1, "z", "y", "Side view (YZ)"),
+            (0, 1, "x", "y", "Front view (XY)"),
+        ]
+    else:
+        projs = [
+            (0, 1, "x", "y", "XY"),
+            (0, 2, "x", "z", "XZ"),
+        ]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(title, fontsize=13)
+
+    for ax, (ha, va, xl, yl, sub_title) in zip(axes, projs):
+        h_edges = np.linspace(mn[ha], mx[ha], n_bins + 1)
+        v_edges = np.linspace(mn[va], mx[va], n_bins + 1)
+
+        # Background: occupied bins (any chart)
+        hi_all = np.clip(np.searchsorted(h_edges, pts[:, ha], side='right') - 1, 0, n_bins - 1)
+        vi_all = np.clip(np.searchsorted(v_edges, pts[:, va], side='right') - 1, 0, n_bins - 1)
+
+        occ = np.zeros((n_bins, n_bins), dtype=bool)
+        occ[vi_all, hi_all] = True
+
+        # Plot light gray background for occupied bins
+        bg = np.full((n_bins, n_bins, 4), [1., 1., 1., 0.], dtype=float)
+        bg[occ] = [0.88, 0.88, 0.88, 1.]
+        ax.imshow(bg, extent=[mn[ha], mx[ha], mn[va], mx[va]],
+                  origin="lower", aspect="equal", interpolation="nearest")
+
+        # Plot each chart on top
+        for cid in range(n_charts):
+            mask = chart_id == cid
+            if mask.sum() == 0:
+                continue
+            hi = np.clip(np.searchsorted(h_edges, pts[mask, ha], side='right') - 1, 0, n_bins - 1)
+            vi = np.clip(np.searchsorted(v_edges, pts[mask, va], side='right') - 1, 0, n_bins - 1)
+            cnt = np.zeros((n_bins, n_bins), dtype=int)
+            np.add.at(cnt, (vi, hi), 1)
+
+            # Convert hex to RGBA
+            r, g, b = tuple(int(colors[cid % len(colors)].lstrip('#')[i:i+2], 16)/255
+                            for i in (0, 2, 4))
+            overlay = np.zeros((n_bins, n_bins, 4), dtype=float)
+            overlay[cnt > 0] = [r, g, b, 0.75]
+            ax.imshow(overlay, extent=[mn[ha], mx[ha], mn[va], mx[va]],
+                      origin="lower", aspect="equal", interpolation="nearest")
+
+        ax.set_xlabel(xl)
+        ax.set_ylabel(yl)
+        ax.set_title(sub_title, fontsize=10)
+
+    legend_patches = [Patch(color=colors[i % len(colors)], label=f"Chart {i}")
+                      for i in range(n_charts)]
+    fig.legend(handles=legend_patches, loc="lower center",
+               ncol=min(n_charts, 6), fontsize=8, bbox_to_anchor=(0.5, -0.05))
+    fig.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved matplotlib chart projections: {output_path}")
+
+
+# ===========================================================================
 # Per-example rendering
 # ===========================================================================
 
@@ -453,27 +768,52 @@ def render_rabbit_poisson(args: argparse.Namespace) -> None:
     out = args.output_dir
     os.makedirs(out, exist_ok=True)
 
-    # PyVista
+    # Matplotlib 2-D projections — primary static figures for the volumetric
+    # Poisson data.  Projecting all interior points onto each face plane and
+    # binning by mean scalar value gives clean "CT scan" style views where the
+    # rabbit boundary is visible as the outer edge of coloured bins.
+    matplotlib_volume_projections(
+        pts, u_error_mag,
+        scalar_label="|u error|", cmap="hot_r",
+        title="Rabbit Poisson — solution error projections (physical space)",
+        output_path=os.path.join(out, "rabbit_poisson_error_proj.png"),
+        n_bins=80, y_up=True,
+    )
+    matplotlib_volume_projections(
+        pts, u_pred,
+        scalar_label="u predicted", cmap="viridis",
+        title="Rabbit Poisson — predicted solution projections (physical space)",
+        output_path=os.path.join(out, "rabbit_poisson_upred_proj.png"),
+        n_bins=80, y_up=True,
+    )
+    matplotlib_chart_projections(
+        pts, chart_id, n_charts, _CHART_COLORS_12,
+        title="Rabbit Poisson — volumetric atlas charts (physical space)",
+        output_path=os.path.join(out, "rabbit_poisson_charts_proj.png"),
+        n_bins=80, y_up=True,
+    )
+
+    # PyVista — 3-D views: isometric + side + front + top with Y-up camera.
     if _pv_available() and not args.no_pyvista:
         pyvista_4panel(
             pts, u_error_mag, "u_error_mag",
             cmap="hot_r", scalar_label="|u error|",
             title="Rabbit Poisson — solution error (physical space)",
             output_path=os.path.join(out, "rabbit_poisson_error_4panel.png"),
-            log_scale=False, point_size=3,
+            log_scale=False, point_size=2, y_up=True,
         )
         pyvista_4panel(
             pts, u_pred, "u_pred",
             cmap="viridis", scalar_label="u predicted",
             title="Rabbit Poisson — predicted solution (physical space)",
             output_path=os.path.join(out, "rabbit_poisson_upred_4panel.png"),
-            log_scale=False, point_size=3,
+            log_scale=False, point_size=2, y_up=True,
         )
         pyvista_chart_mosaic(
             pts, chart_id, n_charts, _CHART_COLORS_12,
-            title="Rabbit Poisson — 12 atlas charts (physical space)",
+            title="Rabbit Poisson — 12 volumetric atlas charts (physical space)",
             output_path=os.path.join(out, "rabbit_poisson_charts.png"),
-            point_size=2,
+            point_size=2, y_up=True,
         )
 
     # Plotly
@@ -542,7 +882,9 @@ def render_rabbit_elder(args: argparse.Namespace) -> None:
     out = args.output_dir
     os.makedirs(out, exist_ok=True)
 
-    # PyVista
+    # PyVista — Elder atlas uses surface points so the rabbit silhouette is
+    # visible directly.  Use y_up=True so the rabbit appears right-side-up
+    # (Stanford bunny: ears point in +Y direction).
     if _pv_available() and not args.no_pyvista and "p_pred" in fields:
         if "c_pred" in fields:
             pyvista_two_scalars(
@@ -551,14 +893,14 @@ def render_rabbit_elder(args: argparse.Namespace) -> None:
                 fields["c_pred"], "concentration", "viridis",
                 suptitle="Rabbit Elder — pressure & concentration (physical space)",
                 output_path=os.path.join(out, "rabbit_elder_fields.png"),
-                point_size=3,
+                point_size=3, y_up=True,
             )
         pyvista_4panel(
             pts, fields["p_pred"], "pressure",
             cmap="RdBu_r", scalar_label="pressure",
             title="Rabbit Elder — pressure field (physical space)",
             output_path=os.path.join(out, "rabbit_elder_pressure_4panel.png"),
-            point_size=3,
+            point_size=3, y_up=True,
         )
         if "p_error_mag" in fields:
             pyvista_4panel(
@@ -566,7 +908,7 @@ def render_rabbit_elder(args: argparse.Namespace) -> None:
                 cmap="hot_r", scalar_label="|p error|",
                 title="Rabbit Elder — pressure error (physical space)",
                 output_path=os.path.join(out, "rabbit_elder_error_4panel.png"),
-                point_size=3,
+                point_size=3, y_up=True,
             )
 
     # Plotly
