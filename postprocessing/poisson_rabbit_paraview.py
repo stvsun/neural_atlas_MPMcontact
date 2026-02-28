@@ -22,13 +22,14 @@ with the correct rabbit geometry in ParaView.
 All 50 000 points in the solution NPZ are already filtered to lie inside the
 rabbit domain (SDF < 0), so no additional culling is needed.
 
-Surface mesh (--surface / --sdf-checkpoint):
-  Evaluates the trained neural SDF on an 80³ grid, extracts the SDF=0
-  isosurface with marching cubes, and exports a triangulated surface mesh VTU
-  with solution scalars (u_pred, u_error_mag, …) mapped to surface vertices
-  via nearest-neighbour interpolation from the interior point cloud.  Open
-  this file in ParaView with the default 'Surface' representation to see the
-  rabbit geometry immediately — no need for 'Point Gaussian' mode.
+Surface mesh (--surface):
+  Voxelises the 50 000 interior solution points onto a 100³ occupancy grid,
+  applies morphological fill/close to handle sparsely-sampled thin regions
+  (ears, legs), then runs marching cubes at the binary boundary.  The result
+  is a triangulated surface mesh VTU with solution scalars mapped to surface
+  vertices via nearest-neighbour interpolation.  Open this file in ParaView
+  with the default 'Surface' representation to see the rabbit geometry
+  immediately — no need for 'Point Gaussian' mode.
 
 In ParaView:
   - <prefix>_surface.vtu  → open with Representation='Surface', colour by
@@ -52,7 +53,7 @@ Usage (default paths for the CompactChartNet best run):
         --prefix       rabbit_poisson_compact \\
         --grid \\
         --surface \\
-        --sdf-checkpoint runs/examples/meshfree_accel_20260212_194730/sdf/rabbit_sdf.pt
+        --surface-grid 100
 """
 
 from __future__ import annotations
@@ -76,7 +77,6 @@ from postprocessing.utils import (
 
 # Default atlas NPZ for the volumetric (50 000 point) rabbit runs
 _DEFAULT_ATLAS_NPZ = "runs/atlas_vol/rabbit_atlas_data.npz"
-_DEFAULT_SDF_CKPT  = "runs/examples/meshfree_accel_20260212_194730/sdf/rabbit_sdf.pt"
 
 
 # ---------------------------------------------------------------------------
@@ -171,108 +171,104 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--surface",
         action="store_true",
-        help="Export a triangulated rabbit surface mesh VTU using marching cubes "
-             "on the trained neural SDF.  Requires --sdf-checkpoint.",
-    )
-    p.add_argument(
-        "--sdf-checkpoint",
-        default=_DEFAULT_SDF_CKPT,
-        help="Path to the SDF model checkpoint (rabbit_sdf.pt) used for surface "
-             "extraction via marching cubes.",
+        help="Export a triangulated rabbit surface mesh VTU.  Voxelises the "
+             "interior solution points onto a grid, fills gaps, and runs "
+             "marching cubes.  No SDF checkpoint needed.",
     )
     p.add_argument(
         "--surface-grid", type=int, default=80,
-        help="Grid resolution for marching cubes SDF evaluation (NxNxN, default 80)",
+        help="Resolution of the voxel occupancy grid for --surface (NxNxN). "
+             "Default 80; increase to 120 for higher fidelity.",
+    )
+    p.add_argument(
+        "--surface-close-iters", type=int, default=2,
+        help="Morphological binary-closing iterations for --surface.  "
+             "Higher values fill larger gaps in sparse thin regions (ears, legs).",
+    )
+    p.add_argument(
+        "--surface-smooth-sigma", type=float, default=1.5,
+        help="Gaussian smoothing sigma (voxels) applied before marching cubes "
+             "for --surface.  Reduces staircase artefacts and triangle count. "
+             "Default 1.5; set to 0 to disable.",
     )
     return p.parse_args()
 
 
 # ---------------------------------------------------------------------------
-# SDF-based surface extraction
+# Occupancy-voxel surface extraction
 # ---------------------------------------------------------------------------
 
-def extract_sdf_surface(
-    sdf_ckpt: str,
+def extract_surface_from_points(
+    points_norm: np.ndarray,
+    *,
     grid_size: int = 80,
-    half_extent: float = 0.60,
-    batch_size: int = 32768,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """Evaluate the neural SDF on a grid, run marching cubes, return surface.
+    padding: float = 0.01,
+    close_iters: int = 2,
+    smooth_sigma: float = 1.5,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Voxelise interior points and run marching cubes to recover the surface.
+
+    The interior solution points were filtered to lie inside the rabbit domain
+    (SDF < 0) during the PINN solve.  Their outer envelope therefore traces
+    the true rabbit surface.  This function voxelises those points on a
+    ``grid_size³`` occupancy grid, fills holes, applies Gaussian smoothing to
+    reduce triangle count, and extracts the boundary via marching cubes.
+
+    Parameters
+    ----------
+    points_norm:
+        (N, 3) interior point cloud in SDF-normalised coordinates.
+    grid_size:
+        Resolution of the occupancy grid along each axis.  Default 80.
+    padding:
+        Small margin (normalised units) around the point-cloud bounding box
+        so the mesh closes cleanly at the edges.
+    close_iters:
+        Number of binary-closing iterations to bridge gaps in sparsely-
+        sampled thin regions (ears, hind legs).
+    smooth_sigma:
+        Standard deviation (in voxels) of the Gaussian filter applied to the
+        binary volume before marching cubes.  Smoothing eliminates staircase
+        artefacts and reduces the triangle count dramatically.  Default 1.5.
 
     Returns
     -------
     verts_norm : (V, 3) float64
-        Surface vertex coordinates in SDF-normalised space.
+        Surface vertex positions in SDF-normalised space.
     faces : (F, 3) int32
-        Triangle vertex index array.
-    sdf_center : (3,) float64
-        Center used by the SDF model.
-    sdf_scale : float
-        Scale used by the SDF model.
+        Triangle face index array.
     """
-    import torch
-
-    class _MLP(torch.nn.Module):
-        def __init__(self, in_dim: int, out_dim: int, width: int, depth: int):
-            super().__init__()
-            layers = [torch.nn.Linear(in_dim, width)]
-            for _ in range(depth - 1):
-                layers.append(torch.nn.Linear(width, width))
-            self.hidden = torch.nn.ModuleList(layers)
-            self.out = torch.nn.Linear(width, out_dim)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            h = x
-            for layer in self.hidden:
-                h = torch.tanh(layer(h))
-            return self.out(h)
-
-    class _SDFNet(torch.nn.Module):
-        def __init__(self, width: int = 128, depth: int = 6):
-            super().__init__()
-            self.net = _MLP(in_dim=3, out_dim=1, width=width, depth=depth)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.net(x).squeeze(-1)
-
     try:
         from skimage.measure import marching_cubes
     except ImportError:
-        raise ImportError("scikit-image is required for surface extraction: pip install scikit-image")
+        raise ImportError(
+            "scikit-image is required for --surface: pip install scikit-image"
+        )
+    from scipy.ndimage import binary_fill_holes, binary_closing, gaussian_filter
 
-    ckpt = torch.load(sdf_ckpt, map_location="cpu", weights_only=False)
-    kw = ckpt.get("model_kwargs", {"width": 128, "depth": 6})
-    model = _SDFNet(width=kw.get("width", 128), depth=kw.get("depth", 6))
-    model.load_state_dict(ckpt["model_state"])
-    model.eval()
+    lo = points_norm.min(axis=0) - padding
+    hi = points_norm.max(axis=0) + padding
+    ranges = [(lo[i], hi[i]) for i in range(3)]
+    spacing = tuple(float((hi[i] - lo[i]) / (grid_size - 1)) for i in range(3))
 
-    sdf_center = np.asarray(ckpt["center"], dtype=float).reshape(3)
-    sdf_scale  = float(np.asarray(ckpt["scale"]).reshape(-1)[0])
+    # Build binary occupancy volume
+    occupancy, _ = np.histogramdd(points_norm, bins=grid_size, range=ranges)
+    binary = occupancy > 0
+    binary = binary_fill_holes(binary)
+    binary = binary_closing(binary, iterations=close_iters)
 
-    # Build 3-D grid in SDF-normalised space
-    ax = np.linspace(-half_extent, half_extent, grid_size, dtype=np.float32)
-    gx, gy, gz = np.meshgrid(ax, ax, ax, indexing="ij")          # (G, G, G) each
-    grid_pts = np.stack([gx.reshape(-1), gy.reshape(-1), gz.reshape(-1)], axis=1)  # (G³, 3)
+    # Gaussian smoothing turns the binary 0/1 volume into a smooth 0→1 field;
+    # marching cubes at 0.5 extracts the smooth boundary with far fewer triangles
+    smooth = gaussian_filter(binary.astype(np.float64), sigma=smooth_sigma)
 
-    # Evaluate SDF in batches
-    sdf_vals = np.empty(len(grid_pts), dtype=np.float32)
-    with torch.no_grad():
-        for i in range(0, len(grid_pts), batch_size):
-            chunk = torch.tensor(grid_pts[i:i + batch_size])
-            sdf_vals[i:i + batch_size] = model(chunk).numpy()
-
-    sdf_vol = sdf_vals.reshape(grid_size, grid_size, grid_size)
-
-    # Marching cubes at SDF = 0 (rabbit surface)
-    spacing = (ax[1] - ax[0],) * 3
-    verts, faces, _, _ = marching_cubes(sdf_vol, level=0.0, spacing=spacing)
-    # verts come out in index * spacing coordinates — shift to centred range
-    verts = verts + ax[0]   # shift origin from [0, 0, 0] to [-half_extent, ...]
-    verts = verts.astype(np.float64)
-    faces = faces.astype(np.int32)
-
-    print(f"  SDF marching cubes: {len(verts)} vertices, {len(faces)} triangles")
-    return verts, faces, sdf_center, sdf_scale
+    verts, faces, _, _ = marching_cubes(smooth, level=0.5, spacing=spacing)
+    # marching_cubes origin is (0,0,0); shift to normalised lo[]
+    verts = verts + lo
+    print(
+        f"  Voxel occupancy surface: {len(verts)} vertices, {len(faces)} triangles"
+        f"  (grid {grid_size}³, sigma={smooth_sigma}, close_iters={close_iters})"
+    )
+    return verts.astype(np.float64), faces.astype(np.int32)
 
 
 # ---------------------------------------------------------------------------
@@ -381,17 +377,22 @@ def main() -> None:
         print(f"Writing rectilinear grid VTR: {grid_path}")
         write_vtu_rectilinear_grid(grid_path, xg, yg, zg, gf)
 
-    # ---- Optional surface mesh (SDF marching cubes) -----------------------
+    # ---- Optional surface mesh (occupancy voxel → marching cubes) ---------
     surface_path: Optional[str] = None
     if args.surface:
-        print(f"\nExtracting rabbit surface via neural SDF: {args.sdf_checkpoint} ...")
-        verts_norm, faces, sdf_center, sdf_scale = extract_sdf_surface(
-            args.sdf_checkpoint,
-            grid_size=args.surface_grid,
+        print(
+            f"\nExtracting rabbit surface from interior points "
+            f"(grid {args.surface_grid}³, sigma={args.surface_smooth_sigma}, "
+            f"close_iters={args.surface_close_iters}) ..."
         )
-        # Convert SDF-normalised verts to physical space using the SDF model's
-        # own center/scale (stored inside the checkpoint, not the atlas NPZ).
-        verts_phys = sdf_center + sdf_scale * verts_norm
+        verts_norm, faces = extract_surface_from_points(
+            points_norm,
+            grid_size=args.surface_grid,
+            close_iters=args.surface_close_iters,
+            smooth_sigma=args.surface_smooth_sigma,
+        )
+        # Convert SDF-normalised verts to physical space (same atlas transform)
+        verts_phys = to_physical(verts_norm, center, scale)
         # Map scalar fields to surface vertices via nearest-neighbour
         from scipy.spatial import cKDTree
         tree = cKDTree(points_physical)
