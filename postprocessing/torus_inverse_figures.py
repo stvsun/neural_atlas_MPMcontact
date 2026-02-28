@@ -117,9 +117,18 @@ def _load(run_dir: str) -> Tuple[Dict, Dict]:
 
 
 def _param_err_pct(metrics: Dict, key: str, true_val: float) -> Optional[float]:
-    """Extract a parameter's final relative error (%) from metrics."""
-    # Try direct keys first
-    for candidate in (f"{key}_final", f"{key}_mean", key):
+    """Extract a parameter's final relative error (%) from metrics.
+
+    Tries pre-computed *_rel_error_percent keys first (most accurate), then
+    falls back to estimating from the stored parameter value.
+    """
+    # 1. Pre-computed percentage error stored directly
+    for pct_key in (f"{key}_rel_error_percent", f"{key}_rel_error_pct"):
+        if pct_key in metrics:
+            return float(metrics[pct_key])
+
+    # 2. Estimate from stored parameter value (atlas: mu_final, Schwarz: mu_mean_final)
+    for candidate in (f"{key}_final", f"{key}_mean_final", f"{key}_mean", key):
         if candidate in metrics:
             est = float(metrics[candidate])
             return abs(est - true_val) / abs(true_val) * 100.0
@@ -241,8 +250,9 @@ def fig_summary(
         metr = run["metrics"]
         mu_errs.append(_param_err_pct(metr, "mu", MU_TRUE))
         K_errs.append(_param_err_pct(metr, "K",  K_TRUE))
-        # obs_rel_l2
-        for cand in ("obs_rel_l2", "traction_rel_l2", "displacement_rel_l2"):
+        # obs_rel_l2 — key name varies by solver variant
+        for cand in ("obs_rel_l2_final", "obs_rel_l2", "traction_rel_l2",
+                     "traction_rel_l2_final", "displacement_rel_l2"):
             if cand in metr:
                 obs_rl2.append(float(metr[cand]) * 100.0)
                 break
