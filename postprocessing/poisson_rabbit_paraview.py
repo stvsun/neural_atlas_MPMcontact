@@ -22,21 +22,28 @@ with the correct rabbit geometry in ParaView.
 All 50 000 points in the solution NPZ are already filtered to lie inside the
 rabbit domain (SDF < 0), so no additional culling is needed.
 
+Note on physical coordinates vs. Elder rabbit
+─────────────────────────────────────────────
+The Poisson rabbit uses atlas_vol/rabbit_atlas_data.npz (scale ≈ 1.64),
+whereas the Elder rabbit uses the Stanford-Bunny atlas (scale ≈ 0.156).
+Consequently the Poisson physical domain spans ≈ 1.8 m while the Elder domain
+spans ≈ 0.16 m.  The Poisson PINN was trained on a *procedural* union-of-
+ellipsoids SDF — not the Stanford Bunny PLY — so its geometry appears as a
+rounded ellipsoidal blob rather than a recognisable rabbit silhouette.
+Both coordinate transforms are numerically correct; the visual difference is
+a consequence of the different training domains.
+
 Surface mesh (--surface):
-  Voxelises the 50 000 interior solution points onto a 100³ occupancy grid,
-  applies morphological fill/close to handle sparsely-sampled thin regions
-  (ears, legs), then runs marching cubes at the binary boundary.  The result
-  is a triangulated surface mesh VTU with solution scalars mapped to surface
-  vertices via nearest-neighbour interpolation.  Open this file in ParaView
-  with the default 'Surface' representation to see the rabbit geometry
-  immediately — no need for 'Point Gaussian' mode.
+  Voxelises the 50 000 interior solution points onto a grid occupancy grid,
+  applies morphological fill/close to handle sparsely-sampled thin regions,
+  then runs marching cubes at the binary boundary.  The result is a
+  triangulated surface mesh VTU with solution scalars mapped to surface
+  vertices via nearest-neighbour interpolation.
 
 In ParaView:
-  - <prefix>_surface.vtu  → open with Representation='Surface', colour by
-    'u_error_mag' or 'u_pred' for instant rabbit geometry visualisation.
-  - <prefix>_merged.vtu   → Representation='Point Gaussian' for the interior
-    point cloud; use 'Slice' or 'Threshold' filters for cross-sections.
-  - <prefix>_grid.vtr     → Representation='Volume' for volumetric rendering.
+  - <prefix>_surface.vtu  → Representation='Surface', colour by 'u_error_mag'
+  - <prefix>_merged.vtu   → Representation='Point Gaussian' for point cloud
+  - <prefix>_grid.vtr     → Representation='Volume' for volumetric rendering
 
 Outputs (written to --output-dir):
     <prefix>_merged.vtu          All interior points (physical coords)
@@ -45,15 +52,18 @@ Outputs (written to --output-dir):
     <prefix>_grid.vtr            Regular Cartesian grid (optional, --grid)
     <prefix>_manifest.json       Paths + metrics summary
 
+Additionally writes publication-quality convergence figures (Matplotlib) to
+--figures-dir, mirroring the figure output of elder_rabbit_paraview.py.
+
 Usage (default paths for the CompactChartNet best run):
     python postprocessing/poisson_rabbit_paraview.py \\
         --solution-npz runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_solution.npz \\
         --atlas-npz    runs/atlas_vol/rabbit_atlas_data.npz \\
-        --output-dir   runs/attempt20c_compact/paraview \\
+        --output-dir   paraview/rabbit_poisson_compact \\
         --prefix       rabbit_poisson_compact \\
         --grid \\
         --surface \\
-        --surface-grid 100
+        --figures-dir  figures
 """
 
 from __future__ import annotations
@@ -69,6 +79,11 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from postprocessing.utils import (
+    DOUBLE_COL_W,
+    GOLDEN,
+    PUB_COLORS,
+    SINGLE_COL_W,
+    set_pub_style,
     write_vtu_points,
     write_vtu_surface_mesh,
     write_vtu_rectilinear_grid,
@@ -77,6 +92,21 @@ from postprocessing.utils import (
 
 # Default atlas NPZ for the volumetric (50 000 point) rabbit runs
 _DEFAULT_ATLAS_NPZ = "runs/atlas_vol/rabbit_atlas_data.npz"
+
+
+# ---------------------------------------------------------------------------
+# JSON helpers (mirror elder_rabbit_paraview.py)
+# ---------------------------------------------------------------------------
+
+def _load_json(run_dir: str, suffix: str) -> dict:
+    """Return the first JSON file in run_dir whose name ends with suffix."""
+    if not os.path.isdir(run_dir):
+        return {}
+    for fn in sorted(os.listdir(run_dir)):
+        if fn.endswith(suffix):
+            with open(os.path.join(run_dir, fn)) as fh:
+                return json.load(fh)
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +222,20 @@ def parse_args() -> argparse.Namespace:
              "for --surface.  Reduces staircase artefacts and triangle count. "
              "Default 1.2; set to 0 to disable.",
     )
+    p.add_argument(
+        "--run-dir", default=None,
+        help="Run directory containing *_history.json and *_metrics.json used "
+             "for convergence figures.  Inferred from --solution-npz if omitted.",
+    )
+    p.add_argument(
+        "--figures-dir", default="figures",
+        help="Directory for publication-quality Matplotlib figures.",
+    )
+    p.add_argument(
+        "--skip-figures", action="store_true",
+        help="Skip Matplotlib figure generation (useful when matplotlib is "
+             "unavailable or figures are not needed).",
+    )
     return p.parse_args()
 
 
@@ -296,6 +340,108 @@ def extract_surface_from_points(
 
 
 # ---------------------------------------------------------------------------
+# Publication figures (convergence + error summary)
+# ---------------------------------------------------------------------------
+
+def make_figures(run_dir: str, figures_dir: str, final_metrics: dict) -> None:
+    """Generate Poisson convergence and error-summary figures.
+
+    Mirrors the figure output of elder_rabbit_paraview.py.
+
+    Parameters
+    ----------
+    run_dir:
+        Directory that contains *_history.json and *_metrics.json.
+    figures_dir:
+        Output directory for PDF/PNG figures.
+    final_metrics:
+        Dict with keys 'rel_l2' (float, 0-1) and 'max_err' (float).
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    set_pub_style(fontsize=9, linewidth=1.5)
+
+    hist = _load_json(run_dir, "_history.json")
+    if not hist:
+        print(f"  No *_history.json found in {run_dir} — skipping figures.")
+        return
+
+    os.makedirs(figures_dir, exist_ok=True)
+    iters = np.arange(1, len(next(iter(hist.values()))) + 1)
+
+    # ---- Figure 1: convergence (2×2) --------------------------------------
+    fig, axes = plt.subplots(
+        2, 2,
+        figsize=(DOUBLE_COL_W, DOUBLE_COL_W * GOLDEN * 1.1),
+        constrained_layout=True,
+    )
+    axes = axes.ravel()
+
+    panels = [
+        ("global_residual", "PDE (Laplacian) loss"),
+        ("bc_loss",         "Boundary condition loss"),
+        ("interface_flux",  "Interface flux residual"),
+        ("rel_l2_eval",     "Relative L² error (%)"),
+    ]
+    for pi, (key, ylabel) in enumerate(panels):
+        ax = axes[pi]
+        if key in hist:
+            vals = np.asarray(hist[key], dtype=float)
+            if key == "rel_l2_eval":
+                vals = vals * 100.0   # convert to %
+            ax.plot(iters[:len(vals)], vals,
+                    color=PUB_COLORS[0], linewidth=1.5)
+        ax.set_xlabel("Schwarz iteration")
+        ax.set_ylabel(ylabel)
+        ax.set_yscale("log")
+        ax.text(0.02, 0.97, f"({chr(ord('a') + pi)})",
+                transform=ax.transAxes, va="top", ha="left",
+                fontsize=9, fontweight="bold")
+
+    fig.suptitle("Poisson on rabbit — Schwarz convergence",
+                 fontsize=10, fontweight="bold")
+    for ext in ("pdf", "png"):
+        path = os.path.join(figures_dir, f"poisson_rabbit_convergence.{ext}")
+        fig.savefig(path, dpi=300)
+        print(f"  Saved: {path}")
+    plt.close(fig)
+
+    # ---- Figure 2: error summary bar chart --------------------------------
+    fig2, ax2 = plt.subplots(
+        figsize=(SINGLE_COL_W * 1.2, SINGLE_COL_W * GOLDEN * 1.5),
+        constrained_layout=True,
+    )
+
+    bar_labels = ["Rel-L² error (%)", "Max abs. error"]
+    bar_vals   = [final_metrics.get("rel_l2", 0.0) * 100.0,
+                  final_metrics.get("max_err", 0.0)]
+    bar_colors = [PUB_COLORS[0], PUB_COLORS[1]]
+
+    bars = ax2.bar(range(len(bar_vals)), bar_vals,
+                   color=bar_colors, edgecolor="white", linewidth=0.5)
+    for rect, val in zip(bars, bar_vals):
+        ax2.annotate(
+            f"{val:.3g}",
+            xy=(rect.get_x() + rect.get_width() / 2, rect.get_height()),
+            xytext=(0, 3), textcoords="offset points",
+            ha="center", va="bottom", fontsize=8,
+        )
+    ax2.set_xticks(range(len(bar_labels)))
+    ax2.set_xticklabels(bar_labels, rotation=10, ha="right")
+    ax2.set_ylabel("Error")
+    ax2.set_title("Poisson rabbit — final errors",
+                  fontsize=9, fontweight="bold")
+
+    for ext in ("pdf", "png"):
+        path = os.path.join(figures_dir, f"poisson_rabbit_error_summary.{ext}")
+        fig2.savefig(path, dpi=300)
+        print(f"  Saved: {path}")
+    plt.close(fig2)
+
+
+# ---------------------------------------------------------------------------
 # Main export logic
 # ---------------------------------------------------------------------------
 
@@ -322,11 +468,17 @@ def main() -> None:
     u_error        = np.asarray(data["u_error"],           dtype=float).reshape(-1)
     u_error_mag    = np.asarray(data["u_error_mag"],       dtype=float).reshape(-1)
     chart_id       = np.asarray(data["chart_id"],          dtype=np.int32).reshape(-1)
-    blend_weight   = np.asarray(data["blend_weight"],      dtype=float).reshape(-1)
-    interface_res  = np.asarray(data["interface_residual"],dtype=float).reshape(-1)
 
     n_points = points_physical.shape[0]
     n_charts = int(chart_id.max()) + 1
+
+    # Optional fields — present in most runs but may be absent in older NPZs
+    blend_weight  = np.asarray(
+        data["blend_weight"] if "blend_weight" in data else np.zeros(n_points),
+        dtype=float).reshape(-1)
+    interface_res = np.asarray(
+        data["interface_residual"] if "interface_residual" in data else np.zeros(n_points),
+        dtype=float).reshape(-1)
 
     print(f"  N = {n_points} interior points,  n_charts = {n_charts}")
     print(f"  Physical coords: "
@@ -466,6 +618,15 @@ def main() -> None:
     if surface_path:
         print(f"  6. Open {os.path.basename(surface_path)} → Representation = 'Surface'")
         print("     Colour by 'u_error_mag' or 'u_pred' to see the full rabbit geometry.")
+
+    # ---- Publication figures ----------------------------------------------
+    if not args.skip_figures:
+        run_dir = args.run_dir or os.path.dirname(os.path.abspath(args.solution_npz))
+        print(f"\nGenerating convergence figures → {args.figures_dir}")
+        make_figures(run_dir, args.figures_dir,
+                     {"rel_l2": rel_l2, "max_err": max_err})
+
+    print("\nDone.")
 
 
 if __name__ == "__main__":
