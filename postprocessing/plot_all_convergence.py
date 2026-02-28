@@ -195,30 +195,29 @@ def fig_all_convergence(args: argparse.Namespace) -> None:
             va="top", ha="left", fontsize=9, fontweight="bold")
     ax.set_title("Poisson — rabbit", fontsize=8)
 
-    # ---- Panel (b): Elder rabbit k0 error vs iteration -------------------
+    # ---- Panel (b): Elder rabbit — PDE loss convergence (more informative) --
     ax = axes[1]
     hist_elder, _ = _load_hist(args.elder_dir)
-    if "k0_rel" in hist_elder:
-        vals = np.asarray(hist_elder["k0_rel"], dtype=float) * 100.0
-        # Deduplicate (Elder history repeats each iter 3 times due to update scheme)
-        # Keep unique consecutive values
-        keep = [0] + [i for i in range(1, len(vals)) if vals[i] != vals[i - 1]]
-        vals_u = vals[keep]
-        iters_u = np.arange(1, len(vals_u) + 1)
-        ax.plot(iters_u, vals_u,
-                color=PUB_COLORS[0], linewidth=1.5,
-                marker="o", markersize=4, label="$k_0$ rel. error")
-    if "eig_rel_mean" in hist_elder:
-        vals = np.asarray(hist_elder["eig_rel_mean"], dtype=float) * 100.0
-        keep = [0] + [i for i in range(1, len(vals)) if vals[i] != vals[i - 1]]
-        vals_u = vals[keep]
-        iters_u = np.arange(1, len(vals_u) + 1)
-        ax.plot(iters_u, vals_u,
-                color=PUB_COLORS[1], linestyle="--", linewidth=1.5,
-                marker="s", markersize=4, label="Eigenvalue rel. error (mean)")
+    # Use "flow" (Darcy PDE loss) and "trans" (transport PDE loss) which show
+    # clear convergence behaviour.  Each value is repeated 3× per Schwarz iter
+    # due to the elder update scheme; deduplicate to show one point per iter.
+    for key_e, lbl_e, col_e, ls_e, mk_e in [
+        ("flow",   "Darcy PDE loss",     PUB_COLORS[0], "-",   "o"),
+        ("trans",  "Transport PDE loss", PUB_COLORS[1], "--",  "s"),
+        ("if_flux","Interface flux",     PUB_COLORS[2], "-.",  "^"),
+    ]:
+        if key_e not in hist_elder:
+            continue
+        vals = np.asarray(hist_elder[key_e], dtype=float)
+        # The Elder history stores one scalar per Schwarz sub-iteration;
+        # plot all raw values — the step pattern reflects the convergence event.
+        iters_u = np.arange(1, len(vals) + 1)
+        ax.plot(iters_u, vals, color=col_e, linestyle=ls_e, linewidth=1.5,
+                marker=mk_e, markevery=max(1, len(vals) // 8),
+                markersize=4, label=lbl_e)
     ax.set_xlabel("Schwarz iteration")
-    ax.set_ylabel("Parameter relative error (%)")
-    ax.set_yscale("linear")
+    ax.set_ylabel("Loss / residual")
+    ax.set_yscale("log")
     ax.legend(loc="upper right", fontsize=7)
     ax.text(0.02, 0.97, "(b)", transform=ax.transAxes,
             va="top", ha="left", fontsize=9, fontweight="bold")
@@ -312,13 +311,18 @@ def fig_benchmark_summary(args: argparse.Namespace) -> None:
     groups = []
 
     # Poisson rabbit (best run = attempt20c_compact)
+    # Metrics are stored under a nested "global" key
     metr = _load_metrics(
         args.poisson_dirs[-1],  # last entry = best
         args.poisson_prefixes[-1],
     )
     if metr:
-        rel_l2 = float(metr.get("relative_l2_error", 0.0)) * 100.0
-        max_err = float(metr.get("max_error", 0.0)) * 100.0
+        g = metr.get("global", metr)  # fall back to flat dict if no "global" key
+        rel_l2  = float(g.get("relative_l2_error", 0.0)) * 100.0
+        max_err = float(g.get("max_error", 0.0)) * 100.0
+        if rel_l2 == 0.0:  # try flat keys as fallback
+            rel_l2  = float(metr.get("relative_l2_error", 0.0)) * 100.0
+            max_err = float(metr.get("max_error", 0.0)) * 100.0
         groups.append({
             "label":  "Poisson\nrabbit\n(best)",
             "bars": [
@@ -327,11 +331,13 @@ def fig_benchmark_summary(args: argparse.Namespace) -> None:
             ],
         })
 
-    # Torus inverse — atlas
+    # Torus inverse — atlas  (keys: mu_rel_error_percent, K_rel_error_percent)
     metr_atlas = _load_metrics(args.torus_atlas_dir)
     if metr_atlas:
-        mu_err = abs(float(metr_atlas.get("mu_final", 1.8)) - 1.8) / 1.8 * 100.0
-        K_err  = abs(float(metr_atlas.get("K_final",  25.0)) - 25.0) / 25.0 * 100.0
+        mu_err = float(metr_atlas.get("mu_rel_error_percent",
+                       abs(float(metr_atlas.get("mu_final", 1.8)) - 1.8) / 1.8 * 100.0))
+        K_err  = float(metr_atlas.get("K_rel_error_percent",
+                       abs(float(metr_atlas.get("K_final",  25.0)) - 25.0) / 25.0 * 100.0))
         groups.append({
             "label": "Neo-Hookean\ntorus\n(atlas)",
             "bars": [
@@ -340,11 +346,13 @@ def fig_benchmark_summary(args: argparse.Namespace) -> None:
             ],
         })
 
-    # Torus inverse — Schwarz displacement (best)
+    # Torus inverse — Schwarz displacement (keys: mu_rel_error_percent, K_rel_error_percent)
     metr_disp = _load_metrics(args.torus_disp_dir)
     if metr_disp:
-        mu_err = abs(float(metr_disp.get("mu_mean", 1.8)) - 1.8) / 1.8 * 100.0
-        K_err  = abs(float(metr_disp.get("K_mean",  25.0)) - 25.0) / 25.0 * 100.0
+        mu_err = float(metr_disp.get("mu_rel_error_percent",
+                       abs(float(metr_disp.get("mu_mean_final", 1.8)) - 1.8) / 1.8 * 100.0))
+        K_err  = float(metr_disp.get("K_rel_error_percent",
+                       abs(float(metr_disp.get("K_mean_final",  25.0)) - 25.0) / 25.0 * 100.0))
         groups.append({
             "label": "Neo-Hookean\ntorus\n(Schwarz disp.)",
             "bars": [
@@ -353,12 +361,12 @@ def fig_benchmark_summary(args: argparse.Namespace) -> None:
             ],
         })
 
-    # Elder rabbit
+    # Elder rabbit (keys: k0_rel_error, eig_rel_error_mean, axis_angle_error_deg_mean)
     metr_elder = _load_metrics(args.elder_dir)
     if metr_elder:
-        k0_err  = float(metr_elder.get("k0_rel_err", 0.0)) * 100.0
-        eig_err = float(metr_elder.get("eig_rel_mean", 0.0)) * 100.0
-        ax_deg  = float(metr_elder.get("axis_deg_mean", 0.0))
+        k0_err  = float(metr_elder.get("k0_rel_error", 0.0)) * 100.0
+        eig_err = float(metr_elder.get("eig_rel_error_mean", 0.0)) * 100.0
+        ax_deg  = float(metr_elder.get("axis_angle_error_deg_mean", 0.0))
         groups.append({
             "label": "Elder inverse\nrabbit",
             "bars": [
