@@ -105,6 +105,78 @@ def write_vtu_points(
         f.write("</VTKFile>\n")
 
 
+def write_vtu_surface_mesh(
+    path: str,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    point_data: Dict[str, np.ndarray],
+    *,
+    float_fmt: str = "%.8g",
+) -> None:
+    """Write an ASCII VTK UnstructuredGrid with VTK_TRIANGLE cells.
+
+    Parameters
+    ----------
+    path:
+        Output .vtu file path.
+    vertices:
+        (V, 3) array of vertex coordinates.
+    faces:
+        (F, 3) integer array of triangle vertex indices.
+    point_data:
+        Dictionary of field names → 1-D arrays of length V (scalar at each vertex).
+    """
+    vertices = np.asarray(vertices, dtype=float)
+    faces = np.asarray(faces, dtype=np.int32)
+    nv = vertices.shape[0]
+    nf = faces.shape[0]
+
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+    connectivity = faces.reshape(-1)                          # 3*F indices
+    offsets      = np.arange(3, 3 * nf + 1, 3, dtype=np.int32)
+    cell_types   = np.full(nf, 5, dtype=np.uint8)             # 5 = VTK_TRIANGLE
+
+    def _fmt(arr: np.ndarray) -> str:
+        return " ".join(float_fmt % v for v in np.asarray(arr).reshape(-1))
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0"?>\n')
+        f.write('<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">\n')
+        f.write("  <UnstructuredGrid>\n")
+        f.write(f'    <Piece NumberOfPoints="{nv}" NumberOfCells="{nf}">\n')
+        f.write("      <Points>\n")
+        f.write('        <DataArray type="Float64" NumberOfComponents="3" format="ascii">\n')
+        f.write("          " + _fmt(vertices) + "\n")
+        f.write("        </DataArray>\n")
+        f.write("      </Points>\n")
+        f.write("      <Cells>\n")
+        f.write('        <DataArray type="Int32" Name="connectivity" format="ascii">\n')
+        f.write("          " + " ".join(map(str, connectivity)) + "\n")
+        f.write("        </DataArray>\n")
+        f.write('        <DataArray type="Int32" Name="offsets" format="ascii">\n')
+        f.write("          " + " ".join(map(str, offsets)) + "\n")
+        f.write("        </DataArray>\n")
+        f.write('        <DataArray type="UInt8" Name="types" format="ascii">\n')
+        f.write("          " + " ".join(map(str, cell_types)) + "\n")
+        f.write("        </DataArray>\n")
+        f.write("      </Cells>\n")
+        f.write("      <PointData>\n")
+        for name, arr in point_data.items():
+            arr = np.asarray(arr, dtype=float)
+            ncomp = 1 if arr.ndim == 1 else arr.shape[1]
+            f.write(
+                f'        <DataArray type="Float64" Name="{name}" '
+                f'NumberOfComponents="{ncomp}" format="ascii">\n'
+            )
+            f.write("          " + _fmt(arr) + "\n")
+            f.write("        </DataArray>\n")
+        f.write("      </PointData>\n")
+        f.write("    </Piece>\n")
+        f.write("  </UnstructuredGrid>\n")
+        f.write("</VTKFile>\n")
+
+
 def write_vtu_rectilinear_grid(
     path: str,
     x_coords: np.ndarray,
