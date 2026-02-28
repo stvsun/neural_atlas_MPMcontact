@@ -1,10 +1,28 @@
 #!/usr/bin/env python3
 """
-Export Elder-flow inverse results on the Stanford rabbit to ParaView VTK files.
+Export Elder-flow inverse results on the Stanford rabbit to ParaView VTK files
+in *physical (world) space*.
 
-The solution NPZ contains ~30 000 volumetric interior points.  All three
-physical fields (pressure, concentration, velocity) are exported together with
-their errors, enabling 3-D interior cross-section analysis in ParaView.
+Background
+──────────
+The solution NPZ stores point coordinates in the SDF-normalised reference
+frame used during training:
+
+    x_norm = (x_physical − center) / scale
+
+The inverse transform that recovers physical space is:
+
+    x_physical = center + scale × x_norm
+
+The center and scale are stored in the atlas-data NPZ produced by
+build_rabbit_atlas.py.  This script loads them and applies the transform
+before writing any VTK output, so the resulting files open with the correct
+rabbit geometry in ParaView.
+
+The solution NPZ contains ~30 000 volumetric interior points (already filtered
+to lie inside the rabbit domain, SDF < 0 — no additional culling needed).
+All three physical fields (pressure, concentration, velocity) are exported
+together with their errors.
 
 In ParaView you can:
   - Open the merged VTU, set Representation = 'Point Gaussian' or 'Sphere'.
@@ -20,14 +38,15 @@ Additionally writes publication-quality convergence + parameter-recovery
 figures (Matplotlib) to the --figures-dir directory.
 
 Outputs:
-    <output-dir>/<prefix>_merged.vtu         All interior points
-    <output-dir>/<prefix>_chart_<id>.vtu     Per-chart subsets (12 charts)
+    <output-dir>/<prefix>_merged.vtu         All interior points (physical coords)
+    <output-dir>/<prefix>_chart_<id>.vtu     Per-chart subsets (physical coords)
     <output-dir>/<prefix>_grid.vtr           Regular grid (optional, --grid)
     <output-dir>/<prefix>_manifest.json
 
 Usage:
     python postprocessing/elder_rabbit_paraview.py \\
-        --run-dir  runs/rabbit_inverse_elder_globalfield_small \\
+        --run-dir    runs/rabbit_inverse_elder_globalfield_small \\
+        --atlas-npz  runs/atlas_schwarz_20260213_002517/rabbit_atlas_data.npz \\
         --output-dir runs/rabbit_inverse_elder_globalfield_small/paraview2 \\
         --figures-dir figures \\
         --grid
@@ -62,6 +81,37 @@ from postprocessing.utils import (
 K0_TRUE   = 1.0
 EIG_TRUE  = np.array([1.688, 1.0, 0.541])   # dominant eigenvalues
 
+# Default atlas NPZ for the Elder / surface-atlas rabbit runs
+_DEFAULT_ATLAS_NPZ = "runs/atlas_schwarz_20260213_002517/rabbit_atlas_data.npz"
+
+
+# ---------------------------------------------------------------------------
+# SDF-normalisation helpers  (same logic as poisson_rabbit_paraview.py)
+# ---------------------------------------------------------------------------
+
+def load_sdf_transform(atlas_npz: Optional[str]):
+    """Return (center, scale) from the atlas-data NPZ.
+
+    Falls back to (zeros(3), 1.0) — identity transform — if the file is
+    missing, so the script still runs (albeit in normalised space).
+    """
+    if atlas_npz is None or not os.path.isfile(atlas_npz):
+        print(f"  WARNING: atlas NPZ not found ({atlas_npz}); "
+              "coordinates will remain in SDF-normalised space.")
+        return np.zeros(3, dtype=float), 1.0
+    d = np.load(atlas_npz, allow_pickle=True)
+    center = np.asarray(d["center"], dtype=float).reshape(3)
+    scale  = float(np.asarray(d["scale"]).reshape(-1)[0])
+    return center, scale
+
+
+def to_physical(points_norm: np.ndarray, center: np.ndarray, scale: float) -> np.ndarray:
+    """Convert SDF-normalised coordinates to physical space.
+
+    x_physical = center + scale * x_norm
+    """
+    return center + scale * np.asarray(points_norm, dtype=float)
+
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -69,13 +119,20 @@ EIG_TRUE  = np.array([1.688, 1.0, 0.541])   # dominant eigenvalues
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Export rabbit Elder inverse results to ParaView VTK files.",
+        description="Export rabbit Elder inverse results to ParaView VTK files "
+                    "in physical (world) space.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument(
         "--run-dir",
         default="runs/rabbit_inverse_elder_globalfield_small",
         help="Run directory (must contain *_solution.npz and *_pressure_velocity_fields.npz)",
+    )
+    p.add_argument(
+        "--atlas-npz",
+        default=_DEFAULT_ATLAS_NPZ,
+        help="Path to rabbit_atlas_data.npz containing the SDF normalisation "
+             "'center' and 'scale'.  Used to convert coordinates to physical space.",
     )
     p.add_argument(
         "--output-dir",
@@ -146,6 +203,12 @@ def _load_json(run_dir: str, suffix: str) -> Dict:
 def export_vtk(args: argparse.Namespace) -> None:
     t0 = time.time()
 
+    # ---- Load SDF transform (center + scale) --------------------------------
+    print(f"Loading atlas transform from {args.atlas_npz} ...")
+    center, scale = load_sdf_transform(args.atlas_npz)
+    print(f"  SDF normalisation: center={center}, scale={scale:.6f}")
+    print(f"  Transform: x_physical = center + {scale:.4f} × x_norm")
+
     # ---- Load solution data (p, c, u fields) --------------------------------
     sol_path = _find_npz(args.run_dir, "_solution.npz")
     pv_path  = _find_npz(args.run_dir, "_pressure_velocity_fields.npz")
@@ -157,11 +220,17 @@ def export_vtk(args: argparse.Namespace) -> None:
     print(f"Loading {sol_path} ...")
     sol = np.load(sol_path, allow_pickle=True)
 
-    points   = np.asarray(sol["points"],   dtype=float)   # (N, 3)
+    # Points are in SDF-normalised space — convert to physical space
+    points_norm     = np.asarray(sol["points"], dtype=float)   # (N, 3)
+    points          = to_physical(points_norm, center, scale)  # physical space
     chart_id = np.asarray(sol["chart_id"], dtype=np.int32).reshape(-1)
     n_points = points.shape[0]
     n_charts = int(chart_id.max()) + 1
     print(f"  N = {n_points} volumetric interior points,  n_charts = {n_charts}")
+    print(f"  Physical coords: "
+          f"x=[{points[:,0].min():.4f}, {points[:,0].max():.4f}]  "
+          f"y=[{points[:,1].min():.4f}, {points[:,1].max():.4f}]  "
+          f"z=[{points[:,2].min():.4f}, {points[:,2].max():.4f}]")
 
     # Build point_data ---------------------------------------------------
     point_data: Dict[str, np.ndarray] = {
@@ -275,6 +344,10 @@ def export_vtk(args: argparse.Namespace) -> None:
     manifest = {
         "solution_npz":    os.path.abspath(sol_path) if sol_path else None,
         "pv_npz":          os.path.abspath(pv_path)  if pv_path  else None,
+        "atlas_npz":       os.path.abspath(args.atlas_npz) if os.path.isfile(args.atlas_npz) else None,
+        "sdf_center":      center.tolist(),
+        "sdf_scale":       scale,
+        "coords":          "physical",
         "n_points":        n_points,
         "n_charts":        n_charts,
         "merged_vtu":      os.path.abspath(merged_path),
@@ -288,8 +361,9 @@ def export_vtk(args: argparse.Namespace) -> None:
 
     elapsed = time.time() - t0
     print(f"\nVTK export done in {elapsed:.1f}s")
-    print("\nParaView tips:")
-    print("  1. Open the merged VTU.  Color by 'pressure' or 'concentration'.")
+    print("\nParaView tips (physical space):")
+    print("  1. Open the merged VTU.  The rabbit shape should appear at its")
+    print("     true physical dimensions.  Color by 'pressure' or 'concentration'.")
     print("  2. Apply 'Slice' (X/Y/Z) to see interior cross-sections.")
     print("  3. Apply 'Glyph' on 'velocity' (3-component) for flow arrows.")
     print("  4. 'Threshold' on 'chart_id' to isolate individual charts.")

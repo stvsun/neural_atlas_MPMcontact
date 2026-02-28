@@ -1,32 +1,48 @@
 #!/usr/bin/env python3
 """
-Export Poisson-on-rabbit atlas results to ParaView-compatible VTK files.
+Export Poisson-on-rabbit atlas results to ParaView-compatible VTK files
+in *physical (world) space*.
 
-The solution NPZ contains ~50 000 volumetric interior points (not just the
-surface), so the resulting VTU files give full 3-D interior field access.
-In ParaView you can:
-  - Render the raw point cloud with "Point Gaussian" or "Sphere" glyphs.
-  - Apply the "Slice" filter (X / Y / Z planes) to inspect interior cross-
-    sections of the pressure field and error.
-  - Apply "Threshold" on the `chart_id` field to isolate individual charts.
-  - Apply "Glyph" on gradient (velocity) vectors.
+Background
+──────────
+The solution NPZ stores point coordinates in the SDF-normalised reference
+frame used during training:
 
-Optionally an axis-aligned rectilinear-grid VTR file is produced by
-nearest-neighbour interpolation, which allows the "Volume" renderer and
-cleaner slice views.
+    x_norm = (x_physical − center) / scale
+
+The inverse transform that recovers physical space is:
+
+    x_physical = center + scale × x_norm
+
+The center and scale are stored in the atlas-data NPZ produced by
+build_rabbit_atlas_volumetric.py.  This script loads them and applies the
+transform before writing any VTK output, so that the resulting files open
+with the correct rabbit geometry in ParaView.
+
+All 50 000 points in the solution NPZ are already filtered to lie inside the
+rabbit domain (SDF < 0), so no additional culling is needed.
+
+In ParaView:
+  - Open the merged VTU.  Set Representation = 'Point Gaussian' or 'Sphere'.
+  - Color by 'u_error_mag' to see error hot-spots in physical space.
+  - Add 'Slice' filter (X/Y/Z) to inspect interior cross-sections.
+  - Use 'Threshold' on 'chart_id' to isolate individual atlas charts.
+  - With --grid: open the .vtr file → Representation = 'Volume' for
+    full 3-D volumetric rendering of the interior solution field.
 
 Outputs (written to --output-dir):
-    <prefix>_merged.vtu          All interior + evaluation points (merged)
-    <prefix>_chart_<id>.vtu      Per-chart subset (12 files for 12-chart atlas)
+    <prefix>_merged.vtu          All interior points (physical coords)
+    <prefix>_chart_<id>.vtu      Per-chart subsets  (physical coords)
     <prefix>_grid.vtr            Regular Cartesian grid (optional, --grid)
     <prefix>_manifest.json       Paths + metrics summary
 
-Usage:
+Usage (default paths for the CompactChartNet best run):
     python postprocessing/poisson_rabbit_paraview.py \\
         --solution-npz runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_solution.npz \\
-        --output-dir  runs/attempt20c_compact/paraview \\
-        --prefix      rabbit_poisson_compact \\
-        --grid                      # also write rectilinear grid VTR
+        --atlas-npz    runs/atlas_vol/rabbit_atlas_data.npz \\
+        --output-dir   runs/attempt20c_compact/paraview \\
+        --prefix       rabbit_poisson_compact \\
+        --grid
 """
 
 from __future__ import annotations
@@ -36,13 +52,53 @@ import json
 import os
 import sys
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-# Allow running from any directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from postprocessing.utils import write_vtu_points, write_vtu_rectilinear_grid, interpolate_to_grid
+
+# Default atlas NPZ for the volumetric (50 000 point) rabbit runs
+_DEFAULT_ATLAS_NPZ = "runs/atlas_vol/rabbit_atlas_data.npz"
+
+
+# ---------------------------------------------------------------------------
+# SDF-normalisation helpers
+# ---------------------------------------------------------------------------
+
+def load_sdf_transform(atlas_npz: Optional[str]) -> Tuple[np.ndarray, float]:
+    """Return (center, scale) from the atlas-data NPZ.
+
+    Parameters
+    ----------
+    atlas_npz:
+        Path to the atlas NPZ file that contains 'center' and 'scale' arrays.
+        If None or the file is missing, returns (zeros, 1.0) — i.e. identity
+        transform (no denormalization).
+
+    Returns
+    -------
+    center : np.ndarray of shape (3,)
+    scale  : float
+    """
+    if atlas_npz is None or not os.path.isfile(atlas_npz):
+        print(f"  WARNING: atlas NPZ not found ({atlas_npz}); "
+              "coordinates will remain in SDF-normalised space.")
+        return np.zeros(3, dtype=float), 1.0
+
+    d = np.load(atlas_npz, allow_pickle=True)
+    center = np.asarray(d["center"], dtype=float).reshape(3)
+    scale  = float(np.asarray(d["scale"]).reshape(-1)[0])
+    return center, scale
+
+
+def to_physical(points_norm: np.ndarray, center: np.ndarray, scale: float) -> np.ndarray:
+    """Convert SDF-normalised coordinates to physical space.
+
+    x_physical = center + scale * x_norm
+    """
+    return center + scale * np.asarray(points_norm, dtype=float)
 
 
 # ---------------------------------------------------------------------------
@@ -51,13 +107,20 @@ from postprocessing.utils import write_vtu_points, write_vtu_rectilinear_grid, i
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Export rabbit Poisson atlas results to ParaView VTK files.",
+        description="Export rabbit Poisson atlas results to ParaView VTK files "
+                    "in physical (world) space.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument(
         "--solution-npz",
         required=True,
         help="Path to *_solution.npz produced by run_poisson_rabbit_atlas_schwarz.py",
+    )
+    p.add_argument(
+        "--atlas-npz",
+        default=_DEFAULT_ATLAS_NPZ,
+        help="Path to rabbit_atlas_data.npz containing the SDF normalisation "
+             "'center' and 'scale'.  Used to convert coordinates to physical space.",
     )
     p.add_argument(
         "--output-dir",
@@ -100,22 +163,36 @@ def main() -> None:
     args = parse_args()
     t0 = time.time()
 
+    # ---- Load SDF transform (center + scale) ------------------------------
+    print(f"Loading atlas transform from {args.atlas_npz} ...")
+    center, scale = load_sdf_transform(args.atlas_npz)
+    print(f"  SDF normalisation: center={center}, scale={scale:.6f}")
+    print(f"  Transform: x_physical = center + {scale:.4f} × x_norm")
+
     # ---- Load solution data -----------------------------------------------
     print(f"Loading {args.solution_npz} ...")
     data = np.load(args.solution_npz, allow_pickle=True)
 
-    points         = np.asarray(data["points"],           dtype=float)   # (N, 3)
-    u_pred         = np.asarray(data["u_pred"],           dtype=float).reshape(-1)
-    u_true         = np.asarray(data["u_true"],           dtype=float).reshape(-1)
-    u_error        = np.asarray(data["u_error"],          dtype=float).reshape(-1)
-    u_error_mag    = np.asarray(data["u_error_mag"],      dtype=float).reshape(-1)
-    chart_id       = np.asarray(data["chart_id"],         dtype=np.int32).reshape(-1)
-    blend_weight   = np.asarray(data["blend_weight"],     dtype=float).reshape(-1)
+    # Points are in SDF-normalised space — convert to physical space
+    points_norm     = np.asarray(data["points"],            dtype=float)   # (N, 3)
+    points_physical = to_physical(points_norm, center, scale)
+
+    u_pred         = np.asarray(data["u_pred"],            dtype=float).reshape(-1)
+    u_true         = np.asarray(data["u_true"],            dtype=float).reshape(-1)
+    u_error        = np.asarray(data["u_error"],           dtype=float).reshape(-1)
+    u_error_mag    = np.asarray(data["u_error_mag"],       dtype=float).reshape(-1)
+    chart_id       = np.asarray(data["chart_id"],          dtype=np.int32).reshape(-1)
+    blend_weight   = np.asarray(data["blend_weight"],      dtype=float).reshape(-1)
     interface_res  = np.asarray(data["interface_residual"],dtype=float).reshape(-1)
 
-    n_points = points.shape[0]
+    n_points = points_physical.shape[0]
     n_charts = int(chart_id.max()) + 1
+
     print(f"  N = {n_points} interior points,  n_charts = {n_charts}")
+    print(f"  Physical coords: "
+          f"x=[{points_physical[:,0].min():.4f}, {points_physical[:,0].max():.4f}]  "
+          f"y=[{points_physical[:,1].min():.4f}, {points_physical[:,1].max():.4f}]  "
+          f"z=[{points_physical[:,2].min():.4f}, {points_physical[:,2].max():.4f}]")
 
     # Optional extra fields
     extra: Dict[str, np.ndarray] = {}
@@ -124,34 +201,30 @@ def main() -> None:
             extra[key] = np.asarray(data[key], dtype=float).reshape(-1)
 
     # ---- Derived fields ---------------------------------------------------
-    # Relative pointwise error (clamped to avoid division by zero)
     u_true_abs = np.abs(u_true)
-    u_rel_err = u_error_mag / np.maximum(u_true_abs, 1e-12 * u_true_abs.max() + 1e-20)
+    u_rel_err  = u_error_mag / np.maximum(u_true_abs, 1e-12 * u_true_abs.max() + 1e-20)
 
-    # ---- Build point_data dict for merged file ----------------------------
+    # ---- Build point_data dict --------------------------------------------
     point_data: Dict[str, np.ndarray] = {
-        # Solution
         "u_pred":             u_pred,
         "u_true":             u_true,
-        # Error
         "u_error":            u_error,
         "u_error_mag":        u_error_mag,
         "u_rel_error":        u_rel_err,
-        # Atlas metadata
         "chart_id":           chart_id.astype(float),
         "blend_weight":       blend_weight,
         "interface_residual": interface_res,
     }
     point_data.update(extra)
 
-    # ---- Write merged VTU -------------------------------------------------
+    # ---- Write merged VTU (physical coords) -------------------------------
     os.makedirs(args.output_dir, exist_ok=True)
     merged_path = os.path.join(args.output_dir, f"{args.prefix}_merged.vtu")
     print(f"Writing merged VTU: {merged_path}")
-    write_vtu_points(merged_path, points, point_data)
+    write_vtu_points(merged_path, points_physical, point_data)
 
     # ---- Write per-chart VTUs ---------------------------------------------
-    per_chart_paths: list[str] = []
+    per_chart_paths: list = []
     if not args.no_per_chart:
         for cid in range(n_charts):
             mask = chart_id == cid
@@ -160,15 +233,15 @@ def main() -> None:
             chart_data = {k: v[mask] for k, v in point_data.items()}
             cpath = os.path.join(args.output_dir, f"{args.prefix}_chart_{cid:02d}.vtu")
             print(f"  Chart {cid:02d}: {mask.sum()} pts → {cpath}")
-            write_vtu_points(cpath, points[mask], chart_data)
+            write_vtu_points(cpath, points_physical[mask], chart_data)
             per_chart_paths.append(cpath)
 
-    # ---- Optional rectilinear grid (for Volume / Slice rendering) ---------
+    # ---- Optional rectilinear grid (physical coords) ----------------------
     grid_path: Optional[str] = None
     if args.grid:
         print(
             f"Interpolating to {args.grid_nx}×{args.grid_ny}×{args.grid_nz} grid "
-            "(nearest-neighbour) ..."
+            "(nearest-neighbour) in physical space ..."
         )
         scalar_fields = {
             "u_pred":       u_pred,
@@ -180,7 +253,7 @@ def main() -> None:
             "blend_weight": blend_weight,
         }
         xg, yg, zg, gf = interpolate_to_grid(
-            points, scalar_fields,
+            points_physical, scalar_fields,
             nx=args.grid_nx, ny=args.grid_ny, nz=args.grid_nz,
             method="nearest",
         )
@@ -188,19 +261,21 @@ def main() -> None:
         print(f"Writing rectilinear grid VTR: {grid_path}")
         write_vtu_rectilinear_grid(grid_path, xg, yg, zg, gf)
 
-    # ---- Compute summary metrics ------------------------------------------
-    rel_l2 = float(
-        np.sqrt(np.mean(u_error ** 2)) / (np.sqrt(np.mean(u_true ** 2)) + 1e-30)
-    )
+    # ---- Summary metrics --------------------------------------------------
+    rel_l2  = float(np.sqrt(np.mean(u_error**2)) / (np.sqrt(np.mean(u_true**2)) + 1e-30))
     max_err = float(u_error_mag.max())
 
-    # ---- Write manifest ---------------------------------------------------
+    # ---- Manifest ---------------------------------------------------------
     manifest = {
         "solution_npz":   os.path.abspath(args.solution_npz),
+        "atlas_npz":      os.path.abspath(args.atlas_npz) if os.path.isfile(args.atlas_npz) else None,
+        "sdf_center":     center.tolist(),
+        "sdf_scale":      scale,
         "n_points":       n_points,
         "n_charts":       n_charts,
         "rel_l2_error":   rel_l2,
         "max_error":      max_err,
+        "coords":         "physical",
         "merged_vtu":     os.path.abspath(merged_path),
         "per_chart_vtu":  [os.path.abspath(p) for p in per_chart_paths],
         "grid_vtr":       os.path.abspath(grid_path) if grid_path else None,
@@ -211,18 +286,17 @@ def main() -> None:
     print(f"Manifest: {manifest_path}")
 
     elapsed = time.time() - t0
-    print(
-        f"\nDone in {elapsed:.1f}s.  rel_L2 = {rel_l2 * 100:.3f}%,  "
-        f"max_err = {max_err:.4f}"
-    )
-    print("\nParaView tips:")
-    print("  1. Open the merged VTU.  Set Representation = 'Point Gaussian' or 'Sphere'.")
-    print("  2. Color by 'u_error_mag' with a diverging colormap to see error hot-spots.")
-    print("  3. Add 'Slice' filter (X/Y/Z normal) to see interior cross-sections.")
-    print("  4. Use 'Threshold' on 'chart_id' to highlight individual atlas charts.")
+    print(f"\nDone in {elapsed:.1f}s.  rel_L2 = {rel_l2*100:.3f}%,  max_err = {max_err:.4f}")
+    print("\nParaView tips (physical space):")
+    print("  1. Open the merged VTU.  Representation = 'Point Gaussian' or 'Sphere'.")
+    print("     The rabbit shape should now be visible at its true physical dimensions.")
+    print("  2. Color by 'u_error_mag' with a diverging colormap.")
+    print("  3. Add 'Slice' filter (X/Y/Z) to see interior cross-sections.")
+    print("  4. 'Threshold' on 'chart_id' to isolate individual atlas charts.")
     if grid_path:
-        print(f"  5. Open {os.path.basename(grid_path)} and set Representation = 'Volume'")
-        print("     for full 3-D volumetric rendering of the interior pressure field.")
+        print(f"  5. Open {os.path.basename(grid_path)} → Representation = 'Volume'")
+        print("     for full 3-D volumetric rendering (note: grid is bounding-box only;")
+        print("     points outside the rabbit surface have values from nearest interior pt).")
 
 
 if __name__ == "__main__":
