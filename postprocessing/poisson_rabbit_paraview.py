@@ -34,11 +34,19 @@ Both coordinate transforms are numerically correct; the visual difference is
 a consequence of the different training domains.
 
 Surface mesh (--surface):
-  Voxelises the 50 000 interior solution points onto a grid occupancy grid,
-  applies morphological fill/close to handle sparsely-sampled thin regions,
-  then runs marching cubes at the binary boundary.  The result is a
-  triangulated surface mesh VTU with solution scalars mapped to surface
-  vertices via nearest-neighbour interpolation.
+  Two modes are available:
+
+  1. PLY mesh (--ply-file, recommended for Stanford Bunny):
+     Reads the original PLY mesh vertices and face connectivity directly.
+     This preserves thin features such as rabbit ears that carry almost no
+     interior points and are completely lost by voxelisation.  Solution
+     scalars are mapped to PLY vertices by nearest-neighbour query from the
+     interior point cloud.
+
+  2. Voxel occupancy (default when --ply-file is omitted):
+     Voxelises the 50 000 interior solution points onto a grid occupancy
+     grid, applies morphological fill/close, then runs marching cubes.
+     Produces a blobby outline that loses fine surface features.
 
 In ParaView:
   - <prefix>_surface.vtu  → Representation='Surface', colour by 'u_error_mag'
@@ -71,9 +79,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import struct
 import sys
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -223,6 +232,16 @@ def parse_args() -> argparse.Namespace:
              "Default 1.2; set to 0 to disable.",
     )
     p.add_argument(
+        "--ply-file", default=None,
+        help="Path to the original PLY mesh file (e.g. bun_zipper.ply) whose "
+             "vertices and face connectivity are used for --surface instead of "
+             "the voxel-occupancy reconstruction.  Recommended for the Stanford "
+             "Bunny: preserves thin features (ears, legs) that have almost no "
+             "interior atlas points and are lost by voxelisation.  "
+             "Example: runs/atlas_schwarz_20260212_210412/downloads/bunny/"
+             "reconstruction/bun_zipper.ply",
+    )
+    p.add_argument(
         "--run-dir", default=None,
         help="Run directory containing *_history.json and *_metrics.json used "
              "for convergence figures.  Inferred from --solution-npz if omitted.",
@@ -337,6 +356,155 @@ def extract_surface_from_points(
         f"  (grid {grid_size}³, sigma={smooth_sigma}, close_iters={close_iters})"
     )
     return verts.astype(np.float64), faces.astype(np.int32)
+
+
+# ---------------------------------------------------------------------------
+# PLY mesh reader (vertices + face connectivity)
+# ---------------------------------------------------------------------------
+
+# Maps PLY property type names to (numpy dtype suffix, struct format char, byte size)
+_PLY_NP: Dict[str, str] = {
+    "char":    "i1",  "int8":    "i1",
+    "uchar":   "u1",  "uint8":   "u1",
+    "short":   "i2",  "int16":   "i2",
+    "ushort":  "u2",  "uint16":  "u2",
+    "int":     "i4",  "int32":   "i4",
+    "uint":    "u4",  "uint32":  "u4",
+    "float":   "f4",  "float32": "f4",
+    "double":  "f8",  "float64": "f8",
+}
+_PLY_STRUCT: Dict[str, tuple] = {
+    "char":    ("b", 1),  "int8":    ("b", 1),
+    "uchar":   ("B", 1),  "uint8":   ("B", 1),
+    "short":   ("h", 2),  "int16":   ("h", 2),
+    "ushort":  ("H", 2),  "uint16":  ("H", 2),
+    "int":     ("i", 4),  "int32":   ("i", 4),
+    "uint":    ("I", 4),  "uint32":  ("I", 4),
+    "float":   ("f", 4),  "float32": ("f", 4),
+    "double":  ("d", 8),  "float64": ("d", 8),
+}
+
+
+def parse_ply_mesh(path: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Parse a PLY file and return vertex positions and triangle faces.
+
+    Supports ``binary_little_endian``, ``binary_big_endian``, and ``ascii``
+    PLY formats.  Non-triangular faces (quads, n-gons) are tessellated into
+    triangles using a fan from the first vertex.
+
+    Parameters
+    ----------
+    path:
+        Path to the ``.ply`` mesh file.
+
+    Returns
+    -------
+    verts : (V, 3) float64
+        Vertex ``(x, y, z)`` positions in the PLY file's coordinate system.
+    faces : (F, 3) int32
+        Triangle face index array.
+    """
+    with open(path, "rb") as fh:
+        # ── parse ASCII header ──────────────────────────────────────────────
+        header_lines: List[str] = []
+        while True:
+            raw = fh.readline()
+            line = raw.decode("ascii", errors="replace").strip()
+            header_lines.append(line)
+            if line == "end_header":
+                break
+
+        # Detect binary / ascii format
+        fmt = "ascii"
+        for l in header_lines:
+            if l.startswith("format"):
+                parts = l.split()
+                if len(parts) >= 2:
+                    fmt = parts[1]   # e.g. "binary_little_endian"
+                break
+        endian = "<" if "little" in fmt else (">" if "big" in fmt else "=")
+
+        # Parse element/property declarations
+        n_verts: int = 0
+        n_faces: int = 0
+        vert_props: List[Tuple[str, str]] = []   # (name, ply_type_str)
+        face_count_ptype: str = "uchar"
+        face_idx_ptype:   str = "int"
+
+        cur_elem = None
+        for l in header_lines:
+            if l.startswith("element vertex"):
+                n_verts = int(l.split()[-1])
+                cur_elem = "vertex"
+            elif l.startswith("element face"):
+                n_faces = int(l.split()[-1])
+                cur_elem = "face"
+            elif l.startswith("element"):
+                cur_elem = "other"
+            elif l.startswith("property list") and cur_elem == "face":
+                parts = l.split()   # property list <count_type> <idx_type> <name>
+                face_count_ptype = parts[2]
+                face_idx_ptype   = parts[3]
+            elif l.startswith("property") and "list" not in l and cur_elem == "vertex":
+                parts = l.split()   # property <type> <name>
+                vert_props.append((parts[2], parts[1]))
+
+        # ── read vertices ────────────────────────────────────────────────────
+        if fmt == "ascii":
+            x_col = next(i for i, (n, _) in enumerate(vert_props) if n == "x")
+            y_col = next(i for i, (n, _) in enumerate(vert_props) if n == "y")
+            z_col = next(i for i, (n, _) in enumerate(vert_props) if n == "z")
+            verts = np.zeros((n_verts, 3), dtype=np.float64)
+            for vi in range(n_verts):
+                row = fh.readline().decode("ascii").split()
+                verts[vi, 0] = float(row[x_col])
+                verts[vi, 1] = float(row[y_col])
+                verts[vi, 2] = float(row[z_col])
+        else:
+            # Binary: build a numpy structured dtype and read all vertices at once
+            dt = np.dtype(
+                [(name, endian + _PLY_NP[ptype]) for name, ptype in vert_props]
+            )
+            raw = fh.read(n_verts * dt.itemsize)
+            va = np.frombuffer(raw, dtype=dt)
+            verts = np.column_stack([
+                va["x"].astype(np.float64),
+                va["y"].astype(np.float64),
+                va["z"].astype(np.float64),
+            ])
+
+        # ── read faces ───────────────────────────────────────────────────────
+        c_fmt_char, c_sz = _PLY_STRUCT[face_count_ptype]
+        i_fmt_char, i_sz = _PLY_STRUCT[face_idx_ptype]
+        c_struct = struct.Struct(endian + c_fmt_char)
+
+        tri_faces: List[List[int]] = []
+        if fmt == "ascii":
+            for _ in range(n_faces):
+                row = fh.readline().decode("ascii").split()
+                cnt = int(row[0])
+                idxs = [int(row[1 + k]) for k in range(cnt)]
+                for k in range(1, cnt - 1):          # fan tessellation
+                    tri_faces.append([idxs[0], idxs[k], idxs[k + 1]])
+        else:
+            for _ in range(n_faces):
+                cnt = c_struct.unpack(fh.read(c_sz))[0]
+                raw_idxs = fh.read(cnt * i_sz)
+                idxs = list(struct.unpack(endian + i_fmt_char * cnt, raw_idxs))
+                for k in range(1, cnt - 1):           # fan tessellation
+                    tri_faces.append([idxs[0], idxs[k], idxs[k + 1]])
+
+    faces_arr = (
+        np.array(tri_faces, dtype=np.int32)
+        if tri_faces
+        else np.empty((0, 3), dtype=np.int32)
+    )
+    print(
+        f"  PLY mesh '{os.path.basename(path)}': "
+        f"{n_verts} vertices, {len(faces_arr)} triangles "
+        f"(from {n_faces} face records)"
+    )
+    return verts.astype(np.float64), faces_arr
 
 
 # ---------------------------------------------------------------------------
@@ -553,24 +721,47 @@ def main() -> None:
         print(f"Writing rectilinear grid VTR: {grid_path}")
         write_vtu_rectilinear_grid(grid_path, xg, yg, zg, gf)
 
-    # ---- Optional surface mesh (occupancy voxel → marching cubes) ---------
+    # ---- Optional surface mesh --------------------------------------------
     surface_path: Optional[str] = None
     if args.surface:
-        print(
-            f"\nExtracting rabbit surface from interior points "
-            f"(grid {args.surface_grid}³, sigma={args.surface_smooth_sigma}, "
-            f"close_iters={args.surface_close_iters}) ..."
-        )
-        verts_norm, faces = extract_surface_from_points(
-            points_norm,
-            grid_size=args.surface_grid,
-            close_iters=args.surface_close_iters,
-            smooth_sigma=args.surface_smooth_sigma,
-        )
-        # Convert SDF-normalised verts to physical space (same atlas transform)
-        verts_phys = to_physical(verts_norm, center, scale)
-        # Map scalar fields to surface vertices via nearest-neighbour
         from scipy.spatial import cKDTree
+
+        if args.ply_file:
+            # ── PLY mesh path (recommended for Stanford Bunny) ─────────────
+            # Uses original mesh connectivity → preserves ears, legs, and all
+            # thin features that voxel-occupancy reconstruction loses.
+            print(f"\nLoading PLY mesh for surface: {args.ply_file}")
+            if not os.path.isfile(args.ply_file):
+                raise FileNotFoundError(
+                    f"--ply-file not found: {args.ply_file}"
+                )
+            verts_phys, faces = parse_ply_mesh(args.ply_file)
+            print(
+                f"  PLY bounding box: "
+                f"x=[{verts_phys[:,0].min():.4f}, {verts_phys[:,0].max():.4f}]  "
+                f"y=[{verts_phys[:,1].min():.4f}, {verts_phys[:,1].max():.4f}]  "
+                f"z=[{verts_phys[:,2].min():.4f}, {verts_phys[:,2].max():.4f}]"
+            )
+        else:
+            # ── Voxel-occupancy fallback (original behaviour) ──────────────
+            print(
+                f"\nExtracting rabbit surface from interior points "
+                f"(grid {args.surface_grid}³, sigma={args.surface_smooth_sigma}, "
+                f"close_iters={args.surface_close_iters}) ..."
+            )
+            verts_norm, faces = extract_surface_from_points(
+                points_norm,
+                grid_size=args.surface_grid,
+                close_iters=args.surface_close_iters,
+                smooth_sigma=args.surface_smooth_sigma,
+            )
+            # Convert SDF-normalised verts to physical space
+            verts_phys = to_physical(verts_norm, center, scale)
+
+        # Map scalar fields to surface vertices via nearest-neighbour from
+        # the interior point cloud (works for both PLY and voxel surfaces).
+        print(f"  Mapping {len(point_data)} scalar fields to surface vertices "
+              f"(KD-tree over {len(points_physical)} interior points) ...")
         tree = cKDTree(points_physical)
         _, nn_idx = tree.query(verts_phys)
         surf_data: Dict[str, np.ndarray] = {k: v[nn_idx] for k, v in point_data.items()}
