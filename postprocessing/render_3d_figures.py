@@ -31,8 +31,9 @@ Usage (defaults — uses the pre-built NPZ and VTK files):
 
     # Override paths:
     python postprocessing/render_3d_figures.py \\
-        --poisson-npz  runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_solution.npz \\
-        --atlas-npz    runs/atlas_vol/rabbit_atlas_data.npz \\
+        --poisson-npz  runs/bunny_poisson/rabbit_poisson_schwarz_bunny_vol_solution.npz \\
+        --atlas-npz    runs/atlas_bunny_vol/rabbit_atlas_data.npz \\
+        --ply-file     runs/atlas_schwarz_20260212_210412/downloads/bunny/reconstruction/bun_zipper.ply \\
         --elder-dir    runs/rabbit_inverse_elder_globalfield_small \\
         --elder-atlas  runs/atlas_schwarz_20260213_002517/rabbit_atlas_data.npz \\
         --torus-dir    runs/torus_inverse_mps_dense_v4 \\
@@ -43,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import struct
 import sys
 from typing import Dict, List, Optional, Tuple
 
@@ -52,11 +54,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from postprocessing.utils import PUB_COLORS, set_pub_style
 
 # ---------------------------------------------------------------------------
-# Defaults
+# Defaults  (updated to Stanford Bunny domain — bunny_vol atlas, scale≈0.156)
 # ---------------------------------------------------------------------------
-_POISSON_NPZ   = "runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_solution.npz"
-_POISSON_VTR   = "runs/attempt20c_compact/paraview/rabbit_poisson_compact_grid.vtr"
-_ATLAS_NPZ     = "runs/atlas_vol/rabbit_atlas_data.npz"
+_POISSON_NPZ   = "runs/bunny_poisson/rabbit_poisson_schwarz_bunny_vol_solution.npz"
+_POISSON_VTR   = "runs/bunny_poisson/paraview/rabbit_poisson_bunny_grid.vtr"
+_ATLAS_NPZ     = "runs/atlas_bunny_vol/rabbit_atlas_data.npz"
 _ELDER_DIR     = "runs/rabbit_inverse_elder_globalfield_small"
 _ELDER_ATLAS   = "runs/atlas_schwarz_20260213_002517/rabbit_atlas_data.npz"
 _TORUS_DIR     = "runs/torus_inverse_mps_dense_v4"
@@ -100,6 +102,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--poisson-vtr",  default=_POISSON_VTR,
                    help="VTR rectilinear grid for Poisson volume-slice renders")
     p.add_argument("--atlas-npz",    default=_ATLAS_NPZ)
+    p.add_argument("--ply-file",     default=None,
+                   help="Stanford Bunny PLY mesh (e.g. bun_zipper.ply).  When "
+                        "supplied, surface figures use the original mesh connectivity "
+                        "instead of the alpha-shape reconstruction from interior points, "
+                        "preserving thin features like ears.  "
+                        "Example: runs/atlas_schwarz_20260212_210412/downloads/bunny/"
+                        "reconstruction/bun_zipper.ply")
     p.add_argument("--elder-dir",    default=_ELDER_DIR)
     p.add_argument("--elder-atlas",  default=_ELDER_ATLAS)
     p.add_argument("--torus-dir",    default=_TORUS_DIR)
@@ -107,6 +116,164 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-pyvista",   action="store_true", help="Skip PyVista renders")
     p.add_argument("--no-plotly",    action="store_true", help="Skip Plotly renders")
     return p.parse_args()
+
+
+# ===========================================================================
+# PLY mesh reader  (vertices + face connectivity)
+# ===========================================================================
+
+_PLY_NP: Dict[str, str] = {
+    "char":    "i1",  "int8":    "i1",
+    "uchar":   "u1",  "uint8":   "u1",
+    "short":   "i2",  "int16":   "i2",
+    "ushort":  "u2",  "uint16":  "u2",
+    "int":     "i4",  "int32":   "i4",
+    "uint":    "u4",  "uint32":  "u4",
+    "float":   "f4",  "float32": "f4",
+    "double":  "f8",  "float64": "f8",
+}
+_PLY_STRUCT: Dict[str, tuple] = {
+    "char":    ("b", 1),  "int8":    ("b", 1),
+    "uchar":   ("B", 1),  "uint8":   ("B", 1),
+    "short":   ("h", 2),  "int16":   ("h", 2),
+    "ushort":  ("H", 2),  "uint16":  ("H", 2),
+    "int":     ("i", 4),  "int32":   ("i", 4),
+    "uint":    ("I", 4),  "uint32":  ("I", 4),
+    "float":   ("f", 4),  "float32": ("f", 4),
+    "double":  ("d", 8),  "float64": ("d", 8),
+}
+
+
+def parse_ply_mesh(path: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Parse a PLY file and return vertex positions and triangle faces.
+
+    Supports binary_little_endian, binary_big_endian, and ASCII PLY.
+    Non-triangular faces are tessellated by fan from first vertex.
+
+    Returns
+    -------
+    verts : (V, 3) float64  — vertex (x, y, z) in the PLY coordinate system
+    faces : (F, 3) int32   — triangle connectivity
+    """
+    with open(path, "rb") as fh:
+        header_lines: List[str] = []
+        while True:
+            raw = fh.readline()
+            line = raw.decode("ascii", errors="replace").strip()
+            header_lines.append(line)
+            if line == "end_header":
+                break
+
+        fmt = "ascii"
+        for l in header_lines:
+            if l.startswith("format"):
+                parts = l.split()
+                if len(parts) >= 2:
+                    fmt = parts[1]
+                break
+        endian = "<" if "little" in fmt else (">" if "big" in fmt else "=")
+
+        n_verts: int = 0
+        n_faces: int = 0
+        vert_props: List[Tuple[str, str]] = []
+        face_count_ptype = "uchar"
+        face_idx_ptype   = "int"
+        cur_elem = None
+        for l in header_lines:
+            if l.startswith("element vertex"):
+                n_verts = int(l.split()[-1]);  cur_elem = "vertex"
+            elif l.startswith("element face"):
+                n_faces = int(l.split()[-1]);  cur_elem = "face"
+            elif l.startswith("element"):
+                cur_elem = "other"
+            elif l.startswith("property list") and cur_elem == "face":
+                parts = l.split()
+                face_count_ptype = parts[2];  face_idx_ptype = parts[3]
+            elif l.startswith("property") and "list" not in l and cur_elem == "vertex":
+                parts = l.split()
+                vert_props.append((parts[2], parts[1]))
+
+        if fmt == "ascii":
+            x_col = next(i for i, (n, _) in enumerate(vert_props) if n == "x")
+            y_col = next(i for i, (n, _) in enumerate(vert_props) if n == "y")
+            z_col = next(i for i, (n, _) in enumerate(vert_props) if n == "z")
+            verts = np.zeros((n_verts, 3), dtype=np.float64)
+            for vi in range(n_verts):
+                row = fh.readline().decode("ascii").split()
+                verts[vi] = [float(row[x_col]), float(row[y_col]), float(row[z_col])]
+        else:
+            dt = np.dtype([(name, endian + _PLY_NP[ptype]) for name, ptype in vert_props])
+            raw = fh.read(n_verts * dt.itemsize)
+            va = np.frombuffer(raw, dtype=dt)
+            verts = np.column_stack([va["x"].astype(np.float64),
+                                     va["y"].astype(np.float64),
+                                     va["z"].astype(np.float64)])
+
+        c_fmt_char, c_sz = _PLY_STRUCT[face_count_ptype]
+        i_fmt_char, i_sz = _PLY_STRUCT[face_idx_ptype]
+        c_struct = struct.Struct(endian + c_fmt_char)
+        tri_faces: List[List[int]] = []
+        if fmt == "ascii":
+            for _ in range(n_faces):
+                row = fh.readline().decode("ascii").split()
+                cnt = int(row[0]);  idxs = [int(row[1 + k]) for k in range(cnt)]
+                for k in range(1, cnt - 1):
+                    tri_faces.append([idxs[0], idxs[k], idxs[k + 1]])
+        else:
+            for _ in range(n_faces):
+                cnt = c_struct.unpack(fh.read(c_sz))[0]
+                idxs = list(struct.unpack(endian + i_fmt_char * cnt, fh.read(cnt * i_sz)))
+                for k in range(1, cnt - 1):
+                    tri_faces.append([idxs[0], idxs[k], idxs[k + 1]])
+
+    faces_arr = (np.array(tri_faces, dtype=np.int32) if tri_faces
+                 else np.empty((0, 3), dtype=np.int32))
+    print(f"  PLY mesh '{os.path.basename(path)}': "
+          f"{n_verts} verts, {len(faces_arr)} triangles")
+    return verts.astype(np.float64), faces_arr
+
+
+def _load_ply_surface(
+    ply_path: str,
+    pts_phys: np.ndarray,
+    scalars_dict: Dict[str, np.ndarray],
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray]]:
+    """Load a PLY mesh and map interior-point scalars onto surface vertices.
+
+    Parameters
+    ----------
+    ply_path : str
+        Path to the PLY file (physical coordinates).
+    pts_phys : (N, 3)
+        Interior atlas points in physical space.
+    scalars_dict : dict[str, (N,) array]
+        Per-interior-point scalar arrays to map onto the surface.
+
+    Returns
+    -------
+    ply_verts : (V, 3) float64   — PLY vertex positions (physical space)
+    ply_faces : (F, 3) int32     — PLY triangle face indices
+    surf_data : dict             — scalars interpolated onto PLY vertices via
+                                   nearest-neighbour from interior pts_phys
+    """
+    from scipy.spatial import cKDTree
+    ply_verts, ply_faces = parse_ply_mesh(ply_path)
+    tree = cKDTree(pts_phys)
+    _, nn_idx = tree.query(ply_verts)
+    surf_data = {k: v[nn_idx] for k, v in scalars_dict.items()}
+    print(f"  PLY surface: {len(ply_verts)} verts, {len(ply_faces)} faces; "
+          f"scalars mapped from {len(pts_phys)} interior pts")
+    return ply_verts, ply_faces, surf_data
+
+
+def _pv_surf_from_ply(ply_verts: np.ndarray,
+                       ply_faces: np.ndarray) -> "pyvista.PolyData":
+    """Build a PyVista PolyData surface from PLY verts + faces."""
+    import pyvista as pv
+    faces_pv = np.hstack(
+        [np.full((len(ply_faces), 1), 3, dtype=np.int32), ply_faces]
+    ).ravel()
+    return pv.PolyData(ply_verts.astype(np.float32), faces_pv)
 
 
 # ===========================================================================
@@ -393,6 +560,152 @@ def pyvista_rabbit_surface(pts: np.ndarray, scalars: np.ndarray,
     print(f"  Saved PyVista rabbit surface: {output_path}")
 
 
+def pyvista_ply_scalar_surface(
+    ply_verts: np.ndarray,
+    ply_faces: np.ndarray,
+    scalars: np.ndarray,
+    scalar_name: str,
+    cmap: str,
+    scalar_label: str,
+    title: str,
+    output_path: str,
+    y_up: bool = True,
+) -> None:
+    """Render a PLY surface mesh coloured by a scalar field (4-panel layout).
+
+    Unlike ``pyvista_rabbit_surface`` which reconstructs the surface from
+    interior points via Delaunay alpha-shapes, this function renders the
+    original PLY mesh connectivity directly.  This preserves thin features
+    such as rabbit ears that carry almost no interior points and are lost by
+    the alpha-shape approach.
+
+    Parameters
+    ----------
+    ply_verts, ply_faces : outputs of ``parse_ply_mesh``
+    scalars : (V,) array of scalar values already interpolated onto PLY verts
+    """
+    import pyvista as pv
+    pv.global_theme.background = "white"
+    pv.global_theme.font.color = "black"
+
+    surf = _pv_surf_from_ply(ply_verts, ply_faces)
+    surf[scalar_name] = scalars.astype(np.float32)
+
+    if y_up:
+        view_fns = [
+            ("Isometric",  lambda p: p.view_vector([1, 0.7, 1], viewup=(0, 1, 0))),
+            ("Front (Z-)", lambda p: p.view_vector([0, 0, 1],   viewup=(0, 1, 0))),
+            ("Side (X+)",  lambda p: p.view_vector([1, 0, 0],   viewup=(0, 1, 0))),
+            ("Top (Y↑)",   lambda p: p.view_vector([0, 1, 0],   viewup=(0, 0, -1))),
+        ]
+    else:
+        view_fns = [
+            ("Isometric", lambda p: p.view_isometric()),
+            ("Top (Z↑)",  lambda p: p.view_xy()),
+            ("Front (Y)", lambda p: p.view_xz()),
+            ("Side (X)",  lambda p: p.view_yz()),
+        ]
+
+    plot_kwargs = dict(
+        scalars=scalar_name, cmap=cmap,
+        show_scalar_bar=True,
+        scalar_bar_args={"title": scalar_label, "n_labels": 5,
+                         "fmt": "%.2e", "title_font_size": 14,
+                         "label_font_size": 11},
+        smooth_shading=True,
+    )
+
+    pl = pv.Plotter(shape=(2, 2), off_screen=True, window_size=(1600, 1200))
+    pl.set_background("white")
+    for idx, (name, view_fn) in enumerate(view_fns):
+        r, c = divmod(idx, 2)
+        pl.subplot(r, c)
+        pl.add_mesh(surf, **plot_kwargs)
+        view_fn(pl)
+        pl.reset_camera()
+        pl.add_text(name, font_size=10, color="black")
+
+    pl.add_title(title, font_size=12, color="black")
+    pl.screenshot(output_path, transparent_background=False)
+    pl.close()
+    print(f"  Saved PyVista PLY scalar surface: {output_path}")
+
+
+def pyvista_ply_chart_surface(
+    ply_verts: np.ndarray,
+    ply_faces: np.ndarray,
+    vert_chart_id: np.ndarray,
+    n_charts: int,
+    colors: List[str],
+    title: str,
+    output_path: str,
+    y_up: bool = True,
+) -> None:
+    """Render PLY surface with chart assignment — one sub-panel per chart.
+
+    For each chart, the full surface is shown in light gray and the faces
+    belonging to that chart are highlighted in the chart's colour.  A face
+    is assigned to a chart when the plurality of its three vertices belongs
+    to that chart (tie goes to lower chart index).
+
+    This replaces ``pyvista_chart_mosaic`` (interior-point blobs) with a
+    proper surface view that reveals which part of the Stanford Bunny each
+    atlas chart covers.
+    """
+    import pyvista as pv
+    pv.global_theme.background = "white"
+
+    # Assign each face to the chart whose id is most common among its 3 verts
+    vert_ids = vert_chart_id[ply_faces]      # (F, 3) int
+    # Use mode (plurality) per row — simple approach: take the chart id that
+    # appears in ≥1 of the 3 vertices with smallest id on ties
+    face_chart_id = np.array([
+        np.bincount(row, minlength=n_charts).argmax()
+        for row in vert_ids
+    ], dtype=np.int32)
+
+    full_surf = _pv_surf_from_ply(ply_verts, ply_faces)
+
+    ncols = 4
+    nrows = int(np.ceil(n_charts / ncols))
+    pl = pv.Plotter(shape=(nrows, ncols), off_screen=True,
+                    window_size=(ncols * 500, nrows * 400))
+    pl.set_background("white")
+
+    for cid in range(n_charts):
+        r, c = divmod(cid, ncols)
+        pl.subplot(r, c)
+        pl.add_mesh(full_surf, color="#dddddd", opacity=0.25, show_edges=False)
+
+        mask = face_chart_id == cid
+        if mask.sum() > 0:
+            cf = ply_faces[mask]
+            chart_faces_pv = np.hstack(
+                [np.full((len(cf), 1), 3, dtype=np.int32), cf]
+            ).ravel()
+            chart_surf = pv.PolyData(ply_verts.astype(np.float32), chart_faces_pv)
+            pl.add_mesh(chart_surf, color=colors[cid % len(colors)],
+                        opacity=0.92, smooth_shading=True, show_edges=False)
+
+        if y_up:
+            pl.view_vector([1, 0.7, 1], viewup=(0, 1, 0))
+        else:
+            pl.view_isometric()
+        pl.reset_camera()
+        pl.add_text(f"Chart {cid}  ({(face_chart_id == cid).sum()} faces)",
+                    font_size=8, color="black")
+
+    for cid in range(n_charts, nrows * ncols):
+        r, c = divmod(cid, ncols)
+        pl.subplot(r, c)
+        pl.add_text("", font_size=1)
+
+    pl.add_title(title, font_size=12, color="black")
+    pl.screenshot(output_path, transparent_background=False)
+    pl.close()
+    print(f"  Saved PyVista PLY chart surface: {output_path}")
+
+
 def pyvista_point_slices(pts: np.ndarray, scalars: np.ndarray,
                           scalar_name: str, cmap: str, scalar_label: str,
                           title: str, output_path: str,
@@ -601,6 +914,117 @@ def plotly_chart_scatter3d(pts: np.ndarray, chart_id: np.ndarray,
             print(f"  Saved Plotly chart PNG: {output_png}")
         except Exception as e:
             print(f"  WARNING: PNG export failed ({e})")
+
+
+def _save_plotly_fig(fig, output_html: str,
+                     output_png: Optional[str] = None,
+                     w: int = 1200, h: int = 900) -> None:
+    """Write a Plotly figure to HTML and optionally PNG."""
+    os.makedirs(os.path.dirname(output_html) or ".", exist_ok=True)
+    fig.write_html(output_html, include_plotlyjs="cdn")
+    print(f"  Saved Plotly HTML: {output_html}")
+    if output_png:
+        try:
+            fig.write_image(output_png, width=w, height=h, scale=2)
+            print(f"  Saved Plotly PNG: {output_png}")
+        except Exception as e:
+            print(f"  WARNING: PNG export failed ({e})")
+
+
+def plotly_ply_scalar_mesh3d(
+    ply_verts: np.ndarray,
+    ply_faces: np.ndarray,
+    scalars: np.ndarray,
+    scalar_name: str,
+    colorscale: str,
+    title: str,
+    output_html: str,
+    output_png: Optional[str] = None,
+    opacity: float = 0.95,
+) -> None:
+    """Interactive Plotly surface mesh (Mesh3d) coloured by a scalar field.
+
+    Uses the original PLY face connectivity, so thin features like rabbit
+    ears are rendered correctly.  Solution scalars must already be mapped
+    onto PLY vertices (e.g. via ``_load_ply_surface``).
+    """
+    import plotly.graph_objects as go
+
+    fig = go.Figure(data=[go.Mesh3d(
+        x=ply_verts[:, 0].tolist(),
+        y=ply_verts[:, 1].tolist(),
+        z=ply_verts[:, 2].tolist(),
+        i=ply_faces[:, 0].tolist(),
+        j=ply_faces[:, 1].tolist(),
+        k=ply_faces[:, 2].tolist(),
+        intensity=scalars.tolist(),
+        colorscale=colorscale,
+        colorbar=dict(title=scalar_name.replace("_", " "), thickness=15),
+        opacity=opacity,
+        name=scalar_name,
+        showscale=True,
+        hovertemplate=(
+            "x=%{x:.4f}<br>y=%{y:.4f}<br>z=%{z:.4f}"
+            f"<br>{scalar_name}=%{{intensity:.3e}}<extra></extra>"
+        ),
+    )])
+    fig.update_layout(
+        title=title,
+        scene=dict(xaxis_title="x", yaxis_title="y", zaxis_title="z",
+                   aspectmode="data"),
+        margin=dict(l=0, r=0, t=40, b=0),
+        template="plotly_white",
+    )
+    _save_plotly_fig(fig, output_html, output_png)
+
+
+def plotly_ply_chart_mesh3d(
+    ply_verts: np.ndarray,
+    ply_faces: np.ndarray,
+    face_chart_id: np.ndarray,
+    n_charts: int,
+    colors: List[str],
+    title: str,
+    output_html: str,
+    output_png: Optional[str] = None,
+) -> None:
+    """Interactive Plotly Mesh3d with one trace per atlas chart.
+
+    Each chart's faces are drawn as a separate Mesh3d trace in its chart
+    colour, enabling toggle-visibility in the legend.  ``face_chart_id``
+    must be a per-FACE assignment (see ``pyvista_ply_chart_surface`` for
+    how to compute it from per-vertex chart_id).
+    """
+    import plotly.graph_objects as go
+
+    traces = []
+    for cid in range(n_charts):
+        cf = ply_faces[face_chart_id == cid]
+        if len(cf) == 0:
+            continue
+        traces.append(go.Mesh3d(
+            x=ply_verts[:, 0].tolist(),
+            y=ply_verts[:, 1].tolist(),
+            z=ply_verts[:, 2].tolist(),
+            i=cf[:, 0].tolist(),
+            j=cf[:, 1].tolist(),
+            k=cf[:, 2].tolist(),
+            color=colors[cid % len(colors)],
+            opacity=0.92,
+            name=f"Chart {cid}",
+            showlegend=True,
+        ))
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        title=title,
+        scene=dict(xaxis_title="x", yaxis_title="y", zaxis_title="z",
+                   aspectmode="data"),
+        margin=dict(l=0, r=0, t=40, b=0),
+        template="plotly_white",
+        legend=dict(title="Chart", font=dict(size=10)),
+    )
+    _save_plotly_fig(fig, output_html, output_png)
 
 
 def plotly_two_scalars_3d(pts: np.ndarray,
@@ -863,62 +1287,141 @@ def render_rabbit_poisson(args: argparse.Namespace) -> None:
     chart_id    = np.asarray(data["chart_id"],       dtype=np.int32).reshape(-1)
     n_charts    = int(chart_id.max()) + 1
 
+    print(f"  {len(pts)} interior pts  |  n_charts={n_charts}  |  "
+          f"physical x=[{pts[:,0].min():.4f},{pts[:,0].max():.4f}]  "
+          f"y=[{pts[:,1].min():.4f},{pts[:,1].max():.4f}]")
+
     out = args.output_dir
     os.makedirs(out, exist_ok=True)
 
-    # PyVista — reconstruct the rabbit surface from interior points using
-    # Delaunay 3-D alpha-shapes, then render as a solid coloured surface mesh.
-    # This gives a proper 3-D rabbit geometry rather than an opaque point blob.
-    if _pv_available() and not args.no_pyvista:
-        pyvista_rabbit_surface(
-            pts, u_error_mag, "u_error_mag",
-            cmap="hot_r", scalar_label="|u error|",
-            title="Rabbit Poisson — solution error (physical space)",
-            output_path=os.path.join(out, "rabbit_poisson_error_surface.png"),
-            y_up=True,
-        )
-        pyvista_rabbit_surface(
-            pts, u_pred, "u_pred",
-            cmap="viridis", scalar_label="u predicted",
-            title="Rabbit Poisson — predicted solution (physical space)",
-            output_path=os.path.join(out, "rabbit_poisson_upred_surface.png"),
-            y_up=True,
-        )
-        pyvista_chart_mosaic(
-            pts, chart_id, n_charts, _CHART_COLORS_12,
-            title="Rabbit Poisson — 12 volumetric atlas charts (physical space)",
-            output_path=os.path.join(out, "rabbit_poisson_charts.png"),
-            point_size=2, y_up=True,
-        )
+    # ── Optionally load PLY mesh for surface renders ─────────────────────────
+    # When --ply-file is given we use the original Stanford Bunny mesh topology
+    # so thin features (ears, legs) are preserved.  Without it we fall back to
+    # the Delaunay 3-D alpha-shape reconstruction from interior points.
+    ply_verts:      Optional[np.ndarray] = None
+    ply_faces:      Optional[np.ndarray] = None
+    surf_u_err:     Optional[np.ndarray] = None
+    surf_u_pred:    Optional[np.ndarray] = None
+    face_chart_id:  Optional[np.ndarray] = None   # per-face chart assignment
 
-    # Plotly — interactive 3-D point cloud.  Using opacity=0.25 so the 50k
-    # interior points form a semi-transparent cloud: the outer shell is denser
-    # and appears brighter, naturally revealing the 3-D rabbit geometry without
-    # collapsing to an opaque blob.
+    if args.ply_file and os.path.isfile(args.ply_file):
+        scalars_map = {"u_error_mag": u_error_mag, "u_pred": u_pred,
+                       "chart_id": chart_id.astype(float)}
+        ply_verts, ply_faces, surf_data = _load_ply_surface(
+            args.ply_file, pts, scalars_map)
+        surf_u_err   = surf_data["u_error_mag"]
+        surf_u_pred  = surf_data["u_pred"]
+        vert_chart   = surf_data["chart_id"].round().astype(np.int32)
+        # Per-face chart assignment: plurality vote over 3 vertex chart ids
+        vert_ids_per_face = vert_chart[ply_faces]   # (F, 3)
+        face_chart_id = np.array([
+            np.bincount(row, minlength=n_charts).argmax()
+            for row in vert_ids_per_face
+        ], dtype=np.int32)
+        print(f"  PLY surface loaded — {len(ply_verts)} verts, "
+              f"{len(ply_faces)} faces, chart faces: "
+              + ", ".join(f"C{c}={int((face_chart_id==c).sum())}"
+                          for c in range(n_charts)))
+    elif args.ply_file:
+        print(f"  WARNING: --ply-file not found: {args.ply_file}  "
+              "— falling back to alpha-shape surface reconstruction")
+
+    # ── PyVista renders ───────────────────────────────────────────────────────
+    if _pv_available() and not args.no_pyvista:
+        if ply_verts is not None:
+            # PLY-based surface — correct topology, preserves ears
+            pyvista_ply_scalar_surface(
+                ply_verts, ply_faces, surf_u_err, "u_error_mag",
+                cmap="hot_r", scalar_label="|u error|",
+                title="Rabbit Poisson — solution error on PLY surface",
+                output_path=os.path.join(out, "rabbit_poisson_error_surface.png"),
+                y_up=True,
+            )
+            pyvista_ply_scalar_surface(
+                ply_verts, ply_faces, surf_u_pred, "u_pred",
+                cmap="viridis", scalar_label="u predicted",
+                title="Rabbit Poisson — predicted solution on PLY surface",
+                output_path=os.path.join(out, "rabbit_poisson_upred_surface.png"),
+                y_up=True,
+            )
+            pyvista_ply_chart_surface(
+                ply_verts, ply_faces, face_chart_id, n_charts, _CHART_COLORS_12,
+                title="Rabbit Poisson — atlas chart coverage on PLY surface",
+                output_path=os.path.join(out, "rabbit_poisson_charts.png"),
+                y_up=True,
+            )
+        else:
+            # Fallback: Delaunay alpha-shape reconstruction from interior points
+            pyvista_rabbit_surface(
+                pts, u_error_mag, "u_error_mag",
+                cmap="hot_r", scalar_label="|u error|",
+                title="Rabbit Poisson — solution error (physical space)",
+                output_path=os.path.join(out, "rabbit_poisson_error_surface.png"),
+                y_up=True,
+            )
+            pyvista_rabbit_surface(
+                pts, u_pred, "u_pred",
+                cmap="viridis", scalar_label="u predicted",
+                title="Rabbit Poisson — predicted solution (physical space)",
+                output_path=os.path.join(out, "rabbit_poisson_upred_surface.png"),
+                y_up=True,
+            )
+            pyvista_chart_mosaic(
+                pts, chart_id, n_charts, _CHART_COLORS_12,
+                title="Rabbit Poisson — 12 volumetric atlas charts (physical space)",
+                output_path=os.path.join(out, "rabbit_poisson_charts.png"),
+                point_size=2, y_up=True,
+            )
+
+    # ── Plotly interactive renders ────────────────────────────────────────────
     if not args.no_plotly:
-        plotly_scatter3d(
-            pts, u_error_mag, "u_error_mag",
-            colorscale="Hot",
-            title="Rabbit Poisson — |u error| (interactive 3-D)",
-            output_html=os.path.join(out, "rabbit_poisson_error.html"),
-            output_png=os.path.join(out, "rabbit_poisson_error_plotly.png"),
-            opacity=0.25,
-        )
-        plotly_scatter3d(
-            pts, u_pred, "u_pred",
-            colorscale="Viridis",
-            title="Rabbit Poisson — predicted solution (interactive 3-D)",
-            output_html=os.path.join(out, "rabbit_poisson_upred.html"),
-            output_png=os.path.join(out, "rabbit_poisson_upred_plotly.png"),
-            opacity=0.25,
-        )
-        plotly_chart_scatter3d(
-            pts, chart_id, n_charts, _CHART_COLORS_12,
-            title="Rabbit Poisson — atlas charts (interactive 3-D)",
-            output_html=os.path.join(out, "rabbit_poisson_charts.html"),
-            output_png=os.path.join(out, "rabbit_poisson_charts_plotly.png"),
-            opacity=0.25,
-        )
+        if ply_verts is not None:
+            # PLY-based surface Mesh3d — crisp interactive renders with ears
+            plotly_ply_scalar_mesh3d(
+                ply_verts, ply_faces, surf_u_err, "u_error_mag",
+                colorscale="Hot",
+                title="Rabbit Poisson — |u error| on Stanford Bunny surface",
+                output_html=os.path.join(out, "rabbit_poisson_error.html"),
+                output_png=os.path.join(out, "rabbit_poisson_error_plotly.png"),
+            )
+            plotly_ply_scalar_mesh3d(
+                ply_verts, ply_faces, surf_u_pred, "u_pred",
+                colorscale="Viridis",
+                title="Rabbit Poisson — predicted solution on Stanford Bunny surface",
+                output_html=os.path.join(out, "rabbit_poisson_upred.html"),
+                output_png=os.path.join(out, "rabbit_poisson_upred_plotly.png"),
+            )
+            plotly_ply_chart_mesh3d(
+                ply_verts, ply_faces, face_chart_id, n_charts, _CHART_COLORS_12,
+                title="Rabbit Poisson — atlas chart coverage on Stanford Bunny surface",
+                output_html=os.path.join(out, "rabbit_poisson_charts.html"),
+                output_png=os.path.join(out, "rabbit_poisson_charts_plotly.png"),
+            )
+        else:
+            # Fallback: semi-transparent interior point cloud
+            plotly_scatter3d(
+                pts, u_error_mag, "u_error_mag",
+                colorscale="Hot",
+                title="Rabbit Poisson — |u error| (interactive 3-D)",
+                output_html=os.path.join(out, "rabbit_poisson_error.html"),
+                output_png=os.path.join(out, "rabbit_poisson_error_plotly.png"),
+                opacity=0.25,
+            )
+            plotly_scatter3d(
+                pts, u_pred, "u_pred",
+                colorscale="Viridis",
+                title="Rabbit Poisson — predicted solution (interactive 3-D)",
+                output_html=os.path.join(out, "rabbit_poisson_upred.html"),
+                output_png=os.path.join(out, "rabbit_poisson_upred_plotly.png"),
+                opacity=0.25,
+            )
+            plotly_chart_scatter3d(
+                pts, chart_id, n_charts, _CHART_COLORS_12,
+                title="Rabbit Poisson — atlas charts (interactive 3-D)",
+                output_html=os.path.join(out, "rabbit_poisson_charts.html"),
+                output_png=os.path.join(out, "rabbit_poisson_charts_plotly.png"),
+                opacity=0.25,
+            )
 
 
 # ---------------------------------------------------------------------------
