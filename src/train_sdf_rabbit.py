@@ -14,8 +14,9 @@ import json
 import math
 import os
 import random
+import struct
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,6 +24,115 @@ import torch
 
 
 torch.set_default_dtype(torch.float64)
+
+
+PLY_TYPE_MAP = {
+    "char": "b",
+    "int8": "b",
+    "uchar": "B",
+    "uint8": "B",
+    "short": "h",
+    "int16": "h",
+    "ushort": "H",
+    "uint16": "H",
+    "int": "i",
+    "int32": "i",
+    "uint": "I",
+    "uint32": "I",
+    "float": "f",
+    "float32": "f",
+    "double": "d",
+    "float64": "d",
+}
+
+
+def parse_ply(path: str) -> tuple:
+    """Parse a PLY file and return (points, normals) arrays.
+
+    Supports ASCII and binary_little_endian formats.  normals is None if
+    nx/ny/nz properties are absent.
+    """
+    with open(path, "rb") as f:
+        header_lines: List[str] = []
+        while True:
+            line = f.readline()
+            if not line:
+                raise ValueError(f"Invalid PLY (missing end_header): {path}")
+            s = line.decode("ascii", errors="ignore").strip()
+            header_lines.append(s)
+            if s == "end_header":
+                break
+
+        fmt = None
+        n_vertices = None
+        vertex_props: List[tuple] = []
+        current_element = None
+
+        for line in header_lines:
+            toks = line.split()
+            if not toks:
+                continue
+            if toks[0] == "format":
+                fmt = toks[1]
+            elif toks[0] == "element":
+                current_element = toks[1]
+                if current_element == "vertex":
+                    n_vertices = int(toks[2])
+            elif toks[0] == "property" and current_element == "vertex":
+                if len(toks) >= 3 and toks[1] != "list":
+                    p_type = toks[1]
+                    p_name = toks[2]
+                    vertex_props.append((p_name, p_type))
+
+        if fmt is None or n_vertices is None or not vertex_props:
+            raise ValueError(f"Unsupported PLY header: {path}")
+
+        prop_names = [p[0] for p in vertex_props]
+        xyz_names = ["x", "y", "z"]
+        if not all(name in prop_names for name in xyz_names):
+            raise ValueError(f"PLY vertex does not contain x/y/z: {path}")
+
+        nx_present = all(name in prop_names for name in ["nx", "ny", "nz"])
+
+        if fmt == "ascii":
+            vals = []
+            for _ in range(n_vertices):
+                row = f.readline().decode("ascii", errors="ignore").strip().split()
+                if len(row) < len(vertex_props):
+                    raise ValueError(f"Malformed ASCII PLY vertex row in {path}")
+                vals.append([float(row[i]) for i in range(len(vertex_props))])
+            arr = np.asarray(vals, dtype=float)
+        elif fmt == "binary_little_endian":
+            fmt_chars = []
+            for _, p_type in vertex_props:
+                if p_type not in PLY_TYPE_MAP:
+                    raise ValueError(f"Unsupported PLY property type '{p_type}' in {path}")
+                fmt_chars.append(PLY_TYPE_MAP[p_type])
+            rec_fmt = "<" + "".join(fmt_chars)
+            rec_size = struct.calcsize(rec_fmt)
+            vals = []
+            for _ in range(n_vertices):
+                data = f.read(rec_size)
+                if len(data) != rec_size:
+                    raise ValueError(f"Unexpected EOF in PLY vertex data: {path}")
+                vals.append(struct.unpack(rec_fmt, data))
+            arr = np.asarray(vals, dtype=float)
+        else:
+            raise ValueError(f"Unsupported PLY format '{fmt}' in {path}")
+
+    idx_x = prop_names.index("x")
+    idx_y = prop_names.index("y")
+    idx_z = prop_names.index("z")
+    points = arr[:, [idx_x, idx_y, idx_z]]
+
+    normals = None
+    if nx_present:
+        idx_nx = prop_names.index("nx")
+        idx_ny = prop_names.index("ny")
+        idx_nz = prop_names.index("nz")
+        normals = arr[:, [idx_nx, idx_ny, idx_nz]]
+
+    return points, normals
 
 
 def set_seed(seed: int) -> None:
@@ -164,7 +274,9 @@ def generate_procedural_rabbit(n_surface: int) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def load_point_cloud(path: str) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-    if path.endswith(".npz"):
+    if path.endswith(".ply"):
+        points, normals = parse_ply(path)
+    elif path.endswith(".npz"):
         data = np.load(path)
         if "points" not in data:
             raise ValueError("NPZ must include key 'points'")
@@ -409,7 +521,7 @@ def train_sdf(args: argparse.Namespace) -> Dict[str, float]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train meshfree rabbit SDF from point cloud or procedural fallback")
-    parser.add_argument("--points-file", default=None, help="Optional .npz/.npy/.csv/.txt point cloud path")
+    parser.add_argument("--points-file", default=None, help="Optional .ply/.npz/.npy/.csv/.txt point cloud path")
     parser.add_argument("--output-dir", default="runs/rabbit_sdf", help="Output directory")
     parser.add_argument("--seed", type=int, default=42)
 
