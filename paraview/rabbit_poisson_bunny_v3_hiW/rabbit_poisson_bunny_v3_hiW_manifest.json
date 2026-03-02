@@ -1,0 +1,32 @@
+{
+  "solution_npz": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/bunny_poisson_v3_hiW/rabbit_poisson_schwarz_bunny_poisson_v3_hiW_solution.npz",
+  "atlas_npz": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/atlas_bunny_vol_v3/rabbit_atlas_data.npz",
+  "sdf_center": [
+    -0.0168404,
+    0.1101542,
+    -0.0015369499999999987
+  ],
+  "sdf_scale": 0.15569899999999998,
+  "n_points": 50000,
+  "n_charts": 12,
+  "rel_l2_error": 0.2843640949615337,
+  "max_error": 0.16830793023109436,
+  "coords": "physical",
+  "merged_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_merged.vtu",
+  "per_chart_vtu": [
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_00.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_01.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_02.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_03.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_04.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_05.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_06.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_07.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_08.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_09.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_10.vtu",
+    "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_chart_11.vtu"
+  ],
+  "grid_vtr": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_grid.vtr",
+  "surface_vtu": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_poisson_bunny_v3_hiW/rabbit_poisson_bunny_v3_hiW_surface.vtu"
+}
