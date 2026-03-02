@@ -902,62 +902,89 @@ def train_all(args: argparse.Namespace) -> None:
     all_histories: List[dict] = []
     all_metrics: List[dict] = []
 
-    for ci in range(C):
-        print(f"\n{'━'*60}")
-        print(f"  Chart {ci:2d} / {C-1}  (seed={seed_pts_norm[ci].round(4).tolist()})")
-        t0 = time.time()
-
-        # Extract local PLY surface data (within args.coverage_factor × radius)
-        cover_r = support_radii[ci]
-        d2seed = np.linalg.norm(ply_pts_norm - seed_pts_norm[ci], axis=1)
-        local_mask = d2seed < args.coverage_factor * cover_r
-        local_surf = ply_pts_norm[local_mask]
-        local_nrm = ply_nrm[local_mask]
+    # Resume mode: if all per-chart checkpoints exist, load them and skip training
+    all_ckpts_exist = all(
+        os.path.isfile(os.path.join(args.output_dir, f"chart_{ci:02d}_sdf.pt"))
+        for ci in range(C)
+    )
+    if all_ckpts_exist:
         print(
-            f"  Local PLY points: {local_mask.sum()}  "
-            f"(within {args.coverage_factor:.1f}×{cover_r:.4f} of seed)"
+            "  [RESUME] All chart checkpoints found — loading from disk, skipping training."
         )
+        for ci in range(C):
+            ckpt_ci = os.path.join(args.output_dir, f"chart_{ci:02d}_sdf.pt")
+            ckpt = torch.load(ckpt_ci, map_location=device, weights_only=False)
+            net = SDFNetLocal(
+                width=args.local_width, depth=args.local_depth
+            ).to(device=device, dtype=dtype)
+            net.load_state_dict(ckpt["model_state"])
+            net.eval()
+            local_nets.append(net)
+            all_histories.append({})
+            m = ckpt.get("metrics", {})
+            all_metrics.append(m)
+            print(
+                f"  Loaded chart {ci:2d}: "
+                f"surf={m.get('final_surface', float('nan')):.3e}  "
+                f"sign={m.get('final_sign', float('nan')):.3e}"
+            )
+    else:
+        for ci in range(C):
+            print(f"\n{'━'*60}")
+            print(f"  Chart {ci:2d} / {C-1}  (seed={seed_pts_norm[ci].round(4).tolist()})")
+            t0 = time.time()
 
-        net, hist, metrics = train_local_sdf(
-            chart_idx=ci,
-            seed_norm=seed_pts_norm[ci],
-            cover_radius=cover_r,
-            adaptive_offset=adaptive_offsets[ci],
-            surf_pts_norm=local_surf,
-            surf_nrm_norm=local_nrm,
-            all_pts_norm=ply_pts_norm,
-            all_nrm_norm=ply_nrm,
-            args=args,
-            device=device,
-            dtype=dtype,
-        )
-        local_nets.append(net)
-        all_histories.append(hist)
-        all_metrics.append(metrics)
+            # Extract local PLY surface data (within args.coverage_factor × radius)
+            cover_r = support_radii[ci]
+            d2seed = np.linalg.norm(ply_pts_norm - seed_pts_norm[ci], axis=1)
+            local_mask = d2seed < args.coverage_factor * cover_r
+            local_surf = ply_pts_norm[local_mask]
+            local_nrm = ply_nrm[local_mask]
+            print(
+                f"  Local PLY points: {local_mask.sum()}  "
+                f"(within {args.coverage_factor:.1f}×{cover_r:.4f} of seed)"
+            )
 
-        elapsed = time.time() - t0
-        print(
-            f"  [chart {ci:2d}] DONE in {elapsed:.0f}s — "
-            f"surf={metrics.get('final_surface', 'N/A'):.3e}  "
-            f"sign={metrics.get('final_sign', 'N/A'):.3e}"
-        )
+            net, hist, metrics = train_local_sdf(
+                chart_idx=ci,
+                seed_norm=seed_pts_norm[ci],
+                cover_radius=cover_r,
+                adaptive_offset=adaptive_offsets[ci],
+                surf_pts_norm=local_surf,
+                surf_nrm_norm=local_nrm,
+                all_pts_norm=ply_pts_norm,
+                all_nrm_norm=ply_nrm,
+                args=args,
+                device=device,
+                dtype=dtype,
+            )
+            local_nets.append(net)
+            all_histories.append(hist)
+            all_metrics.append(metrics)
 
-        # Save per-chart checkpoint
-        ckpt_ci = os.path.join(args.output_dir, f"chart_{ci:02d}_sdf.pt")
-        torch.save(
-            {
-                "model_state": net.state_dict(),
-                "model_kwargs": {
-                    "width": args.local_width, "depth": args.local_depth
+            elapsed = time.time() - t0
+            print(
+                f"  [chart {ci:2d}] DONE in {elapsed:.0f}s — "
+                f"surf={metrics.get('final_surface', 'N/A'):.3e}  "
+                f"sign={metrics.get('final_sign', 'N/A'):.3e}"
+            )
+
+            # Save per-chart checkpoint
+            ckpt_ci = os.path.join(args.output_dir, f"chart_{ci:02d}_sdf.pt")
+            torch.save(
+                {
+                    "model_state": net.state_dict(),
+                    "model_kwargs": {
+                        "width": args.local_width, "depth": args.local_depth
+                    },
+                    "chart_idx": ci,
+                    "seed_norm": seed_pts_norm[ci].tolist(),
+                    "cover_radius": float(cover_r),
+                    "adaptive_offset": float(adaptive_offsets[ci]),
+                    "metrics": metrics,
                 },
-                "chart_idx": ci,
-                "seed_norm": seed_pts_norm[ci].tolist(),
-                "cover_radius": float(cover_r),
-                "adaptive_offset": float(adaptive_offsets[ci]),
-                "metrics": metrics,
-            },
-            ckpt_ci,
-        )
+                ckpt_ci,
+            )
 
     # ── Assemble SDFNetChartwise ───────────────────────────────────────────────
     print(f"\n{'━'*60}")
@@ -965,8 +992,9 @@ def train_all(args: argparse.Namespace) -> None:
     chartwise = SDFNetChartwise(local_nets, seed_pts_norm, support_radii).to(device=device)
 
     # ── Overlap consistency metric ────────────────────────────────────────────
+    # Use interior_pts (50 k, matching membership rows), NOT ply_pts_norm (35 k)
     print("Computing overlap consistency…")
-    oc = compute_overlap_consistency(chartwise, ply_pts_norm, membership, device, dtype)
+    oc = compute_overlap_consistency(chartwise, interior_pts, membership, device, dtype)
     print(f"  overlap_consistency = {oc:.4f}  (lower is better; procedural ref ≈ 0.006)")
 
     # ── Global slice plot for blended SDF ─────────────────────────────────────
