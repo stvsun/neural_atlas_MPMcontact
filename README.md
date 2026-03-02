@@ -19,8 +19,10 @@ coordinate charts, multiplicative Schwarz domain decomposition, and automatic di
    - [Multi-Objective PINN Loss](#7-multi-objective-pinn-loss)
    - [PCGrad Gradient Surgery](#8-pcgrad-gradient-surgery)
    - [CompactChartNet — Voronoi Sub-Atlas](#9-compactchartnet--voronoi-sub-atlas)
+   - [Chart-Partitioned SDF](#10-chart-partitioned-sdf)
 3. [Key Algorithms — Pseudocode](#key-algorithms--pseudocode)
    - [Algorithm 1: Neural SDF Training](#algorithm-1-neural-sdf-training)
+   - [Algorithm 1b: Chart-Partitioned SDF Training](#algorithm-1b-chart-partitioned-sdf-training)
    - [Algorithm 2: Atlas Construction](#algorithm-2-atlas-construction)
    - [Algorithm 3: Multiplicative Schwarz PINN Loop](#algorithm-3-multiplicative-schwarz-pinn-loop)
    - [Algorithm 4: PCGrad K=2 per Chart Step](#algorithm-4-pcgrad-k2-per-chart-step)
@@ -31,6 +33,7 @@ coordinate charts, multiplicative Schwarz domain decomposition, and automatic di
    - [Example 3: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)](#example-3-inverse-neo-hookean-elasticity--torus-original-atlas)
    - [Example 4: Inverse Neo-Hookean Elasticity — Torus (Schwarz Dual)](#example-4-inverse-neo-hookean-elasticity--torus-schwarz-dual)
    - [Example 5: Inverse Elder-Like Flow — Stanford Rabbit](#example-5-inverse-elder-like-flow--stanford-rabbit)
+   - [Example 6: Chart-Partitioned SDF — Stanford Bunny (In Progress)](#example-6-chart-partitioned-sdf--stanford-bunny-in-progress)
 5. [Repository Structure](#repository-structure)
 6. [Prerequisites and Installation](#prerequisites-and-installation)
 7. [Geometry Preparation Pipeline](#geometry-preparation-pipeline)
@@ -38,7 +41,8 @@ coordinate charts, multiplicative Schwarz domain decomposition, and automatic di
 9. [Configuration Reference](#configuration-reference)
 10. [Post-Processing and Visualization](#post-processing-and-visualization)
 11. [Known Limitations](#known-limitations)
-12. [Citation](#citation)
+12. [TODO / Open Problems](#todo--open-problems)
+13. [Citation](#citation)
 
 ---
 
@@ -297,6 +301,51 @@ iterations vs oscillation with the dense MLP.
 
 ---
 
+### 10. Chart-Partitioned SDF
+
+The global SDF uses a single **anchor offset** δ for sign-anchor supervision across the
+entire domain.  For geometries with thin features (Stanford Bunny ears ~5 mm), a single
+offset forces a trade-off: small δ gives poor interior coverage, large δ places anchors
+outside thin features → wrong signs → corrupted interface normals.
+
+**Chart-partitioned SDF** resolves this by training N **local** SDF networks `{φᵢ}`, one
+per atlas chart, each with a **geometry-adaptive offset**:
+
+```
+offset_i = f_factor × dist(seed_i, nearest surface point)
+```
+
+For the Stanford Bunny with f_factor=0.30 this gives:
+- Ear-region charts: offset ≈ 0.2–1.8 mm (within ear thickness)
+- Body charts: offset ≈ 4–15 mm (deep interior coverage)
+
+vs the global offset of 38.9 mm that places anchors outside all thin features.
+
+**Training procedure** (implemented in `src/train_sdf_chartwise.py`):
+
+1. **Voxel SDT initialization** — for each chart i, compute the exact unsigned distance
+   from a local query grid to the nearest PLY surface point via `cKDTree`.  Sign is
+   determined by the outward-normal dot-product test:
+   `sign(q) = +1 if (q - p_nearest) · n_nearest ≥ 0 else -1`.
+   The local `SDFNetLocal` is pre-trained by MSE regression to this SDT.
+
+2. **Eikonal reinitialization fine-tuning** — the Eikonal loss `mean((‖∇φᵢ‖ - 1)²)` is
+   the steady-state form of the governing equation of the reinitialization PDE:
+   `∂φ/∂t + sign(φ₀)(‖∇φ‖ - 1) = 0`.
+   The zero level set is preserved by the surface loss `|φᵢ(x_s)|`.
+
+3. **Partition-of-unity blending** for inference — the global SDF is reconstructed as:
+   ```
+   φ(x) = Σᵢ wᵢ(x) φᵢ(x) / Σᵢ wᵢ(x),   wᵢ(x) = exp(-‖x-seedᵢ‖²/2σᵢ²)
+   ```
+   This is smooth and fully differentiable through PyTorch autograd.
+
+4. **Global adapter** — a single `SDFNet(128/6)` is optionally fitted to the blended
+   chartwise SDF via regression (`--fit-adapter`), providing a drop-in replacement for
+   the existing atlas builder and PINN code with no modifications required.
+
+---
+
 ## Key Algorithms — Pseudocode
 
 ### Algorithm 1: Neural SDF Training
@@ -322,6 +371,57 @@ for epoch = 1 to E_sdf:
 
 return SDF_θ
 ```
+
+---
+
+### Algorithm 1b: Chart-Partitioned SDF Training
+
+```
+Input:  PLY surface point cloud {x_s, n_s} (or PCA-estimated normals),
+        atlas {seed_i, support_radius_i}, N charts
+Output: SDFNetChartwise — blended partition-of-unity SDF
+
+for i = 1 to N:
+
+    # Step 1: Geometry-adaptive offset
+    d_i ← dist(seed_i, nearest PLY point)
+    offset_i ← f_factor × d_i     # f_factor=0.30 recommended
+    # e.g. ear-region: d≈0.6mm → offset≈0.2mm; body: d≈14mm → offset≈4.2mm
+
+    # Step 2: Voxel SDT initialization on local grid
+    for q in local_grid(seed_i, radius=1.5 × support_radius_i):
+        (d_unsigned, k) ← cKDTree({x_s}).query(q)
+        sign ← +1 if (q - x_s[k]) · n_s[k] ≥ 0 else -1
+        sdt[q] ← sign × d_unsigned
+
+    # Step 3: Pre-train SDFNetLocal_i to match SDT
+    Initialize SDFNetLocal_i (width=64, depth=4, tanh)
+    for epoch = 1 to E_pretrain:   # default 400
+        L_sdt = mean( (φᵢ(q) - sdt[q])² )
+        Update via Adam(L_sdt)
+
+    # Step 4: Eikonal fine-tuning (reinitialization PDE at steady state)
+    for epoch = 1 to E_finetune:   # default 3000
+        Sample x_s_local ← local PLY points near seed_i
+        Sample x_eik     ← random points in ball B(seed_i, 1.5 × support_radius_i)
+
+        L_surface ← mean( |φᵢ(x_s_local)| )              # zero-level-set
+        L_eikonal ← mean( (‖∇φᵢ(x_eik)‖ - 1)² )          # |∇φ|=1 (reinit PDE)
+        L_normal  ← mean( 1 - ∇φᵢ(x_s_local)·n_s_local ) # normal alignment
+        L_sign    ← softplus loss at x_s ± offset_i × n_s # adaptive sign anchor
+
+        L_i = w_surf·L_surface + w_eik·L_eikonal + w_norm·L_normal + w_sign·L_sign
+        Update SDFNetLocal_i via Adam(L_i)
+
+# Assemble: Gaussian PoU blending
+SDFNetChartwise.forward(x):
+    w_i(x) = exp(-‖x-seed_i‖² / (2 support_radius_i²))
+    return Σ_i w_i(x) φᵢ(x) / Σ_i w_i(x)   # differentiable via autograd
+
+# Optional: fit a single global adapter SDFNet(128/6) by regression on chartwise values
+```
+
+**Script**: `src/train_sdf_chartwise.py`
 
 ---
 
@@ -712,6 +812,46 @@ quaternion `q`, and `Λ = diag(λ₁, λ₂, λ₃)` is a diagonal anisotropy ma
 
 ---
 
+### Example 6: Chart-Partitioned SDF — Stanford Bunny (In Progress)
+
+**Motivation**: All prior Stanford Bunny Poisson PINN runs diverged (best: 28.1% rel-L²
+at Schwarz iter 1, interface flux increasing every iteration).  Root cause diagnosis
+identified the **global SDF sign quality** as the bottleneck: the global SDF v3 used a
+fixed anchor offset of 38.9 mm, which placed sign-supervision anchors outside the ~5 mm
+bunny ears, causing 31% sign errors.  With corrupt interface normals on 31% of surface
+points, the Schwarz iteration diverges regardless of atlas quality.
+
+**Proposed fix** (implemented, pending experimental validation):
+
+| Component | Global SDF (v3) | Chart-partitioned SDF |
+|-----------|----------------|-----------------------|
+| Networks | 1 global SDFNet (128/6) | 12 local SDFNetLocal (64/4) |
+| Anchor offset | 38.9 mm (fixed) | 0.2–4.2 mm (adaptive per chart) |
+| Ear-safe charts | 0/12 | 10/12 |
+| SDT initialization | None (random Xavier) | KD-tree SDT pre-training (400 epochs) |
+| Eikonal fine-tuning | Standard | Reinitialization PDE formulation |
+| Inference | Single forward pass | Gaussian PoU blending |
+| Drop-in compatibility | Yes | Yes (via global adapter `--fit-adapter`) |
+
+**Key result** (from adaptive offset measurement):
+- Chart 5 (ear region): seed is only **0.6 mm** from the nearest surface point →
+  adaptive offset = 0.2 mm → sign anchors safely inside the 5 mm ear volume
+- Chart 0 (body region): seed is **14.1 mm** from surface → adaptive offset = 4.2 mm →
+  good deep interior coverage
+
+**Status**: Script implemented (`src/train_sdf_chartwise.py`), validation run pending.
+
+**Expected outcome** (if sign_error < 0.05):
+- Interface normals at surface points corrected
+- Schwarz interface flux should decrease monotonically
+- Expected rel-L² on Stanford Bunny < 10% (vs current 28.1%)
+
+**Script**: `bash scripts/experimental/run_chartwise_sdf_example.sh`
+
+**Detailed results**: `RESULTS.md § Chart-partitioned SDF`
+
+---
+
 ## Repository Structure
 
 ```
@@ -725,7 +865,8 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── run_torus_inverse_neohookean_schwarz_dual.py  # Schwarz dual torus inverse (Example 4)
 │   ├── run_rabbit_inverse_elder_atlas_schwarz.py     # Inverse Elder flow on rabbit (Example 5)
 │   ├── run_rabbit_inverse_neohookean_mapped.py       # Neo-Hookean inverse on rabbit
-│   ├── train_sdf_rabbit.py                    # Neural SDF training (Algorithm 1)
+│   ├── train_sdf_rabbit.py                    # Global neural SDF training (Algorithm 1)
+│   ├── train_sdf_chartwise.py                 # Chart-partitioned SDF training (Algorithm 1b, Example 6)
 │   ├── train_mapping_from_sdf.py              # Sphere-to-domain mapping network
 │   └── export_rabbit_elder_inverse_paraview.py
 │
@@ -750,11 +891,24 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── chatgpt52_paper_starter.md             # Paper outline (draft)
 │   └── chatgpt52_handoff_mindmap.md           # Research mindmap
 │
+├── scripts/
+│   ├── successful/                    # Canonical reproduction scripts
+│   │   ├── run_poisson_rabbit_best.sh          # Reproduces 2.21% Poisson (procedural rabbit)
+│   │   └── build_bunny_sdf_atlas_v3.sh         # Reproduces SDF v3 + atlas v3 + decoders
+│   └── experimental/                  # Failed / in-progress attempts
+│       ├── run_chartwise_sdf_example.sh        # Example 6: chart-partitioned SDF pipeline
+│       ├── fix_decoders.sh            # Failed: standard atlas (gate failed, pde=165k)
+│       ├── fix_decoders_v2.sh         # Partial: high overlap weight (gate=True, PINN diverges)
+│       └── diagnostic_supervised.sh   # Failed: manufactured supervision negligible vs PDE
+│
+├── RESULTS.md                         # Comprehensive results summary and analysis
 ├── schwarz_poisson_attempt_status.md  # Detailed Schwarz Poisson attempt log
 ├── pinn_only_improvement_plan.md      # W-series and architecture roadmap
 └── runs/                              # Saved checkpoints and metrics
     ├── attempt19_w4/                  # Dense MLP best run (rel_l2=2.531%)
     ├── attempt20c_compact/            # CompactChartNet best run (rel_l2=2.207%)
+    ├── bunny_sdf_v3/                  # Stanford Bunny SDF v3 (sign=0.311)
+    ├── atlas_bunny_vol_v3_hiW/        # Stanford Bunny atlas decoders (gate=True, overlap=0.018)
     ├── torus_inverse_mps/             # Torus inverse best run (score=3.96e-7)
     └── rabbit_inverse_elder_globalfield_small/  # Elder inverse best run
 ```
@@ -1065,6 +1219,94 @@ python src/export_rabbit_elder_inverse_paraview.py \
 6. **Seam artifacts in gradient fields**: The partition-of-unity blending is C⁰ but not
    C¹; gradient-based observables (Darcy velocity = −K∇p) show visible seams at chart
    boundaries. Use `weighted_detached` blending policy for visualization.
+
+7. **Global SDF sign quality on thin-featured geometry**: The global SDF uses a single
+   anchor offset across all charts.  For the Stanford Bunny (~5 mm ears), an offset large
+   enough for body coverage (38.9 mm) places anchors outside the ears, causing 31% sign
+   errors.  This corrupts interface normals in all 12 charts simultaneously and causes
+   Schwarz iteration to diverge.  The **chart-partitioned SDF** (Example 6) addresses
+   this directly via geometry-adaptive per-chart offsets (0.2–4.2 mm for the bunny).
+
+---
+
+## TODO / Open Problems
+
+The following tasks are planned or in progress, roughly ordered by priority.
+
+### High Priority — Stanford Bunny Poisson convergence
+
+- [ ] **[EXP] Run `scripts/experimental/run_chartwise_sdf_example.sh`** (~5.5 h)
+  Train chart-partitioned SDF on Stanford Bunny, rebuild atlas, run Poisson PINN.
+  Target metric: `sign_error < 0.05` (vs current 0.311 for global SDF v3).
+
+- [ ] **[EVAL] Verify Schwarz convergence with chartwise SDF**
+  Monitor `interface_flux` per iteration — it should decrease (not increase as before).
+  Record best `rel_L2` and compare to current 28.1% (iter=1 checkpoint).
+
+- [ ] **[TUNE] If chartwise PINN still diverges**: add cross-chart consistency loss
+  in overlap regions (`mean((φᵢ(x) - φⱼ(x))²)` for chart pairs sharing overlap points).
+  This is already stubbed in `train_sdf_chartwise.py` as `compute_overlap_consistency`.
+
+- [ ] **[BENCH] If chartwise PINN converges**: document results in `RESULTS.md`,
+  add a row to the `scripts/successful/` table, and run postprocessing to generate
+  publication figures (`paraview/bunny_poisson_chartwise/`, `figures/bunny_chartwise/`).
+
+### Medium Priority — SDF quality improvements
+
+- [ ] **[CODE] Normal estimation for PLY without per-vertex normals**
+  The current PCA k-NN implementation uses a centroid-based global orientation flip,
+  which misclassifies ~50% of normals on concave surfaces (e.g., between the ears).
+  Better approach: use a minimum spanning tree (MST) propagation algorithm (Hoppe et al.)
+  to propagate consistent orientation from a seed point.
+
+- [ ] **[CODE] Multi-scale anchor offsets in global SDF**
+  Train the global `SDFNet` with a mix of three offsets (e.g., 0.02, 0.15, 0.50)
+  rather than a single value.  This is an alternative to the full chartwise SDF approach
+  and simpler to integrate with the existing pipeline.
+
+- [ ] **[CODE] Replace centroid-estimated normals with global SDF gradient**
+  When `--sdf-checkpoint` is provided to `train_sdf_chartwise.py`, use
+  `n(x) = ∇φ(x) / ‖∇φ(x)‖` at PLY surface points as the normal estimate.
+  The global SDF v3 already has `final_normal = 0.032` (good gradient alignment),
+  so its gradients are reliable normals even if the sign is wrong.
+
+### Medium Priority — PINN architecture
+
+- [ ] **[CODE] Replace manufactured solution with PLY-mesh BCs**
+  Currently the Poisson PINN enforces `u=sin(πx₁)sin(πx₂)sin(πx₃)` on `∂Ω` using the
+  SDF zero-crossing for BC sampling.  A wrong-sign SDF places BC samples inside Ω.
+  Using the actual PLY mesh vertices as BC sample points removes the SDF-sign dependence
+  for boundary conditions entirely.
+
+- [ ] **[CODE] Supervised warmup before Schwarz iterations**
+  Add a pre-Schwarz phase where all charts are initialized to the manufactured solution
+  via MSE regression.  This gives a good global starting point before the Schwarz
+  coupling begins, avoiding the cold-start divergence observed in the Stanford Bunny runs.
+
+- [ ] **[EXP] CompactChartNet on Stanford Bunny**
+  Once the sign quality is resolved (via chartwise SDF or PLY-mesh BCs), benchmark
+  the CompactChartNet architecture on the Stanford Bunny domain.
+  Hypothesis: monotone Schwarz convergence carries over from the procedural rabbit.
+
+### Low Priority — Paper and documentation
+
+- [ ] **[DOC] Finalize paper draft** (`docs/chatgpt52_paper_starter.md`)
+  Key sections remaining: Example 6 results table, comparison with global SDF baseline,
+  discussion of adaptive offset derivation.
+
+- [ ] **[DOC] Generate publication figures for Stanford Bunny**
+  Once chartwise PINN converges, run `postprocessing/render_3d_figures.py` to produce:
+  - `figures/3d/bunny_poisson_error_surface.png`
+  - `figures/3d/bunny_poisson_charts.png`
+  - `figures/3d/bunny_adaptive_offsets.png`
+
+- [ ] **[CODE] Git push `PINN_coordinate_chart_3Dgeometry` main branch**
+  The sub-repo is 7 commits ahead of `origin/main` (as of 2026-03-01).
+  Push after the chartwise SDF experiment validates.
+
+- [ ] **[CODE] Vectorize `estimate_normals_pca` in `train_sdf_chartwise.py`**
+  The current per-point `np.linalg.eigh` loop is O(N·k²) and takes ~0.8s for 36k
+  points.  A batched `np.linalg.eigh` on the full covariance stack would be 10–20× faster.
 
 ---
 
