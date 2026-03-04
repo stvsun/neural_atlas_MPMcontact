@@ -100,6 +100,127 @@ class SDFNet(torch.nn.Module):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Watertight mesh repair (multi-step: open3d cleaning → fan-fill → Poisson)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def repair_to_watertight(mesh_trimesh, mesh_o3d):
+    """Multi-step watertight repair: open3d cleaning → boundary fan-fill → Poisson fallback.
+
+    Parameters
+    ----------
+    mesh_trimesh : trimesh.Trimesh
+    mesh_o3d     : open3d.geometry.TriangleMesh  (loaded from PLY, legacy mesh)
+
+    Returns
+    -------
+    mesh_trimesh : repaired trimesh.Trimesh
+    mesh_o3d     : corresponding open3d TriangleMesh (updated if Poisson used)
+    """
+    import open3d as o3d
+
+    print("  Aggressive watertight repair:")
+
+    # Step 1: Open3D mesh cleaning (removes degenerate/duplicate geometry)
+    mesh_o3d.remove_degenerate_triangles()
+    mesh_o3d.remove_duplicated_vertices()
+    mesh_o3d.remove_non_manifold_edges()
+    mesh_o3d.remove_unreferenced_vertices()
+    mesh_o3d.compute_vertex_normals()
+    print(
+        f"    After o3d cleaning: {len(mesh_o3d.vertices)} verts, "
+        f"{len(mesh_o3d.triangles)} tris"
+    )
+
+    # Step 2: Detect boundary edges (edges with only 1 adjacent face) and fan-fill
+    # mesh_trimesh.edges: (F*3, 2) — all face edges; shared edges appear twice,
+    # boundary edges appear once.
+    edges_sorted = np.sort(mesh_trimesh.edges, axis=1)
+    unique_edges, counts = np.unique(edges_sorted, axis=0, return_counts=True)
+    boundary_edges = unique_edges[counts == 1]  # each boundary edge appears once
+
+    if len(boundary_edges) > 0:
+        # Build boundary-vertex adjacency (each boundary vertex has degree 2)
+        adj: dict = {}
+        for e in boundary_edges:
+            v0, v1 = int(e[0]), int(e[1])
+            adj.setdefault(v0, []).append(v1)
+            adj.setdefault(v1, []).append(v0)
+
+        # Find connected components via BFS (each component = one boundary loop)
+        visited: set = set()
+        loops = []
+        for start in adj:
+            if start in visited:
+                continue
+            loop: list = []
+            stack = [start]
+            while stack:
+                v = stack.pop()
+                if v in visited:
+                    continue
+                visited.add(v)
+                loop.append(v)
+                for nb in adj[v]:
+                    if nb not in visited:
+                        stack.append(nb)
+            loops.append(np.array(loop, dtype=np.int32))
+
+        print(
+            f"    Found {len(loops)} boundary loop(s) "
+            f"({len(boundary_edges)} boundary edges)"
+        )
+
+        # Fan-triangulate each loop from its centroid
+        all_verts = mesh_trimesh.vertices.copy()
+        all_faces = mesh_trimesh.faces.copy()
+        for loop_arr in loops:
+            centroid = all_verts[loop_arr].mean(axis=0)
+            cid = len(all_verts)
+            all_verts = np.vstack([all_verts, centroid[None, :]])
+            n = len(loop_arr)
+            new_faces = np.array(
+                [[cid, loop_arr[i], loop_arr[(i + 1) % n]] for i in range(n)],
+                dtype=np.int32,
+            )
+            all_faces = np.vstack([all_faces, new_faces])
+
+        mesh_trimesh = trimesh.Trimesh(
+            vertices=all_verts, faces=all_faces, process=True
+        )
+        print(
+            f"    After fan-fill: watertight={mesh_trimesh.is_watertight}, "
+            f"{len(mesh_trimesh.vertices)} verts, {len(mesh_trimesh.faces)} faces"
+        )
+    else:
+        print("    No boundary edges found — mesh already edge-complete")
+
+    # Step 3: Poisson reconstruction fallback if still not watertight
+    if not mesh_trimesh.is_watertight:
+        print("    Fan-fill insufficient; trying Poisson surface reconstruction…")
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(
+            np.asarray(mesh_o3d.vertices, dtype=np.float64)
+        )
+        pcd.normals = o3d.utility.Vector3dVector(
+            np.asarray(mesh_o3d.vertex_normals, dtype=np.float64)
+        )
+        mesh_o3d_rep, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+            pcd, depth=9, linear_fit=True
+        )
+        mesh_trimesh = trimesh.Trimesh(
+            vertices=np.asarray(mesh_o3d_rep.vertices),
+            faces=np.asarray(mesh_o3d_rep.triangles),
+        )
+        mesh_o3d = mesh_o3d_rep
+        print(
+            f"    After Poisson: watertight={mesh_trimesh.is_watertight}, "
+            f"{len(mesh_trimesh.vertices)} verts, {len(mesh_trimesh.faces)} faces"
+        )
+
+    return mesh_trimesh, mesh_o3d
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # open3d RaycastingScene — primary SDF oracle
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -112,6 +233,33 @@ def build_open3d_scene(ply_path: str):
     scene.add_triangles(mesh_t)
     print(
         f"  open3d mesh: {len(mesh_o3d.vertices)} verts, "
+        f"{len(mesh_o3d.triangles)} triangles, "
+        f"watertight={mesh_o3d.is_watertight()}"
+    )
+    return scene, mesh_o3d
+
+
+def build_open3d_scene_from_trimesh(mesh_trimesh):
+    """Build an open3d RaycastingScene from a trimesh object (for repaired meshes).
+
+    Used after repair_to_watertight() so the SDF oracle matches the repaired geometry.
+    Returns (scene, o3d_mesh).
+    """
+    import open3d as o3d
+
+    mesh_o3d = o3d.geometry.TriangleMesh()
+    mesh_o3d.vertices = o3d.utility.Vector3dVector(
+        np.asarray(mesh_trimesh.vertices, dtype=np.float64)
+    )
+    mesh_o3d.triangles = o3d.utility.Vector3iVector(
+        np.asarray(mesh_trimesh.faces, dtype=np.int32)
+    )
+    mesh_o3d.compute_vertex_normals()
+    mesh_t = o3d.t.geometry.TriangleMesh.from_legacy(mesh_o3d)
+    scene = o3d.t.geometry.RaycastingScene()
+    scene.add_triangles(mesh_t)
+    print(
+        f"  open3d scene from repaired mesh: {len(mesh_o3d.vertices)} verts, "
         f"{len(mesh_o3d.triangles)} triangles, "
         f"watertight={mesh_o3d.is_watertight()}"
     )
@@ -481,6 +629,12 @@ def main(args: argparse.Namespace) -> None:
         except Exception as e:
             print(f"  fill_holes failed ({e}); continuing with original mesh")
 
+    # Aggressive multi-step watertight repair (open3d cleaning → fan-fill → Poisson)
+    if args.repair_watertight:
+        import open3d as o3d
+        mesh_o3d_initial = o3d.io.read_triangle_mesh(args.ply_file)
+        mesh_trimesh, _ = repair_to_watertight(mesh_trimesh, mesh_o3d_initial)
+
     # ── Compute normalisation (same formula as train_sdf_rabbit.py) ───────────
     verts = np.array(mesh_trimesh.vertices, dtype=np.float64)
     mins = np.min(verts, axis=0)
@@ -495,8 +649,12 @@ def main(args: argparse.Namespace) -> None:
           f"{(maxs[0]-our_center[0])/our_scale:.3f}]")
 
     # ── Build open3d RaycastingScene (primary oracle) ─────────────────────────
-    print("\nBuilding open3d RaycastingScene (primary SDF oracle)…")
-    open3d_scene, _ = build_open3d_scene(args.ply_file)
+    if args.repair_watertight:
+        print("\nBuilding open3d RaycastingScene from repaired mesh…")
+        open3d_scene, _ = build_open3d_scene_from_trimesh(mesh_trimesh)
+    else:
+        print("\nBuilding open3d RaycastingScene (primary SDF oracle)…")
+        open3d_scene, _ = build_open3d_scene(args.ply_file)
 
     # Quick sanity check: bunny centre should be inside
     centroid_phys = our_center.reshape(1, 3).astype(np.float32)
@@ -708,6 +866,16 @@ def parse_args() -> argparse.Namespace:
         help="Abort if MLP sign_error exceeds this fraction (default 5%%)",
     )
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument(
+        "--repair-watertight",
+        action="store_true",
+        help=(
+            "Apply aggressive multi-step hole-filling before SDF queries: "
+            "open3d mesh cleaning → boundary fan-triangulation → Poisson fallback. "
+            "Rebuilds the open3d SDF oracle from the repaired mesh. "
+            "Recommended for Stanford Bunny PLY (non-watertight, 3 open holes)."
+        ),
+    )
     return p.parse_args()
 
 
