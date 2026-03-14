@@ -1,0 +1,1180 @@
+{
+  "registry_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/core_benchmarks_registry.json",
+  "scope": "validated_core",
+  "project_root": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry",
+  "cases": [
+    {
+      "case_id": "forward_poisson_ellipsoid",
+      "family": "forward_poisson",
+      "include_in_main": true,
+      "description": "3D ellipsoid mapped-to-sphere Poisson verification",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/pinn_3d_ellipsoid_mapped_sphere.py",
+      "primary_metric": {
+        "key": "relative_l2_error",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "ellipsoid_20260212_180204",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204/run.log",
+          "metrics_type": "ellipsoid_log",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204/pinn_3d_ellipsoid_mapped_sphere.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "relative_l2_error": 0.002258611,
+            "l2_error": 0.001082653,
+            "max_error": 0.005231577,
+            "final_total_loss": 0.0001418031,
+            "runtime_seconds": 106.3,
+            "target_met": null
+          },
+          "primary_metric_value": 0.002258611
+        }
+      ],
+      "record_count": 1,
+      "ok_record_count": 1,
+      "best_record": {
+        "record_id": "ellipsoid_20260212_180204",
+        "seed": 42,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204/run.log",
+        "metrics_type": "ellipsoid_log",
+        "checkpoint_path": null,
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204/pinn_3d_ellipsoid_mapped_sphere.png"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "relative_l2_error": 0.002258611,
+          "l2_error": 0.001082653,
+          "max_error": 0.005231577,
+          "final_total_loss": 0.0001418031,
+          "runtime_seconds": 106.3,
+          "target_met": null
+        },
+        "primary_metric_value": 0.002258611
+      },
+      "summary": {
+        "relative_l2_error": {
+          "n": 1.0,
+          "mean": 0.002258611,
+          "std": 0.0,
+          "min": 0.002258611,
+          "max": 0.002258611
+        },
+        "l2_error": {
+          "n": 1.0,
+          "mean": 0.001082653,
+          "std": 0.0,
+          "min": 0.001082653,
+          "max": 0.001082653
+        },
+        "max_error": {
+          "n": 1.0,
+          "mean": 0.005231577,
+          "std": 0.0,
+          "min": 0.005231577,
+          "max": 0.005231577
+        },
+        "runtime_seconds": {
+          "n": 1.0,
+          "mean": 106.3,
+          "std": 0.0,
+          "min": 106.3,
+          "max": 106.3
+        }
+      },
+      "warnings": []
+    },
+    {
+      "case_id": "forward_poisson_star",
+      "family": "forward_poisson",
+      "include_in_main": true,
+      "description": "3D star mapped Poisson verification",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_poisson_star3d_mapped.py",
+      "primary_metric": {
+        "key": "relative_l2_error",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "star_accel_20260212_194730",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_mapped_metrics.json",
+          "metrics_type": "poisson_star_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_pinn.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_mapped_results.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "relative_l2_error": 0.2590954823118708,
+            "l2_error": 0.1041173032075872,
+            "max_error": 0.5061672331616255,
+            "final_total_loss": 3.525244724802422,
+            "runtime_seconds": 229.36046695709229,
+            "target_met": null
+          },
+          "primary_metric_value": 0.2590954823118708
+        }
+      ],
+      "record_count": 1,
+      "ok_record_count": 1,
+      "best_record": {
+        "record_id": "star_accel_20260212_194730",
+        "seed": 42,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_mapped_metrics.json",
+        "metrics_type": "poisson_star_json",
+        "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_pinn.pt",
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_mapped_results.png"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "relative_l2_error": 0.2590954823118708,
+          "l2_error": 0.1041173032075872,
+          "max_error": 0.5061672331616255,
+          "final_total_loss": 3.525244724802422,
+          "runtime_seconds": 229.36046695709229,
+          "target_met": null
+        },
+        "primary_metric_value": 0.2590954823118708
+      },
+      "summary": {
+        "relative_l2_error": {
+          "n": 1.0,
+          "mean": 0.2590954823118708,
+          "std": 0.0,
+          "min": 0.2590954823118708,
+          "max": 0.2590954823118708
+        },
+        "l2_error": {
+          "n": 1.0,
+          "mean": 0.1041173032075872,
+          "std": 0.0,
+          "min": 0.1041173032075872,
+          "max": 0.1041173032075872
+        },
+        "max_error": {
+          "n": 1.0,
+          "mean": 0.5061672331616255,
+          "std": 0.0,
+          "min": 0.5061672331616255,
+          "max": 0.5061672331616255
+        },
+        "runtime_seconds": {
+          "n": 1.0,
+          "mean": 229.36046695709229,
+          "std": 0.0,
+          "min": 229.36046695709229,
+          "max": 229.36046695709229
+        }
+      },
+      "warnings": []
+    },
+    {
+      "case_id": "rabbit_poisson_schwarz",
+      "family": "rabbit_poisson",
+      "include_in_main": true,
+      "description": "Rabbit Poisson on fixed atlas with Schwarz coupling",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_poisson_rabbit_atlas_schwarz.py",
+      "primary_metric": {
+        "key": "relative_l2_error",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "attempt19_w4",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_metrics.json",
+          "metrics_type": "rabbit_poisson_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_best_rel_l2.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "relative_l2_error": 0.025319136679172516,
+            "l2_error": 0.009838750585913658,
+            "max_error": 0.05302703380584717,
+            "interface_flux": 0.002515421248972416,
+            "runtime_seconds": 403.88238072395325,
+            "target_met": true
+          },
+          "primary_metric_value": 0.025319136679172516
+        },
+        {
+          "record_id": "attempt20c_compact",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_metrics.json",
+          "metrics_type": "rabbit_poisson_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_best_rel_l2.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/figures/poisson_rabbit_convergence.pdf"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "relative_l2_error": 0.022065361961722374,
+            "l2_error": 0.008574367500841618,
+            "max_error": 0.06783068180084229,
+            "interface_flux": 0.011584924533963203,
+            "runtime_seconds": 3658.9905638694763,
+            "target_met": true
+          },
+          "primary_metric_value": 0.022065361961722374
+        },
+        {
+          "record_id": "accurate_warmstart_best",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536/rabbit_poisson_schwarz_accurate_warmstart_best_metrics.json",
+          "metrics_type": "rabbit_poisson_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536/rabbit_poisson_schwarz_accurate_warmstart_best_best_rel_l2.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536/rabbit_poisson_schwarz_accurate_warmstart_best_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "relative_l2_error": 0.13252214761985828,
+            "l2_error": 0.030429017293901732,
+            "max_error": 0.14792743671561392,
+            "interface_flux": 0.22953640572662187,
+            "runtime_seconds": 6.736382961273193,
+            "target_met": true
+          },
+          "primary_metric_value": 0.13252214761985828
+        }
+      ],
+      "record_count": 3,
+      "ok_record_count": 3,
+      "best_record": {
+        "record_id": "attempt20c_compact",
+        "seed": 42,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_metrics.json",
+        "metrics_type": "rabbit_poisson_json",
+        "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_best_rel_l2.pt",
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_curves.png",
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/figures/poisson_rabbit_convergence.pdf"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "relative_l2_error": 0.022065361961722374,
+          "l2_error": 0.008574367500841618,
+          "max_error": 0.06783068180084229,
+          "interface_flux": 0.011584924533963203,
+          "runtime_seconds": 3658.9905638694763,
+          "target_met": true
+        },
+        "primary_metric_value": 0.022065361961722374
+      },
+      "summary": {
+        "relative_l2_error": {
+          "n": 3.0,
+          "mean": 0.059968882086917724,
+          "std": 0.051320100136937996,
+          "min": 0.022065361961722374,
+          "max": 0.13252214761985828
+        },
+        "l2_error": {
+          "n": 3.0,
+          "mean": 0.016280711793552335,
+          "std": 0.010017670306176209,
+          "min": 0.008574367500841618,
+          "max": 0.030429017293901732
+        },
+        "max_error": {
+          "n": 3.0,
+          "mean": 0.08959505077410113,
+          "std": 0.041687627546728466,
+          "min": 0.05302703380584717,
+          "max": 0.14792743671561392
+        },
+        "interface_flux": {
+          "n": 3.0,
+          "mean": 0.08121225050318583,
+          "std": 0.10494635213453452,
+          "min": 0.002515421248972416,
+          "max": 0.22953640572662187
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 1356.5364425182343,
+          "std": 1636.1341574129792,
+          "min": 6.736382961273193,
+          "max": 3658.9905638694763
+        }
+      },
+      "warnings": []
+    },
+    {
+      "case_id": "torus_inverse_original_atlas",
+      "family": "torus_inverse",
+      "include_in_main": true,
+      "description": "Torus inverse Neo-Hookean with original atlas",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_torus_inverse_neohookean_atlas.py",
+      "primary_metric": {
+        "key": "traction_rel_l2",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "torus_inverse_mps",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_metrics.json",
+          "metrics_type": "torus_original_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_state.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "mu_rel_error_percent": 9.271833634194593e-06,
+            "K_rel_error_percent": 2.288818359375e-05,
+            "traction_rel_l2": 2.3500865609094035e-07,
+            "runtime_seconds": 201.09212398529053,
+            "target_met": null
+          },
+          "primary_metric_value": 2.3500865609094035e-07
+        },
+        {
+          "record_id": "torus_inverse_mps_dense_v3",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3/torus_inverse_neohookean_atlas_metrics.json",
+          "metrics_type": "torus_original_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3/torus_inverse_neohookean_atlas_state.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3/torus_inverse_neohookean_atlas_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "mu_rel_error_percent": 0.014923678504098604,
+            "K_rel_error_percent": 0.020904541015625,
+            "traction_rel_l2": 0.00020885038247797638,
+            "runtime_seconds": 92.14155697822571,
+            "target_met": null
+          },
+          "primary_metric_value": 0.00020885038247797638
+        },
+        {
+          "record_id": "torus_inverse_mps_dense_v4",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_metrics.json",
+          "metrics_type": "torus_original_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_state.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "mu_rel_error_percent": 0.014923678504098604,
+            "K_rel_error_percent": 0.020904541015625,
+            "traction_rel_l2": 0.00020885038247797638,
+            "runtime_seconds": 92.98086023330688,
+            "target_met": null
+          },
+          "primary_metric_value": 0.00020885038247797638
+        }
+      ],
+      "record_count": 3,
+      "ok_record_count": 3,
+      "best_record": {
+        "record_id": "torus_inverse_mps",
+        "seed": null,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_metrics.json",
+        "metrics_type": "torus_original_json",
+        "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_state.pt",
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_curves.png"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "mu_rel_error_percent": 9.271833634194593e-06,
+          "K_rel_error_percent": 2.288818359375e-05,
+          "traction_rel_l2": 2.3500865609094035e-07,
+          "runtime_seconds": 201.09212398529053,
+          "target_met": null
+        },
+        "primary_metric_value": 2.3500865609094035e-07
+      },
+      "summary": {
+        "traction_rel_l2": {
+          "n": 3.0,
+          "mean": 0.0001393119245373479,
+          "std": 9.834223032614784e-05,
+          "min": 2.3500865609094035e-07,
+          "max": 0.00020885038247797638
+        },
+        "mu_rel_error_percent": {
+          "n": 3.0,
+          "mean": 0.0099522096139438,
+          "std": 0.007030718729372842,
+          "min": 9.271833634194593e-06,
+          "max": 0.014923678504098604
+        },
+        "K_rel_error_percent": {
+          "n": 3.0,
+          "mean": 0.013943990071614584,
+          "std": 0.009843705546608381,
+          "min": 2.288818359375e-05,
+          "max": 0.020904541015625
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 128.73818039894104,
+          "std": 51.16311152813767,
+          "min": 92.14155697822571,
+          "max": 201.09212398529053
+        }
+      },
+      "warnings": []
+    },
+    {
+      "case_id": "torus_inverse_schwarz_displacement",
+      "family": "torus_inverse",
+      "include_in_main": true,
+      "description": "Torus inverse Neo-Hookean with Schwarz alternating updates (displacement observations)",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_torus_inverse_neohookean_schwarz_dual.py",
+      "primary_metric": {
+        "key": "obs_rel_l2",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "disp_20260215_133200",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_133200",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_133200/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_133200/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "obs_rel_l2": 41.14476399926768,
+            "traction_rel_l2": null,
+            "disp_rel_l2": 0.0008853020085515056,
+            "mu_rel_error_percent": 2.2870594307278225e-10,
+            "K_rel_error_percent": 2.799955040956661,
+            "runtime_seconds": 30.866188049316406,
+            "target_met": false
+          },
+          "primary_metric_value": 41.14476399926768
+        },
+        {
+          "record_id": "disp_20260215_134500",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_134500",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_134500/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_134500/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "obs_rel_l2": 0.0026963424070713107,
+            "traction_rel_l2": 0.019408768762312328,
+            "disp_rel_l2": 0.0026963424070713107,
+            "mu_rel_error_percent": 6.457599886920838e-09,
+            "K_rel_error_percent": 1.9987350658148841,
+            "runtime_seconds": 25.274524211883545,
+            "target_met": true
+          },
+          "primary_metric_value": 0.0026963424070713107
+        },
+        {
+          "record_id": "disp_20260215_140200",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_best_boundary_fields.vtu"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "obs_rel_l2": 0.0017351133192209118,
+            "traction_rel_l2": 0.009593550762501506,
+            "disp_rel_l2": 0.0017351133192209118,
+            "mu_rel_error_percent": 4.083153568343631e-12,
+            "K_rel_error_percent": 0.9992696429789589,
+            "runtime_seconds": 38.6314651966095,
+            "target_met": true
+          },
+          "primary_metric_value": 0.0017351133192209118
+        }
+      ],
+      "record_count": 3,
+      "ok_record_count": 3,
+      "best_record": {
+        "record_id": "disp_20260215_140200",
+        "seed": null,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+        "metrics_type": "torus_schwarz_json",
+        "checkpoint_path": null,
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png",
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_best_boundary_fields.vtu"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "obs_rel_l2": 0.0017351133192209118,
+          "traction_rel_l2": 0.009593550762501506,
+          "disp_rel_l2": 0.0017351133192209118,
+          "mu_rel_error_percent": 4.083153568343631e-12,
+          "K_rel_error_percent": 0.9992696429789589,
+          "runtime_seconds": 38.6314651966095,
+          "target_met": true
+        },
+        "primary_metric_value": 0.0017351133192209118
+      },
+      "summary": {
+        "obs_rel_l2": {
+          "n": 3.0,
+          "mean": 13.716398484997992,
+          "std": 19.394783255973316,
+          "min": 0.0017351133192209118,
+          "max": 41.14476399926768
+        },
+        "traction_rel_l2": {
+          "n": 2.0,
+          "mean": 0.014501159762406917,
+          "std": 0.004907608999905411,
+          "min": 0.009593550762501506,
+          "max": 0.019408768762312328
+        },
+        "disp_rel_l2": {
+          "n": 3.0,
+          "mean": 0.0017722525782812428,
+          "std": 0.0007398203947312061,
+          "min": 0.0008853020085515056,
+          "max": 0.0026963424070713107
+        },
+        "mu_rel_error_percent": {
+          "n": 3.0,
+          "mean": 2.230129661187321e-09,
+          "std": 2.9906791014181304e-09,
+          "min": 4.083153568343631e-12,
+          "max": 6.457599886920838e-09
+        },
+        "K_rel_error_percent": {
+          "n": 3.0,
+          "mean": 1.9326532499168347,
+          "std": 0.7366102906407687,
+          "min": 0.9992696429789589,
+          "max": 2.799955040956661
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 31.590725819269817,
+          "std": 5.476962926807141,
+          "min": 25.274524211883545,
+          "max": 38.6314651966095
+        }
+      },
+      "warnings": []
+    },
+    {
+      "case_id": "torus_inverse_schwarz_traction",
+      "family": "torus_inverse",
+      "include_in_main": true,
+      "description": "Torus inverse Neo-Hookean with Schwarz alternating updates (traction observations)",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_torus_inverse_neohookean_schwarz_dual.py",
+      "primary_metric": {
+        "key": "obs_rel_l2",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "trac_20260215_131500",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_traction_test_20260215_131500",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_traction_test_20260215_131500/torus_inverse_neohookean_schwarz_traction_traction_test_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_traction_test_20260215_131500/torus_inverse_neohookean_schwarz_traction_traction_test_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "obs_rel_l2": 0.02985828889829811,
+            "traction_rel_l2": null,
+            "disp_rel_l2": null,
+            "mu_rel_error_percent": 1.7960272519832083,
+            "K_rel_error_percent": 2.7750171297107045,
+            "runtime_seconds": 4.558820009231567,
+            "target_met": true
+          },
+          "primary_metric_value": 0.02985828889829811
+        },
+        {
+          "record_id": "trac_20260215_133000",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_133000",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_133000/torus_inverse_neohookean_schwarz_traction_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_133000/torus_inverse_neohookean_schwarz_traction_accurate_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "obs_rel_l2": 0.009315721673745126,
+            "traction_rel_l2": null,
+            "disp_rel_l2": 0.008882828607928297,
+            "mu_rel_error_percent": 0.9107075346074861,
+            "K_rel_error_percent": 0.8681259470269964,
+            "runtime_seconds": 48.7626690864563,
+            "target_met": true
+          },
+          "primary_metric_value": 0.009315721673745126
+        },
+        {
+          "record_id": "trac_20260215_140800",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_best_boundary_fields.vtu"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "obs_rel_l2": 0.005797107058353041,
+            "traction_rel_l2": 0.005797107058353041,
+            "disp_rel_l2": 0.003363862716180941,
+            "mu_rel_error_percent": 0.3452891949412315,
+            "K_rel_error_percent": 0.5411622600986306,
+            "runtime_seconds": 76.89387702941895,
+            "target_met": true
+          },
+          "primary_metric_value": 0.005797107058353041
+        }
+      ],
+      "record_count": 3,
+      "ok_record_count": 3,
+      "best_record": {
+        "record_id": "trac_20260215_140800",
+        "seed": null,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_metrics.json",
+        "metrics_type": "torus_schwarz_json",
+        "checkpoint_path": null,
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_curves.png",
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_best_boundary_fields.vtu"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "obs_rel_l2": 0.005797107058353041,
+          "traction_rel_l2": 0.005797107058353041,
+          "disp_rel_l2": 0.003363862716180941,
+          "mu_rel_error_percent": 0.3452891949412315,
+          "K_rel_error_percent": 0.5411622600986306,
+          "runtime_seconds": 76.89387702941895,
+          "target_met": true
+        },
+        "primary_metric_value": 0.005797107058353041
+      },
+      "summary": {
+        "obs_rel_l2": {
+          "n": 3.0,
+          "mean": 0.014990372543465426,
+          "std": 0.010610886383133082,
+          "min": 0.005797107058353041,
+          "max": 0.02985828889829811
+        },
+        "traction_rel_l2": {
+          "n": 1.0,
+          "mean": 0.005797107058353041,
+          "std": 0.0,
+          "min": 0.005797107058353041,
+          "max": 0.005797107058353041
+        },
+        "disp_rel_l2": {
+          "n": 2.0,
+          "mean": 0.006123345662054619,
+          "std": 0.0027594829458736777,
+          "min": 0.003363862716180941,
+          "max": 0.008882828607928297
+        },
+        "mu_rel_error_percent": {
+          "n": 3.0,
+          "mean": 1.0173413271773086,
+          "std": 0.5970417639360753,
+          "min": 0.3452891949412315,
+          "max": 1.7960272519832083
+        },
+        "K_rel_error_percent": {
+          "n": 3.0,
+          "mean": 1.3947684456121106,
+          "std": 0.9850689098093165,
+          "min": 0.5411622600986306,
+          "max": 2.7750171297107045
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 43.40512204170227,
+          "std": 29.77266756922087,
+          "min": 4.558820009231567,
+          "max": 76.89387702941895
+        }
+      },
+      "warnings": []
+    },
+    {
+      "case_id": "rabbit_inverse_elder",
+      "family": "rabbit_inverse",
+      "include_in_main": true,
+      "description": "Rabbit inverse Elder-like flow with atlas Schwarz coupling",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_rabbit_inverse_elder_atlas_schwarz.py",
+      "primary_metric": {
+        "key": "k0_rel_error",
+        "lower_is_better": true
+      },
+      "records": [
+        {
+          "record_id": "elder_main",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main/rabbit_inverse_elder_atlas_schwarz_main_metrics.json",
+          "metrics_type": "rabbit_elder_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main/rabbit_inverse_elder_atlas_schwarz_main_best_target.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main/rabbit_inverse_elder_atlas_schwarz_main_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "k0_rel_error": 0.030000030994415283,
+            "eig_rel_error_mean": 0.029697949066758156,
+            "eig_rel_error_max": 0.062225598841905594,
+            "axis_error_deg_mean": 2.696829080581665,
+            "field_rel_global": 0.0,
+            "interface_flux": 0.003498360514640808,
+            "runtime_seconds": 580.5107200145721,
+            "target_met": true
+          },
+          "primary_metric_value": 0.030000030994415283
+        },
+        {
+          "record_id": "elder_fieldcheck",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_metrics.json",
+          "metrics_type": "rabbit_elder_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_best_target.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_curves.png"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "k0_rel_error": 0.029999971389770508,
+            "eig_rel_error_mean": 0.029697811231017113,
+            "eig_rel_error_max": 0.062225595116615295,
+            "axis_error_deg_mean": 2.696829080581665,
+            "field_rel_global": 0.0,
+            "interface_flux": 0.03525732085108757,
+            "runtime_seconds": 12.089679956436157,
+            "target_met": true
+          },
+          "primary_metric_value": 0.029999971389770508
+        },
+        {
+          "record_id": "elder_globalfield_small",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small/rabbit_inverse_elder_atlas_schwarz_globalfield_small_metrics.json",
+          "metrics_type": "rabbit_elder_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small/rabbit_inverse_elder_atlas_schwarz_globalfield_small_best_target.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small/rabbit_inverse_elder_atlas_schwarz_globalfield_small_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_elder/rabbit_elder_inverse_merged.vtu"
+          ],
+          "status": "ok",
+          "warnings": [],
+          "metrics": {
+            "k0_rel_error": 0.030000000000000027,
+            "eig_rel_error_mean": 0.029697928620848486,
+            "eig_rel_error_max": 0.06222560164696825,
+            "axis_error_deg_mean": 2.6967944254574303,
+            "field_rel_global": 0.0,
+            "interface_flux": 0.0024289236295554646,
+            "runtime_seconds": 642.5640959739685,
+            "target_met": true
+          },
+          "primary_metric_value": 0.030000000000000027
+        }
+      ],
+      "record_count": 3,
+      "ok_record_count": 3,
+      "best_record": {
+        "record_id": "elder_fieldcheck",
+        "seed": null,
+        "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232",
+        "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_metrics.json",
+        "metrics_type": "rabbit_elder_json",
+        "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_best_target.pt",
+        "figures": [
+          "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_curves.png"
+        ],
+        "status": "ok",
+        "warnings": [],
+        "metrics": {
+          "k0_rel_error": 0.029999971389770508,
+          "eig_rel_error_mean": 0.029697811231017113,
+          "eig_rel_error_max": 0.062225595116615295,
+          "axis_error_deg_mean": 2.696829080581665,
+          "field_rel_global": 0.0,
+          "interface_flux": 0.03525732085108757,
+          "runtime_seconds": 12.089679956436157,
+          "target_met": true
+        },
+        "primary_metric_value": 0.029999971389770508
+      },
+      "summary": {
+        "k0_rel_error": {
+          "n": 3.0,
+          "mean": 0.030000000794728605,
+          "std": 2.433998239983098e-08,
+          "min": 0.029999971389770508,
+          "max": 0.030000030994415283
+        },
+        "eig_rel_error_mean": {
+          "n": 3.0,
+          "mean": 0.029697896306207918,
+          "std": 6.073357047236864e-08,
+          "min": 0.029697811231017113,
+          "max": 0.029697949066758156
+        },
+        "eig_rel_error_max": {
+          "n": 3.0,
+          "mean": 0.062225598535163046,
+          "std": 2.674814095127482e-09,
+          "min": 0.062225595116615295,
+          "max": 0.06222560164696825
+        },
+        "axis_error_deg_mean": {
+          "n": 3.0,
+          "mean": 2.696817528873587,
+          "std": 1.6336582232825697e-05,
+          "min": 2.6967944254574303,
+          "max": 2.696829080581665
+        },
+        "field_rel_global": {
+          "n": 3.0,
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "interface_flux": {
+          "n": 3.0,
+          "mean": 0.013728201665094614,
+          "std": 0.015229645509254043,
+          "min": 0.0024289236295554646,
+          "max": 0.03525732085108757
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 411.7214986483256,
+          "std": 283.71564197300313,
+          "min": 12.089679956436157,
+          "max": 642.5640959739685
+        }
+      },
+      "warnings": []
+    }
+  ],
+  "three_run_or_more_cases": [
+    {
+      "case_id": "rabbit_poisson_schwarz",
+      "n": 3,
+      "primary_metric": {
+        "key": "relative_l2_error",
+        "lower_is_better": true
+      },
+      "summary": {
+        "relative_l2_error": {
+          "n": 3.0,
+          "mean": 0.059968882086917724,
+          "std": 0.051320100136937996,
+          "min": 0.022065361961722374,
+          "max": 0.13252214761985828
+        },
+        "l2_error": {
+          "n": 3.0,
+          "mean": 0.016280711793552335,
+          "std": 0.010017670306176209,
+          "min": 0.008574367500841618,
+          "max": 0.030429017293901732
+        },
+        "max_error": {
+          "n": 3.0,
+          "mean": 0.08959505077410113,
+          "std": 0.041687627546728466,
+          "min": 0.05302703380584717,
+          "max": 0.14792743671561392
+        },
+        "interface_flux": {
+          "n": 3.0,
+          "mean": 0.08121225050318583,
+          "std": 0.10494635213453452,
+          "min": 0.002515421248972416,
+          "max": 0.22953640572662187
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 1356.5364425182343,
+          "std": 1636.1341574129792,
+          "min": 6.736382961273193,
+          "max": 3658.9905638694763
+        }
+      }
+    },
+    {
+      "case_id": "torus_inverse_original_atlas",
+      "n": 3,
+      "primary_metric": {
+        "key": "traction_rel_l2",
+        "lower_is_better": true
+      },
+      "summary": {
+        "traction_rel_l2": {
+          "n": 3.0,
+          "mean": 0.0001393119245373479,
+          "std": 9.834223032614784e-05,
+          "min": 2.3500865609094035e-07,
+          "max": 0.00020885038247797638
+        },
+        "mu_rel_error_percent": {
+          "n": 3.0,
+          "mean": 0.0099522096139438,
+          "std": 0.007030718729372842,
+          "min": 9.271833634194593e-06,
+          "max": 0.014923678504098604
+        },
+        "K_rel_error_percent": {
+          "n": 3.0,
+          "mean": 0.013943990071614584,
+          "std": 0.009843705546608381,
+          "min": 2.288818359375e-05,
+          "max": 0.020904541015625
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 128.73818039894104,
+          "std": 51.16311152813767,
+          "min": 92.14155697822571,
+          "max": 201.09212398529053
+        }
+      }
+    },
+    {
+      "case_id": "torus_inverse_schwarz_displacement",
+      "n": 3,
+      "primary_metric": {
+        "key": "obs_rel_l2",
+        "lower_is_better": true
+      },
+      "summary": {
+        "obs_rel_l2": {
+          "n": 3.0,
+          "mean": 13.716398484997992,
+          "std": 19.394783255973316,
+          "min": 0.0017351133192209118,
+          "max": 41.14476399926768
+        },
+        "traction_rel_l2": {
+          "n": 2.0,
+          "mean": 0.014501159762406917,
+          "std": 0.004907608999905411,
+          "min": 0.009593550762501506,
+          "max": 0.019408768762312328
+        },
+        "disp_rel_l2": {
+          "n": 3.0,
+          "mean": 0.0017722525782812428,
+          "std": 0.0007398203947312061,
+          "min": 0.0008853020085515056,
+          "max": 0.0026963424070713107
+        },
+        "mu_rel_error_percent": {
+          "n": 3.0,
+          "mean": 2.230129661187321e-09,
+          "std": 2.9906791014181304e-09,
+          "min": 4.083153568343631e-12,
+          "max": 6.457599886920838e-09
+        },
+        "K_rel_error_percent": {
+          "n": 3.0,
+          "mean": 1.9326532499168347,
+          "std": 0.7366102906407687,
+          "min": 0.9992696429789589,
+          "max": 2.799955040956661
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 31.590725819269817,
+          "std": 5.476962926807141,
+          "min": 25.274524211883545,
+          "max": 38.6314651966095
+        }
+      }
+    },
+    {
+      "case_id": "torus_inverse_schwarz_traction",
+      "n": 3,
+      "primary_metric": {
+        "key": "obs_rel_l2",
+        "lower_is_better": true
+      },
+      "summary": {
+        "obs_rel_l2": {
+          "n": 3.0,
+          "mean": 0.014990372543465426,
+          "std": 0.010610886383133082,
+          "min": 0.005797107058353041,
+          "max": 0.02985828889829811
+        },
+        "traction_rel_l2": {
+          "n": 1.0,
+          "mean": 0.005797107058353041,
+          "std": 0.0,
+          "min": 0.005797107058353041,
+          "max": 0.005797107058353041
+        },
+        "disp_rel_l2": {
+          "n": 2.0,
+          "mean": 0.006123345662054619,
+          "std": 0.0027594829458736777,
+          "min": 0.003363862716180941,
+          "max": 0.008882828607928297
+        },
+        "mu_rel_error_percent": {
+          "n": 3.0,
+          "mean": 1.0173413271773086,
+          "std": 0.5970417639360753,
+          "min": 0.3452891949412315,
+          "max": 1.7960272519832083
+        },
+        "K_rel_error_percent": {
+          "n": 3.0,
+          "mean": 1.3947684456121106,
+          "std": 0.9850689098093165,
+          "min": 0.5411622600986306,
+          "max": 2.7750171297107045
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 43.40512204170227,
+          "std": 29.77266756922087,
+          "min": 4.558820009231567,
+          "max": 76.89387702941895
+        }
+      }
+    },
+    {
+      "case_id": "rabbit_inverse_elder",
+      "n": 3,
+      "primary_metric": {
+        "key": "k0_rel_error",
+        "lower_is_better": true
+      },
+      "summary": {
+        "k0_rel_error": {
+          "n": 3.0,
+          "mean": 0.030000000794728605,
+          "std": 2.433998239983098e-08,
+          "min": 0.029999971389770508,
+          "max": 0.030000030994415283
+        },
+        "eig_rel_error_mean": {
+          "n": 3.0,
+          "mean": 0.029697896306207918,
+          "std": 6.073357047236864e-08,
+          "min": 0.029697811231017113,
+          "max": 0.029697949066758156
+        },
+        "eig_rel_error_max": {
+          "n": 3.0,
+          "mean": 0.062225598535163046,
+          "std": 2.674814095127482e-09,
+          "min": 0.062225595116615295,
+          "max": 0.06222560164696825
+        },
+        "axis_error_deg_mean": {
+          "n": 3.0,
+          "mean": 2.696817528873587,
+          "std": 1.6336582232825697e-05,
+          "min": 2.6967944254574303,
+          "max": 2.696829080581665
+        },
+        "field_rel_global": {
+          "n": 3.0,
+          "mean": 0.0,
+          "std": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "interface_flux": {
+          "n": 3.0,
+          "mean": 0.013728201665094614,
+          "std": 0.015229645509254043,
+          "min": 0.0024289236295554646,
+          "max": 0.03525732085108757
+        },
+        "runtime_seconds": {
+          "n": 3.0,
+          "mean": 411.7214986483256,
+          "std": 283.71564197300313,
+          "min": 12.089679956436157,
+          "max": 642.5640959739685
+        }
+      }
+    }
+  ]
+}

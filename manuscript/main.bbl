@@ -1,0 +1,30 @@
+\begin{thebibliography}{3}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Raissi et~al.(2019)Raissi, Perdikaris, and
+  Karniadakis]{raissi2019physicsinformed}
+Maziar Raissi, Paris Perdikaris, and George~E. Karniadakis.
+\newblock Physics-informed neural networks: A deep learning framework for
+  solving forward and inverse problems involving nonlinear partial differential
+  equations.
+\newblock \emph{Journal of Computational Physics}, 378:\penalty0 686--707,
+  2019.
+
+\bibitem[Quarteroni and Valli(1999)]{quarteroni1999domain}
+Alfio Quarteroni and Alberto Valli.
+\newblock \emph{Domain Decomposition Methods for Partial Differential
+  Equations}.
+\newblock Numerical Mathematics and Scientific Computation. The Clarendon
+  Press, Oxford University Press, New York, 1999.
+
+\bibitem[Elder(1967)]{elder1967transient}
+John~W. Elder.
+\newblock Transient convection in a porous medium.
+\newblock \emph{Journal of Fluid Mechanics}, 27\penalty0 (3):\penalty0
+  609--623, 1967.
+
+\end{thebibliography}

@@ -1,0 +1,305 @@
+{
+  "project_root": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry",
+  "scope": "validated_core",
+  "version": "1.0",
+  "notes": "Hybrid manuscript baseline: /Users/wsun/Downloads/main (1).tex + docs/chatgpt52_paper_starter.md",
+  "main_cases": [
+    {
+      "case_id": "forward_poisson_ellipsoid",
+      "family": "forward_poisson",
+      "include_in_main": true,
+      "description": "3D ellipsoid mapped-to-sphere Poisson verification",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/pinn_3d_ellipsoid_mapped_sphere.py",
+      "primary_metric": {"key": "relative_l2_error", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "ellipsoid_20260212_180204",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204/run.log",
+          "metrics_type": "ellipsoid_log",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/ellipsoid3d_20260212_180204/pinn_3d_ellipsoid_mapped_sphere.png"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "forward_poisson_star",
+      "family": "forward_poisson",
+      "include_in_main": true,
+      "description": "3D star mapped Poisson verification",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_poisson_star3d_mapped.py",
+      "primary_metric": {"key": "relative_l2_error", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "star_accel_20260212_194730",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_mapped_metrics.json",
+          "metrics_type": "poisson_star_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_pinn.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/examples/meshfree_accel_20260212_194730/poisson/poisson_star3d_mapped_results.png"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "rabbit_poisson_schwarz",
+      "family": "rabbit_poisson",
+      "include_in_main": true,
+      "description": "Rabbit Poisson on fixed atlas with Schwarz coupling",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_poisson_rabbit_atlas_schwarz.py",
+      "primary_metric": {"key": "relative_l2_error", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "attempt19_w4",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_metrics.json",
+          "metrics_type": "rabbit_poisson_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_best_rel_l2.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt19_w4/rabbit_poisson_schwarz_attempt19_w4_curves.png"
+          ]
+        },
+        {
+          "record_id": "attempt20c_compact",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_metrics.json",
+          "metrics_type": "rabbit_poisson_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_best_rel_l2.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/attempt20c_compact/rabbit_poisson_schwarz_attempt20c_compact_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/figures/poisson_rabbit_convergence.pdf"
+          ]
+        },
+        {
+          "record_id": "accurate_warmstart_best",
+          "seed": 42,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536/rabbit_poisson_schwarz_accurate_warmstart_best_metrics.json",
+          "metrics_type": "rabbit_poisson_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536/rabbit_poisson_schwarz_accurate_warmstart_best_best_rel_l2.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/poisson_rabbit_accurate_warmstart_20260214_232536/rabbit_poisson_schwarz_accurate_warmstart_best_curves.png"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "torus_inverse_original_atlas",
+      "family": "torus_inverse",
+      "include_in_main": true,
+      "description": "Torus inverse Neo-Hookean with original atlas",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_torus_inverse_neohookean_atlas.py",
+      "primary_metric": {"key": "traction_rel_l2", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "torus_inverse_mps",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_metrics.json",
+          "metrics_type": "torus_original_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_state.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps/torus_inverse_neohookean_atlas_curves.png"
+          ]
+        },
+        {
+          "record_id": "torus_inverse_mps_dense_v3",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3/torus_inverse_neohookean_atlas_metrics.json",
+          "metrics_type": "torus_original_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3/torus_inverse_neohookean_atlas_state.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v3/torus_inverse_neohookean_atlas_curves.png"
+          ]
+        },
+        {
+          "record_id": "torus_inverse_mps_dense_v4",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_metrics.json",
+          "metrics_type": "torus_original_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_state.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_inverse_mps_dense_v4/torus_inverse_neohookean_atlas_curves.png"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "torus_inverse_schwarz_displacement",
+      "family": "torus_inverse",
+      "include_in_main": true,
+      "description": "Torus inverse Neo-Hookean with Schwarz alternating updates (displacement observations)",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_torus_inverse_neohookean_schwarz_dual.py",
+      "primary_metric": {"key": "obs_rel_l2", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "disp_20260215_133200",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_133200",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_133200/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_133200/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png"
+          ]
+        },
+        {
+          "record_id": "disp_20260215_134500",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_134500",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_134500/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_134500/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png"
+          ]
+        },
+        {
+          "record_id": "disp_20260215_140200",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_displacement_20260215_140200/torus_inverse_neohookean_schwarz_displacement_accurate_best_boundary_fields.vtu"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "torus_inverse_schwarz_traction",
+      "family": "torus_inverse",
+      "include_in_main": true,
+      "description": "Torus inverse Neo-Hookean with Schwarz alternating updates (traction observations)",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_torus_inverse_neohookean_schwarz_dual.py",
+      "primary_metric": {"key": "obs_rel_l2", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "trac_20260215_131500",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_traction_test_20260215_131500",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_traction_test_20260215_131500/torus_inverse_neohookean_schwarz_traction_traction_test_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_traction_test_20260215_131500/torus_inverse_neohookean_schwarz_traction_traction_test_curves.png"
+          ]
+        },
+        {
+          "record_id": "trac_20260215_133000",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_133000",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_133000/torus_inverse_neohookean_schwarz_traction_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_133000/torus_inverse_neohookean_schwarz_traction_accurate_curves.png"
+          ]
+        },
+        {
+          "record_id": "trac_20260215_140800",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_metrics.json",
+          "metrics_type": "torus_schwarz_json",
+          "checkpoint_path": null,
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/torus_schwarz_dual_accurate_traction_20260215_140800/torus_inverse_neohookean_schwarz_traction_accurate_best_boundary_fields.vtu"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "rabbit_inverse_elder",
+      "family": "rabbit_inverse",
+      "include_in_main": true,
+      "description": "Rabbit inverse Elder-like flow with atlas Schwarz coupling",
+      "script_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/run_rabbit_inverse_elder_atlas_schwarz.py",
+      "primary_metric": {"key": "k0_rel_error", "lower_is_better": true},
+      "records": [
+        {
+          "record_id": "elder_main",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main/rabbit_inverse_elder_atlas_schwarz_main_metrics.json",
+          "metrics_type": "rabbit_elder_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main/rabbit_inverse_elder_atlas_schwarz_main_best_target.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_atlas_main/rabbit_inverse_elder_atlas_schwarz_main_curves.png"
+          ]
+        },
+        {
+          "record_id": "elder_fieldcheck",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_metrics.json",
+          "metrics_type": "rabbit_elder_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_best_target.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_fieldcheck_20260214_112232/rabbit_inverse_elder_atlas_schwarz_fieldcheck_curves.png"
+          ]
+        },
+        {
+          "record_id": "elder_globalfield_small",
+          "seed": null,
+          "run_dir": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small",
+          "metrics_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small/rabbit_inverse_elder_atlas_schwarz_globalfield_small_metrics.json",
+          "metrics_type": "rabbit_elder_json",
+          "checkpoint_path": "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small/rabbit_inverse_elder_atlas_schwarz_globalfield_small_best_target.pt",
+          "figures": [
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/rabbit_inverse_elder_globalfield_small/rabbit_inverse_elder_atlas_schwarz_globalfield_small_curves.png",
+            "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/paraview/rabbit_elder/rabbit_elder_inverse_merged.vtu"
+          ]
+        }
+      ]
+    }
+  ],
+  "appendix_tracks": [
+    {
+      "track_id": "rabbit_arruda_boyce_inverse",
+      "description": "TI Arruda-Boyce inverse variants with identifiability and interface-jump issues",
+      "paths": [
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz.py",
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz_mms.py",
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz_normal_ramp.py"
+      ]
+    },
+    {
+      "track_id": "torus_cube_fillet_variants",
+      "description": "Cube-chart and filleted-cube mapping variants for torus inverse",
+      "paths": [
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_torus_inverse_neohookean_atlas_cube.py",
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/run_torus_inverse_neohookean_atlas_fillet_inn.py"
+      ]
+    },
+    {
+      "track_id": "bunny_poisson_divergence",
+      "description": "Stanford bunny Poisson divergence diagnostics and chartwise SDF remediation path",
+      "paths": [
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/runs/bunny_poisson_v3",
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/src/train_sdf_chartwise.py",
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/RESULTS.md"
+      ]
+    },
+    {
+      "track_id": "archived_split_and_focus",
+      "description": "Archived adaptive split and fixed-focus refinement ideas",
+      "paths": [
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/experimental_ideas/atlas_split",
+        "/Users/wsun/Documents/Softwares/Mapped_sphere_method_for_complex_geometry/PINN_coordinate_chart_3Dgeometry/experiments/experimental_ideas/fixed_focus"
+      ]
+    }
+  ]
+}
