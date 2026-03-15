@@ -1,4 +1,4 @@
-\begin{thebibliography}{3}
+\begin{thebibliography}{10}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -21,10 +21,63 @@ Alfio Quarteroni and Alberto Valli.
 \newblock Numerical Mathematics and Scientific Computation. The Clarendon
   Press, Oxford University Press, New York, 1999.
 
-\bibitem[Elder(1967)]{elder1967transient}
-John~W. Elder.
-\newblock Transient convection in a porous medium.
-\newblock \emph{Journal of Fluid Mechanics}, 27\penalty0 (3):\penalty0
-  609--623, 1967.
+\bibitem[Tezaur et~al.(2025)Tezaur, Parish, Gruber, Moore, Wentland, and
+  Mota]{tezaur2025hybrid}
+Irina Tezaur, Eric Parish, Anthony Gruber, Ian Moore, Christopher~R. Wentland,
+  and Alejandro Mota.
+\newblock Hybrid coupling with operator inference and the overlapping schwarz
+  alternating method, 2025.
+\newblock arXiv preprint arXiv:2511.20687.
+
+\bibitem[Shukla et~al.(2021)Shukla, Jagtap, and
+  Karniadakis]{shukla2021parallel}
+Khemraj Shukla, Ameya~D. Jagtap, and George~E. Karniadakis.
+\newblock Parallel physics-informed neural networks via domain decomposition,
+  2021.
+\newblock arXiv preprint arXiv:2104.10013.
+
+\bibitem[Moseley et~al.(2021)Moseley, Markham, and
+  Nissen-Meyer]{moseley2021fbpinns}
+Ben Moseley, Andrew Markham, and Tarje Nissen-Meyer.
+\newblock Finite basis physics-informed neural networks ({FBPINNs}): A scalable
+  domain decomposition approach for solving differential equations, 2021.
+\newblock arXiv preprint arXiv:2107.07871.
+
+\bibitem[Paszke et~al.(2019)Paszke, Gross, Massa, Lerer, Bradbury, Chanan,
+  Killeen, Lin, Gimelshein, Antiga, et~al.]{paszke2019pytorch}
+A.~Paszke, S.~Gross, F.~Massa, A.~Lerer, J.~Bradbury, G.~Chanan, T.~Killeen,
+  Z.~Lin, N.~Gimelshein, L.~Antiga, et~al.
+\newblock {PyTorch}: An imperative style, high-performance deep learning
+  library.
+\newblock \emph{Advances in Neural Information Processing Systems}, 32\penalty0
+  (721):\penalty0 8026--8037, 2019.
+
+\bibitem[He et~al.(2016)He, Zhang, Ren, and Sun]{he2016deep}
+Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
+\newblock Deep residual learning for image recognition.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition}, pages 770--778, 2016.
+
+\bibitem[Yu et~al.(2020)Yu, Kumar, Gupta, Levine, Hausman, and
+  Finn]{yu2020gradient}
+Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol Hausman, and
+  Chelsea Finn.
+\newblock Gradient surgery for multi-task learning.
+\newblock \emph{Advances in Neural Information Processing Systems},
+  33:\penalty0 14731--14743, 2020.
+
+\bibitem[de~Souza~Neto et~al.(2011)de~Souza~Neto, Peric, and
+  Owen]{de_souza_neto_computational_2011}
+Eduardo~A de~Souza~Neto, Djordje Peric, and David~RJ Owen.
+\newblock \emph{Computational methods for plasticity: theory and applications}.
+\newblock John Wiley \& Sons, 2011.
+
+\bibitem[Williams et~al.(2019)Williams, Schneider, Silva, Zorin, Bruna, and
+  Panozzo]{williams2019deep}
+Francis Williams, Teseo Schneider, Claudio Silva, Denis Zorin, Joan Bruna, and
+  Daniele Panozzo.
+\newblock Deep geometric prior for surface reconstruction.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, 2019.
 
 \end{thebibliography}

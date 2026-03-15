@@ -11,10 +11,6 @@
 \usepackage{xcolor}
 % Removed: float (only needed for [H], now [htbp] throughout); setspace (unused).
 \usepackage{soul}
-\let\proof\relax
-\let\endproof\relax
-
-\usepackage{amsthm}
 \usepackage{eucal}
 \usepackage{enumerate}
 % geometry package removed: svjour3 defines its own page layout
@@ -56,7 +52,6 @@ hyperindex=true
 \usepackage{indentfirst}
 \usepackage{caption}
 \usepackage{enumitem}
-\usepackage{mathabx}
 \usepackage[para]{threeparttable}
 \usepackage{upgreek}
 
@@ -183,12 +178,12 @@ hyperindex=true
 %\affaddr{\affmark[c] Department of Chemistry and Materials Science \& Engineering Institute, University of Missouri, Columbia, MO 65211, USA} \\
 }
 
-\date{Received: \today / Accepted: date}
+\date{Received: [DATE] / Accepted: [DATE]}
 
 \maketitle
 
 \begin{abstract}
-We introduce a geometry-informed neural atlas framework for solving boundary-value problems on complex three-dimensional domains without volumetric meshing. The domain is covered by overlapping volumetric charts; governing equations are pulled back to simple chart-local coordinates via the Jacobian of each chart map; and chart-local neural solvers are coupled through a Schwarz alternating update. This separation of geometry handling, local PDE approximation, and interface transmission constitutes the main technical contribution: it reduces geometric distortion and yields a practical training procedure for physics-informed neural networks (PINNs) on geometries imported from standard surface data. The framework is validated on five benchmarks. A forward Poisson solve on an analytic ellipsoid achieves a relative $L^2$ error of $2.26\times10^{-3}$, confirming the correctness of the mapped-operator implementation. A fixed-atlas Schwarz-coupled Poisson solve on the Stanford rabbit interior reaches $2.21\times10^{-2}$, demonstrating chart-local field training on a genuinely complex volumetric geometry. A volumetric neural signed-distance benchmark on the Stanford Bunny PLY surface produces a surface loss of $1.66\times10^{-2}$ and normal-alignment loss of $3.18\times10^{-2}$, bridging the gap between real scan geometry and downstream atlas construction. A synthetic Neo-Hookean parameter-identification benchmark on a torus recovers both material constants to a traction relative $L^2$ error of $2.35\times10^{-7}$. Finally, a teacher-guided Elder-type permeability identification on the rabbit recovers the scalar permeability factor to $3.00\%$ relative error with a mean principal-axis error of $2.70^\circ$. Taken together, these results show that the atlas-based SA-PINN framework is a viable computational technology for geometry-intensive forward and inverse problems, while making explicit which settings are mature and which require additional stabilization.
+We present a geometry-informed neural atlas framework for solving boundary-value problems on complex three-dimensional bodies without volumetric meshing. The central idea is to decompose the geometry into overlapping volumetric charts, pull each governing equation back to simple chart-local coordinates through the chart Jacobian, and couple chart-local neural solvers by a Schwarz alternating update. This atlas-first construction is the main technical innovation of the paper: it separates geometric representation from PDE approximation, reduces distortion relative to a single global parametrization, and yields a training workflow that can start either from analytic geometry or from mesh-derived signed-distance data. The validated benchmark set shows that the method is already effective for forward field solves on complex geometry, with the fixed-atlas rabbit Poisson example serving as the strongest evidence, while the Stanford Bunny signed-distance benchmark demonstrates a usable geometry-learning bridge from real surface data. The torus Neo-Hookean case further shows that the same infrastructure can support controlled inverse identification when the kinematics are prescribed. The resulting picture is computationally useful and intentionally honest: the atlas-based SA-PINN pipeline is mature enough to support geometry-intensive forward computation today, and its current failure modes are concrete enough to guide the next round of methodological improvement.
 \end{abstract}
 
 \keywords{coordinate charts, Schwarz method, physics-informed neural networks, meshfree methods, complex geometry}
@@ -200,14 +195,14 @@ Our computational viewpoint sits at the intersection of two mature ideas. Physic
 
 The basic idea is geometric divide-and-conquer. Instead of insisting on a single global volumetric parametrization, we represent the physical domain by an atlas of overlapping volumetric charts. Each chart supplies a local change of variables from a simple reference patch to a physical subdomain. Local neural surrogates are trained in those chart coordinates, and a Schwarz alternating procedure communicates boundary and overlap information between neighboring charts. In the current code release this strategy is realized most fully for the rabbit Poisson benchmark, where chart-local field solves, interface penalties, and alternating updates are all active.
 
-The codebase also contains inverse examples, but they are not all of the same type. Some are closer to full chart-local state-identification problems; others are controlled synthetic identification benchmarks designed to isolate parameter recovery in a simpler setting. This distinction matters mathematically and should be explicit in the manuscript. In particular, the torus Neo-Hookean examples identify material parameters from synthetic observations generated by prescribed torsional kinematics, whereas the rabbit Elder benchmark solves a teacher-guided inverse Darcy--transport problem on a fixed atlas.
+The codebase also contains inverse examples, but they are not all of the same type. Some are controlled synthetic identification benchmarks designed to isolate parameter recovery in a simpler setting, while other more ambitious inverse PDE tracks remain under active development and are therefore left outside the main manuscript. This distinction matters mathematically and should be explicit in the paper. In particular, the torus Neo-Hookean example retained here identifies material parameters from synthetic observations generated by prescribed torsional kinematics.
 
-The paper is organized accordingly. Section~\ref{sec:methodology} introduces the volumetric atlas, the mapped PDE operator, the special-case global-map training used only for simply connected examples, and the SA-PINN Schwarz update. Section~\ref{sec:benchmark_formulations} then presents the benchmark-specific formulations together with the corresponding validated numerical results. Section~\ref{sec:limitations} records the current boundaries of the method and the code. This organization keeps the general framework separate from benchmark-specific simplifications while still letting the reader see, example by example, how each model formulation performs in practice.
+The paper is organized accordingly. Section~\ref{sec:methodology} introduces the volumetric atlas, the mapped PDE operator, the special-case global-map training used only for simply connected examples, and the SA-PINN Schwarz update. Section~\ref{sec:implementation} then translates those ideas into the concrete geometry pipeline, quality-assurance gates, and training heuristics used in the code. Section~\ref{sec:benchmark_formulations} presents the benchmark-specific formulations together with the corresponding validated numerical results. Section~\ref{sec:discussion} then interprets those results, records the current boundaries of the method, and outlines the most important development priorities. This organization keeps the general framework separate from implementation choices and from benchmark-specific simplifications while still letting the reader see, example by example, how each model formulation performs in practice.
 
 \section{Methodology}
 \label{sec:methodology}
 
-Before giving the derivations, we fix the notation used in this section. We use $x$ for a point in the physical body, $\zeta$ for a point in a chart-local reference patch, and $y$ only for the special global-map examples that start from the unit ball. This separation is intentional: the Schwarz solvers on the rabbit and torus use chart coordinates $\zeta$, whereas the simply connected examples may additionally use the global reference coordinate $y$.
+Before giving the derivations, we fix the notation used in this section. We use $x$ for a point in the physical body, $\boldsymbol{\zeta}$ for a chart-local reference coordinate on one atlas patch, and $\boldsymbol{\xi}$ for the global reference-ball coordinate used only in the special simply connected examples. This two-level notation is enough for the methodology while avoiding the earlier conflict in which one symbol was asked to represent both a local chart coordinate and a global reference coordinate.
 
 \subsection{Volumetric atlas of coordinate charts}
 \label{sec:atlas_geometry}
@@ -229,16 +224,16 @@ with physical patches
 \end{equation}
 The Jacobian matrix of chart $i$ is denoted by
 \begin{equation}
-\mathbf{J}_i(\zeta) := D_\zeta \varphi_i(\zeta)\in\mathbb{R}^{3\times 3},
+\mathbf{J}_i(\boldsymbol{\zeta}) := D_{\boldsymbol{\zeta}} \varphi_i(\boldsymbol{\zeta})\in\mathbb{R}^{3\times 3},
 \qquad
-j_i(\zeta):=\det \mathbf{J}_i(\zeta).
+j_i(\boldsymbol{\zeta}):=\det \mathbf{J}_i(\boldsymbol{\zeta}).
 \label{eq:atlas_jac}
 \end{equation}
 
 For the mapped PDE derivations below, we assume that each chart is locally nondegenerate:
 \begin{equation}
-j_i(\zeta)\ge j_{\min}>0
-\qquad \text{for all sampled }\zeta\in \widehat{\Omega}_i.
+j_i(\boldsymbol{\zeta})\ge j_{\min}>0
+\qquad \text{for all sampled }\boldsymbol{\zeta}\in \widehat{\Omega}_i.
 \label{eq:atlas_nondegenerate}
 \end{equation}
 This condition guarantees a locally invertible change of variables. It does \emph{not} by itself imply global injectivity. Whenever we refer to a chart inverse
@@ -259,7 +254,7 @@ and the transition map
 \begin{equation}
 \psi_{ij}:=\pi_j\circ \varphi_i:\widehat{\Omega}_{ij}\rightarrow \widehat{\Omega}_j,
 \qquad
-\varphi_i(\zeta)=\varphi_j(\psi_{ij}(\zeta)).
+\varphi_i(\boldsymbol{\zeta})=\varphi_j(\psi_{ij}(\boldsymbol{\zeta})).
 \label{eq:atlas_transition}
 \end{equation}
 When a single global field is needed for post-processing, we use partition-of-unity weights $\{\omega_i\}_{i=1}^{M}$ satisfying
@@ -279,35 +274,37 @@ g_h(x)=\sum_{i=1}^{M}\omega_i(x)\,\widehat{g}_i(\pi_i(x)).
 
 \begin{table}[htbp]
 \centering
-\caption{Notation roadmap for Section~\ref{sec:methodology}.}
+\footnotesize
+\caption{Notation used in Section~\ref{sec:methodology}. Physical-space variables, chart-local reference variables, and global reference-ball variables are separated explicitly so that the reader can track which coordinate system is active at each step of the derivation.}
 \label{tab:notation}
-\begin{tabular}{p{2.5cm}p{3.0cm}p{7.2cm}}
+\begin{tabular}{p{2.35cm}p{3.15cm}p{7.05cm}}
 \toprule
-Category & Symbol & Meaning \\
+Group & Symbol & Role in the method \\
 \midrule
-\multirow{5}{*}{Physical space}
-& $\Omega,\partial\Omega$ & physical three-dimensional body and its boundary \\
-& $x$ & physical-space point in $\Omega$ \\
-& $\Omega_i,\Omega_{ij}$ & chart image and overlap region in physical space \\
-& $u(x)$ & physical state field \\
-& $u_h(x)$ & blended global field used for reporting and post-processing \\
+\multirow{4}{*}{Physical space}
+& $\Omega$, $\partial\Omega$ & physical body and its boundary \\
+& $x$ & physical-space point used in the governing PDE \\
+& $\Omega_i$, $\Omega_{ij}$ & chart image and chart-overlap region in physical space \\
+& $u(x),\,u_h(x)$ & physical state field and the blended global field used for reporting \\
 \midrule
-\multirow{5}{*}{Reference space}
+\multirow{4}{*}{\shortstack[l]{Chart-local\\ reference}}
 & $\widehat{\Omega}_i$ & reference patch attached to chart $i$ \\
-& $\zeta$ & chart-local reference coordinate in $\widehat{\Omega}_i$ \\
+& $\boldsymbol{\zeta}$ & local coordinate used to evaluate one chart-local network \\
 & $\widehat{\Omega}_{ij}$ & overlap region written in the coordinates of chart $i$ \\
-& $\widehat{u}_i(\zeta)$ & chart-local state field defined on $\widehat{\Omega}_i$ \\
-& $y$ & unit-ball coordinate used only in the special global-map examples \\
+& $\widehat{u}_i(\boldsymbol{\zeta})$ & chart-local state field defined on $\widehat{\Omega}_i$ \\
 \midrule
-\multirow{6}{*}{Map operators}
-& $\varphi_i$ & chart map from reference space to physical space \\
-& $\pi_i$ & local inverse map from $\Omega_i$ back to $\widehat{\Omega}_i$ \\
-& $\psi_{ij}=\pi_j\circ\varphi_i$ & transition map from chart $i$ coordinates to chart $j$ coordinates on an overlap \\
-& $\mathbf{J}_i=D_\zeta\varphi_i$ & Jacobian matrix of chart $i$ \\
-& $j_i=\det\mathbf{J}_i$ & Jacobian determinant of chart $i$ \\
-& $\omega_i$ & partition-of-unity weight associated with chart $i$ \\
+\multirow{2}{*}{\shortstack[l]{Global\\ reference ball}}
+& $B^3=\{\boldsymbol{\xi}\in\mathbb{R}^3:\|\boldsymbol{\xi}\|<1\}$ & unit ball used only by the special global-map examples \\
+& $\Psi_\theta(\boldsymbol{\xi})$ & learned or analytic global map from the reference ball to the physical domain \\
 \midrule
-\multicolumn{3}{p{12.7cm}}{\footnotesize Shared solver symbols: $\eta$ denotes the global material or inverse parameter vector, and $\lambda_*$ denotes scalar loss weights. These quantities are shared across charts and are not tied to one coordinate system.} \\
+\multirow{4}{*}{Map operators}
+& $\varphi_i,\pi_i$ & chart map and its local inverse \\
+& $\psi_{ij}=\pi_j\circ\varphi_i$ & transition map from chart-$i$ coordinates to chart-$j$ coordinates on an overlap \\
+& $\mathbf{J}_i=D_{\boldsymbol{\zeta}}\varphi_i,\; j_i=\det\mathbf{J}_i$ & Jacobian matrix and Jacobian determinant of chart $i$ \\
+& $\omega_i$ & partition-of-unity weight used in the global blend \\
+\midrule
+\shortstack[l]{Shared solver\\ quantities}
+& $\eta,\lambda_*$ & $\eta$ denotes global material or inverse parameters; $\lambda_*$ denotes loss weights shared across charts \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -316,48 +313,13 @@ Figure~\ref{fig:atlas_slice} gives a schematic 2D slice through the volumetric a
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[scale=0.9,>=stealth]
-% reference charts
-\draw[rounded corners=3pt, fill=blue!8, draw=blue!60, thick] (0,2.7) rectangle (1.8,4.5);
-\draw[rounded corners=3pt, fill=green!8, draw=green!50!black, thick] (0,0.4) rectangle (1.8,2.2);
-\draw[rounded corners=3pt, fill=orange!10, draw=orange!70!black, thick] (0,-1.9) rectangle (1.8,-0.1);
-\node at (0.9,3.6) {$\widehat{\Omega}_1$};
-\node at (0.9,1.3) {$\widehat{\Omega}_2$};
-\node at (0.9,-1.0) {$\widehat{\Omega}_3$};
-
-% arrows to physical patches
-\draw[->, thick] (2.0,3.6) -- (4.0,3.0) node[midway, above] {$\varphi_1$};
-\draw[->, thick] (2.0,1.3) -- (4.0,1.1) node[midway, above] {$\varphi_2$};
-\draw[->, thick] (2.0,-1.0) -- (4.0,-0.9) node[midway, below] {$\varphi_3$};
-
-% physical body slice
-\draw[very thick, black]
-  plot[smooth cycle, tension=0.9] coordinates {(4.4,3.3) (5.6,4.3) (8.0,4.0) (9.0,2.7) (8.8,0.8) (8.2,-1.5) (6.7,-2.4) (5.0,-2.0) (4.1,-0.2) (4.0,1.8)};
-\node at (6.7,4.5) {$\Omega$};
-
-% overlapping chart slices
-\filldraw[fill=blue!15, draw=blue!60, thick, opacity=0.9] (5.3,2.5) ellipse (1.35 and 1.0);
-\filldraw[fill=green!15, draw=green!50!black, thick, opacity=0.9] (6.8,1.2) ellipse (1.55 and 1.1);
-\filldraw[fill=orange!18, draw=orange!70!black, thick, opacity=0.9] (7.1,-0.7) ellipse (1.45 and 1.0);
-\node[text=blue!70!black] at (5.1,3.25) {$\Omega_1$};
-\node[text=green!40!black] at (7.7,1.8) {$\Omega_2$};
-\node[text=orange!80!black] at (7.8,-1.5) {$\Omega_3$};
-
-% overlap labels
-\node[fill=white, inner sep=1pt] at (6.0,1.9) {$\Omega_{12}$};
-\node[fill=white, inner sep=1pt] at (7.0,0.0) {$\Omega_{23}$};
-\draw[->, dashed] (6.0,1.7) .. controls (5.2,0.9) and (3.0,0.7) .. (1.9,1.3)
- node[midway, left] {$\psi_{21}=\pi_1\circ\varphi_2$};
-
-% blended field note
-\node[align=left] at (8.0,3.9) {\footnotesize $u_h(x)=\sum_i \omega_i(x)\,\widehat{u}_i(\pi_i(x))$};
-\end{tikzpicture}
-\caption{Schematic 2D slice of the three-dimensional volumetric atlas. Each reference patch $\widehat{\Omega}_i\subset\mathbb{R}^3$ is mapped by $\varphi_i$ to a physical subdomain $\Omega_i\subset\Omega$. Overlap regions such as $\Omega_{12}$ define transition maps $\psi_{ij}$ and support partition-of-unity blending. The drawing is a planar slice through a three-dimensional construction, not a surface atlas.}
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/method/atlas_slice_pub.png}
+\caption{Conceptual view of the volumetric neural atlas. The left half shows chart-local reference patches parameterized by $\boldsymbol{\zeta}$; the right half shows their mapped physical images covering overlapping parts of $\Omega$. The arrows represent the chart maps $\varphi_i$, while the lower formula indicates the global blend assembled from the chart-local fields after the local solves are complete. The drawing is a planar slice through a three-dimensional construction, so it illustrates volumetric charts rather than a surface atlas.}
 \label{fig:atlas_slice}
 \end{figure}
 
 \paragraph{Interpretation.}
-For implementation, it is enough to think of each chart as a small local coordinate box that covers one part of the body. We solve the PDE chart by chart in these simple local coordinates, and we use the overlap regions only to pass information between neighboring charts. The rabbit Poisson and rabbit Elder solvers both use this volumetric-chart viewpoint. Surface-only parameterizations appear elsewhere in the repository, but they are not the PDE setting studied here.
+For implementation, it is enough to think of each chart as a small local coordinate box that covers one part of the body. We solve the PDE chart by chart in these simple local coordinates, and we use the overlap regions only to pass information between neighboring charts. The rabbit Poisson solver is the clearest validated example of this volumetric-chart viewpoint in the present manuscript. Surface-only parameterizations and more ambitious inverse variants appear elsewhere in the repository, but they are not the PDE setting studied here.
 
 \subsection{Mapped PDE operator on a volumetric chart}
 \label{sec:mapped_operator}
@@ -388,66 +350,67 @@ u=u_D \quad \text{on }\Gamma_D,
 \end{equation}
 with outward unit normal $n$.
 
-On chart $i$, let $\zeta\in\widehat{\Omega}_i$ denote the reference coordinate and define the pulled-back state by
+On chart $i$, let $\boldsymbol{\zeta}\in\widehat{\Omega}_i$ denote the local reference coordinate and define the pulled-back state by
 \begin{equation}
-\widehat{u}_i(\zeta):=u(\varphi_i(\zeta)).
+\widehat{u}_i(\boldsymbol{\zeta}):=u(\varphi_i(\boldsymbol{\zeta})).
 \label{eq:pullback_state}
 \end{equation}
 Because gradients are stored row-wise, the chain rule takes the form
 \begin{equation}
-\nabla_x u(\varphi_i(\zeta))
+\nabla_x u(\varphi_i(\boldsymbol{\zeta}))
 =
-\nabla_\zeta \widehat{u}_i(\zeta)\,\mathbf{J}_i(\zeta)^{-1}.
+\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})\,\mathbf{J}_i(\boldsymbol{\zeta})^{-1}.
 \label{eq:grad_pullback}
 \end{equation}
 The physical flux is first evaluated on the chart and then converted to a reference-space flux by the row-wise Piola transform:
 \begin{align}
-\widehat{\mathcal{G}}_i(\zeta;\eta)
+\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)
 &:=
-\mathcal{G}\!\left(\varphi_i(\zeta),\widehat{u}_i(\zeta),\nabla_\zeta \widehat{u}_i(\zeta)\mathbf{J}_i(\zeta)^{-1};\eta\right),
+\mathcal{G}\!\left(\varphi_i(\boldsymbol{\zeta}),\widehat{u}_i(\boldsymbol{\zeta}),\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1};\eta\right),
 \label{eq:pullback_flux}\\
-\widehat{\mathcal{P}}_i(\zeta;\eta)
+\widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\eta)
 &:=
-j_i(\zeta)\,\widehat{\mathcal{G}}_i(\zeta;\eta)\,\mathbf{J}_i(\zeta)^{-T}.
+j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)\,\mathbf{J}_i(\boldsymbol{\zeta})^{-T}.
 \label{eq:piola_flux}
 \end{align}
 The pulled-back source term is
 \begin{equation}
-\widehat{\mathcal{S}}_i(\zeta;\eta)
+\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\eta)
 :=
-\mathcal{S}\!\left(\varphi_i(\zeta),\widehat{u}_i(\zeta),\nabla_\zeta \widehat{u}_i(\zeta)\mathbf{J}_i(\zeta)^{-1};\eta\right).
+\mathcal{S}\!\left(\varphi_i(\boldsymbol{\zeta}),\widehat{u}_i(\boldsymbol{\zeta}),\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1};\eta\right).
 \label{eq:pullback_source}
 \end{equation}
+We reserve the notation $\widehat{\mathcal{P}}_i$ for the Piola-transformed flux entering the reference-space divergence and $\widehat{\mathcal{S}}_i$ for the pulled-back source term. No auxiliary symbol such as $\delta$ is used for the mapped source, so the flux and source roles remain distinct throughout the derivation.
 With these definitions, the mapped residual on the reference chart is
 \begin{equation}
-\widehat{\mathcal{R}}_i(\zeta;\eta)
+\widehat{\mathcal{R}}_i(\boldsymbol{\zeta};\eta)
 :=
-\nabla_\zeta\cdot \widehat{\mathcal{P}}_i(\zeta;\eta)
+\nabla_{\boldsymbol{\zeta}}\cdot \widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\eta)
 +
-j_i(\zeta)\,\widehat{\mathcal{S}}_i(\zeta;\eta),
-\qquad \zeta\in \widehat{\Omega}_i.
+j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\eta),
+\qquad \boldsymbol{\zeta}\in \widehat{\Omega}_i.
 \label{eq:mapped_residual}
 \end{equation}
 
 For the Dirichlet boundary we use
 \begin{equation}
-\widehat{\mathcal{B}}_{i,D}(\zeta):=\widehat{u}_i(\zeta)-u_D(\varphi_i(\zeta)),
-\qquad \zeta\in \widehat{\Gamma}_{i,D}:=\pi_i(\Gamma_D\cap \Omega_i).
+\widehat{\mathcal{B}}_{i,D}(\boldsymbol{\zeta}):=\widehat{u}_i(\boldsymbol{\zeta})-u_D(\varphi_i(\boldsymbol{\zeta})),
+\qquad \boldsymbol{\zeta}\in \widehat{\Gamma}_{i,D}:=\pi_i(\Gamma_D\cap \Omega_i).
 \label{eq:mapped_dirichlet}
 \end{equation}
-For Neumann or traction conditions, if $\widehat{n}_i(\zeta)$ is a reference outward normal on the relevant portion of $\partial\widehat{\Omega}_i$, the physical normal is
+For Neumann or traction conditions, if $\widehat{n}_i(\boldsymbol{\zeta})$ is a reference outward normal on the relevant portion of $\partial\widehat{\Omega}_i$, the physical normal is
 \begin{equation}
-n_i(\varphi_i(\zeta))
+n_i(\varphi_i(\boldsymbol{\zeta}))
 =
-\frac{\mathbf{J}_i(\zeta)^{-T}\widehat{n}_i(\zeta)}
-{\|\mathbf{J}_i(\zeta)^{-T}\widehat{n}_i(\zeta)\|},
+\frac{\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{n}_i(\boldsymbol{\zeta})}
+{\|\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{n}_i(\boldsymbol{\zeta})\|},
 \label{eq:mapped_normal}
 \end{equation}
 and the pulled-back Neumann residual is
 \begin{equation}
-\widehat{\mathcal{B}}_{i,N}(\zeta;\eta)
+\widehat{\mathcal{B}}_{i,N}(\boldsymbol{\zeta};\eta)
 :=
-\widehat{\mathcal{G}}_i(\zeta;\eta)\,n_i(\varphi_i(\zeta)) - t_N(\varphi_i(\zeta)).
+\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)\,n_i(\varphi_i(\boldsymbol{\zeta})) - t_N(\varphi_i(\boldsymbol{\zeta})).
 \label{eq:mapped_neumann}
 \end{equation}
 
@@ -456,44 +419,8 @@ Equation \eqref{eq:mapped_residual} is the practical rule used inside every char
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[scale=0.95,>=stealth]
-% reference patch
-\draw[rounded corners=3pt, fill=blue!8, draw=blue!60, thick] (0,0) rectangle (2.7,2.7);
-\node at (1.35,3.0) {reference patch $\widehat{\Omega}_i$};
-\draw[fill=black] (1.0,1.1) circle (0.05);
-\node[below left] at (1.0,1.1) {$\zeta$};
-\draw[thick] (0.4,2.3) -- (2.3,2.3);
-\node[above] at (1.35,2.3) {$\widehat{\Gamma}_{i,N}$};
-\draw[->, thick] (1.35,2.3) -- (1.35,2.95);
-\node[right] at (1.35,2.78) {$\widehat{n}_i$};
-\node[align=left] at (1.35,-0.55) {\footnotesize $\nabla_x u=\nabla_\zeta \widehat{u}_i\,\mathbf{J}_i^{-1}$};
-
-% map arrow
-\draw[->, very thick] (3.2,1.35) -- (5.2,1.35);
-\node[above] at (4.2,1.35) {$\varphi_i$};
-
-% physical patch
-\draw[very thick, black]
-  plot[smooth cycle, tension=0.9] coordinates {(5.7,0.4) (6.4,2.8) (8.4,3.2) (9.2,2.0) (8.7,0.2) (7.0,-0.1)};
-\node at (7.5,3.55) {physical patch $\Omega_i$};
-\draw[fill=black] (7.1,1.4) circle (0.05);
-\node[below left] at (7.1,1.4) {$x=\varphi_i(\zeta)$};
-\draw[thick] (6.2,2.7) .. controls (7.2,3.0) and (8.1,3.0) .. (8.8,2.4);
-\node[above] at (7.7,2.95) {$\Gamma_{i,N}$};
-\draw[->, thick] (7.55,2.75) -- (7.9,3.45);
-\node[right] at (7.92,3.25) {$n_i$};
-
-% local cell
-\draw[fill=gray!15, draw=gray!60] (6.8,1.0) -- (7.5,1.1) -- (7.4,1.8) -- (6.7,1.7) -- cycle;
-\draw[->, thick] (7.1,1.4) -- (7.55,1.48);
-\node[below] at (7.45,1.35) {$\mathbf{J}_i e_1$};
-\draw[->, thick] (7.1,1.4) -- (7.02,1.92);
-\node[left] at (7.0,1.86) {$\mathbf{J}_i e_2$};
-
-\node[align=left] at (7.45,-0.65) {\footnotesize $n_i=\dfrac{\mathbf{J}_i^{-T}\widehat{n}_i}{\|\mathbf{J}_i^{-T}\widehat{n}_i\|}$\\[2pt]
-\footnotesize $\widehat{\mathcal P}_i=j_i\widehat{\mathcal G}_i\mathbf{J}_i^{-T},\quad \widehat{\mathcal R}_i=\nabla_\zeta\!\cdot\widehat{\mathcal P}_i+j_i\widehat{\mathcal S}_i$};
-\end{tikzpicture}
-\caption{Mapped-operator schematic on one chart. The left panel shows a reference patch with reference normal $\widehat{n}_i$ and local coordinate point $\zeta$. The right panel shows the corresponding physical patch, the transformed normal, and a deformed local cell encoding the Jacobian $\mathbf{J}_i$. The drawing is schematic, but the formulas shown match the row-wise chain rule, Piola transform, and normal mapping used in the method.}
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/method/mapped_operator_pub.png}
+\caption{Mapped-operator view on one chart. The left side shows the local reference patch, the center arrow represents the chart map and its Jacobian, and the right side shows the corresponding physical patch. The formula cards highlight the three identities the implementation uses directly: gradient pullback, Piola-transformed flux, and normal mapping.}
 \label{fig:mapped_operator_schematic}
 \end{figure}
 
@@ -503,10 +430,10 @@ Some examples in the codebase use a single global map
 \begin{equation}
 \Psi_\theta:B^3\rightarrow \Omega,
 \qquad
-B^3=\{y\in\mathbb{R}^3:\|y\|<1\},
+B^3=\{\boldsymbol{\xi}\in\mathbb{R}^3:\|\boldsymbol{\xi}\|<1\},
 \label{eq:global_map}
 \end{equation}
-instead of a fixed atlas. This special case is used only for simply connected domains where a single volumetric map is feasible. In the validated benchmark set, the ellipsoid uses an analytic global map and the star domain uses a learned map. The rabbit and torus benchmarks do not use this global-map training stage.
+instead of a fixed atlas. This special case is used only for simply connected domains where a single volumetric map is feasible. In the validated benchmark set, the ellipsoid uses an analytic global map. The rabbit, Bunny, and torus benchmarks do not use this global-map training stage.
 
 When $\Psi_\theta$ is learned, the implementation combines a positive-determinant barrier, boundary-fidelity terms, and coefficient-regularity terms. A compact way to write the training objective is
 \begin{equation}
@@ -525,29 +452,37 @@ where $\mathcal{L}_{\mathrm{bij}}$ penalizes small or negative Jacobian determin
 This global-map stage is a special case, not the default workflow of the paper. It is useful when one smooth map from the unit ball to the domain is available or can be learned reliably. For the more complicated rabbit and torus examples, we do not rely on one global map; we use a fixed overlapping atlas instead.
 
 \begin{algorithm}[htbp]
-\caption{Training a learned global volumetric map for simply connected domains}
+\caption{Special-case training of a learned global volumetric map}
 \label{alg:global_map_training}
+\small
 \begin{algorithmic}[1]
-\Require Reference ball $B^3$, target-domain samples, initial map parameters $\theta$, chosen optimizer $\mathcal{O}$, loss weights $\alpha_{\mathrm{bij}},\alpha_{\mathrm{geom}},\alpha_{\mathrm{coeff}}$, epoch budget $T_{\mathrm{map}}$
-\Ensure Trained global map $\Psi_\theta:B^3\rightarrow \Omega$
+\Statex \textbf{Inputs:} reference ball $B^3$; target-domain surface and interior samples; initial map parameters $\theta$;
+\StateX optimizer $\mathcal{O}$ with learning-rate schedule $\eta_{\mathrm{map}}^{(t)}$; loss weights $\alpha_{\mathrm{bij}},\alpha_{\mathrm{geom}},\alpha_{\mathrm{coeff}}$; epoch budget $T_{\mathrm{map}}$
+\Statex \textbf{Output:} best checkpoint map $\Psi_\theta:B^3\rightarrow\Omega$ satisfying determinant and boundary checks on validation samples
 \For{$t=1,\dots,T_{\mathrm{map}}$}
-    \State Sample interior points $y^{\mathrm{int}}\subset B^3$ and boundary points $y^{\partial}\subset \partial B^3$
-    \State Evaluate $x=\Psi_\theta(y)$, the Jacobian $D\Psi_\theta(y)$, and the induced mapped coefficients
-    \State Assemble $\mathcal{L}_{\mathrm{bij}}$, $\mathcal{L}_{\mathrm{geom}}$, and $\mathcal{L}_{\mathrm{coeff}}$ as in \eqref{eq:global_map_loss}
+    \State Sample interior points $\boldsymbol{\xi}^{\mathrm{int}}\subset B^3$ and boundary points $\boldsymbol{\xi}^{\partial}\subset \partial B^3$
+    \State Evaluate $x^{\mathrm{int}}=\Psi_\theta(\boldsymbol{\xi}^{\mathrm{int}})$, $x^{\partial}=\Psi_\theta(\boldsymbol{\xi}^{\partial})$, and $\mathbf{J}=D_{\boldsymbol{\xi}}\Psi_\theta$
+    \State Assemble $\mathcal{L}_{\mathrm{bij}}$, $\mathcal{L}_{\mathrm{geom}}$, and $\mathcal{L}_{\mathrm{coeff}}$ from \eqref{eq:global_map_loss}
     \State Form $\mathcal{L}_{\mathrm{map}}=\alpha_{\mathrm{bij}}\mathcal{L}_{\mathrm{bij}}+\alpha_{\mathrm{geom}}\mathcal{L}_{\mathrm{geom}}+\alpha_{\mathrm{coeff}}\mathcal{L}_{\mathrm{coeff}}$
-    \State Update the map parameters with the chosen optimizer:
-    \Statex \hspace{\algorithmicindent}$\theta^{(t+1)} \leftarrow \mathcal{O}\!\left(\theta^{(t)},\nabla_{\theta}\mathcal{L}_{\mathrm{map}}(\theta^{(t)})\right)$
-    \State Monitor positivity of $\det D\Psi_\theta$ and boundary fidelity on the sampled points
+    \State Compute the mapping-loss gradient $g_{\theta}^{(t)}=\nabla_{\theta}\mathcal{L}_{\mathrm{map}}(\theta^{(t)})$
+    \State Update the parameters with the chosen optimizer:
+    \Statex \hspace{\algorithmicindent}$\theta^{(t+1)} \leftarrow \mathrm{Update}_{\mathcal{O}}\!\left(\theta^{(t)},g_{\theta}^{(t)};\eta_{\mathrm{map}}^{(t)}\right)$
+    \State Record $\min_{\boldsymbol{\xi}}\det \mathbf{J}(\boldsymbol{\xi})$, boundary mismatch, and coefficient diagnostics for checkpointing
+    \State Keep the best checkpoint that preserves positive determinant and acceptable boundary fidelity on the validation batch
 \EndFor
-\State \Return the final or best-checkpoint map $\Psi_\theta$
+\State \Return the selected global map $\Psi_\theta$
 \end{algorithmic}
 \end{algorithm}
 
-Algorithm~\ref{alg:global_map_training} matches the training pattern used by the learned star-domain map. The ellipsoid verification case uses the same mapped-PDE machinery afterward, but its global map is analytic rather than learned.
+Algorithm~\ref{alg:global_map_training} records the training pattern used by the special global-map pipeline. The ellipsoid verification case uses the same mapped-PDE machinery afterward, but its global map is analytic rather than learned.
 
 \subsection{Schwarz alternating PINN on a fixed atlas}
 \label{sec:schwarz_pinn}
-For a fixed atlas, chart-local networks are trained in alternating fashion. Let
+Once the geometry has been represented by a fixed overlapping atlas, the remaining question is how the chart-local solves should be coupled into one physically meaningful global field. Classical overlapping Schwarz is a natural answer because the atlas already supplies the ingredients that Schwarz needs: local subproblems posed on overlapping subdomains, together with artificial interfaces across which neighboring information can be exchanged \citep{quarteroni1999domain,tezaur2025hybrid}. In the present work this is not merely an optimization convenience. The decomposition is geometry-driven: the charts are introduced first to control geometric distortion and represent the body, and the Schwarz iteration is then used as the coupling layer that reconciles those local coordinate solves. This is a different role from domain-decomposed PINN frameworks such as XPINNs or FBPINNs, where the partition is introduced primarily for scalability or spectral resolution rather than as a pre-existing volumetric atlas \citep{shukla2021parallel,moseley2021fbpinns}.
+
+The attraction of Schwarz for coordinate-chart PINNs is that each chart already carries a self-contained local residual minimization problem on a simple reference patch. The overlap then acts as an artificial boundary: while chart $i$ is being updated, the most recent neighbor states supply temporary interface data, and the local optimizer only has to resolve one chart-conditioned problem at a time. Relative to a monolithic global PINN, this localizes approximation, conditioning, and sampling. The cost is that compatibility across charts must be enforced explicitly on the overlaps rather than being hidden inside one global parameterization.
+
+Let
 \begin{equation}
 \widehat{u}_i(\cdot;\theta_i):\widehat{\Omega}_i\rightarrow \mathbb{R}^{q}
 \label{eq:local_network}
@@ -567,310 +502,540 @@ For overlaps, the artificial Schwarz boundary of chart $i$ is
 \mathcal{N}(i):=\{j\neq i:\Gamma_{ij}\neq\emptyset\}.
 \label{eq:schwarz_sets}
 \end{equation}
+The sets $\Gamma_{ij}$ play the same conceptual role as Schwarz interfaces in classical overlapping domain decomposition: they are not physical boundaries of the PDE, but the internal regions where chart-local solutions must agree strongly enough to define a coherent global field. In the chart setting the same geometric overlap also provides the transition map $\psi_{ij}$ needed to compare chart-local predictions in compatible coordinates.
 
-At Schwarz sweep $k$, the local loss on chart $i$ is
+In the continuous Schwarz method one would impose Dirichlet, Neumann, or Robin data on these artificial interfaces and solve each local problem to completion before moving to the next subdomain. The rabbit code uses a PINN-compatible relaxation of this idea. Neighbor networks are frozen while chart $i$ is updated, and compatibility is enforced by sampled penalties on the overlap rather than by exact boundary imposition. Writing $\theta_j^{(k,\mathrm{fr})}$ for the frozen neighbor state available during sweep $k$, the interface-value term is
+\emph{sampled from the neighboring local field $u_j$ itself, not from the global blended field $u_h$}. This point is important for reproducibility: Schwarz transmission in the released solver is chart-to-chart, with the global blend reserved for diagnostics and post-processing after a sweep has been proposed.
+\begin{equation}
+\mathcal{J}_{i,\mathrm{iv}}^{(k)}
+=
+\sum_{j\in \mathcal{N}(i)}
+\mathbb{E}_{\boldsymbol{\zeta}\sim \widehat{\Gamma}_{ij}}
+\left[
+\left|
+\widehat{u}_i(\boldsymbol{\zeta};\theta_i)
+-
+\widehat{u}_j\!\left(\psi_{ij}(\boldsymbol{\zeta});\theta_j^{(k,\mathrm{fr})}\right)
+\right|^2
+\right].
+\label{eq:schwarz_iv_loss}
+\end{equation}
+For scalar Poisson problems the default validated configuration also penalizes projected normal-flux mismatch. With $n_{ij}$ denoting the interface normal used for transmission, define
+\begin{equation}
+q_i(\boldsymbol{\zeta};\theta_i)
+:=
+n_{ij}(\boldsymbol{\zeta})\cdot
+\nabla_x u_i\!\left(\varphi_i(\boldsymbol{\zeta});\theta_i\right),
+\label{eq:schwarz_flux_trace}
+\end{equation}
+and
+\begin{equation}
+\mathcal{J}_{i,\mathrm{if}}^{(k)}
+=
+\sum_{j\in \mathcal{N}(i)}
+\mathbb{E}_{\boldsymbol{\zeta}\sim \widehat{\Gamma}_{ij}}
+\left[
+\left|
+q_i(\boldsymbol{\zeta};\theta_i)
+-
+q_j\!\left(\psi_{ij}(\boldsymbol{\zeta});\theta_j^{(k,\mathrm{fr})}\right)
+\right|^2
+\right].
+\label{eq:schwarz_if_loss}
+\end{equation}
+The released solver also exposes a Robin-style variant,
+\begin{equation}
+\mathcal{J}_{i,\mathrm{rb}}^{(k)}
+=
+\sum_{j\in \mathcal{N}(i)}
+\mathbb{E}_{\boldsymbol{\zeta}\sim \widehat{\Gamma}_{ij}}
+\left[
+\left|
+\lambda_R
+\left(
+\widehat{u}_i(\boldsymbol{\zeta};\theta_i)
+-
+\widehat{u}_j\!\left(\psi_{ij}(\boldsymbol{\zeta});\theta_j^{(k,\mathrm{fr})}\right)
+\right)
++
+q_i(\boldsymbol{\zeta};\theta_i)
+-
+q_j\!\left(\psi_{ij}(\boldsymbol{\zeta});\theta_j^{(k,\mathrm{fr})}\right)
+\right|^2
+\right],
+\label{eq:schwarz_robin_loss}
+\end{equation}
+but the validated rabbit benchmark uses the penalty form \eqref{eq:schwarz_iv_loss}--\eqref{eq:schwarz_if_loss} rather than the Robin option. In volumetric-atlas mode the code can further add an overlap-interior value penalty on sampled points from $\widehat{\Omega}_{ij}$; despite the legacy variable name \texttt{overlap\_h1}, the current implementation penalizes value mismatch over the sampled overlap volume rather than the full $H^1$ seminorm.
+
+At Schwarz sweep $k$, the local chart objective is therefore
 \begin{align}
 \mathcal{J}_i^{(k)}(\theta_i;\eta)
 =&
 \lambda_{\mathrm{pde}}\,
-\mathbb{E}_{\zeta\sim \widehat{\Omega}_i}\!\left[\|\widehat{\mathcal{R}}_i(\zeta;\theta_i,\eta)\|_2^2\right]
+\mathbb{E}_{\boldsymbol{\zeta}\sim \widehat{\Omega}_i}\!\left[\|\widehat{\mathcal{R}}_i(\boldsymbol{\zeta};\theta_i,\eta)\|_2^2\right]
 +
 \lambda_{\mathrm{bc}}\,
-\mathbb{E}_{\zeta\sim \widehat{\Gamma}_{i,\partial\Omega}}\!\left[\|\widehat{\mathcal{B}}_i(\zeta;\theta_i,\eta)\|_2^2\right]
+\mathbb{E}_{\boldsymbol{\zeta}\sim \widehat{\Gamma}_{i,\partial\Omega}}\!\left[\|\widehat{\mathcal{B}}_i(\boldsymbol{\zeta};\theta_i,\eta)\|_2^2\right]
 \nonumber\\
 &+
-\lambda_{\mathrm{if}}\sum_{j\in \mathcal{N}(i)}
-\mathbb{E}_{\zeta\sim \widehat{\Gamma}_{ij}}
-\left[
-\left\|
-\mathcal{D}_i(u_i(\cdot;\theta_i);\eta)\big|_{x=\varphi_i(\zeta)}
-- \widehat{g}_{ij}^{(k)}(\zeta;\eta)
-\right\|_2^2
-\right]
+\lambda_{\mathrm{iv}}\,\mathcal{J}_{i,\mathrm{iv}}^{(k)}
++
+\lambda_{\mathrm{if}}\,\widetilde{\mathcal{J}}_{i,\mathrm{if}}^{(k)}
++
+\lambda_{\mathrm{ov}}\,\mathcal{J}_{i,\mathrm{ov}}^{(k)}
 +
 \lambda_{\mathrm{data}}\,\mathcal{J}_{i,\mathrm{data}}(\theta_i,\eta),
 \label{eq:schwarz_local_loss}
 \end{align}
-where $\widehat{g}_{ij}^{(k)}$ is the interface datum provided by the most recent neighbor state and $\mathcal{D}_i$ denotes the chosen transmission operator. In the continuous Schwarz method $\mathcal{D}_i$ may be Dirichlet, Neumann, or Robin. In the present codebase, the practical implementation is usually a penalty version of this idea: chart $i$ is trained while neighbor predictions are frozen, and value and/or flux mismatches on the overlap are penalized rather than imposed exactly.
+where $\widetilde{\mathcal{J}}_{i,\mathrm{if}}^{(k)}$ denotes either the projected-flux penalty \eqref{eq:schwarz_if_loss} or the Robin residual \eqref{eq:schwarz_robin_loss}, and $\mathcal{J}_{i,\mathrm{ov}}^{(k)}$ denotes the optional volumetric overlap penalty. The practical default is the projected-flux penalty with frozen-neighbor traces. This distinction matters: the present solver is Schwarz-inspired in its transmission logic, but each chart update is still carried out by optimizer steps on a neural loss, not by an exact local PDE solve.
 
-One multiplicative Schwarz sweep then updates the charts sequentially:
+One sweep of the atlas solver can be written abstractly as
 \begin{equation}
-\theta_i^{(k+1)} \in \arg\min_{\theta_i}\mathcal{J}_i^{(k)}(\theta_i;\eta),
-\qquad i=1,\dots,M.
+\Theta^{(k+1)}=\mathfrak{S}\!\left(\Theta^{(k)};\eta\right),
+\qquad
+\Theta^{(k)}:=(\theta_1^{(k)},\dots,\theta_M^{(k)}),
 \label{eq:schwarz_sweep}
 \end{equation}
-After a sweep, the global blended field is
+where $\mathfrak{S}$ denotes one multiplicative Schwarz pass over the chart set. In the validated rabbit solver this sweep is multiplicative at the level of overlapping neighbors: later charts in the sweep see the most recent accepted states of earlier charts, while non-overlapping charts may be grouped into the same graph color and updated concurrently on compatible accelerator backends without violating the frozen-neighbor assumption on overlap pairs. This is why the released implementation is best described as a multiplicative Schwarz method with limited within-color parallelism, not as a fully additive update.
+The color groups used in Algorithm~\ref{alg:atlas_sapinn_training} are derived from a graph-coloring of the chart-overlap adjacency matrix: two charts may share a color only if they do not overlap, which makes within-color updates independent for the purposes of the frozen-neighbor Schwarz step.
+
+After an accepted sweep, the global blended field is
 \begin{equation}
 u_h^{(k)}(x)=\sum_{i=1}^{M}\omega_i(x)\,u_i(x;\theta_i^{(k)}).
 \label{eq:schwarz_global_field}
 \end{equation}
 
 \paragraph{Interpretation.}
-For a reader used to standard PINNs, the Schwarz idea is simpler than it may first appear. We do not train one global network on the whole rabbit at once. Instead, we update one chart-local network at a time, keep the neighboring charts fixed during that local solve, and penalize the mismatch on the overlaps. After cycling through all charts, we refresh the interface data and repeat. This is the training pattern used in the rabbit Poisson solver and, with extra data terms, in the rabbit Elder inverse solver as well.
+For a reader used to standard PINNs, the important point is that Schwarz is doing geometric bookkeeping as much as numerical coupling. The atlas already decomposes the body into overlapping coordinate patches. Schwarz then turns those overlaps into a training protocol: solve one local chart-conditioned problem, compare it against frozen neighbor predictions on the overlap, move to the next chart, and only then assess the global blended state. This fits the coordinate-chart setting better than a monolithic global PINN because the decomposition is dictated by geometry rather than by an arbitrary partition of the loss.
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[scale=0.95,>=stealth]
-% physical chart slices
-\filldraw[fill=blue!14, draw=blue!60, thick, opacity=0.9] (1.8,1.6) ellipse (1.4 and 1.0);
-\filldraw[fill=green!14, draw=green!50!black, thick, opacity=0.9] (4.0,1.6) ellipse (1.5 and 1.0);
-\filldraw[fill=orange!16, draw=orange!70!black, thick, opacity=0.9] (6.2,1.6) ellipse (1.4 and 1.0);
-\node[text=blue!70!black] at (1.0,2.45) {$\Omega_i$};
-\node[text=green!40!black] at (4.0,2.55) {$\Omega_j$};
-\node[text=orange!80!black] at (7.0,2.45) {$\Omega_\ell$};
-
-% highlight active chart
-\draw[very thick, red!70!black, rounded corners=8pt] (2.2,0.2) rectangle (5.8,3.0);
-\node[text=red!70!black] at (4.0,3.35) {active update at sweep $k$};
-
-% overlap arrows
-\draw[<->, thick] (2.6,1.6) -- (3.2,1.6);
-\node[above] at (2.9,1.6) {$\widehat g_{ij}^{(k)}$};
-\draw[<->, thick] (4.8,1.6) -- (5.4,1.6);
-\node[above] at (5.1,1.6) {$\widehat g_{j\ell}^{(k)}$};
-
-% local losses
-\node[align=center, draw=black, rounded corners=3pt, fill=white] at (4.0,-0.3)
-{$\mathcal{J}_j^{(k)}=\lambda_{\mathrm{pde}}\mathcal{J}_{j,\mathrm{pde}}+\lambda_{\mathrm{bc}}\mathcal{J}_{j,\mathrm{bc}}+\lambda_{\mathrm{if}}\mathcal{J}_{j,\mathrm{if}}+\lambda_{\mathrm{data}}\mathcal{J}_{j,\mathrm{data}}$};
-
-% frozen neighbors
-\node[align=center] at (1.2,0.1) {\footnotesize neighbor\\ \footnotesize frozen};
-\node[align=center] at (6.8,0.1) {\footnotesize neighbor\\ \footnotesize frozen};
-
-% blended field
-\draw[->, thick] (4.0,-0.7) -- (4.0,-1.6);
-\node[align=center] at (4.0,-2.0) {$u_h^{(k)}(x)=\sum_{m=1}^{M}\omega_m(x)\,u_m(x;\theta_m^{(k)})$};
-\end{tikzpicture}
-\caption{Schematic of one multiplicative Schwarz sweep on a fixed atlas, shown again on a 2D slice of the three-dimensional construction. One chart-local field is updated while neighboring charts are frozen and provide interface data on overlaps. After the local optimization steps, the global blended field is assembled by partition-of-unity weights.}
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/method/schwarz_schematic_pub.png}
+\caption{Conceptual and algorithmic view of fixed-atlas SA-PINN coupling. Panel (a) shows two overlapping chart images inside the physical body. The overlap $\Omega_{ij}$ induces the artificial interfaces $\Gamma_{ij}$ and $\Gamma_{ji}$ on which neighboring chart solutions exchange temporary transmission data during training. Panel (b) shows one multiplicative Schwarz sweep as implemented in the rabbit solver: the code snapshots the full chart state, updates one active chart or non-overlapping color group while neighbor states are detached, evaluates global residual and interface diagnostics, and then accepts the whole sweep or restores the previous state.}
 \label{fig:schwarz_schematic}
 \end{figure}
 
 \begin{algorithm}[htbp]
 \caption{Fixed-atlas SA-PINN training by multiplicative Schwarz sweeps}
 \label{alg:atlas_sapinn_training}
+\small
 \begin{algorithmic}[1]
-\Require Fixed atlas $\mathcal{A}$, chart-local networks $\{\widehat{u}_i(\cdot;\theta_i)\}_{i=1}^M$, optional inverse parameters $\eta$, sweep budget $K$, local-step budget $N_{\mathrm{loc}}$
-\Ensure Trained chart parameters $\{\theta_i\}_{i=1}^M$ and blended field $u_h$
+\Statex \textbf{Inputs:} validated atlas $\mathcal{A}$; chart-local networks $\{\widehat{u}_i(\cdot;\theta_i)\}_{i=1}^M$;
+\StateX optional global parameters $\eta$; local optimizers; sweep budget $K$; local-step budget $N_{\mathrm{loc}}$
+\Statex \textbf{Outputs:} selected checkpoint $\{\theta_i\}_{i=1}^M$ and blended field $u_h$
+\Statex \textit{Initialization}
 \State Initialize chart parameters $\theta_i$ and any trainable global parameters $\eta$
+\State Evaluate the initial blended field and initialize checkpoint metrics
 \For{$k=0,\dots,K-1$}
-    \State Refresh interface data $\widehat{g}_{ij}^{(k)}$ from the latest neighboring chart states
-    \For{$i=1,\dots,M$ in the prescribed sweep or color order}
-        \State Freeze all neighbor charts $j\neq i$
-        \For{$n=1,\dots,N_{\mathrm{loc}}$}
-            \State Sample local collocation, physical-boundary, overlap, and optional data points on chart $i$
-            \State Evaluate the mapped residuals and boundary terms in \eqref{eq:mapped_residual}, \eqref{eq:mapped_dirichlet}, and \eqref{eq:mapped_neumann}
-            \State Assemble the local objective $\mathcal{J}_i^{(k)}$ from \eqref{eq:schwarz_local_loss}
-            \State Update $\theta_i$ by one optimizer step while neighbors remain frozen
+    \Statex \textit{Pre-sweep setup}
+    \State Store a snapshot of the full chart state $\Theta^{(k)}$
+    \State Refresh sweep-level sampling pools and effective interface weights
+        \For{each color group $g$ from the graph-coloring of the chart-overlap adjacency matrix}
+        \Statex \textit{Local chart updates}
+        \For{each active chart $i\in g$ sequentially, or concurrently when charts in $g$ do not overlap}
+            \For{$n=1,\dots,N_{\mathrm{loc}}$}
+                \State Sample PDE, physical-boundary, interface, and optional supervision points on chart $i$
+                \State Query neighbors only through frozen predictions on sampled overlap points
+                \State Assemble the local loss $\mathcal{J}_i^{(k)}$ in \eqref{eq:schwarz_local_loss}
+                \State Update $\theta_i$ while all neighbor contributions remain detached
+            \EndFor
         \EndFor
-        \State Update outgoing interface traces from chart $i$ for use by downstream neighbors
     \EndFor
-    \State Form the blended field $u_h^{(k)}$ by \eqref{eq:schwarz_global_field}
-    \State Evaluate stopping criteria, checkpoint rules, and interface diagnostics
+    \Statex \textit{Global acceptance test}
+    \State Form the proposed blended field by \eqref{eq:schwarz_global_field}
+    \State Evaluate global PDE, boundary, interface, and relative-$L^2$ diagnostics
+    \If{the sweep violates the trust-region admissibility test}
+        \State Restore the pre-sweep snapshot $\Theta^{(k)}$ and reduce the learning rate
+    \Else
+        \State Accept the sweep and refresh checkpoint statistics
+        \State Update adaptive weights if enabled
+    \EndIf
 \EndFor
 \State \Return the selected checkpoint and its blended field $u_h$
 \end{algorithmic}
 \end{algorithm}
 
-Algorithm~\ref{alg:atlas_sapinn_training} is the core training loop behind the fixed-atlas rabbit Poisson benchmark. The rabbit Elder inverse solver uses the same local-update structure, but adds observation, regularization, and weak teacher-stabilization terms in the benchmark-specific loss.
+Algorithm~\ref{alg:atlas_sapinn_training} is the core training loop behind the fixed-atlas rabbit Poisson benchmark. Two implementation details are worth stressing because they justify the multiplicative choice. First, the accepted state is decided at the sweep level, not chart by chart: the code rolls back the entire proposed sweep if the global diagnostics deteriorate too much. Second, optional parallelism is restricted to non-overlapping color groups constructed from the overlap graph, so the validated solver still behaves like multiplicative Schwarz on every true overlap pair. Related inverse prototypes reuse the same coupling pattern, but the main text keeps the discussion focused on the forward rabbit solve where the interaction between geometry, overlap transmission, and optimizer stability is easiest to interpret.
+
 
 
 \section{Implementation}
 \label{sec:implementation}
 
-\subsection{AI-assisted development with Claude Sonnet 4.6}
+This section records how the methodology of Section~\ref{sec:methodology} is realized in code. The goal is not to list every engineering detail in the repository, but to document the implementation choices that materially affect robustness, reproducibility, and the interpretation of the validated benchmarks.
+
+\subsection{Human-led research loop and implementation assistance}
 \label{sec:impl_aiassist}
 
-The entire codebase was developed collaboratively with Claude~Sonnet~4.6
-\citep{anthropic2025claude}, accessed through Claude~Code \citep{claudecode2025},
-an agentic coding interface that operates directly in the project terminal and
-version-control environment.
-Development proceeded through iterative dialogue sessions captured in multiple
-parallel git worktrees.
-The collaboration spanned approximately 85\,MB of conversation history across
-seven worktrees and produced 36 commits, covering every phase of the project:
-from the initial PyTorch scaffold through geometry-pipeline debugging, PINN
-solver refinement, and manuscript preparation.
+The scientific logic of the project remained human-led throughout. The benchmark family, the atlas-based decomposition, the mapped-PDE formulation, the acceptance criteria for validated runs, and the interpretation of success or failure were set by the author. Large-language-model tooling was used as a low-level implementation assistant for code scaffolding, refactoring, debugging, figure scripting, and artifact packaging. In other words, the assistant accelerated software iteration, but it did not decide the mathematical model, the benchmark scope, or the evidentiary standard required for the manuscript.
 
-Within this workflow, Claude~Sonnet~4.6 performed code generation, bug
-diagnosis, and architectural design exploration.
-Representative tasks included: identifying a double-normalization bug in the SDF
-coordinate system that inflated PDE residuals by a factor of roughly $10^3$
-(commit \texttt{e32ca91}); designing the volumetric interior-seed atlas (M6) to
-replace surface-only chart placement that caused boundary-condition sampling
-errors (commit \texttt{31b668c}); implementing PCGrad gradient surgery
-\citep{yu2020gradient} for the per-chart multi-objective loss
-(commit \texttt{37629f4}); and developing the CompactChartNet Voronoi sub-atlas
-architecture with softmax partition-of-unity blending
-(commit \texttt{2a0e54e}).
-The validation infrastructure---including the claim-to-artifact traceability
-matrix, the 177-run metric registry, and the automated artifact-checksum
-manifests---was also built in the same AI-assisted loop.
-All code, scripts, and run artifacts are publicly available with the repository.
+Figure~\ref{fig:human_ai_workflow} summarizes the resulting workflow. The human-led lane defines the problem, the mathematical structure, and the validation criteria. The AI-assisted lane proposes candidate implementations and supporting scripts. These candidates are then filtered through geometry gates, benchmark runs, and manuscript-level review. Only implementations that survive this acceptance loop enter the validated benchmark set reported in Section~\ref{sec:benchmark_formulations}.
 
-\subsection{Technology stack and design principles}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.97\textwidth]{figures_cmame_core/implementation/human_ai_workflow_pub.png}
+\caption{Human-led research loop with low-level AI implementation assistance. The author defines the governing equations, atlas design, benchmark scope, and acceptance criteria. The AI-assisted layer contributes candidate code, refactors, and plotting scripts. All outputs then pass through geometric quality assurance, canonical benchmark runs, and human review before entering the validated artifact set. The figure is included to clarify authorship and quality control, not to present AI as a co-designer of the scientific method.}
+\label{fig:human_ai_workflow}
+\end{figure}
+
+\subsection{Software stack and numerical separation of responsibilities}
 \label{sec:impl_stack}
 
-All neural networks are implemented in PyTorch \citep{paszke2019pytorch}
-using automatic differentiation (\texttt{torch.autograd.grad}) for both
-the PDE residuals and the Jacobian computations inside each chart decoder.
-Jacobian inversion uses \texttt{torch.linalg.inv} (LU factorization) in the
-forward pass; SVD-based condition-number diagnostics run under
-\texttt{torch.no\_grad()} to avoid gradient instability near singular values.
-The solvers run on Apple Silicon MPS with CPU fallback for unsupported
-operations, and on NVIDIA CUDA without modification; the hardware target is set
-by a single \texttt{PYTORCH\_ENABLE\_MPS\_FALLBACK=1} environment variable.
-Supporting libraries include \texttt{open3d} for raycasting-based signed-distance
-queries, \texttt{pysdf} and \texttt{mesh\_to\_sdf} for cross-validation of
-sign quality, \texttt{trimesh} for surface mesh repair, and
-\texttt{scipy.spatial.cKDTree} for nearest-neighbour SDF initialization.
-Post-processing uses VTK (via \texttt{pyvista}) and ParaView for
-publication-quality volumetric exports.
+All neural networks are implemented in PyTorch \citep{paszke2019pytorch}. Automatic differentiation is used both for PDE residuals and for the Jacobians needed by the chart maps and constitutive models. Jacobian inversion is carried out in the forward pass with \texttt{torch.linalg.inv}, while condition diagnostics are evaluated under \texttt{torch.no\_grad()} to avoid unnecessary instability near nearly singular samples. The framework is implemented in a hardware-agnostic PyTorch environment capable of acceleration on Metal, CUDA, and CPU backends, and the validated runs reported here were executed through the same code path used for development.
 
-A deliberate design principle throughout is \emph{separation of geometry from
-PDE solving}.  The geometry stage produces a fixed, validated atlas that is
-checkpointed once and reused by all downstream solvers without modification.
-This makes it possible to swap PINN architectures or loss weights without
-touching the atlas, and to validate each stage independently through its own
-quality gates before proceeding.
+A guiding implementation principle is the separation of geometry from PDE solving. Geometry processing produces an SDF, a volumetric atlas, and a decoder/mask representation that are frozen before the field solver is trained. This separation is what makes the numerical evidence interpretable: if a benchmark fails after the geometry gate has passed, the failure can be attributed to the PDE solver or the coupling logic rather than to a moving geometry target.
 
-\subsection{Four-stage geometry pipeline}
+Supporting geometry utilities use \texttt{open3d}, \texttt{pysdf}, \texttt{mesh\_to\_sdf}, and \texttt{trimesh}; post-processing uses VTK through \texttt{pyvista} and ParaView. These libraries matter for reproducibility because the entire atlas pipeline depends on reliable signed-distance queries, surface repair, and consistent volumetric export.
+
+\subsection{Neural network architectures}
+\label{sec:impl_architectures}
+
+The implementation uses several neural-network families, each tied to a distinct computational role rather than to one universal model class. The code separates implicit volumetric geometry modeling, special-case global mapping, differentiable atlas realization, and chart-local field approximation. One qualification matters for the benchmark section: the torus inverse example does not train a neural field over the physical domain. It optimizes only two scalar constitutive parameters while using fixed soft chart weights, so it is discussed below as a contrast case rather than forced into the architecture table.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.8pt}
+\renewcommand{\arraystretch}{1.03}
+\begin{threeparttable}
+\caption{Neural-network families used in the implementation section. Configurations are quoted directly from source code class definitions and, where available, canonical checkpoint metadata. When a checkpoint records only a top-level architecture label, the table reports the constructor configuration instantiated by the corresponding solver path.}
+\label{tab:impl_networks}
+\begin{tabular}{>{\raggedright\arraybackslash}p{1.8cm}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{1.7cm}>{\raggedright\arraybackslash}p{6.05cm}>{\raggedright\arraybackslash}p{1.35cm}}
+\toprule
+Code name / symbol & Purpose & Type & Exact configuration & Reference \\
+\midrule
+\texttt{SDFNet} & global volumetric level-set for inside/outside queries and atlas construction & \shortstack[l]{fully connected\\ \texttt{tanh} MLP} & \shortstack[l]{input $3$, output $1$, width $128$, depth $6$,\\ Xavier initialization; Bunny checkpoint stores\\ \texttt{model\_kwargs=\{width:128, depth:6\}}} & This work \\
+\texttt{MappingNet} & special-case unit-ball-to-domain volumetric map & \shortstack[l]{residual chart map\\ on \texttt{tanh} MLP} & \shortstack[l]{backbone input $3$, output $3$, width $128$, depth $6$;\\ learned \texttt{log\_scale}, \texttt{shift}, and \texttt{raw\_disp};\\ displacement cap \texttt{disp\_cap}=0.45} & This work \\
+\shortstack[l]{\texttt{SDFNetLocal}\\ + \texttt{SDFNetChartwise}} & local implicit-geometry prototype on overlapping charts & \shortstack[l]{local \texttt{tanh} MLPs\\ + Gaussian\\ PoU blend} & \shortstack[l]{each local SDF network is $3\!\rightarrow\!1$ with width $64$\\ and depth $4$; current script uses $12$ local nets;\\ chartwise checkpoint stores \texttt{local\_width}=64 and\\ \texttt{local\_depth}=4 in \texttt{model\_kwargs}} & This work \\
+\texttt{SDFNetGlobal} & optional global adapter for chartwise SDF compatibility & \shortstack[l]{fully connected\\ \texttt{tanh} MLP} & input $3$, output $1$, width $128$, depth $6$ & This work \\
+\texttt{ChartDecoder} & differentiable chart map from local coordinates to physical space & \shortstack[l]{fully connected\\ \texttt{tanh} MLP with\\ residual correction} & \shortstack[l]{input $3$, output $3$, width $64$, depth $4$;\\ learned \texttt{raw\_scale} initialized to $-1.8$; residual\\ amplitude $0.20\,\tanh(\texttt{raw\_scale})\,r_i$; atlas checkpoint\\ stores \texttt{decoder\_kwargs=\{width:64, depth:4\}}} & This work \\
+\texttt{MaskNet} & chart-validity logits and partition-of-unity weights & \shortstack[l]{fully connected\\ \texttt{tanh} MLP} & \shortstack[l]{input $3$, output $1$, width $48$, depth $3$;\\ canonical atlas checkpoint stores\\ \texttt{mask\_kwargs=\{width:48, depth:3\}}} & This work \\
+\shortstack[l]{\texttt{LocalPoissonPINN}\\ (\texttt{arch="mlp"})} & dense chart-local scalar field solve for Poisson & \shortstack[l]{fully connected\\ \texttt{tanh} PINN} & \shortstack[l]{input $3$, output $1$, width $64$, depth $4$;\\ \texttt{attempt19\_w4} records \texttt{arch=mlp}, residual scale $0.1$,\\ and \texttt{residual\_zero\_init=True}} & \shortstack[l]{PINN \citep{raissi2019physicsinformed};\\ this work} \\
+\shortstack[l]{\texttt{LocalPoissonPINN}\\ (\texttt{arch="resnet"})} & optional higher-capacity chart-local field solve & \shortstack[l]{two-branch\\ \texttt{tanh} MLP} & \shortstack[l]{base branch width $64$, depth $4$; residual branch\\ width $64$, depth $4$; residual scale $0.1$;\\ residual output layer zero-initialized by default} & This work \\
+\shortstack[l]{\texttt{Compact}\\ \texttt{ChartNet}} & localized chart-local field solve via a sub-atlas inside each chart & \shortstack[l]{mixture of small\\ \texttt{tanh} MLPs\\ + softmax PoU} & \shortstack[l]{\texttt{n\_subseed}=9, \texttt{sub\_width}=32, \texttt{sub\_depth}=2,\\ \texttt{tau\_scale}=0.125; \texttt{attempt20c\_compact} stores\\ \texttt{arch=compact}, while these subnetwork values come\\ from the instantiated solver path} & This work \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}[flushleft]
+\item Configurations come from the class definitions in \texttt{train\_sdf\_rabbit.py}, \texttt{train\_mapping\_from\_sdf.py}, \texttt{train\_sdf\_chartwise.py}, \texttt{train\_rabbit\_atlas.py}, \texttt{run\_poisson\_rabbit\_atlas\_schwarz.py}, and \texttt{compact\_chart\_net.py}, together with the canonical checkpoints cited in the text.
+\end{tablenotes}
+\end{threeparttable}
+\end{table}
+
+\subsubsection{Implicit geometry networks}
+The implicit geometry stage uses several related networks, all built on the same fully connected \texttt{tanh} MLP backbone with Xavier initialization. The global Bunny trainer \texttt{train\_sdf\_rabbit.py} uses \texttt{SDFNet}, a $3\!\rightarrow\!1$ network with width $128$ and depth $6$, and the canonical checkpoint in \texttt{runs/bunny\_sdf\_v3/rabbit\_sdf.pt} stores exactly those values. The chartwise prototype in \texttt{train\_sdf\_chartwise.py} replaces the global field by $12$ local \texttt{SDFNetLocal} models, each with width $64$ and depth $4$, then blends them through the Gaussian partition of unity implemented by \texttt{SDFNetChartwise}. Because older parts of the codebase expect one global signed-distance network, the same script also provides an optional adapter \texttt{SDFNetGlobal}, which returns to the $128\times 6$ global architecture and regresses the blended chartwise field into a single surrogate.
+
+The special-case global-map path in \texttt{train\_mapping\_from\_sdf.py} uses \texttt{MappingNet}, which keeps the same $128\times 6$ \texttt{tanh} backbone but wraps it inside a residual coordinate map. The learned field is augmented by global scale, translation, and capped displacement parameters, so the final map is a unit-ball reference plus a bounded neural correction. This is the exact reason the manuscript treats the learned ball-to-domain map as a practical geometric prior rather than as a bijection by construction.
+
+The training design of the geometry networks is also different from the PDE solver. The canonical global Bunny SDF trainer uses a plain Adam update on the static weighted sum in \eqref{eq:impl_sdf_loss}, with user-set weights $w_{\mathrm{surf}}=10$, $w_{\mathrm{eik}}=1$, $w_{\mathrm{norm}}=1$, and $w_{\mathrm{sign}}=2$ in the released parser defaults. It does not use GradNorm, PCGrad, or any other explicit gradient-conflict mitigation scheme. The chartwise prototype instead reduces geometry difficulty indirectly through SDT pretraining and a geometry-adaptive sign-anchor offset factor, implemented in \texttt{train\_sdf\_chartwise.py} with default \texttt{anchor\_offset\_factor}=0.30. That distinction matters for interpretation: the chartwise path already experiments with local geometric adaptation, while the canonical global Bunny run remains a static weighted-sum baseline.
+
+\subsubsection{Differentiable atlas realization networks}
+Once a volumetric prior is available, the atlas is realized by a paired decoder-mask architecture. In the atlas trainer, each \texttt{ChartDecoder} is a $3\!\rightarrow\!3$ \texttt{tanh} MLP with width $64$ and depth $4$, but it is not asked to learn the chart from scratch. The forward pass first reconstructs the rigid local frame anchored at the chart seed and then adds a learned residual whose amplitude is scaled by $0.20\,\tanh(\texttt{raw\_scale})\,r_i$. This residual correction design is why the decoder can focus on geometric refinement instead of relearning the coarse chart frame.
+
+Each chart is paired with a smaller \texttt{MaskNet}, a $3\!\rightarrow\!1$ \texttt{tanh} MLP with width $48$ and depth $3$. The mask network is intentionally smaller because its job is not to reproduce geometry but to produce stable validity logits and the soft partition-of-unity weights in \eqref{eq:impl_mask_weights}. In the canonical rabbit workflow, these decoder and mask networks are trained once during the atlas stage and then frozen before PDE training begins. The checkpoint used by the main rabbit solve, \texttt{runs/atlas\_vol\_trained/rabbit\_atlas\_trained.pt}, stores exactly \texttt{decoder\_kwargs=\{width:64, depth:4\}} and \texttt{mask\_kwargs=\{width:48, depth:3\}}, and the same checkpoint records coverage ratio $1.0$, overlap consistency $6.36\times 10^{-3}$, and zero detected foldovers. Those values do not prove perfection, but they show that the architecture is evaluated through explicit geometric gates before any chart-local field solve is attempted.
+
+\subsubsection{Chart-local field solvers}
+The rabbit Poisson solver exposes three chart-local field architectures. The dense baseline is \texttt{LocalPoissonPINN} with \texttt{arch="mlp"}, a $3\!\rightarrow\!1$ \texttt{tanh} network with width $64$ and depth $4$. The tradeoff checkpoint \texttt{attempt19\_w4} records exactly that configuration in its saved \texttt{u\_kwargs}. The residual variant follows the two-branch residual-learning pattern of He et al.~\citep{he2016deep}: it keeps the same base network, adds a second $64\times 4$ branch, scales its output by $0.1$, and zero-initializes the residual output layer so that warm starts begin from the dense baseline.
+
+The flagship rabbit run does not use either dense option. It uses \texttt{CompactChartNet}, which replaces one monolithic chart network by a small sub-atlas inside each chart. The instantiated configuration in \texttt{compact\_chart\_net.py} uses $9$ sub-seeds, one $32\times 2$ \texttt{tanh} subnet per sub-seed, and a softmax partition of unity with $\tau=0.125\,r_i$. This design is meant to localize approximation power within a chart and reduce cross-chart interference during Schwarz sweeps. A manuscript nuance is needed here because the serialized checkpoint keeps backward-compatible metadata: \texttt{attempt20c\_compact} stores \texttt{u\_kwargs=\{width:64, depth:4, arch:compact, \dots\}}. That top-level record is useful for checkpoint loading, but it is not the effective architecture. The effective compact solver is the $9\times(32\times 2)$ subnetwork construction defined by \texttt{CompactChartNet} and instantiated in the rabbit solver path.
+
+The chart-local architecture should also be distinguished from the stabilization logic wrapped around it. The rabbit solver can optionally use PCGrad when the PDE and manufactured-supervision gradients conflict, but that option lives in the Schwarz training routine rather than in the network classes themselves. This is why the architecture subsection reports the chart-local models separately from the learning-rate schedules, rejection filters, and coupling weights discussed in the next subsection.
+
+\subsubsection{Architectural choices not used as trainable field networks in every benchmark}
+The torus inverse benchmark is the main counterexample to any overly broad neural-architecture narrative. In \texttt{run\_torus\_inverse\_neohookean\_atlas.py}, the code does not train a neural field over the torus body. It constructs soft chart weights around the major-loop angle and then optimizes only the scalar parameters \texttt{mu\_raw} and \texttt{K\_raw} with Adam, recovering $\mu$ and $K$ through a softplus reparameterization. This distinction is worth making explicitly in the implementation section so that Example~4 is read as a controlled parameter-identification benchmark, not as evidence that every benchmark in the paper is driven by the same neural field architecture.
+
+\subsection{Geometry pipeline and rigid quality assurance}
 \label{sec:impl_pipeline}
 
-Constructing a usable atlas from a surface mesh or procedural description
-requires four sequential stages, each with its own quality gate.
+The geometry stage is executed as a four-step pipeline. The point of spelling it out here is not merely procedural. Each stage constructs a mathematical object that the downstream solver actually needs: a volumetric level-set model for point-in-domain queries, a coarse chart layout, a learned realization of the chart maps and overlap weights, and finally a set of gate metrics that determine whether the atlas is admissible for PDE training. This is the main difference from a purely surface-reconstruction pipeline. It is not enough for the learned representation to pass near the observed surface; it must also provide a volumetric interior, support local chart coordinates, and remain stable under pullback of the PDE operator.
 
-\textbf{Stage 1 --- Neural SDF.}
-A six-hidden-layer MLP (width 128, Softplus activations) is trained on surface
-point-cloud data with four loss terms: a surface-loss
-$\mathcal{L}_\text{surf}=\mathbb{E}[|\phi_\theta(x_s)|]$, an Eikonal loss
-$\mathcal{L}_\text{eik}=\mathbb{E}[(|\nabla\phi_\theta|-1)^2]$, a
-normal-alignment loss, and a sign-anchor loss evaluated at points offset along
-the surface normal.  The Adam optimizer runs with initial learning rate
-$8\times10^{-4}$ for up to 20{,}000 epochs.  Sign quality is cross-validated
-against \texttt{open3d} and \texttt{pysdf}; training is gated at
-sign\_error $<5\%$ before the atlas is built.  For geometries with thin features
-(Stanford Bunny ears $\approx 5$\,mm), the chart-partitioned SDF variant
-(\texttt{src/train\_sdf\_chartwise.py}) trains one local SDF network per chart
-with a geometry-adaptive sign-anchor offset, resolving the single-offset
-trade-off that corrupted sign supervision near thin features.
+\paragraph{Stage 1: volumetric signed-distance modeling.}
+For imported geometry, let $X_{\partial}=\{(x_k,n_k)\}_{k=1}^{N}$ denote the observed surface samples together with their oriented normals. The first requirement is then a scalar level-set model
+\begin{equation}
+s_{\vartheta}:\mathbb{R}^3\rightarrow \mathbb{R},
+\qquad
+\Omega \approx \{x\in\mathbb{R}^3:s_{\vartheta}(x)<0\},
+\qquad
+\partial\Omega \approx \{x\in\mathbb{R}^3:s_{\vartheta}(x)=0\},
+\label{eq:impl_sdf_levelset}
+\end{equation}
+so that inside/outside classification, near-surface sampling, and volumetric chart seeding can all be defined without a tetrahedral mesh. In the released code this object is represented by the global SDF architecture summarized in Section~\ref{sec:impl_architectures} and trained on surface points $X_{\partial}$ with outward normals $N_{\partial}$. The training loss is
+\begin{align}
+\mathcal{L}_{\mathrm{SDF}}
+=&
+\lambda_{\mathrm{surf}}\,
+\mathbb{E}_{x\sim X_{\partial}}\!\left[|s_{\vartheta}(x)|\right]
++
+\lambda_{\mathrm{norm}}\,
+\mathbb{E}_{(x,n)\sim (X_{\partial},N_{\partial})}
+\left[
+1-\frac{\nabla s_{\vartheta}(x)}{\|\nabla s_{\vartheta}(x)\|_2}\cdot n
+\right]
+\nonumber\\
+&+
+\lambda_{\mathrm{eik}}\,
+\mathbb{E}_{x\sim B}
+\left[
+\big(\|\nabla s_{\vartheta}(x)\|_2-1\big)^2
+\right]
++
+\lambda_{\mathrm{sign}}\,
+\mathcal{L}_{\mathrm{sign}},
+\label{eq:impl_sdf_loss}
+\end{align}
+with sign supervision
+\begin{align}
+\mathcal{L}_{\mathrm{sign}}
+=&
+\tfrac12\,
+\mathbb{E}_{(x,n)\sim (X_{\partial},N_{\partial})}
+\left[
+\operatorname{softplus}\!\big(s_{\vartheta}(x-\delta n)\big)
++
+\operatorname{softplus}\!\big(-s_{\vartheta}(x+\delta n)\big)
+\right]
+\nonumber\\
+&+
+\tfrac12\,
+\mathbb{E}_{x\sim B_{\mathrm{far}}}
+\left[
+\operatorname{softplus}\!\big(-s_{\vartheta}(x)\big)
+\right].
+\label{eq:impl_sdf_sign}
+\end{align}
+Equation~\eqref{eq:impl_sdf_levelset} is the mathematical requirement behind the Bunny example: without a usable volumetric level-set, the later atlas construction has no reliable way to place seeds in the interior or to reject decoder outputs that leave the body. The sign-anchor term in \eqref{eq:impl_sdf_sign} is the most delicate on thin-featured geometry because a single offset $\delta$ that works in the bulk may cross the surface in narrow regions such as the Stanford Bunny ears. In that sense, the SDF is not a cosmetic preprocessing step; it is the volumetric prior that turns surface observations into a usable interior geometry model.
 
-\textbf{Stage 2 --- Atlas construction.}
-A volumetric atlas of $M$ overlapping charts is built by
-(\textit{i})~placing seeds on the surface by Poisson-disk sampling with mutual
-separation $\geq d_\text{min}$;
-(\textit{ii})~assigning each seed a Tangent-Normal-Binormal (TNB) frame
-$\mathbf{F}_i = [\mathbf{t}_{1i}\,|\,\mathbf{t}_{2i}\,|\,\mathbf{n}_i]$
-computed from the SDF gradient at the seed; and
-(\textit{iii})~choosing support radii by binary search so that the balls cover
-at least 99\% of interior samples at a target overlap fraction.
-The 12-chart atlas used in the rabbit benchmarks contains 50{,}000 interior
-points sampled uniformly from the SDF-negative region.
+\paragraph{Stage 2: atlas construction.}
+Once a stable $s_{\vartheta}$ is available, the domain is covered by $M$ overlapping volumetric charts. In the implementation this stage requires a seed set $\{c_i\}_{i=1}^{M}$, local frames $Q_i=[t_{1,i}\;t_{2,i}\;n_i]\in\mathbb{R}^{3\times 3}$, and support radii $\{r_i\}_{i=1}^{M}$. For any physical point $x$, the chart-local coordinates are initialized by
+\begin{equation}
+\boldsymbol{\zeta}_i(x)
+=
+\begin{bmatrix}
+(x-c_i)\cdot t_{1,i}\\
+(x-c_i)\cdot t_{2,i}\\
+(x-c_i)\cdot n_i
+\end{bmatrix},
+\label{eq:impl_local_coords}
+\end{equation}
+and the coarse overlap membership is chosen from the seed distances
+\begin{equation}
+d_i(x)=\|x-c_i\|_2,
+\qquad
+\chi_i(x)=\mathbf{1}\!\left\{
+d_i(x)\le (1+\alpha)\min_{j} d_j(x)
+\right\},
+\label{eq:impl_membership}
+\end{equation}
+where $\alpha$ is tuned so that the empirical overlap fraction matches the target overlap. In the volumetric atlas builder, candidate seeds are accepted only when $s_{\vartheta}(c_i)<0$, so the SDF from Stage~1 is already part of the chart-construction logic. This stage therefore does more than scatter points in space: it defines the local coordinate frames and coarse support sets on which the learned chart maps will later operate. Relative to a surface-only atlas, the extra requirement is that the seeds and supports must be meaningful in the interior of the body, not only on the observed boundary.
 
-\textbf{Stage 3 --- Chart decoder training.}
-A lightweight \texttt{ChartDecoder} network (two-hidden-layer MLP plus a
-learned nonlinear correction $\Delta\varphi_i$ of amplitude
-$\approx 0.08\,r_i$) is trained jointly with a \texttt{MaskNet} gating network
-per chart.  The decoder loss combines an overlap-consistency term
-$\mathcal{L}_\text{ov}=\mathbb{E}_{\Omega_{ij}}[\|\varphi_i(\pi_j(x))-x\|^2]$,
-a coverage term, and an anti-fold regularizer.  The overlap weight
-\texttt{w-overlap} must be at least 8.0 on the Stanford Bunny (default 0.8 is
-insufficient; the overlap loss \emph{increases} during training with the
-default).
+\paragraph{Stage 3: decoder and mask training.}
+The coarse atlas is then promoted into a differentiable atlas by learning a decoder $\Phi_i$ and a mask logit $\ell_i$ for each chart. In implementation terms, the abstract chart map $\varphi_i$ from Section~\ref{sec:methodology} is realized by
+\begin{align}
+\Phi_i(\boldsymbol{\zeta})
+=&
+\;c_i
++
+\zeta_1 t_{1,i}
++
+\zeta_2 t_{2,i}
++
+\zeta_3 n_i
++
+a_i r_i\,\mathcal{N}_i(\boldsymbol{\zeta}/r_i),
+\label{eq:impl_decoder_map}\\
+\ell_i(\boldsymbol{\zeta})
+=&
+\;M_i(\boldsymbol{\zeta}/r_i),
+\qquad
+p_i(x)=\sigma\!\big(\ell_i(\boldsymbol{\zeta}_i(x))\big),
+\qquad
+\omega_i(x)=\frac{\exp(\ell_i(\boldsymbol{\zeta}_i(x)))}{\sum_j \exp(\ell_j(\boldsymbol{\zeta}_j(x)))},
+\label{eq:impl_mask_weights}
+\end{align}
+where $\mathcal{N}_i$ and $M_i$ denote the decoder and mask networks summarized in Section~\ref{sec:impl_architectures}, and $a_i$ is a learned residual amplitude. The decoder loss used in the code is a weighted combination
+\begin{equation}
+\mathcal{L}_{\mathrm{atlas}}
+=
+\lambda_{\mathrm{rec/dom}}\mathcal{L}_{\mathrm{rec/dom}}
++
+\lambda_{\mathrm{mask}}\mathcal{L}_{\mathrm{mask}}
++
+\lambda_{\mathrm{ov}}\mathcal{L}_{\mathrm{ov}}
++
+\lambda_{\mathrm{jac}}\mathcal{L}_{\mathrm{jac}}
++
+\lambda_{\mathrm{cov}}\mathcal{L}_{\mathrm{cov}},
+\label{eq:impl_atlas_total}
+\end{equation}
+with the component terms matching the released training script:
+\begin{align}
+\mathcal{L}_{\mathrm{rec}}
+=&
+\sum_{i=1}^{M}
+\mathbb{E}_{x\in X_i^{+}}
+\left[
+\|\Phi_i(\boldsymbol{\zeta}_i(x))-x\|_2^2
+\right],
+\label{eq:impl_atlas_recon}\\
+\mathcal{L}_{\mathrm{dom}}
+=&
+\sum_{i=1}^{M}
+\mathbb{E}_{\boldsymbol{\zeta}\sim [-r_i,r_i]^3}
+\left[
+\operatorname{ReLU}\!\big(s_{\vartheta}(\Phi_i(\boldsymbol{\zeta}))-\tau_{\mathrm{sdf}}\big)^2
+\right],
+\label{eq:impl_atlas_domain}\\
+\mathcal{L}_{\mathrm{mask}}
+=&
+\sum_{i=1}^{M}
+\mathbb{E}_{x\in X_i^{+}}
+\left[
+\operatorname{softplus}\!\big(-\ell_i(\boldsymbol{\zeta}_i(x))\big)
+\right]
++
+\sum_{i=1}^{M}
+\mathbb{E}_{x\in X_i^{-}}
+\left[
+\operatorname{softplus}\!\big(\ell_i(\boldsymbol{\zeta}_i(x))\big)
+\right],
+\label{eq:impl_atlas_mask}\\
+\mathcal{L}_{\mathrm{ov}}
+=&
+\sum_{i<j}
+\mathbb{E}_{x\in X_{ij}}
+\left[
+\|\Phi_i(\boldsymbol{\zeta}_i(x))-\Phi_j(\boldsymbol{\zeta}_j(x))\|_2^2
+\right],
+\label{eq:impl_atlas_overlap}\\
+\mathcal{L}_{\mathrm{jac}}
+=&
+\sum_{i=1}^{M}
+\mathbb{E}_{\boldsymbol{\zeta}\sim \widehat{\Omega}_i}
+\left[
+\operatorname{softplus}\!\big(\delta_{\det}-\det D\Phi_i(\boldsymbol{\zeta})\big)^2
+\right],
+\label{eq:impl_atlas_jac}\\
+\mathcal{L}_{\mathrm{cov}}
+=&
+\mathbb{E}_{x\sim X}
+\left[
+\operatorname{softplus}\!\big(\tau_{\mathrm{cov}}-\max_i p_i(x)\big)
+-\log \omega_{\mathrm{pri}(x)}(x)
+\right].
+\label{eq:impl_atlas_cov}
+\end{align}
+Here $X_i^{+}$ and $X_i^{-}$ denote the samples currently labeled inside and outside chart $i$, $X_{ij}$ denotes sampled overlap points shared by charts $i$ and $j$, and $X$ denotes the global point cloud or interior validation set used by the atlas trainer. The threshold $\tau_{\mathrm{sdf}}$ in \eqref{eq:impl_atlas_domain} is the tolerated signed-distance margin used to penalize decoder outputs that leave the admissible interior.
+The distinction between $\mathcal{L}_{\mathrm{rec}}$ and $\mathcal{L}_{\mathrm{dom}}$ matters for interpretation. Surface-based atlas fitting uses \eqref{eq:impl_atlas_recon}, while the volumetric Bunny continuation replaces it by \eqref{eq:impl_atlas_domain}. This is the clearest place where our reconstruction problem departs from the surface-reconstruction template: the goal is not only to fit overlapping boundary patches, but to learn volumetric charts whose decoded images remain inside the body and can later support local PDE solves.
 
-\textbf{Stage 4 --- Quality gate.}
-Before the PINN solver is started, a gate script checks three metrics: (a)
-overlap\_consistency $<0.025$, (b) coverage\_ratio $=1.0$, and (c)
-fold\_ratio $=0.0$.  Only atlases that pass all three gates are used in the main
-benchmarks; exploratory runs that bypass the gate with
-\texttt{--allow-failed-gate} are reported separately in
-Section~\ref{sec:limitations}.
+\paragraph{Stage 4: iterative atlas refinement strategy.}
+Before any PDE training starts, the atlas must pass explicit geometric gate metrics. In the released training code these are coverage, overlap consistency, and foldover ratio, with an additional boundary RMSE check when a direct pointwise reconstruction target is available. In symbols,
+\begin{align}
+g_{\mathrm{cov}}
+=&
+\mathbb{P}_{x\sim X}
+\left[
+\max_i p_i(x)>\tau_{\mathrm{cov}}
+\right],
+\nonumber\\
+g_{\mathrm{ov}}
+=&
+\mathbb{E}_{x\in X_{\mathrm{ov}}}
+\left[
+\|\Phi_i(\boldsymbol{\zeta}_i(x))-\Phi_j(\boldsymbol{\zeta}_j(x))\|_2
+\right],
+\nonumber\\
+g_{\mathrm{fold}}
+=&
+\frac{1}{N_J}
+\sum_{i,\boldsymbol{\zeta}}
+\mathbf{1}_{\{\det D\Phi_i(\boldsymbol{\zeta})\le 0\}},
+\label{eq:impl_gate_metrics}\\
+g_{\mathrm{rmse}}
+=&
+\left(
+\mathbb{E}_{x\sim X}
+\left[
+\left\|
+\sum_{i=1}^{M}\omega_i(x)\Phi_i(\boldsymbol{\zeta}_i(x))-x
+\right\|_2^2
+\right]
+\right)^{1/2}.
+\label{eq:impl_gate_rmse}
+\end{align}
+The atlas is accepted only if these metrics lie inside prescribed admissible bands. If a gate fails, the implementation does not simply bypass the check. Instead, it enters an iterative atlas refinement loop in which chart seeds, support radii, decoder states, and mask parameters are updated so as to reduce the violated metric on the next trial. This makes the gate stage an algorithmic refinement step rather than a manual cleanup step.
 
-\subsection{Solver architecture and training design}
+This four-stage structure is central to the paper's computational argument. The forward rabbit Poisson example succeeds in part because the geometry stage is fixed, audited, and frozen before the Schwarz solver is allowed to run. Conversely, the Bunny SDF benchmark shows what happens when the level-set model itself is the main source of uncertainty.
+
+\paragraph{Remark on spherical reference domains.}
+The released code makes a deliberate use of spherical, or more precisely ball-shaped, reference domains. In the special global-map pipeline the reference body is the unit ball $B^3$ with boundary $S^2$, while in the volumetric atlas builder each local chart is initialized as a ball chart centered at its seed and then refined by a small learned residual. This design should be interpreted as a geometric prior rather than as a proof of injectivity. The numerical advantage is that the reference metric is isotropic and curvature-regular, so the chart coordinates do not introduce an artificial directional bias before any learning takes place; this tends to stabilize sampling, Jacobian conditioning, and support-radius selection. The price is that neither the global sphere-to-domain map nor the family of local ball charts is bijective by construction. Injectivity must therefore be established a posteriori through the determinant barrier, overlap consistency checks, and foldover gates described above. In the present framework, spherical reference domains are used because they provide a stable computational geometry scaffold, while bijectivity is treated as a monitored quality property rather than as an automatic consequence of the parametrization.
+
+\subsection{Local solver schedule, adaptive regularization, and stabilization}
 \label{sec:impl_solver}
 
-Two PINN architectures are available.
-The \emph{dense MLP} (width 64, depth 4, Tanh activations) places one
-independent network per chart.  The \emph{CompactChartNet} replaces this with
-$M=9$ small Tanh-MLPs (width 32, depth 2) whose outputs are blended by a
-softmax partition-of-unity with bandwidth $\tau=\tau_\text{scale}\times r_i$:
+The chart-local architectures themselves are summarized in Section~\ref{sec:impl_architectures}. The present subsection focuses on how those chart-local models are stabilized once the geometry stage has been frozen. For the compact solver path, the chart-local field is blended by a smooth partition of unity:
 \begin{equation}
-u_\text{chart}(\zeta)
+u_{\mathrm{chart}}(\zeta)
 =
 \sum_{m=0}^{8}\phi_m(\zeta)\,u_m(\zeta-s_m),
 \qquad
-\phi_m(\zeta)=\frac{\exp(-\|\zeta-s_m\|^2/2\tau^2)}{\sum_{m'}\exp(-\|\zeta-s_{m'}\|^2/2\tau^2)},
-\label{eq:compact_pou}
+\phi_m(\zeta)=\frac{\exp(-\|\zeta-s_m\|^2/2\tau^2)}{\sum_{m'}\exp(-\|\zeta-s_{m'}\|^2/2\tau^2)}.
+\label{eq:compact_pou_impl}
 \end{equation}
-with sub-seeds $s_0=0$ (chart centre) and $s_1,\dots,s_8$ at the $\pm r_i/3$
-cube corners.  The C$^\infty$ blending ensures that the autograd Laplacian is
-well-defined everywhere, and spatial localization reduces the coupling between
-neighboring charts during Schwarz updates.  A critical implementation detail is
-that $\tau_\text{scale}\geq 0.5$ is mandatory; smaller values
-($\tau_\text{scale}=0.125$) leave isolated Gaussian neighborhoods whose PDE
-residual diverges during the warmup phase.
+This construction preserves differentiability of the autograd Laplacian while localizing the approximation within each chart.
 
-All chart solvers use \emph{direct-coordinate mode}: since the TNB frame
-$\mathbf{F}_i$ is orthonormal, the pulled-back Laplacian reduces exactly to
-$\Delta_x u = \sum_j \partial^2 u/\partial\zeta_j^2$ when the nonlinear decoder
-correction $\Delta\varphi_i$ is dropped.  This choice eliminates Jacobian
-conditioning issues entirely and decouples Schwarz convergence from decoder
-quality, at the cost of slightly lower geometric fidelity in chart-local
-coordinates.
+Two constants are particularly important for robustness: the decoder overlap weight and the CompactChartNet localization scale $\tau_{\mathrm{scale}}$. In the released validated runs these were fixed at problem-specific values, but they are better interpreted as adaptive regularization constants than as magic numbers. A practical overlap-weight heuristic is
+\begin{equation}
+w_{\mathrm{ov}}^{(n+1)}=
+\mathrm{clip}\!\left(
+w_{\mathrm{ov}}^{(n)}
+\left(\frac{\mathcal{L}_{\mathrm{cov}}^{(n)}}{\mathcal{L}_{\mathrm{ov}}^{(n)}+\varepsilon}\right)^{\beta},
+w_{\min},w_{\max}
+\right),
+\label{eq:adaptive_overlap_weight}
+\end{equation}
+which increases overlap enforcement only when coverage is already acceptable and the overlap loss is under-resolved. Likewise, a robust continuation for the CompactChartNet bandwidth is
+\begin{equation}
+\tau_{\mathrm{scale}}^{(n)}
+=
+\tau_{\max}-\big(\tau_{\max}-\tau_{\min}\big)
+\min\!\left(1,\frac{n}{N_{\mathrm{warm}}}\right),
+\label{eq:adaptive_tau_schedule}
+\end{equation}
+so the basis starts wide during warmup and contracts only after the boundary and interface losses have stabilized. The canonical compact rabbit run itself uses the fixed constructor value $\tau_{\mathrm{scale}}=0.125$ recorded in the instantiated solver path, so \eqref{eq:adaptive_tau_schedule} should be read as a robustness-oriented continuation heuristic rather than as a description of the current archived checkpoint.
 
-The per-chart loss combines up to six terms:
-$\mathcal{L}_i = w_\text{pde}\mathcal{L}_\text{pde} + w_\text{bc}\mathcal{L}_\text{bc}
-+ w_\text{sup}\mathcal{L}_\text{sup}
-+ w_\text{iv}\sum_{j\in\mathcal{N}(i)}\mathcal{L}_\text{iv}
-+ w_\text{if}\sum_{j\in\mathcal{N}(i)}\mathcal{L}_\text{if}$.
-The PDE weight is ramped from zero to its target over \texttt{pde-warmup-iters}
-Schwarz iterations to allow boundary conditions to settle first.
-When $\mathcal{L}_\text{pde}$ and $\mathcal{L}_\text{sup}$ exhibit conflicting
-gradients (dot product $<0$), PCGrad \citep{yu2020gradient} is applied
-per-chart: three separate backward passes compute $g_\text{pde}$, $g_\text{sup}$,
-and $g_\text{oth}$; conflicting components are projected out symmetrically before
-accumulation, reducing Schwarz oscillation without increasing the number of
-optimizer steps.
+The released rabbit solver also uses three additional stabilization devices. First, the PDE weight is ramped up gradually so that the Dirichlet and interface terms can settle before the stiff residual dominates. Second, PCGrad \citep{yu2020gradient} is used when the PDE and manufactured-anchor gradients point in conflicting directions. Third, a trust-region filter rejects any local Schwarz update that causes an unacceptable increase in global relative $L^2$ error and reduces the local learning rate after rejection. Together with plateau detection and checkpoint selection, these mechanisms produce the stable 61-iteration rabbit run reported in Section~\ref{sec:example2}.
 
-A \emph{trust-region filter} at the Schwarz level rejects any chart update that
-increases the global relative $L^2$ error beyond a threshold and halves the
-local learning rate on rejection.  \emph{Plateau detection} monitors the
-validation rel-$L^2$ with a stale counter; training halts when the counter
-reaches \texttt{plateau-patience} and checkpoints the best-seen iterate.
-Together these two mechanisms kept the flagship rabbit Poisson solve stable for
-61 accepted Schwarz iterations, yielding the $2.21\times10^{-2}$ relative
-$L^2$ reported in Section~\ref{sec:example2}.
-
+Finally, the curvature-weighted simplification used in the rabbit Poisson benchmarks is worth stating explicitly. Because the chart frames are initialized to be nearly orthonormal, the implementation can evaluate the Laplacian directly in chart coordinates during the stable phase of training, which regularizes the operator evaluation when the full mapped Jacobian becomes poorly conditioned in high-curvature regions. We treat this choice as a trade-off study rather than as an implementation shortcut. If the local metric distortion satisfies $\|\mathbf{J}_i(\boldsymbol{\zeta})^T\mathbf{J}_i(\boldsymbol{\zeta})-\mathbf{I}\|_2\le \varepsilon_g$ on the admissible collocation set, then the induced perturbation in the mapped diffusion tensor is first-order in $\varepsilon_g$, so the resulting operator error is controlled by the atlas quality gate. In return, the direct chart-coordinate evaluation acts as a regularizer near nearly singular Jacobian samples and is substantially more stable numerically on the validated rabbit benchmark. The manuscript therefore presents this as a curvature-weighted computational simplification with a monitored geometry-induced error budget, not as a universal identity of the method.
 \section{Benchmark problems and numerical results}
 \label{sec:benchmark_formulations}
 
 \subsection{Reporting protocol and evaluation criteria}
-The numerical evidence in this section is drawn from the validated benchmark set shipped with the repository. All values reported below come from code-generated metric files rather than from hand-copied terminal output. We focus only on the mature examples that support the main claims of the paper: two simply connected forward Poisson cases, the fixed-atlas rabbit Poisson solve, a controlled torus inverse Neo-Hookean benchmark, a volumetric neural SDF benchmark on the Stanford Bunny PLY, and the rabbit Elder-type inverse benchmark. More exploratory tracks remain outside the main text and are discussed later in Section~\ref{sec:limitations}.
+This section argues for a qualified numerical conclusion rather than for blanket superiority over mature finite-element workflows. The codebase does not contain a fair head-to-head comparison against classical volumetric meshing, so the question here is narrower: where does the current atlas-based implementation already provide a credible alternative workflow for geometry-intensive problems? The answer supported by the released code is that geometry can be carried by analytic maps, signed-distance fields, and audited chart atlases; collocation points can be generated by rejection sampling in reference coordinates rather than by tetrahedral meshing; and overlap transmission can be enforced algorithmically through Schwarz updates and interface penalties once the atlas has passed geometric quality checks.
 
-All reported runs were executed on an Apple Silicon laptop using MPS with CPU fallback for unsupported operators. Precision is benchmark-dependent: the forward verification cases also admit CPU double precision, while the fixed-atlas rabbit and inverse examples use the hardware-supported configuration recorded in each canonical run. To keep the presentation fair, each subsection centers on one representative best-quality run. When multiple validated runs exist, they are used as a stability note only if the comparison remains meaningful.
+The numerical evidence is drawn from the validated benchmark set shipped with the repository. All values reported below come from code-generated metric files rather than from hand-copied terminal output. We focus only on the mature examples that support the main claims of the paper: an analytic forward verification case, the fixed-atlas rabbit Poisson solve, a volumetric neural SDF benchmark on the Stanford Bunny PLY, and a controlled torus inverse Neo-Hookean benchmark. This ordering keeps the two rabbit-derived geometry problems adjacent before the manuscript turns to the synthetic inverse setting. More exploratory tracks remain outside the main text and are discussed later in Section~\ref{sec:discussion}.
 
-We use the following evaluation criteria throughout this section. For forward Poisson problems, quality is measured by the relative $L^2$ error, the absolute $L^2$ error, and the maximum pointwise error, while performance is summarized by runtime and training difficulty. For the volumetric neural SDF benchmark, we report the surface loss, normal-alignment loss, Eikonal loss, and sign-anchor loss, since these directly measure the geometric quality of the learned level-set representation. For the torus inverse benchmark, quality is judged by the observation mismatch and the relative errors in the recovered constitutive parameters, together with runtime. For the rabbit Elder benchmark, we report the scalar permeability error, the mean and maximum eigenvalue errors, the mean axis-angle error, and the final interface-flux mismatch. In that last case, the canonical validated configuration also includes the weak teacher-guided pre-conditioning term discussed in Section~\ref{sec:limitations}.
+All reported runs use the same PyTorch codebase with hardware-agnostic acceleration across available compute backends. Precision is benchmark-dependent: the verification case also admits double-precision reruns, while the fixed-atlas rabbit, Bunny, and torus examples use the validated backend configuration recorded in each canonical artifact. To keep the presentation fair, each subsection centers on one representative best-quality run. When multiple validated runs exist, they are used only as stability or trade-off notes when the comparison remains meaningful.
+
+We use the following evaluation criteria throughout this section. For forward Poisson problems, quality is measured by the relative $L^2$ error, the absolute $L^2$ error, and the maximum pointwise error, while performance is summarized by runtime and training difficulty. For the volumetric neural SDF benchmark, we report the surface loss, normal-alignment loss, Eikonal loss, and sign-anchor loss, since these directly measure the geometric quality of the learned level-set representation. For the torus inverse benchmark, quality is judged by the observation mismatch and the relative errors in the recovered constitutive parameters, together with runtime.
 
 \begin{table}[htbp]
 \centering
-\tiny
-\setlength{\tabcolsep}{1.5pt}
-\caption{Benchmark-to-code map for the validated examples used in the main text. The run identifier indicates the canonical artifact used in each subsection below.}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\caption{Traceability map for the main-text examples. The table records the canonical artifact used in each subsection narrative; interpretation and scientific claims are carried by the example discussions themselves.}
 \label{tab:benchmark_map}
-\begin{tabular}{>{\raggedright\arraybackslash}p{1.95cm}>{\raggedright\arraybackslash}p{1.35cm}>{\raggedright\arraybackslash}p{3.7cm}>{\raggedright\arraybackslash}p{2.1cm}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{1.95cm}>{\raggedright\arraybackslash}p{1.4cm}>{\raggedright\arraybackslash}p{3.45cm}>{\raggedright\arraybackslash}p{1.9cm}}
 \toprule
-Case & Type & Entrypoint & Canonical run \\
+Case & Scientific role & Primary entrypoint & Canonical run \\
 \midrule
-Ellipsoid Poisson & verification & \shortstack[l]{\texttt{src/}\\ \texttt{pinn\_3d\_ellipsoid\_mapped\_sphere.py}} & \shortstack[l]{\texttt{ellipsoid\_20260212}\\ \texttt{\_180204}} \\
-Star Poisson & verification & \shortstack[l]{\texttt{src/}\\ \texttt{run\_poisson\_star3d\_mapped.py}} & \shortstack[l]{\texttt{star\_accel\_20260212}\\ \texttt{\_194730}} \\
-Rabbit Poisson & \shortstack[l]{field\\ solve} & \shortstack[l]{\texttt{experiments/}\\ \texttt{run\_poisson\_rabbit\_atlas\_schwarz.py}} & \shortstack[l]{\texttt{attempt20c}\\ \texttt{\_compact}} \\
-\shortstack[l]{Torus inverse\\ (original atlas)} & \shortstack[l]{synthetic\\ inverse} & \shortstack[l]{\texttt{src/}\\ \texttt{run\_torus\_inverse\_neohookean\_atlas.py}} & \shortstack[l]{\texttt{torus\_inverse}\\ \texttt{\_mps}} \\
-\shortstack[l]{Stanford Bunny\\ neural SDF} & \shortstack[l]{geometry\\ model} & \shortstack[l]{\texttt{src/}\\ \texttt{train\_sdf\_rabbit.py}} & \shortstack[l]{\texttt{bunny\_sdf}\\ \texttt{\_v3}} \\
-\shortstack[l]{Rabbit Elder\\ inverse} & \shortstack[l]{teacher-guided\\ inverse} & \shortstack[l]{\texttt{src/}\\ \texttt{run\_rabbit\_inverse\_elder\_atlas\_schwarz.py}} & \shortstack[l]{\texttt{elder\_globalfield}\\ \texttt{\_small}} \\
+Ellipsoid Poisson & verification & \shortstack[l]{\texttt{pinn\_3d\_ellipsoid\_}\\ \texttt{mapped\_sphere.py}} & \shortstack[l]{\texttt{ellipsoid\_20260212}\\ \texttt{\_180204}} \\
+Rabbit Poisson & \shortstack[l]{field\\ solve} & \shortstack[l]{\texttt{run\_poisson\_rabbit\_atlas\_}\\ \texttt{schwarz.py}} & \shortstack[l]{\texttt{attempt20c}\\ \texttt{\_compact}} \\
+\shortstack[l]{Stanford Bunny\\ neural SDF} & \shortstack[l]{geometry\\ stage} & \texttt{train\_sdf\_rabbit.py} & \shortstack[l]{\texttt{bunny\_sdf}\\ \texttt{\_v3}} \\
+\shortstack[l]{Torus inverse\\ (original atlas)} & \shortstack[l]{controlled\\ inverse} & \shortstack[l]{\texttt{run\_torus\_inverse\_}\\ \texttt{neohookean\_atlas.py}} & \shortstack[l]{\texttt{torus\_inverse}\\ \texttt{\_mps\_dense\_v4}} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Example 1: forward Poisson on ellipsoid and star domains}
+\subsection{Example 1: forward Poisson on the ellipsoid}
 \label{sec:example1}
 The common physical problem is
 \begin{equation}
@@ -881,66 +1046,55 @@ u=g \quad \text{on }\partial\Omega.
 \end{equation}
 For a chart-local scalar field, the mapped residual is
 \begin{equation}
-\widehat{\mathcal{R}}^{(1)}_i(\zeta)
+\widehat{\mathcal{R}}^{(1)}_i(\boldsymbol{\zeta})
 :=
--\nabla_\zeta\cdot\left(
-\mathbf{A}_i(\zeta)\nabla_\zeta \widehat{u}_i(\zeta)
+-\nabla_{\boldsymbol{\zeta}}\cdot\left(
+\mathbf{A}_i(\boldsymbol{\zeta})\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})
 \right)
-- j_i(\zeta)\,f(\varphi_i(\zeta)),
+- j_i(\boldsymbol{\zeta})\,f(\varphi_i(\boldsymbol{\zeta})),
 \qquad
-\mathbf{A}_i(\zeta):=j_i(\zeta)\mathbf{J}_i(\zeta)^{-1}\mathbf{J}_i(\zeta)^{-T}.
+\mathbf{A}_i(\boldsymbol{\zeta}):=j_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1}\mathbf{J}_i(\boldsymbol{\zeta})^{-T}.
 \label{eq:ex1_residual}
 \end{equation}
 The boundary loss is
 \begin{equation}
-\widehat{\mathcal{B}}^{(1)}_{i,D}(\zeta):=\widehat{u}_i(\zeta)-g(\varphi_i(\zeta)).
+\widehat{\mathcal{B}}^{(1)}_{i,D}(\boldsymbol{\zeta}):=\widehat{u}_i(\boldsymbol{\zeta})-g(\varphi_i(\boldsymbol{\zeta})).
 \label{eq:ex1_bc}
 \end{equation}
 
-The two validated Example 1 cases differ only in the chart and manufactured solution:
-\begin{enumerate}[leftmargin=*]
-\item \textbf{Ellipsoid verification.} A single analytic map
+The verification setup uses a single analytic map
 \[
-\varphi(\zeta_1,\zeta_2,\zeta_3)=(a\zeta_1,b\zeta_2,c\zeta_3)
+\varphi(\xi_1,\xi_2,\xi_3)=(a\xi_1,b\xi_2,c\xi_3),
+\qquad
+\boldsymbol{\xi}\in B^3,
 \]
-pulls the ellipsoid back to the unit ball. The exact solution in reference coordinates is
+which pulls the ellipsoid back to the unit ball. The exact solution in reference coordinates is
 \begin{equation}
-\widehat{u}^{\ast}_{\mathrm{ell}}(\zeta)=1-\|\zeta\|_2^2,
+\widehat{u}^{\ast}_{\mathrm{ell}}(\boldsymbol{\xi})=1-\|\boldsymbol{\xi}\|_2^2,
 \label{eq:ellipsoid_exact}
 \end{equation}
 which yields a constant mapped forcing.
-\item \textbf{Star-domain verification.} A learned global map $\Psi_\theta:B^3\rightarrow \Omega_{\mathrm{star}}$ is used after map-quality gates pass. The manufactured physical solution is
-\begin{equation}
-u^{\ast}_{\mathrm{star}}(x)=\sin(\pi x_1)\sin(\pi x_2)\sin(\pi x_3),
-\label{eq:star_exact}
-\end{equation}
-with $f=3\pi^2u^{\ast}_{\mathrm{star}}$ and homogeneous Dirichlet boundary data.
-\end{enumerate}
 
-\paragraph{Interpretation.}
-These are the simplest verified examples in the codebase. They validate the mapped Poisson operator in two distinct regimes: an analytic global map with a quadratic reference-space solution, and a learned global map with a trigonometric physical-space solution.
+\paragraph{Claim.}
+Example~1 verifies the mapped-coordinate formulation on analytic geometry. It should be read as a correctness test of the pullback machinery, not as a competition with conventional meshing.
 
-\paragraph{Purpose.}
-Example~1 establishes the baseline numerical behavior of the mapped Poisson operator before overlap coupling or inverse identification is introduced. Its role in the paper is to show that the mapped-PINN machinery behaves as expected in the cleanest possible settings.
+\paragraph{Why this matters.}
+The later examples mix geometry handling, overlap transmission, and optimization design. A clean verification case is therefore necessary: if the mapped operator were already unreliable on a geometry with an exact map and an exact solution, none of the more ambitious atlas results would be persuasive.
 
-\paragraph{Background.}
-The ellipsoid case is a classical verification problem because the geometry map is analytic and the exact solution is known in closed form. The star-domain case is harder because the geometry itself is learned first, so the PDE solver inherits whatever distortion remains in that map. Together, these two cases separate operator verification from geometry-learning difficulty.
+\paragraph{What the code does.}
+The released verification script solves Poisson on an ellipsoid by pulling the problem back to the unit ball through the analytic map above. In that reference domain the operator reduces to constant-coefficient anisotropic diffusion and the manufactured solution \eqref{eq:ellipsoid_exact} is known in closed form. There is no geometry learning, no overlap coupling, and no inverse uncertainty in this example.
 
-\paragraph{Major finding.}
-The ellipsoid benchmark reaches a relative $L^2$ error of $2.26\times 10^{-3}$ and therefore serves as the clean verification case. The star-domain benchmark reaches a relative $L^2$ error of $2.59\times 10^{-1}$: this accuracy is substantially lower than the other benchmarks and reflects a current limitation of the learned global-map pipeline (see also Section~\ref{sec:limitations}). The result is retained because it probes the learned-map stage and helps isolate mapped-operator accuracy from the difficulty of learning the geometry itself. A purely analytic or CAD-defined star map would be expected to reduce this error significantly.
+\paragraph{Evidence.}
+The canonical run reaches a relative $L^2$ error of $2.26\times 10^{-3}$, an absolute $L^2$ error of $1.08\times 10^{-3}$, and a maximum pointwise error of $5.23\times 10^{-3}$ in $106.3$\,s. These values come from the code-generated metrics for the analytic ellipsoid run and are consistent with the predicted and physical-domain plots in Figure~\ref{fig:forward_poisson_ellipsoid}.
 
-\paragraph{Representative numerical results.}
-For the ellipsoid verification case, the solver reaches a relative $L^2$ error of $2.26\times 10^{-3}$, an absolute $L^2$ error of $1.08\times 10^{-3}$, and a maximum pointwise error of $5.23\times 10^{-3}$ in $106.3$\,s. For the star-shaped domain, the canonical run reaches a relative $L^2$ error of $2.59\times 10^{-1}$, an absolute $L^2$ error of $1.04\times 10^{-1}$, and a maximum pointwise error of $5.06\times 10^{-1}$ in $229.4$\,s. The comparison is useful because it separates operator verification from geometry-learning difficulty: the ellipsoid confirms that the mapped Poisson operator is implemented correctly on a benign geometry, while the star-domain result shows that the learned global map remains the limiting factor in the simply connected pipeline.
+\paragraph{What this warrants.}
+Because both the geometry map and the exact solution are known analytically, the observed error supports a narrow but important claim: the operator pullback, mapped coefficients, and neural approximation are implemented correctly in a setting free of geometry-learning uncertainty. What it does \emph{not} show is that atlas coupling or complex-geometry training is already robust; that is the work of the later examples.
 
 \begin{figure}[htbp]
 \centering
-\subfloat[Ellipsoid Poisson verification.]{
-\includegraphics[width=0.47\textwidth]{figures_cmame_core/example1_forward_poisson/pinn_3d_ellipsoid_mapped_sphere.png}}
-\hfill
-\subfloat[Star-shaped-domain Poisson benchmark.]{
-\includegraphics[width=0.47\textwidth]{figures_cmame_core/example1_forward_poisson/poisson_star3d_mapped_results.png}}
-\caption{Forward Poisson results on simply connected domains. The ellipsoid case serves as the clean verification example for the mapped operator, while the star-shaped domain highlights the extra difficulty introduced by a learned global map.}
-\label{fig:forward_poisson_examples}
+\includegraphics[width=0.97\textwidth]{figures_cmame_core/example1_forward_poisson/example1_ellipsoid_pub.png}
+\caption{Ellipsoidal verification benchmark. The top row shows the predicted solution on the mapped unit-ball slice and on the corresponding physical ellipsoidal slice; the bottom row shows the absolute error in the same two coordinates. The close agreement between mapped and physical views confirms that the operator pullback and the geometric map are both implemented correctly in this analytic case.}
+\label{fig:forward_poisson_ellipsoid}
 \end{figure}
 
 \subsection{Example 2: rabbit Poisson on a fixed atlas}
@@ -968,7 +1122,7 @@ The interior and boundary residuals are the same as in Example~1, but the loss a
 \lambda_{\mathrm{if,val}}\sum_{i<j}\mathbb{E}_{\widehat{\Omega}_{ij}}
 \left[
 \left|
-\widehat{u}_i(\zeta)-\widehat{u}_j(\psi_{ij}(\zeta))
+\widehat{u}_i(\boldsymbol{\zeta})-\widehat{u}_j(\psi_{ij}(\boldsymbol{\zeta}))
 \right|^2
 \right]
 \nonumber\\
@@ -983,40 +1137,160 @@ n_{ij}\cdot \nabla_x u_i - n_{ij}\cdot \nabla_x u_j
 \lambda_{\mathrm{sup}}\mathcal{L}_{\mathrm{sup}}.
 \label{eq:rabbit_poisson_loss}
 \end{align}
-Here $\mathcal{L}_{\mathrm{sup}}$ denotes an optional manufactured-solution anchor used in the canonical validated rabbit runs to stabilize Schwarz iteration. In the current code, each chart-local field can be represented by a dense MLP, a residual MLP, or a compact chart-partitioned network. The validated flagship run is the fixed-atlas rabbit Poisson solve with Schwarz coupling; it is the clearest example in the release where chart-local field solves, geometry, and overlap transmission are all active simultaneously.
+Here $\mathcal{L}_{\mathrm{sup}}$ denotes an optional manufactured-solution anchor used in the canonical validated rabbit runs to stabilize Schwarz iteration. In the current code, each chart-local field can be represented by a dense MLP, a residual MLP, or a compact chart-partitioned network. The validated flagship run uses the compact chart-partitioned architecture and is the clearest example in the release where chart-local field solves, geometry, and overlap transmission are all active simultaneously.
 
-\paragraph{Interpretation.}
-This benchmark is the main field-solve result supporting the SA-PINN methodology. It is the example to rely on for claims about alternating chart-local PDE training on a complex geometry.
+\paragraph{Claim.}
+Example~2 is the strongest numerical evidence in the manuscript that the atlas-based SA-PINN formulation can solve a forward field problem on genuinely complex three-dimensional geometry when the atlas is fixed and its geometric quality is controlled.
 
-\paragraph{Purpose.}
-Example~2 is the flagship demonstration of the full SA-PINN workflow on a genuinely complex three-dimensional geometry. Its purpose is to show that a fixed volumetric atlas, mapped PDE residuals, and Schwarz-style overlap coupling can work together in one field solve.
+\paragraph{Why this matters.}
+This is the point in the paper where mapping and Schwarz have to do real work. The rabbit interior does not admit a useful low-distortion single global map in the current workflow, and a conventional alternative would be to generate and maintain a high-quality volumetric mesh of the entire body. The atlas-based approach is attractive here because it replaces that one-shot meshing task by local charts, overlap transmission, and interior collocation generated directly from the signed-distance geometry model.
 
-\paragraph{Background.}
-The Stanford rabbit interior is much more demanding than the simply connected examples because no single low-distortion global map is available. The benchmark therefore uses a 12-chart atlas and trains chart-local scalar solution networks with interface value and flux penalties. This is the closest example in the codebase to the methodological picture developed in Section~\ref{sec:methodology}.
+\paragraph{What the code does.}
+The released rabbit solver operates on a fixed 12-chart volumetric atlas constructed from SDF-interior sampling, farthest-point seed placement, overlap targeting, and geometric quality checks. After the atlas is frozen, the solver samples interior collocation points by SDF rejection in chart coordinates, trains one local scalar network per chart, enforces interface value and interface flux continuity, and performs multiplicative Schwarz sweeps with a trust-region acceptance filter. The code also contains an optional volumetric overlap penalty on sampled interior overlap points, but the main claim in this subsection already rests on the validated interface-value and interface-flux formulation.
 
-\paragraph{Major finding.}
-The validated flagship run reaches a relative $L^2$ error of $2.21\times 10^{-2}$ with a final interface-flux mismatch of approximately $1.16\times 10^{-2}$. This result is achieved with the optional manufactured-solution anchor $\mathcal{L}_{\mathrm{sup}}$ active (see \eqref{eq:rabbit_poisson_loss}), which provides weak supervision at interior collocation points and aids Schwarz convergence on the 12-chart atlas. This is the strongest field-solve evidence in the current release and the main basis for claims about Schwarz-coupled chart-local training on complex volumetric geometry.
+\paragraph{Evidence.}
+The canonical run \texttt{attempt20c\_compact} attains a relative $L^2$ error of $2.21\times 10^{-2}$, an absolute $L^2$ error of $8.57\times 10^{-3}$, and a maximum pointwise error of $6.78\times 10^{-2}$. Its final interface-flux mismatch is $1.16\times 10^{-2}$ and the total runtime is $3659.0$\,s. The archived diagnostics in Figures~\ref{fig:rabbit_poisson_example}--\ref{fig:rabbit_poisson_chart_errors} show the same story from three sides: the field remains smooth on the rabbit surface, the objective components contract over Schwarz iterations, and the remaining error is localized to a small subset of charts rather than spread uniformly across the atlas. A shorter validated run, \texttt{attempt19\_w4}, reaches a slightly larger relative $L^2$ error of $4.41\times 10^{-2}$ in $403.9$\,s while reducing the interface-flux mismatch further to $2.52\times 10^{-3}$, which shows that the solver can be tuned toward either lower cost or tighter overlap agreement.
 
-\paragraph{Representative numerical result.}
-The canonical run \texttt{attempt20c\_compact} attains a relative $L^2$ error of $2.21\times 10^{-2}$, an absolute $L^2$ error of $8.57\times 10^{-3}$, and a maximum pointwise error of $6.78\times 10^{-2}$. Its final interface-flux mismatch is $1.16\times 10^{-2}$, and the total runtime is $3659.0$\,s. A shorter validated run, \texttt{attempt19\_w4}, reaches a slightly larger relative $L^2$ error of $2.53\times 10^{-2}$ in $403.9$\,s while reducing the interface-flux mismatch further to $2.52\times 10^{-3}$. This tradeoff shows that the rabbit solve can be tuned either toward peak accuracy or toward lower cost and tighter overlap agreement without changing the underlying formulation.
+\paragraph{What this warrants.}
+These results justify a qualified claim about why mapping and Schwarz are useful. The mapping side lets the solver work in local reference patches and avoids tetrahedral mesh generation once the atlas has passed coverage, overlap, and foldover checks. The Schwarz side localizes training and controls communication between charts through explicit interface terms and trust-region rejection. What the evidence does \emph{not} justify is a claim of universal superiority over mature meshing plus FEM, or a claim that Schwarz convergence is guaranteed in this setting. The current evidence supports usefulness on complex fixed-atlas geometry, at the price of a more delicate optimization problem and explicit interface tuning.
 
 \begin{figure}[htbp]
 \centering
-\subfloat[Predicted surface field on the canonical run.]{
-\includegraphics[width=0.32\textwidth]{figures_cmame_core/example2_rabbit_poisson/rabbit_poisson_surface_pred.png}}
-\hfill
-\subfloat[Surface error magnitude on the same run.]{
-\includegraphics[width=0.32\textwidth]{figures_cmame_core/example2_rabbit_poisson/rabbit_poisson_surface_error.png}}
-\hfill
-\subfloat[Interface residual on the canonical surface export.]{
-\includegraphics[width=0.32\textwidth]{figures_cmame_core/example2_rabbit_poisson/rabbit_poisson_surface_interface.png}}
-\caption{Rabbit Poisson benchmark on the fixed atlas. The figure is rendered directly from the canonical VTU export of \texttt{attempt20c\_compact}. The left panel shows the recovered scalar field, the middle panel shows the surface error magnitude, and the right panel shows the interface residual. Taken together, the panels show that the solution is accurate and that the remaining chart-overlap mismatch stays localized rather than dominating the field.}
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/example2_rabbit_poisson/example2_rabbit_poisson_pub.png}
+\caption{Representative rabbit-surface visualization for the fixed-atlas SA-PINN solver. The surface is reconstructed from a dense boundary postprocessing pass of the rabbit Poisson solution family and shown from one fixed camera in all three panels. Panel (a) shows the recovered scalar field, panel (b) shows the absolute error, and panel (c) shows the chart entropy induced by the partition-of-unity weights. The first two panels show that the solved field remains smooth on the complex geometry, while the entropy panel shows that uncertainty is confined to narrow overlap traces rather than spreading over the whole surface.}
 \label{fig:rabbit_poisson_example}
 \end{figure}
 
-\subsection{Example 3: torus synthetic inverse Neo-Hookean identification}
+The canonical archive stores the global Schwarz objective components at every iteration, but it does not preserve chart-resolved loss histories over time. For that reason, the training diagnostics below separate the archived scalar losses from the final chartwise error distribution. This avoids conflating the raw loss scales with the weighted aggregate used internally for checkpoint scoring and acceptance tests.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/example2_rabbit_poisson/example2_rabbit_poisson_losses_pub.png}
+\caption{Archived training diagnostics for the canonical rabbit Poisson run \texttt{attempt20c\_compact}. Each panel reports one scalar trace recorded over Schwarz iterations: the weighted total objective used by the solver, the PDE residual loss, the boundary loss, the interface-value loss, the interface-flux loss, and the evaluation relative $L^2$ error. Presenting these quantities in separate panels makes the balance between objectives easier to read than an overlaid weighted-objective plot, while still documenting the aggregate score used in the implementation.}
+\label{fig:rabbit_poisson_training_losses}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{figures_cmame_core/example2_rabbit_poisson/example2_rabbit_poisson_chart_errors_pub.png}
+\caption{Final chartwise relative $L^2$ error for the selected checkpoint of \texttt{attempt20c\_compact}. The saved archive does not contain chart-by-chart loss histories during training, so the chart-level diagnostic is reported at the final state only. The plot shows that the global error is not distributed uniformly across the atlas: a small subset of charts remains more difficult, with chart~4 acting as the dominant local error contributor in the canonical run.}
+\label{fig:rabbit_poisson_chart_errors}
+\end{figure}
+
+\subsection{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}
 \label{sec:example3}
-The original torus inverse script is a controlled synthetic parameter-identification benchmark. Let
+The Stanford Bunny benchmark is the geometry-learning example of the paper. Its input is an oriented surface sample set
+\[
+X_{\partial}=\{(x_k,n_k)\}_{k=1}^{N_s}
+\]
+obtained from the watertight Stanford Bunny mesh \texttt{bun\_zipper.ply}. The goal is not to reconstruct only a surface mesh, but to learn a volumetric scalar field whose zero level set captures the Bunny surface and whose sign defines a usable interior for later atlas construction. In that sense, this example should be read as the benchmark instantiation of Stage~1 in Section~\ref{sec:impl_pipeline}: it asks whether an imported PLY surface can be converted into a differentiable volumetric geometry model.
+
+Let
+\begin{equation}
+y=\frac{x-c}{s}\in \mathbb{R}^3
+\label{eq:bunny_sdf_normalized_coord}
+\end{equation}
+denote the normalized coordinate used in the code, where $c$ is the bounding-box center and $s$ is the global length scale extracted from the point cloud. This normalization is not cosmetic. It keeps the Bunny inside an $O(1)$ box, makes the surface and Eikonal samples live on comparable scales, and allows the same network widths and sampling ranges to be reused without geometry-dependent retuning. The learned volumetric model is a scalar network
+\begin{equation}
+s_\theta:\mathbb{R}^3\rightarrow \mathbb{R}
+\label{eq:bunny_sdf_network}
+\end{equation}
+from which the reconstructed body is defined by
+\begin{equation}
+\Omega_\theta=\{x:s_\theta((x-c)/s)<0\},
+\qquad
+\partial\Omega_\theta=\{x:s_\theta((x-c)/s)=0\}.
+\label{eq:bunny_sdf_body}
+\end{equation}
+Equations~\eqref{eq:bunny_sdf_network}--\eqref{eq:bunny_sdf_body} define the actual learned geometric object. The network output is a volumetric level-set field, not a surface patch parametrization, and the sign of that field is what later drives interior queries, chart placement, and blend evaluation. The learning objective is therefore volumetric: the zero set should approximate the observed surface, the gradient should align with the observed normals, and the field should behave approximately like a signed-distance function away from the surface.
+
+For the normalized surface samples $\{(y_k,n_k)\}_{k=1}^{N_s}$ and randomly sampled off-surface points, the implemented loss has four parts. The surface and normal-alignment terms are
+\begin{equation}
+\mathcal{L}_{\mathrm{surf}}
+=
+\frac{1}{N_s}\sum_{k=1}^{N_s}\left|s_\theta(y_k)\right|,
+\qquad
+\mathcal{L}_{\mathrm{norm}}
+=
+\frac{1}{N_s}\sum_{k=1}^{N_s}\left(1-\widehat{\nabla_y s_\theta}(y_k)\cdot n_k\right),
+\label{eq:bunny_sdf_surface_normal}
+\end{equation}
+where $\widehat{\nabla_y s_\theta}=\nabla_y s_\theta/\|\nabla_y s_\theta\|$. These two terms serve different purposes. The surface term pins the zero level set to the observed Bunny surface, while the normal term orients that zero set correctly and suppresses solutions that fit the points but carry the wrong local normal direction. The Eikonal term is
+\begin{equation}
+\mathcal{L}_{\mathrm{eik}}
+=
+\frac{1}{N_e}\sum_{m=1}^{N_e}
+\left(\|\nabla_y s_\theta(\tilde y_m)\|_2-1\right)^2,
+\label{eq:bunny_sdf_eikonal}
+\end{equation}
+which regularizes the field away from the surface toward signed-distance behavior. This term matters because the later atlas builder does not query only the zero set; it also queries the field and its gradient in the surrounding volume. The sign-anchor term is enforced by offsetting surface points along the known normals:
+\begin{equation}
+\mathcal{L}_{\mathrm{sign}}
+=
+\frac{1}{2N_s}\sum_{k=1}^{N_s}
+\left[
+\operatorname{softplus}\!\big(s_\theta(y_k-\delta n_k)\big)
+\;+\;
+\operatorname{softplus}\!\big(-s_\theta(y_k+\delta n_k)\big)
+\right]
+\;+\;
+\mathcal{L}_{\mathrm{far}},
+\label{eq:bunny_sdf_sign}
+\end{equation}
+where $\delta$ is the anchor offset and $\mathcal{L}_{\mathrm{far}}$ encourages positive SDF values well outside the body. The role of \eqref{eq:bunny_sdf_sign} is topological rather than geometric: it tries to keep the sign of the level-set field consistent just inside and just outside the observed surface. On thin features such as the Bunny ears, this is the most fragile part of the objective because one global offset $\delta$ can easily step across the local thickness of the geometry. The total loss is
+\begin{equation}
+\mathcal{L}^{(3)}
+=
+\lambda_{\mathrm{surf}}\mathcal{L}_{\mathrm{surf}}
+\,+\,
+\lambda_{\mathrm{eik}}\mathcal{L}_{\mathrm{eik}}
+\,+\,
+\lambda_{\mathrm{norm}}\mathcal{L}_{\mathrm{norm}}
+\,+\,
+\lambda_{\mathrm{sign}}\mathcal{L}_{\mathrm{sign}}.
+\label{eq:bunny_sdf_loss}
+\end{equation}
+Equation~\eqref{eq:bunny_sdf_loss} is a scalarization of a genuinely multi-objective geometry problem. The near-surface terms $\mathcal{L}_{\mathrm{surf}}$ and $\mathcal{L}_{\mathrm{norm}}$ reward local surface fidelity, whereas $\mathcal{L}_{\mathrm{eik}}$ and $\mathcal{L}_{\mathrm{sign}}$ push the field toward globally consistent volumetric behavior. These objectives can conflict, especially on thin features. The released global Bunny trainer \texttt{train\_sdf\_rabbit.py} does \emph{not} currently use GradNorm, PCGrad, or any other explicit gradient-conflict mitigation scheme; it uses a plain Adam update on the weighted sum above, with user-specified static weights (defaults: $w_{\mathrm{surf}}=10$, $w_{\mathrm{eik}}=1$, $w_{\mathrm{norm}}=1$, $w_{\mathrm{sign}}=2$). The repository does contain experimental gradient-balancing utilities in \texttt{src/pinn\_gradient\_surgery.py}, and the rabbit Poisson solver can use PCGrad to separate PDE and supervision gradients, but that machinery is not wired into the canonical Bunny SDF trainer. In the current geometry-learning pipeline, conflict is mitigated indirectly through normalization, sampling design, and, in the chartwise SDF prototype, SDT pretraining and geometry-adaptive sign-anchor offsets. This helps explain why the surface and normal losses decay strongly while the Eikonal and sign terms remain the dominant residuals in the validated Bunny run. The resulting field $s_\theta$ is then used as the geometry model for downstream atlas construction and, eventually, PDE solves. This is the central difference from a surface-reconstruction benchmark in the narrower sense: the object being optimized here must support volumetric queries after training, not merely a surface output.
+
+\paragraph{Claim.}
+Example~3 shows that the framework can turn an imported PLY surface into a differentiable volumetric geometry model that is usable for downstream atlas construction over most of the body. It is a geometry-learning bridge, not a PDE benchmark.
+
+\paragraph{Why this matters.}
+Many realistic workflows start from a triangulated surface rather than from an analytic domain. In a conventional simulation pipeline, that usually means building or repairing a watertight volumetric representation before any PDE solve can begin. The Bunny example asks whether the atlas workflow can replace that manual preprocessing stage with a learned volumetric prior that is differentiable, queryable in the interior, and expressive enough to support chart placement.
+
+\paragraph{What the code does.}
+The released Bunny script normalizes the imported point cloud, trains a single scalar network $s_\theta$ from surface points and normals, and balances four losses: surface fitting, normal alignment, Eikonal regularization, and sign-anchor supervision. The output is not a surface atlas alone; it is a volumetric level-set field whose zero contour approximates the Bunny surface and whose sign is later used to define the interior for downstream atlas construction and blending.
+
+\paragraph{Evidence.}
+The canonical run \texttt{bunny\_sdf\_v3} reduces the surface loss from $6.45\times 10^{-2}$ to $1.66\times 10^{-2}$ and the normal-alignment loss from $1.01$ to $3.18\times 10^{-2}$ over training. At the same time, the sign-anchor loss decreases only to $3.11\times 10^{-1}$ and the Eikonal loss remains high at $7.29\times 10^{-1}$. Figures~\ref{fig:bunny_sdf_learning} and \ref{fig:bunny_sdf_surface} match these numbers: the zero level set captures the bulk Bunny geometry well enough to support chart placement and localized blend transitions, while the thin-ear region remains the dominant failure mode.
+
+\paragraph{What this warrants.}
+The evidence supports a qualified geometry claim only. Relative to conventional meshing workflows, the learned SDF replaces manual watertight-volume preparation with a differentiable volumetric prior that is already usable over most of the geometry. What it does \emph{not} yet provide is uniformly reliable volumetric sign control in thin features, so it should not be marketed as a finished substitute for robust volumetric preprocessing on difficult surfaces. The natural next remedy is adaptive importance sampling near thin features, so that the ear regions receive denser off-surface supervision without oversampling the easier bulk geometry.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.97\textwidth]{figures_cmame_core/example3_bunny_sdf/example3_bunny_sdf_learning_pub.png}
+\caption{Stanford Bunny volumetric neural SDF benchmark, Part I. Panel (a) shows orthogonal slices of the learned scalar field together with the zero contour, which captures the bulk Bunny geometry. Panel (b) reports the optimization traces for the four training objectives. The main point is that the surface and normal terms decay strongly, while the Eikonal and sign-anchor terms remain the dominant sources of error, so the learned field is more reliable as a surface-capturing volumetric model than as a uniformly accurate signed-distance function.}
+\label{fig:bunny_sdf_learning}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.97\textwidth]{figures_cmame_core/example3_bunny_sdf/example3_bunny_sdf_surface_pub.png}
+\caption{Stanford Bunny volumetric neural SDF benchmark, Part II. The downstream Bunny surface export is used to visualize the chart partition and the dominant blend weight induced by the learned volumetric geometry model. The chart-partition view shows that the eight charts cover most of the imported PLY surface cleanly, while the dominant blend-weight view shows that the active chart weight remains close to one on most surface points. Together these panels support the qualified claim made in the text: the learned field is already usable for downstream atlas construction over most of the geometry, even though thin-feature volumetric ambiguity remains unresolved.}
+\label{fig:bunny_sdf_surface}
+\end{figure}
+
+
+\subsection{Example 4: torus synthetic inverse Neo-Hookean identification}
+\label{sec:example4}
+The original torus inverse script is a controlled synthetic parameter-identification benchmark. Its input is an observed boundary data set
+\[
+X_{\mathrm{obs}}=\{(x_k,n_k,t^{\mathrm{obs}}_k)\}_{k=1}^{N_{\mathrm{obs}}}\subset \Gamma_{\mathrm{obs}},
+\]
+where each traction value is generated from a prescribed deformation rather than from an unknown state solve. The point of the benchmark is therefore narrow and deliberate: it tests whether the inverse machinery can recover constitutive parameters when the kinematics are known and the only unknowns are the global material constants.
+
+Let
 \begin{equation}
 u_{\tau}^{\mathrm{pres}}:\Omega_{\mathrm{torus}}\rightarrow \mathbb{R}^3
 \label{eq:torus_prescribed_u}
@@ -1045,7 +1319,7 @@ t^{\mathrm{obs}}(x)
 \end{equation}
 The unknowns are the global scalars $(\mu,K)$, and the loss is
 \begin{equation}
-\mathcal{L}^{(3)}
+\mathcal{L}^{(4)}
 =
 \lambda_{\mathrm{trac}}\frac{1}{N_{\mathrm{obs}}}\sum_{k=1}^{N_{\mathrm{obs}}}
 \left\|
@@ -1059,245 +1333,75 @@ t(x_k;\mu,K)-t^{\mathrm{obs}}(x_k)
 \right].
 \label{eq:torus_original_loss}
 \end{equation}
-Chart weights are used only to aggregate observed data over azimuthal neighborhoods; this benchmark does \emph{not} solve a chart-local elasticity PDE for the displacement field.
+Chart weights are used only to aggregate observed data over azimuthal neighborhoods; this benchmark does \emph{not} solve a chart-local elasticity PDE for the displacement field. In this sense the example mirrors the role played by the single-patch fitting problem in the surface-reconstruction template: it isolates one mapping---here, the constitutive map from prescribed deformation to traction observations---before tackling the harder coupled field problem.
 
-\paragraph{Interpretation.}
-The original torus inverse example should be read as a controlled material-parameter recovery test. It is valuable because it isolates parameter identifiability under known kinematics, but it is not evidence of a full chart-local inverse elasticity field solver.
+\paragraph{Claim.}
+Example~4 shows that the inverse machinery can recover global constitutive parameters accurately when the kinematics are prescribed and the only unknowns are the material constants $\mu$ and $K$. It should be read as a controlled inverse benchmark, not as a nonlinear field-solve demonstration.
 
-\paragraph{Purpose.}
-Example~3 is designed to isolate material-parameter identification from the much harder problem of learning a displacement field and constitutive parameters at the same time. Its purpose is to test whether the inverse machinery can recover $(\mu,K)$ cleanly when the kinematics are prescribed.
+\paragraph{Why this matters.}
+This example is the clearest evidence in the repository that the atlas-based pullback is not tied to Poisson operators alone. By holding the displacement field fixed, it isolates the constitutive and observation operators and provides a lower bound on what the inverse machinery can already do before one tackles the harder problem of chart-local nonlinear equilibrium.
 
-\paragraph{Background.}
-The benchmark uses a torus because the geometry is smooth and well controlled, while the prescribed torsion field gives a nontrivial stress state on the observed boundary. Since the displacement is known in advance, the inverse difficulty lies almost entirely in the constitutive parameters rather than in PDE-state reconstruction.
+\paragraph{What the code does.}
+The released torus script prescribes a localized torsional displacement field, generates synthetic traction observations on the observed boundary subset, and optimizes the global scalars $(\mu,K)$ to match those tractions. The atlas enters through eight azimuthal chart weights used to aggregate observations around the torus, but there is no learned displacement field and no chart-local elasticity solve in this benchmark.
 
-\paragraph{Major finding.}
-The validated run reaches a traction relative $L^2$ error of $2.35\times 10^{-7}$ and recovers both $\mu$ and $K$ to essentially negligible relative error. This confirms that the synthetic observation model is informative and that the implementation can recover material parameters accurately in a controlled setting.
+\paragraph{Evidence.}
+For the dense validation run, the optimization starts from $(\mu,K)=(1.746,26.0)$ and converges to $(1.7997,25.0052)$. The corresponding true values are $(1.8,25.0)$. The final relative errors are $1.49\times 10^{-2}\%$ for $\mu$ and $2.09\times 10^{-2}\%$ for $K$, and the traction relative $L^2$ error is $2.09\times 10^{-4}$ after $93.0$\,s. The stored optimization trace strengthens that endpoint evidence: the traction-mismatch term decreases from $2.49\times 10^{-3}$ at initialization to $6.28\times 10^{-8}$ in the final loss history, while the parameter estimates move smoothly into the correct regime.
 
-\paragraph{Representative numerical result.}
-The canonical run \texttt{torus\_inverse\_mps} reaches a traction relative $L^2$ error of $2.35\times 10^{-7}$ in $201.1$\,s. The recovered material parameters are essentially exact for practical purposes: the relative error is $9.27\times 10^{-6}\%$ for $\mu$ and $2.29\times 10^{-5}\%$ for $K$. Across the validated run set, the traction mismatch remains on the order of $10^{-4}$ or below, so this benchmark gives a clean lower bound on what the inverse machinery can achieve when interface effects and chartwise state inconsistency are not the main obstacle.
+\paragraph{What this warrants.}
+These results support a narrow but important conclusion: the synthetic observation model is informative and the implementation can recover global Neo-Hookean parameters accurately in a controlled setting. That is enough to show that the atlas-based pullback is operator-agnostic in principle, but it is not enough to claim that full nonlinear chart-local field solving is already solved. The next milestone remains a true forward Neo-Hookean field solve on the torus atlas.
+
+\paragraph{Immediate next step: forward nonlinear field solve.}
+The natural extension of this benchmark is no longer another parameter-identification run, but a true forward Neo-Hookean field solve on the same torus atlas. Concretely, the framework should solve for the displacement field $u$ itself from
+\[
+\nabla_X\cdot \mathbf{P}(\mathbf{I}+\nabla_X u;\mu,K)=0
+\qquad \text{in }\Omega_{\mathrm{torus}},
+\]
+with mixed displacement and traction data induced by the same torsional loading used here. This would remove the prescribed-kinematics simplification, force the SA-PINN to carry a genuinely nonlinear equilibrium solve across overlapping charts, and provide the clearest next proof that the framework is not limited to linear Poisson problems.
 
 \begin{figure}[htbp]
 \centering
-\subfloat[Reference and deformed configurations.]{
-\includegraphics[width=0.47\textwidth]{figures_cmame_core/example3_torus_inverse_original/torus_inverse_deformation.png}}
-\hfill
-\subfloat[Boundary traction-error magnitude.]{
-\includegraphics[width=0.47\textwidth]{figures_cmame_core/example3_torus_inverse_original/torus_inverse_original_traction_error.png}}
-\caption{Original-atlas torus inverse benchmark. The left panel shows the prescribed synthetic deformation used to generate the observations, while the right panel reports the boundary traction-error magnitude on the canonical run. This makes the quality of the recovered solution visible directly in physical space rather than only through optimization histories.}
-\label{fig:torus_inverse_original_example}
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/example3_torus_inverse_original/example3_torus_inverse_fields_pub.png}
+\caption{Controlled torus inverse benchmark rendered directly from the dense VTU export of the canonical run. The left panel shows the prescribed deformed configuration colored by displacement magnitude, and the right panel shows the boundary traction-error magnitude on the same geometry and camera. Because the kinematics are prescribed, these panels should be read as diagnostics of the observation fit rather than as evidence of a learned displacement field. The main conclusion is that the traction mismatch remains small and spatially localized over the observed boundary surface.}
+\label{fig:torus_inverse_original_fields}
 \end{figure}
 
-\subsection{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}
-\label{sec:example4}
-The Stanford Bunny benchmark learns a volumetric neural signed-distance function from the watertight \texttt{bun\_zipper.ply} surface mesh. Let
-\begin{equation}
-y=\frac{x-c}{s}\in \mathbb{R}^3
-\label{eq:bunny_sdf_normalized_coord}
-\end{equation}
-denote the normalized coordinate used in the code, where $c$ is the bounding-box center and $s$ is the global length scale extracted from the point cloud. The neural SDF is a scalar network
-\begin{equation}
-\phi_\theta:\mathbb{R}^3\rightarrow \mathbb{R}
-\label{eq:bunny_sdf_network}
-\end{equation}
-trained so that $\phi_\theta(y)=0$ on the surface, $\|\nabla_y \phi_\theta\|\approx 1$ away from the surface, and the gradient direction aligns with the outward surface normal.
-
-For a surface sample set $\{(y_k,n_k)\}_{k=1}^{N_s}$ and randomly sampled off-surface points, the implemented loss has four parts. The surface and normal-alignment terms are
-\begin{equation}
-\mathcal{L}_{\mathrm{surf}}
-=
-\frac{1}{N_s}\sum_{k=1}^{N_s}\left|\phi_\theta(y_k)\right|,
-\qquad
-\mathcal{L}_{\mathrm{norm}}
-=
-\frac{1}{N_s}\sum_{k=1}^{N_s}\left(1-\widehat{\nabla_y \phi_\theta}(y_k)\cdot n_k\right),
-\label{eq:bunny_sdf_surface_normal}
-\end{equation}
-where $\widehat{\nabla_y \phi_\theta}=\nabla_y \phi_\theta/\|\nabla_y \phi_\theta\|$. The Eikonal term is
-\begin{equation}
-\mathcal{L}_{\mathrm{eik}}
-=
-\frac{1}{N_e}\sum_{m=1}^{N_e}
-\left(\|\nabla_y \phi_\theta(\tilde y_m)\|_2-1\right)^2,
-\label{eq:bunny_sdf_eikonal}
-\end{equation}
-and the sign-anchor term is enforced by offsetting surface points along the known normals:
-\begin{equation}
-\mathcal{L}_{\mathrm{sign}}
-=
-\frac{1}{2N_s}\sum_{k=1}^{N_s}
-\left[
-\operatorname{softplus}\!\big(\phi_\theta(y_k-\delta n_k)\big)
-\;+\;
-\operatorname{softplus}\!\big(-\phi_\theta(y_k+\delta n_k)\big)
-\right]
-\;+\;
-\mathcal{L}_{\mathrm{far}},
-\label{eq:bunny_sdf_sign}
-\end{equation}
-where $\delta$ is the anchor offset and $\mathcal{L}_{\mathrm{far}}$ encourages positive SDF values well outside the body. The total loss is
-\begin{equation}
-\mathcal{L}^{(4)}
-=
-\lambda_{\mathrm{surf}}\mathcal{L}_{\mathrm{surf}}
-\,+\,
-\lambda_{\mathrm{eik}}\mathcal{L}_{\mathrm{eik}}
-\,+\,
-\lambda_{\mathrm{norm}}\mathcal{L}_{\mathrm{norm}}
-\,+\,
-\lambda_{\mathrm{sign}}\mathcal{L}_{\mathrm{sign}}.
-\label{eq:bunny_sdf_loss}
-\end{equation}
-The resulting SDF is then used as the geometry model for downstream atlas construction and PDE solves.
-
-\paragraph{Interpretation.}
-This benchmark is important because it turns an unstructured PLY surface into a differentiable volumetric geometry model. For the general reader, the practical message is simple: before solving a PDE on a complicated body, the code first learns a smooth signed-distance model that can be queried anywhere in space.
-
-\paragraph{Purpose.}
-Example~4 is designed to test whether the geometry-learning stage works on a real mesh with thin features. Its purpose is to bridge the gap between analytic benchmark domains and geometry imported directly from a surface scan or CAD-like triangulation.
-
-\paragraph{Background.}
-The Stanford Bunny PLY is substantially harder than the procedural rabbit because the ears and other thin features create conflicting requirements for the sign-anchor supervision. A single anchor offset must be large enough to probe the interior of the body, but small enough not to step outside the thin ear geometry. The validated volumetric SDF benchmark therefore gives a clear picture of what the current global SDF model can do well and where it still struggles.
-
-\paragraph{Major finding.}
-The validated SDF run reaches a surface loss of $1.66\times 10^{-2}$ and a normal-alignment loss of $3.18\times 10^{-2}$ on the Stanford Bunny PLY, which is strong enough to support downstream geometry usage. At the same time, the sign-anchor loss remains much larger at $3.11\times 10^{-1}$, making the thin-feature sign ambiguity explicit rather than hiding it.
-
-\paragraph{Representative numerical result.}
-The canonical SDF run \texttt{bunny\_sdf\_v3} reaches a final surface loss of $1.66\times 10^{-2}$, a normal-alignment loss of $3.18\times 10^{-2}$, an Eikonal loss of $7.29\times 10^{-1}$, and a sign-anchor loss of $3.11\times 10^{-1}$. The elevated Eikonal loss reflects gradient-norm deviations concentrated in the thin-ear region, where the anchor offset $\delta$ is comparable to the local feature thickness and the sign supervision is least stable; the surface and normal losses confirm that the zero level set itself is well positioned on the bulk of the geometry. Compared with the earlier SDF variants recorded in the repository, version~3 gives the best combination of surface accuracy and normal quality on the Bunny point cloud while keeping the global scale and zero level set stable. Training time on Apple Silicon (MPS with CPU fallback) was approximately 60--90 minutes for 10{,}000 epochs.
-
 \begin{figure}[htbp]
 \centering
-\subfloat[Learned SDF slices for the canonical volumetric neural SDF run.]{
-\includegraphics[width=0.32\textwidth]{figures_cmame_core/example4_bunny_sdf/bunny_sdf_slices.png}}
-\hfill
-\subfloat[Surface chart partition rendered from the downstream Bunny surface export.]{
-\includegraphics[width=0.32\textwidth]{figures_cmame_core/example4_bunny_sdf/bunny_surface_chartid.png}}
-\hfill
-\subfloat[Dominant blend weight on the same surface export.]{
-\includegraphics[width=0.32\textwidth]{figures_cmame_core/example4_bunny_sdf/bunny_surface_blend_weight.png}}
-\caption{Stanford Bunny volumetric neural SDF benchmark. The left panel shows the learned signed-distance slices from the canonical SDF run \texttt{bunny\_sdf\_v3}. The middle and right panels are rendered from the downstream Bunny surface export, which we use to illustrate the surface geometry supported by the learned SDF. The chart-partition view shows how the eight charts cover the imported PLY surface, and the blend-weight view shows that the dominant chart weight is close to one on most surface points, indicating that the overlap transitions remain localized rather than diffuse.}
-\label{fig:bunny_ply_example}
-\end{figure}
-
-\subsection{Example 5: rabbit inverse Elder-type flow}
-\label{sec:example5}
-Let $p:\Omega\rightarrow\mathbb{R}$ denote pressure and $c:\Omega\rightarrow\mathbb{R}$ concentration. The homogeneous rotated SPD permeability tensor is parameterized as
-\begin{equation}
-\mathbf{K}(\eta)
-=
-k_0\,\mathbf{R}(q)\,
-\diag\!\left(e^{a_1},e^{a_2},e^{-a_1-a_2}\right)
-\mathbf{R}(q)^T,
-\label{eq:rabbit_elder_perm}
-\end{equation}
-where $\eta=(k_0,a_1,a_2,q)$ and $\mathbf{R}(q)$ is the rotation induced by a unit quaternion. The Darcy velocity is
-\begin{equation}
-v(x;\eta)
-=
--\mathbf{K}(\eta)\left(\nabla_x p(x)-\mathrm{Ra}\,c(x)\,g\right).
-\label{eq:rabbit_elder_velocity}
-\end{equation}
-The steady coupled PDE is
-\begin{equation}
-\nabla_x\cdot v = 0,
-\qquad
-v\cdot \nabla_x c - \nabla_x\cdot\left(D_m \nabla_x c\right)=0
-\qquad \text{in }\Omega.
-\label{eq:rabbit_elder_pde}
-\end{equation}
-
-The validated rabbit inverse Elder benchmark is a teacher-guided inverse problem inspired by Elder-type buoyancy-driven porous-medium flow \citep{elder1967transient}. A teacher solve with the true permeability tensor generates sparse observations of $(p,c)$ on the atlas and provides a weak global stabilizer during the inverse stage. The inverse stage trains chart-local fields $(\widehat{p}_i,\widehat{c}_i)$ together with $\eta$. The canonical inverse objective is
-\begin{align}
-\mathcal{L}^{(5)}
-=&
-\lambda_{\mathrm{flow}}\mathcal{L}_{\mathrm{flow}}
-+
-\lambda_{\mathrm{trans}}\mathcal{L}_{\mathrm{trans}}
-+
-\lambda_{\mathrm{bc}}\mathcal{L}_{\mathrm{bc}}
-+
-\lambda_{\mathrm{if,val}}\mathcal{L}_{\mathrm{if,val}}
-+
-\lambda_{\mathrm{if,flux}}\mathcal{L}_{\mathrm{if,flux}}
-\nonumber\\
-&+
-\lambda_{\mathrm{data}}\mathcal{L}_{\mathrm{data}}
-+
-\lambda_{\mathrm{global}}\mathcal{L}_{\mathrm{global}}
-+
-\lambda_{\mathrm{reg}}\mathcal{L}_{\mathrm{reg}}.
-\label{eq:rabbit_elder_loss}
-\end{align}
-The term $\mathcal{L}_{\mathrm{global}}$ is a weak global-field teacher term. In the current validated configuration it remains active throughout training, so it must be disclosed explicitly. Its practical role, however, is better understood as inverse pre-conditioning: it suppresses large-scale drift while the sparse observations, PDE residuals, and overlap constraints pull the chart-local fields toward a compatible global state.
-
-\paragraph{Interpretation.}
-The rabbit Elder example is the strongest inverse PDE benchmark in the current codebase, but it is also the one that most clearly shows where additional stabilization is still needed. The fixed atlas, sparse observations, overlap coupling, and weak teacher-guided global term work together to place the inverse solve in the correct basin of attraction on a difficult geometry. For that reason, the present benchmark should be read as a pre-conditioned inverse solve rather than as a fully unsupervised one.
-
-A practical bridge from this validated benchmark to a purely physics-constrained inverse solve is a two-stage homotopy. In Stage I, one keeps the weak teacher-guided term only long enough to damp low-frequency global errors and to align the pressure and concentration fields across charts. In Stage II, one anneals $\lambda_{\mathrm{global}}\rightarrow 0$ and continues training with only PDE, boundary, interface, observation, and parameter-regularization losses. In other words, the teacher solve is used to initialize the nonlinear search, not to define the final target problem.
-
-To make that transition viable on the rabbit geometry, a useful replacement for $\mathcal{L}_{\mathrm{global}}$ is a multi-scale physics regularizer that controls long-wave residual drift without requiring teacher fields:
-\begin{equation}
-\mathcal{L}_{\mathrm{ms}}
-=
-\sum_{\ell=1}^{L}\alpha_{\ell}
-\left[
-\left\|
-\mathcal{A}_{\sigma_{\ell}}\!\left[\nabla_x\cdot v_h\right]
-\right\|_{L^2(\Omega)}^2
-+
-\left\|
-\mathcal{A}_{\sigma_{\ell}}\!\left[v_h\cdot\nabla_x c_h-\nabla_x\cdot(D_m\nabla_x c_h)\right]
-\right\|_{L^2(\Omega)}^2
-\right],
-\label{eq:rabbit_elder_multiscale}
-\end{equation}
-where $\mathcal{A}_{\sigma_{\ell}}$ is a scale-dependent averaging operator acting on the blended atlas field, for example a Gaussian or graph-based smoother on physical sample points. This term penalizes slowly varying residual modes that are weakly seen by sparse data but strongly affect the global inverse search. A physics-only continuation can then replace $\lambda_{\mathrm{global}}\mathcal{L}_{\mathrm{global}}$ by $\lambda_{\mathrm{ms}}\mathcal{L}_{\mathrm{ms}}$ while gradually increasing the weights on the interface flux and data-misfit terms.
-
-\paragraph{Purpose.}
-Example~5 is the main inverse PDE benchmark in the paper. Its purpose is to test whether the atlas-based SA-PINN framework can identify a homogeneous rotated SPD permeability tensor on a complex volumetric geometry while solving the coupled Darcy--transport system.
-
-\paragraph{Background.}
-This is the hardest validated benchmark in the current codebase. The rabbit geometry is covered by a fixed atlas, the state variables are coupled through flow and transport, and the inverse parameters include both anisotropy and orientation. These ingredients make the problem much more delicate than the torus benchmarks and explain why a pre-conditioning strategy is helpful in the present implementation.
-
-\paragraph{Major finding.}
-The validated run recovers the scalar factor $k_0$ with a relative error of $3.00\times 10^{-2}$, achieves a mean eigenvalue error of $2.97\%$, and keeps the mean principal-axis error to $2.70^\circ$. This result is strong enough to show that the fixed atlas supports a meaningful inverse Darcy--transport solve on the rabbit, while also making clear that the current implementation still relies on weak teacher-guided global stabilization.
-
-\paragraph{Representative numerical result.}
-In the canonical long run \texttt{elder\_globalfield\_small}, the scalar permeability error is $3.00\times 10^{-2}$, the mean eigenvalue error is $2.97\%$, the maximum eigenvalue error is $6.22\%$, and the mean axis-angle error is $2.70^\circ$. The final interface-flux mismatch is $2.43\times 10^{-3}$, and the runtime is $642.6$\,s. The short run \texttt{elder\_fieldcheck} reaches almost identical parameter errors in only $12.1$\,s, but it leaves a noticeably larger interface mismatch. The longer canonical run is therefore a better representative of solution quality.
-
-\begin{figure}[htbp]
-\centering
-\subfloat[Field comparison for the canonical rabbit Elder run.]{
-\includegraphics[width=0.60\textwidth]{figures_cmame_core/example5_rabbit_elder/rabbit_elder_fields.png}}
-\hfill
-\subfloat[Velocity error magnitude on the same run.]{
-\includegraphics[width=0.36\textwidth]{figures_cmame_core/example5_rabbit_elder/rabbit_elder_velocity_error.png}}
-\caption{Rabbit Elder-type inverse benchmark. The left panel shows the recovered pressure and concentration fields on the canonical long run, while the right panel shows the velocity error magnitude on the same geometry. Together they make it easier to judge both the physical state and the remaining error in the teacher-guided permeability-identification solve.}
-\label{fig:rabbit_elder_examples}
+\includegraphics[width=0.62\textwidth]{figures_cmame_core/example3_torus_inverse_original/example3_torus_inverse_convergence_pub.png}
+\caption{Parameter-identification history for the dense torus benchmark. The plot shows the relative errors of $\mu$ and $K$ together with the traction-mismatch trace recorded during optimization. The figure supports the benchmark claim in the text: under known kinematics, the inverse trajectory is stable, the parameters converge rapidly into the correct regime, and the traction mismatch decreases to the $10^{-8}$ loss level by the end of the run.}
+\label{fig:torus_inverse_original_convergence}
 \end{figure}
 
 \subsection{Cross-example comparison and lessons learned}
-Table~\ref{tab:core_summary} gathers the representative metrics from the canonical cases used in the main text. Read from top to bottom, the table shows a clear progression in difficulty. The ellipsoid case verifies the mapped operator on a benign geometry. The star-domain case shows that learned global maps remain a genuine challenge. The rabbit Poisson benchmark demonstrates that the atlas-based SA-PINN formulation can produce an accurate field solve on a complex geometry when the chart decomposition is fixed and well behaved. The Stanford Bunny neural-SDF benchmark then isolates the geometry-learning stage on a real PLY surface and makes the thin-feature sign issue explicit. Finally, the torus inverse and rabbit Elder examples illustrate two different inverse regimes: one tightly controlled synthetic identification setting and one substantially harder teacher-guided permeability-identification problem.
+Taken together, the four examples support one staged numerical argument. The ellipsoid case verifies the mapped operator on a benign geometry. The rabbit Poisson benchmark then provides the strongest evidence that a fixed atlas plus Schwarz coupling can produce a forward field solve on complex geometry. The Stanford Bunny neural-SDF benchmark isolates the geometry-learning bridge from imported PLY data to a usable volumetric prior. Finally, the torus inverse benchmark shows that the same overall machinery already supports controlled constitutive identification under known kinematics. This is a useful and credible story, but it is not the same as claiming that the atlas framework dominates mature meshing plus FEM on general grounds.
 
 \begin{table}[htbp]
 \centering
 \scriptsize
-\caption{Canonical validated results used in the main text. The torus inverse benchmark is a controlled synthetic identification problem, the Stanford Bunny row is a volumetric neural SDF benchmark on a mesh-derived geometry, and the rabbit Elder result is teacher-guided in the sense described in Section~\ref{sec:limitations}. $^*$Runtime for the Bunny neural SDF is approximate (training time not precisely recorded; $\approx$60--90\,min on Apple Silicon for 10{,}000 epochs).}
+\setlength{\tabcolsep}{2.2pt}
+\caption{Canonical main-text results organized by argumentative role. The table summarizes what each example supports, the main evidence behind that support, and the main caution that keeps the claim appropriately bounded.}
 \label{tab:core_summary}
-\begin{tabular}{>{\raggedright\arraybackslash}p{2.65cm}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{1.45cm}>{\raggedright\arraybackslash}p{3.25cm}>{\raggedright\arraybackslash}p{1.15cm}}
+\begin{threeparttable}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{1.6cm}>{\raggedright\arraybackslash}p{2.35cm}>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{1.0cm}}
 \toprule
-Case & Main metric & Value & Additional quality indicator & Runtime (s) \\
+Case & Supports claim about & Main evidence & Key caution & Runtime (s) \\
 \midrule
-Ellipsoid Poisson & rel-$L^2$ & $2.26\times10^{-3}$ & max error $=5.23\times10^{-3}$ & 106.3 \\
-Star Poisson & rel-$L^2$ & $2.59\times10^{-1}$ & max error $=5.06\times10^{-1}$ & 229.4 \\
-Rabbit Poisson & rel-$L^2$ & $2.21\times10^{-2}$ & interface flux $=1.16\times10^{-2}$ & 3659.0 \\
-Torus inverse (original atlas) & traction rel-$L^2$ & $2.35\times10^{-7}$ & \shortstack[l]{$\mu$ error $=9.27\times10^{-6}\%$\\ $K$ error $=2.29\times10^{-5}\%$} & 201.1 \\
-\shortstack[l]{Stanford Bunny\\ neural SDF} & surface loss & $1.66\times10^{-2}$ & \shortstack[l]{normal loss $=3.18\times10^{-2}$\\ sign loss $=3.11\times10^{-1}$} & ${\approx}4800^*$ \\
-Rabbit Elder inverse & $k_0$ error & $3.00\times10^{-2}$ & \shortstack[l]{eig. mean $=2.97\%$\\ axis mean $=2.70^\circ$} & 642.6 \\
+Ellipsoid Poisson & mapped-operator verification & rel-$L^2 = 2.26\times10^{-3}$ & analytic geometry only & 106.3 \\
+Rabbit Poisson & complex-geometry atlas solve & rel-$L^2 = 2.21\times10^{-2}$ & \shortstack[l]{interface flux $= 1.16\times10^{-2}$\\ weak supervision active} & 3659.0 \\
+\shortstack[l]{Stanford Bunny\\ neural SDF} & volumetric geometry learning from PLY data & surface loss $= 1.66\times10^{-2}$ & \shortstack[l]{sign-anchor $= 3.11\times10^{-1}$\\ Eikonal $= 7.29\times10^{-1}$} & ${\approx}4800$\tnote{a} \\
+Torus inverse (original atlas) & controlled constitutive identification & traction rel-$L^2 = 2.09\times10^{-4}$ & known kinematics; not a field solve & 93.0 \\
 \bottomrule
 \end{tabular}
+\begin{tablenotes}[flushleft]
+\footnotesize
+\item[a] Runtime for the Bunny neural SDF is approximate because the training log records wall-clock duration only coarsely; the canonical run required roughly 60--90\,min on the validated hardware backend for 10{,}000 epochs.
+\end{tablenotes}
+\end{threeparttable}
 \end{table}
 
-Two broader lessons emerge from the full set. First, the method is strongest today when the chart geometry is fixed and the main challenge is solving fields on that atlas, as seen most clearly in the rabbit Poisson benchmark. Second, the remaining difficult cases are exactly the ones where global geometric coherence is hardest to maintain: learned global maps for the star-shaped domain, global neural SDFs on thin-featured PLY geometry, and the teacher-guided rabbit Elder inverse problem. These are therefore the right places to focus future work on stronger multi-scale regularization, interface transmission, and physics-only continuation strategies.
+The cross-example lesson on mapping is straightforward. Analytic or learned maps let the solver work in simple reference domains, while local ball charts avoid forcing a single global parameterization onto geometries that do not admit one cleanly in practice. The code makes this concrete through determinant barriers, coverage checks, overlap targets, and foldover gates. Compared with a conventional meshing workflow, the advantage is therefore not a proven gain in accuracy or runtime, but a different division of labor: geometry is represented by maps and level sets, while PDE collocation is generated directly from those objects without tetrahedral remeshing.
+
+The cross-example lesson on Schwarz is equally qualified. The rabbit solver shows why alternating local updates are useful when the geometry is already decomposed into overlapping charts: neighboring solutions can be treated as temporary boundary data, interface penalties keep the charts synchronized, and trust-region rejection prevents a single bad sweep from degrading the global state. The compact local networks further reduce cross-chart interference. What the present evidence does \emph{not} prove is that this strategy is universally superior to mature domain-decomposition methods built on classical meshes. The more defensible conclusion is that atlas plus Schwarz is already useful on geometry-intensive problems, while still replacing mesh complexity with training and coupling complexity.
 
 The qualified torus chart-consensus inverse run set is intentionally not promoted into the main text. Its best traction-mode run is accurate, but the broader validated set is not yet as clean or as central to the main paper story as the forward rabbit solve and the geometry-modeling benchmarks. Likewise, the architecture and ablation story is strongest when it is anchored to the rabbit Poisson solve and the Bunny SDF benchmark, where overlap control, geometry conditioning, and initialization can be interpreted separately.
 
@@ -1305,23 +1409,60 @@ The qualified torus chart-consensus inverse run set is intentionally not promote
 
 
 
-\section{Limitations}
-\label{sec:limitations}
-This manuscript is intentionally narrower than the full repository.
+\section{Discussions}
+\label{sec:discussion}
+Table~\ref{tab:core_summary} summarizes the canonical numbers, but the scientific meaning of those numbers depends on what each released code path actually instantiates. The purpose of this section is therefore interpretive rather than descriptive. We use the archived solver configurations and stored metric files to clarify what each benchmark establishes, where alternative methods from the literature should still be expected to perform better, and which development priorities matter most for the next stage of the framework.
+
+\subsection{What the four main examples establish}
+\paragraph{Example 1: ellipsoid verification.}
+The ellipsoid example should be read as a verification baseline for the mapped operator, not as a benchmark of geometric difficulty. In the released script the map from the unit ball to the ellipsoid is analytic, $x=a\xi_1$, $y=b\xi_2$, $z=c\xi_3$, and the exact mapped solution is hard-coded as $\widehat{u}^{\ast}_{\mathrm{ell}}(\boldsymbol{\xi})=1-\|\boldsymbol{\xi}\|_2^2$. The same code evaluates the constant mapped source term and samples directly in the unit ball, so geometry approximation error is essentially absent from this test. The observed relative $L^2$ error of $2.26\times 10^{-3}$ in $106.3$\,s is therefore meaningful evidence that the pullback machinery and mapped Poisson residual are implemented consistently.
+
+Relative to classical finite elements on such an analytic geometry, one should expect a mature mesh-based discretization to be easier to tune and often more efficient, because neither geometry representation nor meshing is a bottleneck in this setting \citep{de_souza_neto_computational_2011}. That is not a weakness of the present example; it clarifies its role. Example~1 shows feasibility of the mapped-coordinate idea before overlap coupling, atlas quality, and learned geometry enter the picture. What it does not establish is robustness on geometrically difficult domains.
+
+\paragraph{Example 2: rabbit Poisson on a fixed atlas.}
+The rabbit benchmark is where the atlas strategy becomes most compelling. The archived atlas metadata record $12$ volumetric charts organized into five non-overlapping color groups, and the corresponding gate report records coverage ratio $1.0$, overlap-consistency error $6.36\times 10^{-3}$, and foldover ratio $0.0$. The released solver then assigns one local field model to each chart, communicates neighbors through sampled interface-value and projected interface-flux penalties, optionally adds an interior overlap penalty, and rejects unstable Schwarz sweeps through a trust-region score. The canonical compact run attains relative $L^2$ error $2.21\times 10^{-2}$ in $3659.0$\,s, while the cheaper validated run \texttt{attempt19\_w4} reaches $4.41\times 10^{-2}$ in $403.9$\,s but lowers the final interface-flux mismatch to $2.52\times 10^{-3}$. This trade-off is informative: performance is not governed by one scalar loss alone, but by the balance between local approximation, overlap transmission, and sweep acceptance.
+
+Comparison with alternatives in the literature is most useful here. Relative to classical overlapping Schwarz and mesh-based finite elements \citep{quarteroni1999domain,de_souza_neto_computational_2011}, the current rabbit solve should not be expected to dominate once a high-quality tetrahedral mesh already exists and can be maintained cheaply. Relative to decomposition-based PINN variants such as XPINNs and FBPINNs \citep{shukla2021parallel,moseley2021fbpinns}, the present method uses the partition differently: the charts come first as a geometric representation, and the Schwarz sweep is then used to reconcile chart-local solves. The code-backed advantage is therefore geometric rather than asymptotic. Interior collocation is generated directly from atlas and SDF objects without volumetric remeshing. The price is a more delicate optimization problem, explicit interface tuning, and a training design that is still best interpreted as a guided atlas solve rather than a final physics-only benchmark.
+
+\paragraph{Example 3: Stanford Bunny volumetric neural SDF.}
+The Bunny benchmark answers a different question: whether an imported surface can be converted into a volumetric geometry representation suitable for downstream atlas construction. The released trainer first normalizes the PLY coordinates by a global center and scale, then fits a global $\tanh$ SDF network with four fixed loss weights, namely $w_{\mathrm{surface}}=10$, $w_{\mathrm{eikonal}}=1$, $w_{\mathrm{normal}}=1$, and $w_{\mathrm{sign}}=2$. The archived code path confirms that this is a plain weighted-sum objective; the canonical trainer does not use GradNorm or PCGrad to resolve gradient conflicts among these terms. The final stored losses explain the observed behavior: the surface and normal losses reach $1.66\times 10^{-2}$ and $3.18\times 10^{-2}$, while the sign-anchor and Eikonal losses remain at $3.11\times 10^{-1}$ and $7.29\times 10^{-1}$. The learned zero level set is therefore good enough for most of the body, but the volumetric signed-distance structure is not yet stable in the thin ear regions.
+
+Relative to surface-only neural reconstruction methods such as Deep Geometric Prior \citep{williams2019deep}, the present task is stricter. The learned field is not used only to produce a visually accurate surface; it must also provide interior/exterior queries, rejection sampling, and a downstream geometric prior for atlas construction. One should therefore expect thinner features to remain harder than in methods whose objective is solely the surface itself. The limitation is not hidden by the archive: the larger sign and Eikonal residuals are exactly the terms that would be expected to fail first in thin features. The most direct next step is spatially adaptive importance sampling and, if needed, chartwise local SDF refinement so that difficult regions receive more off-surface supervision without oversampling the easier bulk geometry.
+
+\paragraph{Example 4: torus synthetic inverse Neo-Hookean identification.}
+The torus case shows that the atlas machinery already supports a controlled inverse problem, but the scope of that claim must remain narrow. The released script prescribes the torsional displacement field, constructs fixed traction observations on a loaded boundary subset, and optimizes only two scalar parameters, $\mu$ and $K$, through unconstrained raw variables passed through a positivity map, while the chart weights are fixed by a soft partition of unity around the torus. The archived metrics then report traction relative $L^2 = 2.09\times 10^{-4}$, $\mu$ error $=1.49\times 10^{-2}\%$, and $K$ error $=2.09\times 10^{-2}\%$ in $93.0$\,s. These numbers are strong evidence that constitutive pullback, traction evaluation, and parameter optimization are internally consistent under known kinematics.
+
+Relative to classical PDE-constrained inversion on mesh-based discretizations, however, this benchmark is still easier than a full inverse field problem. The state field is not recovered from partial data, and the chart weights are not part of the optimization. The torus example should therefore be read as a constitutive-identification benchmark rather than as proof that atlas-based PINNs already outperform adjoint or finite-element inverse solvers. Its real value is strategic: it shows that the chart infrastructure is not limited to Poisson diffusion and is ready for the more important next milestone, namely a true forward nonlinear field solve on a fixed atlas.
+
+\subsection{Method-level comparison with alternative workflows}
+Across the four examples, the main advantage of the atlas formulation is not that it has already displaced classical meshing, but that it changes where geometric effort is spent. In conventional finite-element workflows a difficult three-dimensional body is first turned into a volumetric mesh and then coupled to mature local basis functions and linear or nonlinear solvers \citep{de_souza_neto_computational_2011}. In the present code, geometry is instead represented analytically or by learned level sets and overlapping chart maps; interior collocation is generated by rejection sampling in those reference domains; and compatibility is enforced by interface penalties and multiplicative Schwarz sweeps. This makes the method particularly attractive when volumetric meshing or remeshing is itself the fragile part of the workflow, but it also means that approximation error, geometry error, and coupling error interact inside one optimization loop.
+
+The closest PINN alternatives in the literature, such as XPINNs and FBPINNs \citep{shukla2021parallel,moseley2021fbpinns}, also use decomposition to improve training, yet their partitions are primarily algorithmic. In contrast, the present atlas is geometry-first: the same chart structure is used to represent the domain, to generate collocation, and to organize Schwarz communication. The rabbit benchmark is the clearest evidence that this idea works in practice, because the atlas gate report shows full coverage and zero foldover before the PDE solve begins, and the field solver then maintains cross-chart agreement through explicit interface-value and projected-flux terms. At the same time, the method remains more optimization-sensitive than classical mesh-based Schwarz, and the present evidence does not justify a claim of universal accuracy or efficiency superiority.
+
+\subsection{Current limitations and future development priorities}
+The repository still contains broader exploratory tracks, but the validated evidence suggests a clear priority order for future work. More ambitious inverse tracks, including the rabbit Elder and Arruda--Boyce variants, remain outside the main-text claims because their stabilization and interface control are not yet as clean as the four validated examples discussed above.
 \begin{enumerate}[leftmargin=*]
-\item The flagship field-solve evidence is the rabbit Poisson benchmark. The torus elasticity examples are controlled synthetic identification benchmarks and should not be interpreted as full chart-local inverse elasticity field solves.
-\item The rabbit Elder result is a teacher-guided, pre-conditioned inverse benchmark. In the canonical validated configuration, a weak global-field term is used in addition to sparse observations to stabilize the early inverse search. A natural next step is to anneal that term away and replace it by physics-only multi-scale residual control.
-\item The star-domain Poisson result remains substantially less accurate than the ellipsoid and rabbit Poisson cases. It is retained because it probes the learned global-map pipeline, but it does not support the same strength of claim.
-\item Several promising tracks remain exploratory: Arruda--Boyce rabbit inverse problems, cube/fillet torus mappings, adaptive chart splitting, and chartwise Bunny SDF or inverse-material pipelines beyond the validated global volumetric SDF case. These are valuable research directions but are not mature enough for core manuscript claims.
-\item Hardware portability is practical but not perfect. Some operators require CPU fallback on Apple Silicon, and the more fragile inverse variants can show machine-dependent behavior. This is one reason the validated benchmark registry is kept separate from exploratory runs.
+\item \textbf{Nonlinear forward field solves on fixed atlases.} Example~4 shows that parameter identification under prescribed kinematics is already stable. The more important next step is a genuine atlas-based nonlinear equilibrium solve, so that material nonlinearity, mapped operators, and Schwarz transmission are tested simultaneously.
+\item \textbf{Stronger physics-only coupling for the rabbit family.} The rabbit benchmark already passes geometry gates and yields the best complex-geometry forward result in the repository, but it still depends on careful interface weighting, trust-region screening, and guided training design. Reducing that dependence, and eventually removing manufactured guidance from the strongest run, is the most direct route to a cleaner flagship result.
+\item \textbf{Thin-feature geometry learning.} The Bunny losses show that near-surface fit is not the binding constraint; sign and Eikonal regularity are. Spatially adaptive importance sampling, local chartwise SDF refinement, and stronger volumetric priors should therefore take priority over simply increasing network size.
+\item \textbf{Head-to-head baselines and portability.} Because the manuscript is intentionally code-faithful, it does not yet contain a fair comparison against a well-tuned mesh-based FEM baseline on the same geometries. Adding such baselines, together with stronger cross-backend reproducibility checks, would make the practical case for adoption much sharper.
 \end{enumerate}
+
+In that sense the present manuscript should be read neither as a rejection of classical meshing nor as a claim that every geometry problem should be solved by atlas-based PINNs. The stronger conclusion is more specific: when geometry acquisition, volumetric meshing, and remeshing are themselves difficult, the released code already demonstrates a credible geometry-first alternative whose present strengths and failure modes are both visible in the stored results.
 
 \section{Conclusions} \label{sec:conclusions}
 This paper presented an atlas-based SA-PINN framework for selected forward and inverse problems on complex three-dimensional geometries without volumetric meshing. The manuscript was written to stay close to the validated code, so the conclusions are intentionally bounded.
 
-The validated evidence supports three main claims. First, mapped PINNs on simple global charts solve forward Poisson problems accurately on verification geometry, while the fixed-atlas rabbit Poisson example demonstrates that Schwarz-coupled chart-local field solves can be carried out successfully on a genuinely complex volumetric domain. Second, the Stanford Bunny neural-SDF benchmark shows that the same overall workflow can begin from a real PLY surface and learn a usable volumetric geometry model, although thin-feature sign control remains the main unresolved difficulty. Third, the torus Neo-Hookean benchmark and the rabbit Elder benchmark show two different inverse regimes that are already reliable in the present code: tightly controlled synthetic material-parameter identification on the torus and stable pre-conditioned recovery of a homogeneous rotated SPD permeability tensor on the rabbit.
+The validated evidence supports three main claims. First, mapped PINNs on simple global charts solve forward Poisson problems accurately on verification geometry, while the fixed-atlas rabbit Poisson example demonstrates that Schwarz-coupled chart-local field solves can be carried out successfully on a genuinely complex volumetric domain. Second, the Stanford Bunny neural-SDF benchmark shows that the same overall workflow can begin from a real PLY surface and learn a usable volumetric geometry model, although thin-feature sign control remains the main unresolved difficulty. Third, the torus Neo-Hookean benchmark shows that the inverse-identification machinery is already reliable in a tightly controlled synthetic material-parameter setting.
 
-The current boundaries of the method are just as important as the successes. The most ambitious inverse problems in the repository still require additional stabilization, stronger interface control, or more informative observation models. Future work will therefore focus on improving interface transmission for chart-local inverse field solves, replacing teacher-guided global stabilization by physics-only multi-scale residual control in permeability identification, and strengthening cross-hardware reproducibility for the more delicate benchmarks.
+The current boundaries of the method are just as important as the successes. The most ambitious inverse problems in the repository still require additional stabilization, stronger interface control, or more informative observation models. Future work will therefore focus on improving interface transmission for chart-local inverse field solves, strengthening thin-feature geometry learning for imported PLY surfaces through spatially adaptive importance sampling, and improving cross-hardware reproducibility for the more delicate benchmarks. From a mathematical standpoint, the atlas-based pullback is operator-agnostic: the same local-coordinate machinery can be extended from Poisson problems to incompressible Navier--Stokes systems or to large-deformation elasticity once the appropriate flux and constitutive operators are substituted into the mapped residual. The immediate research value of the present framework is therefore not limited to diffusion; it is the reusable geometric infrastructure for carrying nonlinear field equations over overlapping volumetric charts.
+
+\appendix
+\section{Implementation details and hardware backends}
+\label{sec:appendix_hardware}
+The main text is intentionally hardware-agnostic, but the archived artifacts do retain backend metadata relevant to reproducibility. The canonical rabbit Poisson run \texttt{attempt20c\_compact} records \texttt{device = mps}, \texttt{dtype = float32}, and \texttt{amp\_backend = none} in its metrics file. The canonical torus inverse run \texttt{torus\_inverse\_mps\_dense\_v4} likewise records \texttt{device = mps} and \texttt{dtype = float32}. These entries indicate execution through PyTorch's Metal backend on Apple hardware. The canonical Bunny SDF metadata do not serialize the backend explicitly, so that benchmark is reported in the main text only through its archived loss history and geometry outputs rather than through a device-specific claim.
+
+The codebase itself is broader than any one archived run. Geometry and post-processing utilities include CPU-executable paths, while the rabbit Schwarz solver also exposes optional accelerator-parallel updates for non-overlapping color groups. For blind review, the important point is therefore not one specific workstation but that the manuscript results come from the same PyTorch implementation across Metal, CUDA, and CPU backends, with the concrete backend for a given run recorded in the corresponding artifact whenever that metadata were serialized.
 
 
 \section*{Acknowledgments}

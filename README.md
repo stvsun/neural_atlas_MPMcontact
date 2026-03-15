@@ -30,10 +30,9 @@ coordinate charts, multiplicative Schwarz domain decomposition, and automatic di
 4. [Numerical Examples](#numerical-examples)
    - [Example 1: Forward Poisson — 3D Ellipsoid / Star Domain](#example-1-forward-poisson--3d-ellipsoid--star-domain)
    - [Example 2: Forward Poisson — Stanford Rabbit (Schwarz)](#example-2-forward-poisson--stanford-rabbit-schwarz)
-   - [Example 3: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)](#example-3-inverse-neo-hookean-elasticity--torus-original-atlas)
-   - [Example 4: Inverse Neo-Hookean Elasticity — Torus (Schwarz Dual)](#example-4-inverse-neo-hookean-elasticity--torus-schwarz-dual)
-   - [Example 5: Inverse Elder-Like Flow — Stanford Rabbit](#example-5-inverse-elder-like-flow--stanford-rabbit)
-   - [Example 6: Forward Poisson — Stanford Bunny PLY (Interior Pretrain Breakthrough)](#example-6-forward-poisson--stanford-bunny-ply-interior-pretrain-breakthrough)
+   - [Example 3: Stanford Bunny PLY Volumetric Neural SDF](#example-3-stanford-bunny-ply-volumetric-neural-sdf)
+   - [Example 4: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)](#example-4-inverse-neo-hookean-elasticity--torus-original-atlas)
+   - [Additional Validated and Experimental Benchmarks](#additional-validated-and-experimental-benchmarks)
 5. [Repository Structure](#repository-structure)
 6. [Prerequisites and Installation](#prerequisites-and-installation)
 7. [Geometry Preparation Pipeline](#geometry-preparation-pipeline)
@@ -582,14 +581,16 @@ return u
 
 ### Example 1: Forward Poisson — 3D Ellipsoid / Star Domain
 
-**Description**: Baseline verification of the chart decoder + PINN pipeline on
-analytic domains (no Schwarz coupling needed). A single chart covers the full domain.
+**Description**: Baseline verification of the mapped Poisson operator in two
+simply connected settings. The ellipsoid uses an analytic global map, while the
+star-domain case uses a learned global map.
 
 **Domain**: 3D ellipsoid `x²/a² + y²/b² + z²/c² ≤ 1` (a=1.2, b=0.9, c=0.7);
 3D star domain with 5-pointed star cross-section.
 
-**PDE**: Poisson equation with manufactured solution
-`u*(x,y,z) = sin(πx)sin(πy)sin(πz)`, RHS `f = 3π²u*`.
+**PDE**:
+- Ellipsoid: quadratic manufactured solution in reference coordinates
+- Star domain: `u*(x) = sin(πx₁)sin(πx₂)sin(πx₃)`, RHS `f = 3π²u*`
 
 **Method**: Single MLP PINN, sphere-mapping coordinate chart, no Schwarz coupling.
 
@@ -597,8 +598,10 @@ analytic domains (no Schwarz coupling needed). A single chart covers the full do
 
 | Domain | Metric | Value |
 |--------|--------|-------|
-| 3D Ellipsoid | rel_L2 | < 1% after 5000 epochs |
-| 3D Star domain | rel_L2 | < 2% after 5000 epochs |
+| 3D Ellipsoid | rel_L2 | `2.26e-3` |
+| 3D Ellipsoid | max error | `5.23e-3` |
+| 3D Star domain | rel_L2 | `2.59e-1` |
+| 3D Star domain | max error | `5.06e-1` |
 
 **Scripts**: `src/pinn_3d_ellipsoid_mapped_sphere.py`, `src/run_poisson_star3d_mapped.py`
 
@@ -606,8 +609,10 @@ analytic domains (no Schwarz coupling needed). A single chart covers the full do
 
 ### Example 2: Forward Poisson — Stanford Rabbit (Schwarz)
 
-**Description**: Poisson equation inside the Stanford rabbit volumetric interior,
-solved by a 12-chart Schwarz PINN. Two PINN architectures are benchmarked.
+**Description**: Flagship field-solve benchmark for the atlas-based SA-PINN
+workflow. The Poisson equation is solved on the Stanford rabbit interior using a
+fixed 12-chart volumetric atlas, chart-local neural fields, and Schwarz-style
+overlap coupling.
 
 **Domain**: Stanford rabbit volumetric interior, SDF-normalized coordinates ≈ [−0.55, 0.55]³.
 Atlas: 12 interior ball-charts, support radius r ≈ 0.41, ~20% overlap, 100% coverage.
@@ -615,7 +620,7 @@ Atlas: 12 interior ball-charts, support radius r ≈ 0.41, ~20% overlap, 100% co
 **PDE**: `−Δu = 3π² sin(πx₁)sin(πx₂)sin(πx₃)` with Dirichlet BC `u = 0` on ∂Ω.
 Evaluation: `rel_l2 = ‖u_PINN − u*‖₂ / ‖u*‖₂` over 50K interior reference points.
 
-**Validated improvements** (W-series):
+**Validated solver improvements**:
 
 | ID | Improvement | Effect |
 |----|------------|--------|
@@ -625,317 +630,134 @@ Evaluation: `rel_l2 = ‖u_PINN − u*‖₂ / ‖u*‖₂` over 50K interior re
 | W4 | PCGrad K=2 gradient surgery (L_pde vs L_sup) | **−18.8% rel_l2 vs W3** |
 | W5 | Stronger coupling (`w_if=2.0`, H1 volumetric overlap) | max_error −36%, uniformity ↑ |
 
-**Architecture A — Dense MLP (W1+W2+W3+W4+W5)**:
-
-```
-PINN:       width=64, depth=4 Tanh MLP per chart, 12,801 params/chart
-Algorithm:  PCGrad K=2, 15 local Adam steps per Schwarz iter, lr=2e-4
-Schwarz:    23 iterations total, best at iter 8
-```
+**Canonical run**: `attempt20c_compact`
 
 | Metric | Value |
 |--------|-------|
-| **rel_l2** | **2.531%** |
-| max_error | 5.303% |
-| mean_interface_residual | 0.001511 |
-| Runtime | 404 s (~7 min, Apple M4) |
-| Schwarz iters | 23 (plateau patience=15) |
+| rel_l2 | **2.207%** |
+| absolute L2 | `8.57e-3` |
+| max_error | `6.783%` |
+| mean_interface_residual | `1.979e-3` |
+| final interface flux | `1.16e-2` |
+| Runtime | `3659 s` |
 
-**Architecture B — CompactChartNet (Voronoi sub-atlas, τ_scale=0.5)**:
-
-```
-PINN:       9 sub-nets per chart (M=9, width=32, depth=2, Tanh), 10,953 params/chart
-POU:        φₘ = softmax(−‖ξ−sₘ‖²/2τ²), τ = 0.5 × 0.41 ≈ 0.205
-Algorithm:  PCGrad K=2 + CompactChartNet, lr=2e-4
-Schwarz:    60 iterations (monotone descent), best at iter 56
-```
-
-| Metric | Value |
-|--------|-------|
-| **rel_l2** | **2.207%** ← all-time best |
-| max_error | 6.783% |
-| mean_interface_residual | 0.001979 |
-| Runtime | 3659 s (~61 min, Apple M4) |
-| Schwarz iters | 60 (hit max_schwarz_iters, plateau never fired) |
-| Convergence | Monotone — no oscillation |
-
-**Per-chart "U-net" (`u_nets`) used by the solver**:
-
-In the Poisson rabbit code, `u_nets` denotes the list of local chart solution networks
-(one per chart). This is the field model optimized inside Schwarz iterations.
-
-- Implementation location: `experiments/run_poisson_rabbit_atlas_schwarz.py`
-- Runtime selection: `--pinn-arch {mlp,resnet,compact}`
-- Stored in checkpoints as chart `u_states` and recoverable by warm-start flags
-  (`--init-u-checkpoint`, optional `--u-remap-json`)
-
-Note: in this script, `u_nets` is a per-chart PINN collection (MLP/ResNet/CompactChartNet),
-not a convolutional image U-Net encoder-decoder.
-
-**Benchmark progression**:
+**Performance tradeoff note**:
 
 | Run | Architecture / Features | rel_l2 | max_error | Runtime |
 |-----|------------------------|--------|-----------|---------|
-| attempt14b | Dense MLP baseline (broken plateau) | 4.31% | 10.86% | 10,133 s |
-| attempt15b_w1 | Dense MLP + W1 | 3.698% | **4.107%** | 364 s |
-| attempt16_w2 | Dense MLP + W1+W2 | 3.165% | 4.993% | 335 s |
-| attempt17_w3 | Dense MLP + W1+W2+W3 | 3.117% | 8.485% | 328 s |
-| attempt18_w5 | Dense MLP + W1+W2+W3+W5 | 3.631% | 5.450% | 371 s |
-| attempt19_w4 | Dense MLP + W1+W2+W3+W4+W5 | 2.531% | 5.303% | 404 s |
-| **attempt20c_compact** | **CompactChartNet + all W1–W5** | **2.207%** | 6.783% | 3659 s |
+| `attempt19_w4` | Dense MLP + W1–W5 | 2.531% | 5.303% | 404 s |
+| `attempt20c_compact` | CompactChartNet + W1–W5 | **2.207%** | 6.783% | 3659 s |
 
 **Script**: `experiments/run_poisson_rabbit_atlas_schwarz.py`
 **Best checkpoint**: `runs/attempt20c_compact/`
 
 ---
 
-### Example 3: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)
+### Example 3: Stanford Bunny PLY Volumetric Neural SDF
 
-**Description**: Recover shear modulus μ and bulk modulus K of an incompressible
-neo-Hookean solid from traction observations on the torus surface.
+**Description**: Volumetric neural signed-distance benchmark on the watertight
+Stanford Bunny PLY surface. This example bridges mesh-imported geometry and the
+downstream atlas/PDE pipeline by learning a differentiable volume representation.
+
+**Domain**: Stanford Bunny PLY (`bun_zipper.ply`), normalized to a global
+bounding-box frame before SDF training.
+
+**Model**:
+- neural SDF `φ_θ(y)` trained from surface samples and normals
+- losses on surface consistency, normal alignment, Eikonal regularity, and sign anchors
+
+**Canonical result** (`bunny_sdf_v3`):
+
+| Metric | Value |
+|--------|-------|
+| surface loss | `1.66e-2` |
+| normal loss | `3.18e-2` |
+| Eikonal loss | `7.29e-1` |
+| sign-anchor loss | `3.11e-1` |
+| Runtime | `~4800 s` (approx.) |
+
+**Interpretation**:
+- surface and normal quality are strong enough for downstream geometry use
+- thin features, especially the ears, still make the sign-anchor term difficult
+- this benchmark is therefore a geometry-modeling success with a clearly exposed limitation
+
+**Script**: `src/train_sdf_rabbit.py`
+
+---
+
+### Example 4: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)
+
+**Description**: Controlled synthetic material-parameter identification benchmark.
+The torus displacement field is prescribed, synthetic traction observations are
+generated from it, and the inverse solve recovers the global shear modulus `μ`
+and bulk modulus `K`.
 
 **Domain**: Torus (major radius R=1.0, minor radius r=0.35, genus-1 topology).
 Atlas: 8 coordinate charts covering the torus surface.
 
-**Forward model** (incompressible neo-Hookean):
+**Forward model** (compressible neo-Hookean):
 ```
-P = μ F − μ F⁻ᵀ + K(J−1) J F⁻ᵀ      (1st Piola-Kirchhoff stress)
-Div P = 0   in Ω,     P·N = t   on ∂Ω_N
+P = μ(F − F⁻ᵀ) + K ln(J) F⁻ᵀ
 ```
 
-**Inverse problem**: Given boundary traction observations `t_obs` on ∂Ω,
-find scalar parameters μ and K.
+**Inverse problem**: Given synthetic boundary traction observations `t_obs`,
+identify scalar parameters `μ` and `K`.
 
 **True parameters**: μ = 1.8, K = 25.0
 
-**Method**: Joint PINN optimization — minimize
-`L = w_pde · L_pde + w_bc · L_traction + w_param · ‖{μ,K}‖_reg`
-with μ, K as trainable scalars initialized near the true values.
+**Method**: Controlled parameter-recovery solve. The code optimizes only `μ`
+and `K`; it does **not** solve a chart-local elasticity PDE for the displacement field.
 
-**Results** (run: `torus_inverse_mps`, 300 epochs, Apple M4 MPS):
+**Canonical figure run** (`torus_inverse_mps_dense_v4`):
 
 | Parameter | True | Estimated | Rel. Error |
 |-----------|------|-----------|-----------|
-| μ (shear modulus) | 1.800 | 1.7999998 | **9.3 × 10⁻⁶ %** |
-| K (bulk modulus) | 25.00 | 25.0000057 | **2.3 × 10⁻⁵ %** |
-| traction rel_l2 | — | — | 2.35 × 10⁻⁷ |
+| μ (shear modulus) | 1.800 | 1.79973 | `1.49e-2 %` |
+| K (bulk modulus) | 25.00 | 24.9948 | `2.09e-2 %` |
 
 | Metric | Value |
 |--------|-------|
-| Epochs | 300 |
-| Runtime | 201 s |
-| Composite score | **3.96 × 10⁻⁷** |
+| traction rel_l2 | `2.09e-4` |
+| Runtime | `93.0 s` |
+
+**Interpretation**:
+- this is a clean lower-bound benchmark for the inverse machinery
+- it verifies material-parameter recovery under known kinematics
+- it should not be read as evidence of a full chart-local inverse elasticity field solve
 
 **Script**: `src/run_torus_inverse_neohookean_atlas.py`
 
 ---
 
-### Example 4: Inverse Neo-Hookean Elasticity — Torus (Schwarz Dual)
+### Additional Validated and Experimental Benchmarks
 
-**Description**: Same inverse problem on the torus but with a Schwarz-coupled
-multi-chart solver supporting two observation types: displacement observations
-and traction observations.
+These runs remain useful in the repository, but they are no longer part of the
+main numbered sequence used in the manuscript.
 
-**True parameters**: μ = 1.8, K = 25.0
+#### Torus chart-consensus inverse benchmark
 
-#### Variant A — Displacement observations
+- Script: `src/run_torus_inverse_neohookean_schwarz_dual.py`
+- Purpose: multi-chart consensus benchmark with traction and displacement-style observations
+- Status: promising, but the traction-mode run is cleaner than the full mixed run set, so it is treated as a secondary benchmark rather than a main-text result
 
-| Parameter | True | Estimated | Rel. Error |
-|-----------|------|-----------|-----------|
-| μ | 1.800 | 1.8000000 | **4.1 × 10⁻¹² %** |
-| K | 25.00 | 25.2498 | 1.00% |
+#### Rabbit Elder-type inverse benchmark
 
-| Metric | Value |
-|--------|-------|
-| Best epoch | 405 |
-| Displacement rel_l2 | 0.174% |
-| Traction rel_l2 | 0.959% |
-| Runtime | 38.6 s |
-| Target met | ✅ |
+- Scripts:
+  - `experiments/run_rabbit_inverse_elder_atlas_schwarz.py`
+  - `experiments/export_rabbit_elder_inverse_paraview.py`
+- Purpose: teacher-guided inverse recovery of a rotated SPD permeability tensor on the rabbit atlas
+- Status: moved to `experiments` because the inverse stabilization still needs further work before it is strong enough for the main manuscript
 
-#### Variant B — Traction observations
+#### Stanford Bunny Poisson with interior pretraining
 
-| Parameter | True | Estimated | Rel. Error |
-|-----------|------|-----------|-----------|
-| μ | 1.800 | 1.7938 | **0.345%** |
-| K | 25.00 | 25.135 | 0.541% |
-
-| Metric | Value |
-|--------|-------|
-| Best epoch | 300 |
-| Traction rel_l2 | 0.580% |
-| Displacement rel_l2 | 0.336% |
-| Runtime | 76.9 s |
-| Target met | ✅ |
-
-**Script**: `src/run_torus_inverse_neohookean_schwarz_dual.py`
-
----
-
-### Example 5: Inverse Elder-Like Flow — Stanford Rabbit
-
-**Description**: Recover the **anisotropic permeability tensor** K(x) of a porous medium
-inside the Stanford rabbit from sparse pressure and concentration observations.
-This is a coupled inverse problem for Darcy flow + species transport.
-
-**Forward model**:
-```
-−∇·(K(x)∇p) = 0                         (pressure, Darcy flow)
-−∇·(D∇c − Ra · K(x)c∇p) = 0             (concentration, Elder-like transport)
-```
-
-**Permeability parameterization**:
-```
-K(x) = k₀ · R(q) Λ Rᵀ(q)
-```
-where `k₀` is the isotropic scale, `R(q)` is a rotation matrix parameterized by
-quaternion `q`, and `Λ = diag(λ₁, λ₂, λ₃)` is a diagonal anisotropy matrix.
-
-**Inverse problem**: Given sparse `(p, c)` observations, recover `k₀, q, Λ`.
-
-**Domain**: Stanford rabbit volumetric interior, 12 atlas charts.
-
-**Results** (run: `rabbit_inverse_elder_globalfield_small`, CPU float64):
-
-| Metric | Value |
-|--------|-------|
-| k₀ relative error | **3.0%** |
-| Eigenvalue rel. error (mean) | 2.97% |
-| Eigenvalue rel. error (max) | 6.22% |
-| Axis orientation error (mean) | **2.70°** |
-| Axis orientation error (max) | 3.35° |
-| Pressure field rel_l2 | 0.0% (teacher-student locked) |
-| Runtime | 642 s |
-| Target met | ✅ |
-
-**Script**: `src/run_rabbit_inverse_elder_atlas_schwarz.py`
-
----
-
-### Example 6: Forward Poisson — Stanford Bunny PLY (Interior Pretrain Breakthrough)
-
-**Description**: Poisson equation inside the Stanford Bunny PLY mesh volumetric interior,
-solved by an 8-chart Schwarz PINN with interior supervised pretraining.  All earlier attempts
-without pretraining diverged (Schwarz interface flux grew monotonically every iteration,
-rel-L² → 28–44%).  The key breakthrough is an **interior supervised pretraining** phase
-that warm-starts each chart network near the true manufactured solution before any
-Schwarz coupling is applied.
-
-**Domain**: Stanford Bunny PLY (`bun_zipper.ply`, 35,947 verts, 69,451 triangles),
-SDF reconstructed via open3d + pysdf + mesh_to_sdf three-library pipeline with
-watertight hole-filling (`runs/bunny_sdf_repaired/rabbit_sdf_mesh.pt`).
-Atlas: 8 volumetric ball-charts, support radius mean r ≈ 0.378 (close to procedural
-rabbit's 0.38–0.44), ~35% overlap, 100% interior coverage.
-
-**PDE**: `−Δu = 3π² sin(πx₁)sin(πx₂)sin(πx₃)` with Dirichlet BC `u = 0` on ∂Ω.
-Evaluation: `rel_l2 = ‖u_PINN − u*‖₂ / ‖u*‖₂` over 50K interior reference points.
-
-#### Root-Cause Analysis of Earlier Divergence
-
-| Cause | Symptom | Fix |
-|-------|---------|-----|
-| Atlas decoder irrelevant in `--direct-coord-pde` mode | w_overlap=20→40 had zero effect | Abandon decoder tuning; use TNB frame |
-| PDE loss dominates ~1M:1 over BC | BC grows every Schwarz iter; network drifts from BCs | Interior supervised pretrain |
-| Chart imbalance (ear ~1–3% of volume) | Ear chart isolated by K-means | Accepted: ear chart actually has lowest rel_l2 |
-
-#### Interior Supervised Pretraining
-
-Before Schwarz iterations begin, each chart PINN is trained to fit the manufactured
-solution `u*(ξ) = sin(π·φ₁(ξ))sin(π·φ₂(ξ))sin(π·φ₃(ξ))` in its local coordinate frame.
-This provides a warm-start so the Schwarz loop **converges** (rel_l2 decreasing) rather
-than diverges.
-
-**Critical flag**: `--interior-pretrain-batch 2048` (batch=256 gives 18× higher loss
-and Schwarz diverges; batch=2048 gives convergence).
-
-**Architecture**: CompactChartNet, M=9 sub-nets, width=32, depth=2, τ_scale=0.125,
-10,953 params/chart.  8 charts total, colored Gauss-Seidel with 5 color groups.
-
-#### Scaling: Interior Pretrain Epochs vs Accuracy (8 charts, batch=2048)
-
-| Pretrain epochs | Final pretrain loss | Pretrained state rel_l2 | Global rel_l2 | Pretrain time |
-|-----------------|---------------------|------------------------|--------------|---------------|
-| 2000 (batch=256) | 4.5 × 10⁻² | ~12.6% | 18.5% | ~5 min |
-| 5000 | 2.43 × 10⁻³ | ~? | 6.83% | ~17 min |
-| 10000 | 5.82 × 10⁻⁴ | 1.92% | 5.03% | ~52 min |
-| **20000** | **2.18 × 10⁻⁴** | **0.66%** | **4.73%** | ~103 min |
-
-The loss plateaus at ~2.5 × 10⁻⁴ by epoch ~14000 (model capacity exhausted). Beyond
-10k epochs the bottleneck shifts from pretrain quality to Schwarz oscillation.
-
-#### Best Run: `bunny_poisson_8chart_intpre20k` — **4.73% rel-L²**
-
-```
-PINN:         CompactChartNet, width=64 channels, depth=4 sub-net layers
-Atlas:        8 volumetric charts (runs/atlas_bunny_repaired_8chart/)
-Pretrain:     BC warm-start 300 epochs + interior supervised 20000 epochs (batch=2048)
-Schwarz:      39 iterations total, best at iter 19 (plateau patience=20)
-```
-
-| Metric | Value |
-|--------|-------|
-| **Global rel_l2** | **4.73%** |
-| max_error | 3.99% |
-| mean_interface_residual | 0.00243 |
-| if_flux at best iter | 9.41 × 10⁻³ |
-| Pretrained state rel_l2 (before Schwarz) | 0.66% |
-| Runtime | 7420 s (~2.1 hr, Apple M4 MPS) |
-| Pretrain runtime | ~103 min |
-| Schwarz runtime | ~18 min |
-| Target met (15%) | ✅ |
-
-**Per-chart breakdown** (8 charts, best checkpoint):
-
-| Chart | Points | rel_l2 | Notes |
-|-------|--------|--------|-------|
-| 0 | 20,163 | 6.37% | Large body region |
-| 1 | 8,156 | 3.53% | |
-| 2 | 1,425 | 2.86% | Ear (isolated by K-means; lowest error) |
-| 3 | 12,053 | 4.99% | |
-| 4 | 12,582 | 6.18% | |
-| **5** | **12,234** | **9.54%** | **Persistent worst chart** |
-| 6 | 3,222 | 5.68% | |
-| 7 | 4,654 | 3.68% | |
-
-#### Full Benchmark Progression (Stanford Bunny PLY)
-
-| Run | Method | rel_l2 | Notes |
-|-----|--------|--------|-------|
-| `bunny_poisson_repaired` | 12 charts, no pretrain | 28.6% | Diverges |
-| `bunny_poisson_intpretrain` | 12 charts, 2k pretrain (batch=256) | 18.5% | First convergence |
-| `bunny_poisson_intpre5k` | 12 charts, 5k pretrain (batch=2048) | 10.78% | Target met (< 15%) |
-| `bunny_poisson_8chart_intpre5k` | **8 charts**, 5k pretrain | 6.83% | 8-chart atlas better |
-| `bunny_poisson_8chart_intpre10k` | 8 charts, 10k pretrain | 5.03% | |
-| **`bunny_poisson_8chart_intpre20k`** | **8 charts, 20k pretrain** | **4.73%** | **Best** |
-
-#### Key Command (best run)
-
-```bash
-python -u experiments/run_poisson_rabbit_atlas_schwarz.py \
-  --atlas-data        runs/atlas_bunny_repaired_8chart/rabbit_atlas_data.npz \
-  --atlas-checkpoint  runs/atlas_bunny_repaired_8chart_dec/rabbit_atlas_trained.pt \
-  --sdf-checkpoint    runs/bunny_sdf_repaired/rabbit_sdf_mesh.pt \
-  --output-dir        runs/bunny_poisson_8chart_intpre20k \
-  --run-tag           bunny_poisson_8chart_intpre20k \
-  --pinn-arch compact --pinn-width 64 --pinn-depth 4 \
-  --w-pde 5.0 --w-bc 1.0 --w-interface-value 2.0 --w-interface-flux 2.0 \
-  --bc-pretrain-epochs 300 \
-  --interior-pretrain-epochs 20000 --interior-pretrain-batch 2048 \
-  --interior-pretrain-bc-weight 0.5 --interior-pretrain-grad-weight 0.5 \
-  --interior-pretrain-log-every 2000 \
-  --pde-warmup-iters 50 --max-schwarz-iters 120 \
-  --plateau-patience 20 --plateau-use-rel-l2 \
-  --checkpoint-policy best_rel_l2 \
-  --interface-normal-mode seed \
-  --direct-coord-pde --allow-failed-gate --volumetric-atlas
-```
-
-**Scripts**:
-- SDF: `src/build_mesh_sdf.py` (open3d + pysdf + mesh_to_sdf three-library pipeline)
-- Atlas: `experiments/build_rabbit_atlas_volumetric.py` + `experiments/train_rabbit_atlas.py`
-- PINN: `experiments/run_poisson_rabbit_atlas_schwarz.py`
-
-**Checkpoints**: `runs/bunny_poisson_8chart_intpre20k/`
+- Scripts:
+  - `src/build_mesh_sdf.py`
+  - `experiments/build_rabbit_atlas_volumetric.py`
+  - `experiments/train_rabbit_atlas.py`
+  - `experiments/run_poisson_rabbit_atlas_schwarz.py`
+- Best run: `runs/bunny_poisson_8chart_intpre20k/`
+- Best reported metric: `rel_l2 = 4.73%`
+- Status: important downstream benchmark for thin-feature geometry, but it currently serves better as an experimental continuation of the Bunny SDF story than as a core manuscript example
 
 ---
 
@@ -948,18 +770,18 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── pinn_3d_ellipsoid_mapped_sphere.py     # Forward Poisson on 3D ellipsoid
 │   ├── pinn_gradient_surgery.py               # 2D PINN with PCGrad (reference impl)
 │   ├── run_poisson_star3d_mapped.py           # Forward Poisson on 3D star domain
-│   ├── run_torus_inverse_neohookean_atlas.py  # Inverse neo-Hookean on torus (Example 3)
-│   ├── run_torus_inverse_neohookean_schwarz_dual.py  # Schwarz dual torus inverse (Example 4)
-│   ├── run_rabbit_inverse_elder_atlas_schwarz.py     # Inverse Elder flow on rabbit (Example 5)
+│   ├── run_torus_inverse_neohookean_atlas.py  # Torus inverse benchmark (Example 4)
+│   ├── run_torus_inverse_neohookean_schwarz_dual.py  # Additional torus chart-consensus inverse benchmark
+│   ├── run_rabbit_inverse_elder_atlas_schwarz.py     # Compatibility wrapper for experimental rabbit Elder inverse
 │   ├── run_rabbit_inverse_neohookean_mapped.py       # Neo-Hookean inverse on rabbit
-│   ├── train_sdf_rabbit.py                    # Global neural SDF training (Algorithm 1)
+│   ├── train_sdf_rabbit.py                    # Stanford Bunny volumetric neural SDF (Example 3)
 │   ├── build_mesh_sdf.py                      # Exact mesh SDF via open3d+pysdf+mesh_to_sdf (Stanford Bunny)
-│   ├── train_sdf_chartwise.py                 # Chart-partitioned SDF training (Algorithm 1b)
+│   ├── train_sdf_chartwise.py                 # Additional chart-partitioned SDF experiments
 │   ├── train_mapping_from_sdf.py              # Sphere-to-domain mapping network
 │   └── export_rabbit_elder_inverse_paraview.py
 │
 ├── experiments/                      # Research-stage solvers
-│   ├── run_poisson_rabbit_atlas_schwarz.py    # ← MAIN Schwarz Poisson solver (Example 2)
+│   ├── run_poisson_rabbit_atlas_schwarz.py    # ← MAIN rabbit Schwarz Poisson solver (Example 2)
 │   ├── compact_chart_net.py                   # CompactChartNet (Algorithm 5)
 │   ├── train_rabbit_atlas.py                  # Atlas decoder + mask network training
 │   ├── build_rabbit_atlas_poissondisk.py      # Atlas seed selection (Algorithm 2)
@@ -968,6 +790,8 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── postprocess_rabbit_poisson_dense_fields.py
 │   ├── export_rabbit_atlas_paraview.py
 │   ├── export_rabbit_error_paraview.py
+│   ├── run_rabbit_inverse_elder_atlas_schwarz.py  # Experimental rabbit Elder inverse
+│   ├── export_rabbit_elder_inverse_paraview.py
 │   └── experimental_ideas/                    # Archived exploratory variants
 │
 ├── configs/                          # YAML configuration files
@@ -983,9 +807,9 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── successful/                    # Canonical reproduction scripts
 │   │   ├── run_poisson_rabbit_best.sh          # Reproduces 2.21% Poisson (procedural rabbit)
 │   │   ├── build_bunny_sdf_atlas_v3.sh         # Reproduces SDF v3 + atlas v3 + decoders
-│   │   └── run_bunny_poisson_intpre.sh         # Reproduces 4.73% Stanford Bunny (8-chart, 20k pretrain)
+│   │   └── run_bunny_poisson_intpre.sh         # Reproduces 4.73% Stanford Bunny Poisson continuation
 │   └── experimental/                  # Failed / in-progress attempts
-│       ├── run_chartwise_sdf_example.sh        # Example 6: chart-partitioned SDF pipeline
+│       ├── run_chartwise_sdf_example.sh        # Chart-partitioned Stanford Bunny SDF pipeline
 │       ├── fix_decoders.sh            # Failed: standard atlas (gate failed, pde=165k)
 │       ├── fix_decoders_v2.sh         # Partial: high overlap weight (gate=True, PINN diverges)
 │       └── diagnostic_supervised.sh   # Failed: manufactured supervision negligible vs PDE
@@ -1002,8 +826,10 @@ PINN_coordinate_chart_3Dgeometry/
     ├── bunny_poisson_8chart_intpre20k/   # Best Stanford Bunny run (rel_l2=4.73%, 20k pretrain)
     ├── bunny_poisson_8chart_intpre10k/   # 8-chart 10k pretrain (rel_l2=5.03%)
     ├── bunny_poisson_8chart_intpre5k/    # 8-chart 5k pretrain (rel_l2=6.83%)
-    ├── torus_inverse_mps/             # Torus inverse best run (score=3.96e-7)
-    └── rabbit_inverse_elder_globalfield_small/  # Elder inverse best run
+    ├── torus_inverse_mps/             # Torus inverse benchmark
+    ├── torus_inverse_mps_dense_v4/    # Dense torus inverse visualization run
+    ├── bunny_sdf_v3/                  # Canonical Bunny volumetric neural SDF run
+    └── rabbit_inverse_elder_globalfield_small/  # Experimental Elder inverse run
 ```
 
 ---
@@ -1197,10 +1023,10 @@ python src/run_torus_inverse_neohookean_schwarz_dual.py \
     --device auto  --seed 42
 ```
 
-### Inverse Elder-Like Flow (Rabbit)
+### Inverse Elder-Like Flow (Rabbit, Experimental)
 
 ```bash
-python src/run_rabbit_inverse_elder_atlas_schwarz.py \
+python experiments/run_rabbit_inverse_elder_atlas_schwarz.py \
     --atlas-data     runs/atlas_vol/rabbit_atlas_data.npz \
     --atlas-checkpoint  runs/atlas_vol_trained/rabbit_atlas_trained.pt \
     --output-dir     runs/rabbit_elder \
@@ -1317,7 +1143,8 @@ python src/export_rabbit_elder_inverse_paraview.py \
    anchor offset across all charts.  For the Stanford Bunny (~5 mm ears), an offset large
    enough for body coverage (38.9 mm) places anchors outside the ears, causing 31% sign
    errors.  This corrupts interface normals in all 12 charts simultaneously and causes
-   Schwarz iteration to diverge.  The **chart-partitioned SDF** (Example 6) addresses
+   Schwarz iteration to diverge.  The **chart-partitioned Stanford Bunny continuation**
+   addresses
    this directly via geometry-adaptive per-chart offsets (0.2–4.2 mm for the bunny).
 
 ---
@@ -1384,8 +1211,8 @@ The following tasks are planned or in progress, roughly ordered by priority.
 ### Low Priority — Paper and documentation
 
 - [ ] **[DOC] Finalize paper draft** (`docs/chatgpt52_paper_starter.md`)
-  Key sections remaining: Example 6 results table, comparison with global SDF baseline,
-  discussion of adaptive offset derivation.
+  Key sections remaining: Stanford Bunny continuation results table, comparison with
+  the global SDF baseline, discussion of adaptive offset derivation.
 
 - [ ] **[DOC] Generate publication figures for Stanford Bunny**
   Once chartwise PINN converges, run `postprocessing/render_3d_figures.py` to produce:

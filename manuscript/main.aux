@@ -30,162 +30,204 @@
 \newlabel{eq:atlas_nondegenerate}{{4}{2}{Volumetric atlas of coordinate charts}{equation.2.4}{}}
 \newlabel{eq:atlas_inverse}{{5}{2}{Volumetric atlas of coordinate charts}{equation.2.5}{}}
 \newlabel{eq:atlas_overlap}{{6}{2}{Volumetric atlas of coordinate charts}{equation.2.6}{}}
-\newlabel{eq:atlas_transition}{{7}{3}{Volumetric atlas of coordinate charts}{equation.2.7}{}}
+\newlabel{eq:atlas_transition}{{7}{2}{Volumetric atlas of coordinate charts}{equation.2.7}{}}
 \newlabel{eq:atlas_pou}{{8}{3}{Volumetric atlas of coordinate charts}{equation.2.8}{}}
 \newlabel{eq:atlas_blend}{{9}{3}{Volumetric atlas of coordinate charts}{equation.2.9}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Notation roadmap for Section\nobreakspace  {}\ref  {sec:methodology}.\relax }}{3}{table.caption.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Notation used in Section\nobreakspace  {}\ref  {sec:methodology}. Physical-space variables, chart-local reference variables, and global reference-ball variables are separated explicitly so that the reader can track which coordinate system is active at each step of the derivation.\relax }}{3}{table.caption.1}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{tab:notation}{{1}{3}{Notation roadmap for Section~\ref {sec:methodology}.\relax }{table.caption.1}{}}
+\newlabel{tab:notation}{{1}{3}{Notation used in Section~\ref {sec:methodology}. Physical-space variables, chart-local reference variables, and global reference-ball variables are separated explicitly so that the reader can track which coordinate system is active at each step of the derivation.\relax }{table.caption.1}{}}
 \@writefile{toc}{\contentsline {paragraph}{Interpretation.}{3}{section*.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Mapped PDE operator on a volumetric chart}{3}{subsection.2.2}\protected@file@percent }
 \newlabel{sec:mapped_operator}{{2.2}{3}{Mapped PDE operator on a volumetric chart}{subsection.2.2}{}}
-\newlabel{eq:abstract_pde}{{10}{3}{Mapped PDE operator on a volumetric chart}{equation.2.10}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Schematic 2D slice of the three-dimensional volumetric atlas. Each reference patch $\mathaccentV {widehat}D70{\Omega }_i\subset \mathbb  {R}^3$ is mapped by $\varphi _i$ to a physical subdomain $\Omega _i\subset \Omega $. Overlap regions such as $\Omega _{12}$ define transition maps $\psi _{ij}$ and support partition-of-unity blending. The drawing is a planar slice through a three-dimensional construction, not a surface atlas.\relax }}{4}{figure.caption.2}\protected@file@percent }
-\newlabel{fig:atlas_slice}{{1}{4}{Schematic 2D slice of the three-dimensional volumetric atlas. Each reference patch $\widehat {\Omega }_i\subset \mathbb {R}^3$ is mapped by $\varphi _i$ to a physical subdomain $\Omega _i\subset \Omega $. Overlap regions such as $\Omega _{12}$ define transition maps $\psi _{ij}$ and support partition-of-unity blending. The drawing is a planar slice through a three-dimensional construction, not a surface atlas.\relax }{figure.caption.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Conceptual view of the volumetric neural atlas. The left half shows chart-local reference patches parameterized by $\boldsymbol  {\zeta }$; the right half shows their mapped physical images covering overlapping parts of $\Omega $. The arrows represent the chart maps $\varphi _i$, while the lower formula indicates the global blend assembled from the chart-local fields after the local solves are complete. The drawing is a planar slice through a three-dimensional construction, so it illustrates volumetric charts rather than a surface atlas.\relax }}{4}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:atlas_slice}{{1}{4}{Conceptual view of the volumetric neural atlas. The left half shows chart-local reference patches parameterized by $\boldsymbol {\zeta }$; the right half shows their mapped physical images covering overlapping parts of $\Omega $. The arrows represent the chart maps $\varphi _i$, while the lower formula indicates the global blend assembled from the chart-local fields after the local solves are complete. The drawing is a planar slice through a three-dimensional construction, so it illustrates volumetric charts rather than a surface atlas.\relax }{figure.caption.2}{}}
+\newlabel{eq:abstract_pde}{{10}{4}{Mapped PDE operator on a volumetric chart}{equation.2.10}{}}
 \newlabel{eq:abstract_bc}{{11}{4}{Mapped PDE operator on a volumetric chart}{equation.2.11}{}}
 \newlabel{eq:pullback_state}{{12}{4}{Mapped PDE operator on a volumetric chart}{equation.2.12}{}}
 \newlabel{eq:grad_pullback}{{13}{4}{Mapped PDE operator on a volumetric chart}{equation.2.13}{}}
 \newlabel{eq:pullback_flux}{{14}{4}{Mapped PDE operator on a volumetric chart}{equation.2.14}{}}
 \newlabel{eq:piola_flux}{{15}{4}{Mapped PDE operator on a volumetric chart}{equation.2.15}{}}
 \newlabel{eq:pullback_source}{{16}{4}{Mapped PDE operator on a volumetric chart}{equation.2.16}{}}
-\newlabel{eq:mapped_residual}{{17}{4}{Mapped PDE operator on a volumetric chart}{equation.2.17}{}}
-\newlabel{eq:mapped_dirichlet}{{18}{4}{Mapped PDE operator on a volumetric chart}{equation.2.18}{}}
+\newlabel{eq:mapped_residual}{{17}{5}{Mapped PDE operator on a volumetric chart}{equation.2.17}{}}
+\newlabel{eq:mapped_dirichlet}{{18}{5}{Mapped PDE operator on a volumetric chart}{equation.2.18}{}}
 \newlabel{eq:mapped_normal}{{19}{5}{Mapped PDE operator on a volumetric chart}{equation.2.19}{}}
 \newlabel{eq:mapped_neumann}{{20}{5}{Mapped PDE operator on a volumetric chart}{equation.2.20}{}}
 \@writefile{toc}{\contentsline {paragraph}{Interpretation.}{5}{section*.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Mapped-operator schematic on one chart. The left panel shows a reference patch with reference normal $\mathaccentV {widehat}D70{n}_i$ and local coordinate point $\zeta $. The right panel shows the corresponding physical patch, the transformed normal, and a deformed local cell encoding the Jacobian $\mathbf  {J}_i$. The drawing is schematic, but the formulas shown match the row-wise chain rule, Piola transform, and normal mapping used in the method.\relax }}{5}{figure.caption.5}\protected@file@percent }
-\newlabel{fig:mapped_operator_schematic}{{2}{5}{Mapped-operator schematic on one chart. The left panel shows a reference patch with reference normal $\widehat {n}_i$ and local coordinate point $\zeta $. The right panel shows the corresponding physical patch, the transformed normal, and a deformed local cell encoding the Jacobian $\mathbf {J}_i$. The drawing is schematic, but the formulas shown match the row-wise chain rule, Piola transform, and normal mapping used in the method.\relax }{figure.caption.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Mapped-operator view on one chart. The left side shows the local reference patch, the center arrow represents the chart map and its Jacobian, and the right side shows the corresponding physical patch. The formula cards highlight the three identities the implementation uses directly: gradient pullback, Piola-transformed flux, and normal mapping.\relax }}{5}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:mapped_operator_schematic}{{2}{5}{Mapped-operator view on one chart. The left side shows the local reference patch, the center arrow represents the chart map and its Jacobian, and the right side shows the corresponding physical patch. The formula cards highlight the three identities the implementation uses directly: gradient pullback, Piola-transformed flux, and normal mapping.\relax }{figure.caption.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Special-case global map training for simply connected domains}{5}{subsection.2.3}\protected@file@percent }
 \newlabel{sec:global_map_training}{{2.3}{5}{Special-case global map training for simply connected domains}{subsection.2.3}{}}
 \newlabel{eq:global_map}{{21}{5}{Special-case global map training for simply connected domains}{equation.2.21}{}}
-\newlabel{eq:global_map_loss}{{22}{5}{Special-case global map training for simply connected domains}{equation.2.22}{}}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Training a learned global volumetric map for simply connected domains\relax }}{6}{algorithm.1}\protected@file@percent }
-\newlabel{alg:global_map_training}{{1}{6}{Training a learned global volumetric map for simply connected domains\relax }{algorithm.1}{}}
+\citation{quarteroni1999domain,tezaur2025hybrid}
+\citation{shukla2021parallel,moseley2021fbpinns}
+\newlabel{eq:global_map_loss}{{22}{6}{Special-case global map training for simply connected domains}{equation.2.22}{}}
 \@writefile{toc}{\contentsline {paragraph}{Interpretation.}{6}{section*.6}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Special-case training of a learned global volumetric map\relax }}{6}{algorithm.1}\protected@file@percent }
+\newlabel{alg:global_map_training}{{1}{6}{Special-case training of a learned global volumetric map\relax }{algorithm.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Schwarz alternating PINN on a fixed atlas}{6}{subsection.2.4}\protected@file@percent }
 \newlabel{sec:schwarz_pinn}{{2.4}{6}{Schwarz alternating PINN on a fixed atlas}{subsection.2.4}{}}
 \newlabel{eq:local_network}{{23}{6}{Schwarz alternating PINN on a fixed atlas}{equation.2.23}{}}
-\newlabel{eq:local_physical_field}{{24}{6}{Schwarz alternating PINN on a fixed atlas}{equation.2.24}{}}
-\newlabel{eq:schwarz_sets}{{25}{6}{Schwarz alternating PINN on a fixed atlas}{equation.2.25}{}}
-\newlabel{eq:schwarz_local_loss}{{26}{6}{Schwarz alternating PINN on a fixed atlas}{equation.2.26}{}}
-\newlabel{eq:schwarz_sweep}{{27}{6}{Schwarz alternating PINN on a fixed atlas}{equation.2.27}{}}
-\newlabel{eq:schwarz_global_field}{{28}{6}{Schwarz alternating PINN on a fixed atlas}{equation.2.28}{}}
-\citation{anthropic2025claude}
-\citation{claudecode2025}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Schematic of one multiplicative Schwarz sweep on a fixed atlas, shown again on a 2D slice of the three-dimensional construction. One chart-local field is updated while neighboring charts are frozen and provide interface data on overlaps. After the local optimization steps, the global blended field is assembled by partition-of-unity weights.\relax }}{7}{figure.caption.8}\protected@file@percent }
-\newlabel{fig:schwarz_schematic}{{3}{7}{Schematic of one multiplicative Schwarz sweep on a fixed atlas, shown again on a 2D slice of the three-dimensional construction. One chart-local field is updated while neighboring charts are frozen and provide interface data on overlaps. After the local optimization steps, the global blended field is assembled by partition-of-unity weights.\relax }{figure.caption.8}{}}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Fixed-atlas SA-PINN training by multiplicative Schwarz sweeps\relax }}{7}{algorithm.2}\protected@file@percent }
-\newlabel{alg:atlas_sapinn_training}{{2}{7}{Fixed-atlas SA-PINN training by multiplicative Schwarz sweeps\relax }{algorithm.2}{}}
-\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{7}{section*.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3}Implementation}{7}{section.3}\protected@file@percent }
-\newlabel{sec:implementation}{{3}{7}{Implementation}{section.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}AI-assisted development with Claude Sonnet 4.6}{7}{subsection.3.1}\protected@file@percent }
-\newlabel{sec:impl_aiassist}{{3.1}{7}{AI-assisted development with Claude Sonnet 4.6}{subsection.3.1}{}}
-\citation{yu2020gradient}
+\newlabel{eq:local_physical_field}{{24}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.24}{}}
+\newlabel{eq:schwarz_sets}{{25}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.25}{}}
+\newlabel{eq:schwarz_iv_loss}{{26}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.26}{}}
+\newlabel{eq:schwarz_flux_trace}{{27}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.27}{}}
+\newlabel{eq:schwarz_if_loss}{{28}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.28}{}}
+\newlabel{eq:schwarz_robin_loss}{{29}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.29}{}}
+\newlabel{eq:schwarz_local_loss}{{30}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.30}{}}
+\newlabel{eq:schwarz_sweep}{{31}{7}{Schwarz alternating PINN on a fixed atlas}{equation.2.31}{}}
+\newlabel{eq:schwarz_global_field}{{32}{8}{Schwarz alternating PINN on a fixed atlas}{equation.2.32}{}}
+\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{8}{section*.7}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Conceptual and algorithmic view of fixed-atlas SA-PINN coupling. Panel (a) shows two overlapping chart images inside the physical body. The overlap $\Omega _{ij}$ induces the artificial interfaces $\Gamma _{ij}$ and $\Gamma _{ji}$ on which neighboring chart solutions exchange temporary transmission data during training. Panel (b) shows one multiplicative Schwarz sweep as implemented in the rabbit solver: the code snapshots the full chart state, updates one active chart or non-overlapping color group while neighbor states are detached, evaluates global residual and interface diagnostics, and then accepts the whole sweep or restores the previous state.\relax }}{8}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:schwarz_schematic}{{3}{8}{Conceptual and algorithmic view of fixed-atlas SA-PINN coupling. Panel (a) shows two overlapping chart images inside the physical body. The overlap $\Omega _{ij}$ induces the artificial interfaces $\Gamma _{ij}$ and $\Gamma _{ji}$ on which neighboring chart solutions exchange temporary transmission data during training. Panel (b) shows one multiplicative Schwarz sweep as implemented in the rabbit solver: the code snapshots the full chart state, updates one active chart or non-overlapping color group while neighbor states are detached, evaluates global residual and interface diagnostics, and then accepts the whole sweep or restores the previous state.\relax }{figure.caption.8}{}}
 \citation{paszke2019pytorch}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Technology stack and design principles}{8}{subsection.3.2}\protected@file@percent }
-\newlabel{sec:impl_stack}{{3.2}{8}{Technology stack and design principles}{subsection.3.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Four-stage geometry pipeline}{8}{subsection.3.3}\protected@file@percent }
-\newlabel{sec:impl_pipeline}{{3.3}{8}{Four-stage geometry pipeline}{subsection.3.3}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Fixed-atlas SA-PINN training by multiplicative Schwarz sweeps\relax }}{9}{algorithm.2}\protected@file@percent }
+\newlabel{alg:atlas_sapinn_training}{{2}{9}{Fixed-atlas SA-PINN training by multiplicative Schwarz sweeps\relax }{algorithm.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Implementation}{9}{section.3}\protected@file@percent }
+\newlabel{sec:implementation}{{3}{9}{Implementation}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Human-led research loop and implementation assistance}{9}{subsection.3.1}\protected@file@percent }
+\newlabel{sec:impl_aiassist}{{3.1}{9}{Human-led research loop and implementation assistance}{subsection.3.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Software stack and numerical separation of responsibilities}{9}{subsection.3.2}\protected@file@percent }
+\newlabel{sec:impl_stack}{{3.2}{9}{Software stack and numerical separation of responsibilities}{subsection.3.2}{}}
+\citation{raissi2019physicsinformed}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Human-led research loop with low-level AI implementation assistance. The author defines the governing equations, atlas design, benchmark scope, and acceptance criteria. The AI-assisted layer contributes candidate code, refactors, and plotting scripts. All outputs then pass through geometric quality assurance, canonical benchmark runs, and human review before entering the validated artifact set. The figure is included to clarify authorship and quality control, not to present AI as a co-designer of the scientific method.\relax }}{10}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:human_ai_workflow}{{4}{10}{Human-led research loop with low-level AI implementation assistance. The author defines the governing equations, atlas design, benchmark scope, and acceptance criteria. The AI-assisted layer contributes candidate code, refactors, and plotting scripts. All outputs then pass through geometric quality assurance, canonical benchmark runs, and human review before entering the validated artifact set. The figure is included to clarify authorship and quality control, not to present AI as a co-designer of the scientific method.\relax }{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Neural network architectures}{10}{subsection.3.3}\protected@file@percent }
+\newlabel{sec:impl_architectures}{{3.3}{10}{Neural network architectures}{subsection.3.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.1}Implicit geometry networks}{10}{subsubsection.3.3.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Neural-network families used in the implementation section. Configurations are quoted directly from source code class definitions and, where available, canonical checkpoint metadata. When a checkpoint records only a top-level architecture label, the table reports the constructor configuration instantiated by the corresponding solver path.\relax }}{11}{table.caption.11}\protected@file@percent }
+\newlabel{tab:impl_networks}{{2}{11}{Neural-network families used in the implementation section. Configurations are quoted directly from source code class definitions and, where available, canonical checkpoint metadata. When a checkpoint records only a top-level architecture label, the table reports the constructor configuration instantiated by the corresponding solver path.\relax }{table.caption.11}{}}
+\citation{he2016deep}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.2}Differentiable atlas realization networks}{12}{subsubsection.3.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.3}Chart-local field solvers}{12}{subsubsection.3.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.4}Architectural choices not used as trainable field networks in every benchmark}{13}{subsubsection.3.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Geometry pipeline and rigid quality assurance}{13}{subsection.3.4}\protected@file@percent }
+\newlabel{sec:impl_pipeline}{{3.4}{13}{Geometry pipeline and rigid quality assurance}{subsection.3.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 1: volumetric signed-distance modeling.}{13}{section*.12}\protected@file@percent }
+\newlabel{eq:impl_sdf_levelset}{{33}{13}{Stage 1: volumetric signed-distance modeling}{equation.3.33}{}}
+\newlabel{eq:impl_sdf_loss}{{34}{13}{Stage 1: volumetric signed-distance modeling}{equation.3.34}{}}
+\newlabel{eq:impl_sdf_sign}{{35}{13}{Stage 1: volumetric signed-distance modeling}{equation.3.35}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 2: atlas construction.}{13}{section*.13}\protected@file@percent }
+\newlabel{eq:impl_local_coords}{{36}{13}{Stage 2: atlas construction}{equation.3.36}{}}
+\newlabel{eq:impl_membership}{{37}{13}{Stage 2: atlas construction}{equation.3.37}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 3: decoder and mask training.}{14}{section*.14}\protected@file@percent }
+\newlabel{eq:impl_decoder_map}{{38}{14}{Stage 3: decoder and mask training}{equation.3.38}{}}
+\newlabel{eq:impl_mask_weights}{{39}{14}{Stage 3: decoder and mask training}{equation.3.39}{}}
+\newlabel{eq:impl_atlas_total}{{40}{14}{Stage 3: decoder and mask training}{equation.3.40}{}}
+\newlabel{eq:impl_atlas_recon}{{41}{14}{Stage 3: decoder and mask training}{equation.3.41}{}}
+\newlabel{eq:impl_atlas_domain}{{42}{14}{Stage 3: decoder and mask training}{equation.3.42}{}}
+\newlabel{eq:impl_atlas_mask}{{43}{14}{Stage 3: decoder and mask training}{equation.3.43}{}}
+\newlabel{eq:impl_atlas_overlap}{{44}{14}{Stage 3: decoder and mask training}{equation.3.44}{}}
+\newlabel{eq:impl_atlas_jac}{{45}{14}{Stage 3: decoder and mask training}{equation.3.45}{}}
+\newlabel{eq:impl_atlas_cov}{{46}{14}{Stage 3: decoder and mask training}{equation.3.46}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 4: iterative atlas refinement strategy.}{14}{section*.15}\protected@file@percent }
+\newlabel{eq:impl_gate_metrics}{{47}{14}{Stage 4: iterative atlas refinement strategy}{equation.3.47}{}}
+\newlabel{eq:impl_gate_rmse}{{48}{14}{Stage 4: iterative atlas refinement strategy}{equation.3.48}{}}
 \citation{yu2020gradient}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Solver architecture and training design}{9}{subsection.3.4}\protected@file@percent }
-\newlabel{sec:impl_solver}{{3.4}{9}{Solver architecture and training design}{subsection.3.4}{}}
-\newlabel{eq:compact_pou}{{29}{9}{Solver architecture and training design}{equation.3.29}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Benchmark problems and numerical results}{9}{section.4}\protected@file@percent }
-\newlabel{sec:benchmark_formulations}{{4}{9}{Benchmark problems and numerical results}{section.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Reporting protocol and evaluation criteria}{9}{subsection.4.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Benchmark-to-code map for the validated examples used in the main text. The run identifier indicates the canonical artifact used in each subsection below.\relax }}{10}{table.caption.9}\protected@file@percent }
-\newlabel{tab:benchmark_map}{{2}{10}{Benchmark-to-code map for the validated examples used in the main text. The run identifier indicates the canonical artifact used in each subsection below.\relax }{table.caption.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Example 1: forward Poisson on ellipsoid and star domains}{10}{subsection.4.2}\protected@file@percent }
-\newlabel{sec:example1}{{4.2}{10}{Example 1: forward Poisson on ellipsoid and star domains}{subsection.4.2}{}}
-\newlabel{eq:ex1_phys}{{30}{10}{Example 1: forward Poisson on ellipsoid and star domains}{equation.4.30}{}}
-\newlabel{eq:ex1_residual}{{31}{10}{Example 1: forward Poisson on ellipsoid and star domains}{equation.4.31}{}}
-\newlabel{eq:ex1_bc}{{32}{10}{Example 1: forward Poisson on ellipsoid and star domains}{equation.4.32}{}}
-\newlabel{eq:ellipsoid_exact}{{33}{10}{Example 1: forward Poisson on ellipsoid and star domains}{equation.4.33}{}}
-\newlabel{eq:star_exact}{{34}{10}{Example 1: forward Poisson on ellipsoid and star domains}{equation.4.34}{}}
-\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{10}{section*.10}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{10}{section*.11}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Background.}{11}{section*.12}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Major finding.}{11}{section*.13}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Representative numerical results.}{11}{section*.14}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Forward Poisson results on simply connected domains. The ellipsoid case serves as the clean verification example for the mapped operator, while the star-shaped domain highlights the extra difficulty introduced by a learned global map.\relax }}{11}{figure.caption.15}\protected@file@percent }
-\newlabel{fig:forward_poisson_examples}{{4}{11}{Forward Poisson results on simply connected domains. The ellipsoid case serves as the clean verification example for the mapped operator, while the star-shaped domain highlights the extra difficulty introduced by a learned global map.\relax }{figure.caption.15}{}}
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {Ellipsoid Poisson verification.}}}{11}{subfigure.4.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {Star-shaped-domain Poisson benchmark.}}}{11}{subfigure.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Example 2: rabbit Poisson on a fixed atlas}{11}{subsection.4.3}\protected@file@percent }
-\newlabel{sec:example2}{{4.3}{11}{Example 2: rabbit Poisson on a fixed atlas}{subsection.4.3}{}}
-\newlabel{eq:rabbit_poisson_exact}{{35}{11}{Example 2: rabbit Poisson on a fixed atlas}{equation.4.35}{}}
-\newlabel{eq:rabbit_poisson_loss}{{36}{12}{Example 2: rabbit Poisson on a fixed atlas}{equation.4.36}{}}
-\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{12}{section*.16}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{12}{section*.17}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Background.}{12}{section*.18}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Major finding.}{12}{section*.19}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Representative numerical result.}{12}{section*.20}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Example 3: torus synthetic inverse Neo-Hookean identification}{12}{subsection.4.4}\protected@file@percent }
-\newlabel{sec:example3}{{4.4}{12}{Example 3: torus synthetic inverse Neo-Hookean identification}{subsection.4.4}{}}
-\newlabel{eq:torus_prescribed_u}{{37}{12}{Example 3: torus synthetic inverse Neo-Hookean identification}{equation.4.37}{}}
-\newlabel{eq:torus_prescribed_F}{{38}{12}{Example 3: torus synthetic inverse Neo-Hookean identification}{equation.4.38}{}}
-\newlabel{eq:nh_stress}{{39}{12}{Example 3: torus synthetic inverse Neo-Hookean identification}{equation.4.39}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Rabbit Poisson benchmark on the fixed atlas. The figure is rendered directly from the canonical VTU export of \texttt  {attempt20c\_compact}. The left panel shows the recovered scalar field, the middle panel shows the surface error magnitude, and the right panel shows the interface residual. Taken together, the panels show that the solution is accurate and that the remaining chart-overlap mismatch stays localized rather than dominating the field.\relax }}{13}{figure.caption.21}\protected@file@percent }
-\newlabel{fig:rabbit_poisson_example}{{5}{13}{Rabbit Poisson benchmark on the fixed atlas. The figure is rendered directly from the canonical VTU export of \texttt {attempt20c\_compact}. The left panel shows the recovered scalar field, the middle panel shows the surface error magnitude, and the right panel shows the interface residual. Taken together, the panels show that the solution is accurate and that the remaining chart-overlap mismatch stays localized rather than dominating the field.\relax }{figure.caption.21}{}}
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {Predicted surface field on the canonical run.}}}{13}{subfigure.5.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {Surface error magnitude on the same run.}}}{13}{subfigure.5.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(c)}{\ignorespaces {Interface residual on the canonical surface export.}}}{13}{subfigure.5.3}\protected@file@percent }
-\newlabel{eq:torus_obs_traction}{{40}{13}{Example 3: torus synthetic inverse Neo-Hookean identification}{equation.4.40}{}}
-\newlabel{eq:torus_original_loss}{{41}{13}{Example 3: torus synthetic inverse Neo-Hookean identification}{equation.4.41}{}}
-\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{13}{section*.22}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{13}{section*.23}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Background.}{13}{section*.24}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Major finding.}{13}{section*.25}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Representative numerical result.}{13}{section*.26}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Original-atlas torus inverse benchmark. The left panel shows the prescribed synthetic deformation used to generate the observations, while the right panel reports the boundary traction-error magnitude on the canonical run. This makes the quality of the recovered solution visible directly in physical space rather than only through optimization histories.\relax }}{14}{figure.caption.27}\protected@file@percent }
-\newlabel{fig:torus_inverse_original_example}{{6}{14}{Original-atlas torus inverse benchmark. The left panel shows the prescribed synthetic deformation used to generate the observations, while the right panel reports the boundary traction-error magnitude on the canonical run. This makes the quality of the recovered solution visible directly in physical space rather than only through optimization histories.\relax }{figure.caption.27}{}}
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {Reference and deformed configurations.}}}{14}{subfigure.6.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {Boundary traction-error magnitude.}}}{14}{subfigure.6.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{14}{subsection.4.5}\protected@file@percent }
-\newlabel{sec:example4}{{4.5}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{subsection.4.5}{}}
-\newlabel{eq:bunny_sdf_normalized_coord}{{42}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.42}{}}
-\newlabel{eq:bunny_sdf_network}{{43}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.43}{}}
-\newlabel{eq:bunny_sdf_surface_normal}{{44}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.44}{}}
-\newlabel{eq:bunny_sdf_eikonal}{{45}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.45}{}}
-\newlabel{eq:bunny_sdf_sign}{{46}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.46}{}}
-\newlabel{eq:bunny_sdf_loss}{{47}{14}{Example 4: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.47}{}}
-\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{15}{section*.28}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{15}{section*.29}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Background.}{15}{section*.30}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Major finding.}{15}{section*.31}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Representative numerical result.}{15}{section*.32}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Stanford Bunny volumetric neural SDF benchmark. The left panel shows the learned signed-distance slices from the canonical SDF run \texttt  {bunny\_sdf\_v3}. The middle and right panels are rendered from the downstream Bunny surface export, which we use to illustrate the surface geometry supported by the learned SDF. The chart-partition view shows how the eight charts cover the imported PLY surface, and the blend-weight view shows that the dominant chart weight is close to one on most surface points, indicating that the overlap transitions remain localized rather than diffuse.\relax }}{15}{figure.caption.33}\protected@file@percent }
-\newlabel{fig:bunny_ply_example}{{7}{15}{Stanford Bunny volumetric neural SDF benchmark. The left panel shows the learned signed-distance slices from the canonical SDF run \texttt {bunny\_sdf\_v3}. The middle and right panels are rendered from the downstream Bunny surface export, which we use to illustrate the surface geometry supported by the learned SDF. The chart-partition view shows how the eight charts cover the imported PLY surface, and the blend-weight view shows that the dominant chart weight is close to one on most surface points, indicating that the overlap transitions remain localized rather than diffuse.\relax }{figure.caption.33}{}}
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {Learned SDF slices for the canonical volumetric neural SDF run.}}}{15}{subfigure.7.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {Surface chart partition rendered from the downstream Bunny surface export.}}}{15}{subfigure.7.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(c)}{\ignorespaces {Dominant blend weight on the same surface export.}}}{15}{subfigure.7.3}\protected@file@percent }
-\citation{elder1967transient}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Example 5: rabbit inverse Elder-type flow}{16}{subsection.4.6}\protected@file@percent }
-\newlabel{sec:example5}{{4.6}{16}{Example 5: rabbit inverse Elder-type flow}{subsection.4.6}{}}
-\newlabel{eq:rabbit_elder_perm}{{48}{16}{Example 5: rabbit inverse Elder-type flow}{equation.4.48}{}}
-\newlabel{eq:rabbit_elder_velocity}{{49}{16}{Example 5: rabbit inverse Elder-type flow}{equation.4.49}{}}
-\newlabel{eq:rabbit_elder_pde}{{50}{16}{Example 5: rabbit inverse Elder-type flow}{equation.4.50}{}}
-\newlabel{eq:rabbit_elder_loss}{{51}{16}{Example 5: rabbit inverse Elder-type flow}{equation.4.51}{}}
-\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{16}{section*.34}\protected@file@percent }
-\newlabel{eq:rabbit_elder_multiscale}{{52}{16}{Interpretation}{equation.4.52}{}}
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{16}{section*.35}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Background.}{16}{section*.36}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Major finding.}{17}{section*.37}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Representative numerical result.}{17}{section*.38}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Rabbit Elder-type inverse benchmark. The left panel shows the recovered pressure and concentration fields on the canonical long run, while the right panel shows the velocity error magnitude on the same geometry. Together they make it easier to judge both the physical state and the remaining error in the teacher-guided permeability-identification solve.\relax }}{17}{figure.caption.39}\protected@file@percent }
-\newlabel{fig:rabbit_elder_examples}{{8}{17}{Rabbit Elder-type inverse benchmark. The left panel shows the recovered pressure and concentration fields on the canonical long run, while the right panel shows the velocity error magnitude on the same geometry. Together they make it easier to judge both the physical state and the remaining error in the teacher-guided permeability-identification solve.\relax }{figure.caption.39}{}}
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {Field comparison for the canonical rabbit Elder run.}}}{17}{subfigure.8.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {Velocity error magnitude on the same run.}}}{17}{subfigure.8.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.7}Cross-example comparison and lessons learned}{17}{subsection.4.7}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Canonical validated results used in the main text. The torus inverse benchmark is a controlled synthetic identification problem, the Stanford Bunny row is a volumetric neural SDF benchmark on a mesh-derived geometry, and the rabbit Elder result is teacher-guided in the sense described in Section\nobreakspace  {}\ref  {sec:limitations}. $^*$Runtime for the Bunny neural SDF is approximate (training time not precisely recorded; $\approx $60--90\tmspace  +\thinmuskip {.1667em}min on Apple Silicon for 10{,}000 epochs).\relax }}{18}{table.caption.40}\protected@file@percent }
-\newlabel{tab:core_summary}{{3}{18}{Canonical validated results used in the main text. The torus inverse benchmark is a controlled synthetic identification problem, the Stanford Bunny row is a volumetric neural SDF benchmark on a mesh-derived geometry, and the rabbit Elder result is teacher-guided in the sense described in Section~\ref {sec:limitations}. $^*$Runtime for the Bunny neural SDF is approximate (training time not precisely recorded; $\approx $60--90\,min on Apple Silicon for 10{,}000 epochs).\relax }{table.caption.40}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}Limitations}{18}{section.5}\protected@file@percent }
-\newlabel{sec:limitations}{{5}{18}{Limitations}{section.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusions}{18}{section.6}\protected@file@percent }
-\newlabel{sec:conclusions}{{6}{18}{Conclusions}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{Remark on spherical reference domains.}{15}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Local solver schedule, adaptive regularization, and stabilization}{15}{subsection.3.5}\protected@file@percent }
+\newlabel{sec:impl_solver}{{3.5}{15}{Local solver schedule, adaptive regularization, and stabilization}{subsection.3.5}{}}
+\newlabel{eq:compact_pou_impl}{{49}{15}{Local solver schedule, adaptive regularization, and stabilization}{equation.3.49}{}}
+\newlabel{eq:adaptive_overlap_weight}{{50}{15}{Local solver schedule, adaptive regularization, and stabilization}{equation.3.50}{}}
+\newlabel{eq:adaptive_tau_schedule}{{51}{15}{Local solver schedule, adaptive regularization, and stabilization}{equation.3.51}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Benchmark problems and numerical results}{16}{section.4}\protected@file@percent }
+\newlabel{sec:benchmark_formulations}{{4}{16}{Benchmark problems and numerical results}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Reporting protocol and evaluation criteria}{16}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Example 1: forward Poisson on the ellipsoid}{16}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:example1}{{4.2}{16}{Example 1: forward Poisson on the ellipsoid}{subsection.4.2}{}}
+\newlabel{eq:ex1_phys}{{52}{16}{Example 1: forward Poisson on the ellipsoid}{equation.4.52}{}}
+\newlabel{eq:ex1_residual}{{53}{16}{Example 1: forward Poisson on the ellipsoid}{equation.4.53}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Traceability map for the main-text examples. The table records the canonical artifact used in each subsection narrative; interpretation and scientific claims are carried by the example discussions themselves.\relax }}{17}{table.caption.17}\protected@file@percent }
+\newlabel{tab:benchmark_map}{{3}{17}{Traceability map for the main-text examples. The table records the canonical artifact used in each subsection narrative; interpretation and scientific claims are carried by the example discussions themselves.\relax }{table.caption.17}{}}
+\newlabel{eq:ex1_bc}{{54}{17}{Example 1: forward Poisson on the ellipsoid}{equation.4.54}{}}
+\newlabel{eq:ellipsoid_exact}{{55}{17}{Example 1: forward Poisson on the ellipsoid}{equation.4.55}{}}
+\@writefile{toc}{\contentsline {paragraph}{Claim.}{17}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why this matters.}{17}{section*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What the code does.}{17}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Evidence.}{17}{section*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What this warrants.}{17}{section*.22}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Example 2: rabbit Poisson on a fixed atlas}{17}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:example2}{{4.3}{17}{Example 2: rabbit Poisson on a fixed atlas}{subsection.4.3}{}}
+\newlabel{eq:rabbit_poisson_exact}{{56}{17}{Example 2: rabbit Poisson on a fixed atlas}{equation.4.56}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Ellipsoidal verification benchmark. The top row shows the predicted solution on the mapped unit-ball slice and on the corresponding physical ellipsoidal slice; the bottom row shows the absolute error in the same two coordinates. The close agreement between mapped and physical views confirms that the operator pullback and the geometric map are both implemented correctly in this analytic case.\relax }}{18}{figure.caption.23}\protected@file@percent }
+\newlabel{fig:forward_poisson_ellipsoid}{{5}{18}{Ellipsoidal verification benchmark. The top row shows the predicted solution on the mapped unit-ball slice and on the corresponding physical ellipsoidal slice; the bottom row shows the absolute error in the same two coordinates. The close agreement between mapped and physical views confirms that the operator pullback and the geometric map are both implemented correctly in this analytic case.\relax }{figure.caption.23}{}}
+\newlabel{eq:rabbit_poisson_loss}{{57}{18}{Example 2: rabbit Poisson on a fixed atlas}{equation.4.57}{}}
+\@writefile{toc}{\contentsline {paragraph}{Claim.}{19}{section*.24}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why this matters.}{19}{section*.25}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What the code does.}{19}{section*.26}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Evidence.}{19}{section*.27}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What this warrants.}{19}{section*.28}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{19}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:example3}{{4.4}{19}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{subsection.4.4}{}}
+\newlabel{eq:bunny_sdf_normalized_coord}{{58}{19}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.58}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Representative rabbit-surface visualization for the fixed-atlas SA-PINN solver. The surface is reconstructed from a dense boundary postprocessing pass of the rabbit Poisson solution family and shown from one fixed camera in all three panels. Panel (a) shows the recovered scalar field, panel (b) shows the absolute error, and panel (c) shows the chart entropy induced by the partition-of-unity weights. The first two panels show that the solved field remains smooth on the complex geometry, while the entropy panel shows that uncertainty is confined to narrow overlap traces rather than spreading over the whole surface.\relax }}{20}{figure.caption.29}\protected@file@percent }
+\newlabel{fig:rabbit_poisson_example}{{6}{20}{Representative rabbit-surface visualization for the fixed-atlas SA-PINN solver. The surface is reconstructed from a dense boundary postprocessing pass of the rabbit Poisson solution family and shown from one fixed camera in all three panels. Panel (a) shows the recovered scalar field, panel (b) shows the absolute error, and panel (c) shows the chart entropy induced by the partition-of-unity weights. The first two panels show that the solved field remains smooth on the complex geometry, while the entropy panel shows that uncertainty is confined to narrow overlap traces rather than spreading over the whole surface.\relax }{figure.caption.29}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Archived training diagnostics for the canonical rabbit Poisson run \texttt  {attempt20c\_compact}. Each panel reports one scalar trace recorded over Schwarz iterations: the weighted total objective used by the solver, the PDE residual loss, the boundary loss, the interface-value loss, the interface-flux loss, and the evaluation relative $L^2$ error. Presenting these quantities in separate panels makes the balance between objectives easier to read than an overlaid weighted-objective plot, while still documenting the aggregate score used in the implementation.\relax }}{20}{figure.caption.30}\protected@file@percent }
+\newlabel{fig:rabbit_poisson_training_losses}{{7}{20}{Archived training diagnostics for the canonical rabbit Poisson run \texttt {attempt20c\_compact}. Each panel reports one scalar trace recorded over Schwarz iterations: the weighted total objective used by the solver, the PDE residual loss, the boundary loss, the interface-value loss, the interface-flux loss, and the evaluation relative $L^2$ error. Presenting these quantities in separate panels makes the balance between objectives easier to read than an overlaid weighted-objective plot, while still documenting the aggregate score used in the implementation.\relax }{figure.caption.30}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Final chartwise relative $L^2$ error for the selected checkpoint of \texttt  {attempt20c\_compact}. The saved archive does not contain chart-by-chart loss histories during training, so the chart-level diagnostic is reported at the final state only. The plot shows that the global error is not distributed uniformly across the atlas: a small subset of charts remains more difficult, with chart\nobreakspace  {}4 acting as the dominant local error contributor in the canonical run.\relax }}{21}{figure.caption.31}\protected@file@percent }
+\newlabel{fig:rabbit_poisson_chart_errors}{{8}{21}{Final chartwise relative $L^2$ error for the selected checkpoint of \texttt {attempt20c\_compact}. The saved archive does not contain chart-by-chart loss histories during training, so the chart-level diagnostic is reported at the final state only. The plot shows that the global error is not distributed uniformly across the atlas: a small subset of charts remains more difficult, with chart~4 acting as the dominant local error contributor in the canonical run.\relax }{figure.caption.31}{}}
+\newlabel{eq:bunny_sdf_network}{{59}{21}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.59}{}}
+\newlabel{eq:bunny_sdf_body}{{60}{21}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.60}{}}
+\newlabel{eq:bunny_sdf_surface_normal}{{61}{21}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.61}{}}
+\newlabel{eq:bunny_sdf_eikonal}{{62}{21}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.62}{}}
+\newlabel{eq:bunny_sdf_sign}{{63}{21}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.63}{}}
+\newlabel{eq:bunny_sdf_loss}{{64}{22}{Example 3: Stanford Bunny PLY volumetric neural SDF benchmark}{equation.4.64}{}}
+\@writefile{toc}{\contentsline {paragraph}{Claim.}{22}{section*.32}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why this matters.}{22}{section*.33}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What the code does.}{22}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Evidence.}{22}{section*.35}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What this warrants.}{22}{section*.36}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Stanford Bunny volumetric neural SDF benchmark, Part I. Panel (a) shows orthogonal slices of the learned scalar field together with the zero contour, which captures the bulk Bunny geometry. Panel (b) reports the optimization traces for the four training objectives. The main point is that the surface and normal terms decay strongly, while the Eikonal and sign-anchor terms remain the dominant sources of error, so the learned field is more reliable as a surface-capturing volumetric model than as a uniformly accurate signed-distance function.\relax }}{23}{figure.caption.37}\protected@file@percent }
+\newlabel{fig:bunny_sdf_learning}{{9}{23}{Stanford Bunny volumetric neural SDF benchmark, Part I. Panel (a) shows orthogonal slices of the learned scalar field together with the zero contour, which captures the bulk Bunny geometry. Panel (b) reports the optimization traces for the four training objectives. The main point is that the surface and normal terms decay strongly, while the Eikonal and sign-anchor terms remain the dominant sources of error, so the learned field is more reliable as a surface-capturing volumetric model than as a uniformly accurate signed-distance function.\relax }{figure.caption.37}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Stanford Bunny volumetric neural SDF benchmark, Part II. The downstream Bunny surface export is used to visualize the chart partition and the dominant blend weight induced by the learned volumetric geometry model. The chart-partition view shows that the eight charts cover most of the imported PLY surface cleanly, while the dominant blend-weight view shows that the active chart weight remains close to one on most surface points. Together these panels support the qualified claim made in the text: the learned field is already usable for downstream atlas construction over most of the geometry, even though thin-feature volumetric ambiguity remains unresolved.\relax }}{23}{figure.caption.38}\protected@file@percent }
+\newlabel{fig:bunny_sdf_surface}{{10}{23}{Stanford Bunny volumetric neural SDF benchmark, Part II. The downstream Bunny surface export is used to visualize the chart partition and the dominant blend weight induced by the learned volumetric geometry model. The chart-partition view shows that the eight charts cover most of the imported PLY surface cleanly, while the dominant blend-weight view shows that the active chart weight remains close to one on most surface points. Together these panels support the qualified claim made in the text: the learned field is already usable for downstream atlas construction over most of the geometry, even though thin-feature volumetric ambiguity remains unresolved.\relax }{figure.caption.38}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Example 4: torus synthetic inverse Neo-Hookean identification}{24}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:example4}{{4.5}{24}{Example 4: torus synthetic inverse Neo-Hookean identification}{subsection.4.5}{}}
+\newlabel{eq:torus_prescribed_u}{{65}{24}{Example 4: torus synthetic inverse Neo-Hookean identification}{equation.4.65}{}}
+\newlabel{eq:torus_prescribed_F}{{66}{24}{Example 4: torus synthetic inverse Neo-Hookean identification}{equation.4.66}{}}
+\newlabel{eq:nh_stress}{{67}{24}{Example 4: torus synthetic inverse Neo-Hookean identification}{equation.4.67}{}}
+\newlabel{eq:torus_obs_traction}{{68}{24}{Example 4: torus synthetic inverse Neo-Hookean identification}{equation.4.68}{}}
+\newlabel{eq:torus_original_loss}{{69}{24}{Example 4: torus synthetic inverse Neo-Hookean identification}{equation.4.69}{}}
+\@writefile{toc}{\contentsline {paragraph}{Claim.}{24}{section*.39}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why this matters.}{24}{section*.40}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What the code does.}{24}{section*.41}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Evidence.}{24}{section*.42}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What this warrants.}{25}{section*.43}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Immediate next step: forward nonlinear field solve.}{25}{section*.44}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Controlled torus inverse benchmark rendered directly from the dense VTU export of the canonical run. The left panel shows the prescribed deformed configuration colored by displacement magnitude, and the right panel shows the boundary traction-error magnitude on the same geometry and camera. Because the kinematics are prescribed, these panels should be read as diagnostics of the observation fit rather than as evidence of a learned displacement field. The main conclusion is that the traction mismatch remains small and spatially localized over the observed boundary surface.\relax }}{25}{figure.caption.45}\protected@file@percent }
+\newlabel{fig:torus_inverse_original_fields}{{11}{25}{Controlled torus inverse benchmark rendered directly from the dense VTU export of the canonical run. The left panel shows the prescribed deformed configuration colored by displacement magnitude, and the right panel shows the boundary traction-error magnitude on the same geometry and camera. Because the kinematics are prescribed, these panels should be read as diagnostics of the observation fit rather than as evidence of a learned displacement field. The main conclusion is that the traction mismatch remains small and spatially localized over the observed boundary surface.\relax }{figure.caption.45}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Cross-example comparison and lessons learned}{25}{subsection.4.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Parameter-identification history for the dense torus benchmark. The plot shows the relative errors of $\mu $ and $K$ together with the traction-mismatch trace recorded during optimization. The figure supports the benchmark claim in the text: under known kinematics, the inverse trajectory is stable, the parameters converge rapidly into the correct regime, and the traction mismatch decreases to the $10^{-8}$ loss level by the end of the run.\relax }}{26}{figure.caption.46}\protected@file@percent }
+\newlabel{fig:torus_inverse_original_convergence}{{12}{26}{Parameter-identification history for the dense torus benchmark. The plot shows the relative errors of $\mu $ and $K$ together with the traction-mismatch trace recorded during optimization. The figure supports the benchmark claim in the text: under known kinematics, the inverse trajectory is stable, the parameters converge rapidly into the correct regime, and the traction mismatch decreases to the $10^{-8}$ loss level by the end of the run.\relax }{figure.caption.46}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Canonical main-text results organized by argumentative role. The table summarizes what each example supports, the main evidence behind that support, and the main caution that keeps the claim appropriately bounded.\relax }}{26}{table.caption.47}\protected@file@percent }
+\newlabel{tab:core_summary}{{4}{26}{Canonical main-text results organized by argumentative role. The table summarizes what each example supports, the main evidence behind that support, and the main caution that keeps the claim appropriately bounded.\relax }{table.caption.47}{}}
+\citation{de_souza_neto_computational_2011}
+\citation{quarteroni1999domain,de_souza_neto_computational_2011}
+\citation{shukla2021parallel,moseley2021fbpinns}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Discussions}{27}{section.5}\protected@file@percent }
+\newlabel{sec:discussion}{{5}{27}{Discussions}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}What the four main examples establish}{27}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Example 1: ellipsoid verification.}{27}{section*.49}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Example 2: rabbit Poisson on a fixed atlas.}{27}{section*.50}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Example 3: Stanford Bunny volumetric neural SDF.}{27}{section*.51}\protected@file@percent }
+\citation{williams2019deep}
+\citation{de_souza_neto_computational_2011}
+\citation{shukla2021parallel,moseley2021fbpinns}
+\@writefile{toc}{\contentsline {paragraph}{Example 4: torus synthetic inverse Neo-Hookean identification.}{28}{section*.52}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Method-level comparison with alternative workflows}{28}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Current limitations and future development priorities}{28}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusions}{29}{section.6}\protected@file@percent }
+\newlabel{sec:conclusions}{{6}{29}{Conclusions}{section.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation details and hardware backends}{29}{appendix.A}\protected@file@percent }
+\newlabel{sec:appendix_hardware}{{A}{29}{Implementation details and hardware backends}{appendix.A}{}}
 \bibstyle{unsrtnat}
 \bibdata{main}
 \bibcite{raissi2019physicsinformed}{{1}{2019}{{Raissi et~al.}}{{Raissi, Perdikaris, and Karniadakis}}}
 \bibcite{quarteroni1999domain}{{2}{1999}{{Quarteroni and Valli}}{{}}}
-\bibcite{elder1967transient}{{3}{1967}{{Elder}}{{}}}
+\bibcite{tezaur2025hybrid}{{3}{2025}{{Tezaur et~al.}}{{Tezaur, Parish, Gruber, Moore, Wentland, and Mota}}}
+\bibcite{shukla2021parallel}{{4}{2021}{{Shukla et~al.}}{{Shukla, Jagtap, and Karniadakis}}}
+\bibcite{moseley2021fbpinns}{{5}{2021}{{Moseley et~al.}}{{Moseley, Markham, and Nissen-Meyer}}}
+\bibcite{paszke2019pytorch}{{6}{2019}{{Paszke et~al.}}{{Paszke, Gross, Massa, Lerer, Bradbury, Chanan, Killeen, Lin, Gimelshein, Antiga, et~al.}}}
+\bibcite{he2016deep}{{7}{2016}{{He et~al.}}{{He, Zhang, Ren, and Sun}}}
+\bibcite{yu2020gradient}{{8}{2020}{{Yu et~al.}}{{Yu, Kumar, Gupta, Levine, Hausman, and Finn}}}
+\bibcite{de_souza_neto_computational_2011}{{9}{2011}{{de~Souza~Neto et~al.}}{{de~Souza~Neto, Peric, and Owen}}}
+\bibcite{williams2019deep}{{10}{2019}{{Williams et~al.}}{{Williams, Schneider, Silva, Zorin, Bruna, and Panozzo}}}
