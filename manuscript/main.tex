@@ -6,10 +6,9 @@
 \usepackage{amssymb}
 \usepackage{listings}
 \usepackage{mathrsfs}
-\usepackage{times}
-\usepackage{float}
+\usepackage{newtxtext,newtxmath} % unified Times-compatible text+math font (replaces times+mathpazo)
 \usepackage{xcolor}
-\usepackage{setspace}
+% Removed: float (only needed for [H], now [htbp] throughout); setspace (unused).
 \usepackage{soul}
 \let\proof\relax
 \let\endproof\relax
@@ -17,7 +16,7 @@
 \usepackage{amsthm}
 \usepackage{eucal}
 \usepackage{enumerate}
-\usepackage[letterpaper,margin=3cm]{geometry}
+% geometry package removed: svjour3 defines its own page layout
 \usepackage[title]{appendix}
 \usepackage{array}
 \usepackage{calligra}
@@ -37,7 +36,6 @@ linktocpage=true, % make the page number as hyperlink in table of content
 hyperindex=true
 ]{hyperref}
 
-\usepackage{lipsum}
 \usepackage{subfig}
 \usepackage{natbib}
 %\setcitestyle{authoryear}
@@ -48,7 +46,8 @@ hyperindex=true
 \usepackage{epstopdf}
 \usepackage{booktabs}
 \usepackage{lineno}
-\usepackage{mathpazo}
+%\linenumbers  % uncomment for review submission
+% mathpazo removed: replaced by newtxtext,newtxmath above
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric}
 \usetikzlibrary{arrows}
@@ -188,7 +187,7 @@ hyperindex=true
 \maketitle
 
 \begin{abstract}
-We introduce a geometry-informed neural atlas for boundary-value problems on complex three-dimensional domains. The key idea is to replace a single global parametrization by overlapping volumetric charts, pull the governing equations back to simple chart-local coordinates, and couple chart-local neural solvers through a Schwarz alternating update. This separation of geometry, local PDE approximation, and interface transmission is the main technical contribution of the work: it avoids volumetric meshing, reduces geometric distortion, and gives a practical route for training neural solvers on domains such as the Stanford rabbit and the Stanford Bunny PLY. The manuscript is written to match the validated code exactly. The strongest field-solve result is a fixed-atlas rabbit Poisson benchmark, and the paper also reports a volumetric neural signed-distance benchmark on the Stanford Bunny PLY that supports downstream atlas construction from real surface data. The inverse evidence is reported in the form supported by the present implementation: controlled synthetic Neo-Hookean identification on a torus and a teacher-guided Elder-type permeability benchmark on the rabbit. Taken together, these results show that the atlas-based SA-PINN framework is a viable computational technology for geometry-intensive problems, while also making clear which inverse settings are mature and which still require additional stabilization.
+We introduce a geometry-informed neural atlas framework for solving boundary-value problems on complex three-dimensional domains without volumetric meshing. The domain is covered by overlapping volumetric charts; governing equations are pulled back to simple chart-local coordinates via the Jacobian of each chart map; and chart-local neural solvers are coupled through a Schwarz alternating update. This separation of geometry handling, local PDE approximation, and interface transmission constitutes the main technical contribution: it reduces geometric distortion and yields a practical training procedure for physics-informed neural networks (PINNs) on geometries imported from standard surface data. The framework is validated on five benchmarks. A forward Poisson solve on an analytic ellipsoid achieves a relative $L^2$ error of $2.26\times10^{-3}$, confirming the correctness of the mapped-operator implementation. A fixed-atlas Schwarz-coupled Poisson solve on the Stanford rabbit interior reaches $2.21\times10^{-2}$, demonstrating chart-local field training on a genuinely complex volumetric geometry. A volumetric neural signed-distance benchmark on the Stanford Bunny PLY surface produces a surface loss of $1.66\times10^{-2}$ and normal-alignment loss of $3.18\times10^{-2}$, bridging the gap between real scan geometry and downstream atlas construction. A synthetic Neo-Hookean parameter-identification benchmark on a torus recovers both material constants to a traction relative $L^2$ error of $2.35\times10^{-7}$. Finally, a teacher-guided Elder-type permeability identification on the rabbit recovers the scalar permeability factor to $3.00\%$ relative error with a mean principal-axis error of $2.70^\circ$. Taken together, these results show that the atlas-based SA-PINN framework is a viable computational technology for geometry-intensive forward and inverse problems, while making explicit which settings are mature and which require additional stabilization.
 \end{abstract}
 
 \keywords{coordinate charts, Schwarz method, physics-informed neural networks, meshfree methods, complex geometry}
@@ -196,7 +195,7 @@ We introduce a geometry-informed neural atlas for boundary-value problems on com
 \section{Introduction} \label{sec:introduction}
 Classical numerical solution of PDEs on three-dimensional bodies with intricate geometry still depends heavily on volumetric meshing. For many of the geometries considered in this work, such as a Stanford rabbit interior or a torus with overlapping chart parametrizations, mesh generation and mesh quality control are substantial tasks in their own right. A chart-based meshfree alternative is attractive because it separates geometry handling from local PDE approximation: the geometry is carried by chart maps, while the PDE is enforced in chart-local reference coordinates.
 
-Our computational viewpoint sits at the intersection of two mature ideas. Physics-informed neural networks provide a meshfree route for solving forward and inverse PDE problems \citep{raissi2019physicsinformed}, while Schwarz-type overlapping domain decomposition provides a classical way to couple local subproblems on overlapping patches \citep{quarteroni1999domain}. The atlas-based SA-PINN formulation developed here combines these ideas, although the current repository realizes this full picture more clearly in some benchmarks than in others.
+Our computational viewpoint sits at the intersection of two mature ideas. Physics-informed neural networks (PINNs) provide a meshfree route for solving forward and inverse PDE problems \citep{raissi2019physicsinformed}, while Schwarz-type overlapping domain decomposition provides a classical way to couple local subproblems on overlapping patches \citep{quarteroni1999domain}. The atlas-based Schwarz-alternating PINN (SA-PINN) formulation developed here combines these ideas, although the current repository realizes this full picture more clearly in some benchmarks than in others.
 
 The basic idea is geometric divide-and-conquer. Instead of insisting on a single global volumetric parametrization, we represent the physical domain by an atlas of overlapping volumetric charts. Each chart supplies a local change of variables from a simple reference patch to a physical subdomain. Local neural surrogates are trained in those chart coordinates, and a Schwarz alternating procedure communicates boundary and overlap information between neighboring charts. In the current code release this strategy is realized most fully for the rabbit Poisson benchmark, where chart-local field solves, interface penalties, and alternating updates are all active.
 
@@ -277,7 +276,7 @@ g_h(x)=\sum_{i=1}^{M}\omega_i(x)\,\widehat{g}_i(\pi_i(x)).
 \label{eq:atlas_blend}
 \end{equation}
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \caption{Notation roadmap for Section~\ref{sec:methodology}.}
 \label{tab:notation}
@@ -314,7 +313,7 @@ Category & Symbol & Meaning \\
 
 Figure~\ref{fig:atlas_slice} gives a schematic 2D slice through the volumetric atlas used in the analysis. The caption states explicitly that the drawing is a slice, so the figure illustrates the three-dimensional construction without suggesting that the charts are surface patches.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[scale=0.9,>=stealth]
 % reference charts
@@ -454,7 +453,7 @@ and the pulled-back Neumann residual is
 \paragraph{Interpretation.}
 Equation \eqref{eq:mapped_residual} is the practical rule used inside every chart. In code, we sample points in the easy reference patch, evaluate the neural network and its derivatives there, and then use the Jacobian of the chart map to recover the physical PDE. This is the main computational benefit of the atlas: geometry stays in the map, while the training points stay in simple local coordinates.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[scale=0.95,>=stealth]
 % reference patch
@@ -524,7 +523,7 @@ where $\mathcal{L}_{\mathrm{bij}}$ penalizes small or negative Jacobian determin
 \paragraph{Interpretation.}
 This global-map stage is a special case, not the default workflow of the paper. It is useful when one smooth map from the unit ball to the domain is available or can be learned reliably. For the more complicated rabbit and torus examples, we do not rely on one global map; we use a fixed overlapping atlas instead.
 
-\begin{algorithm}[H]
+\begin{algorithm}[htbp]
 \caption{Training a learned global volumetric map for simply connected domains}
 \label{alg:global_map_training}
 \begin{algorithmic}[1]
@@ -608,7 +607,7 @@ u_h^{(k)}(x)=\sum_{i=1}^{M}\omega_i(x)\,u_i(x;\theta_i^{(k)}).
 \paragraph{Interpretation.}
 For a reader used to standard PINNs, the Schwarz idea is simpler than it may first appear. We do not train one global network on the whole rabbit at once. Instead, we update one chart-local network at a time, keep the neighboring charts fixed during that local solve, and penalize the mismatch on the overlaps. After cycling through all charts, we refresh the interface data and repeat. This is the training pattern used in the rabbit Poisson solver and, with extra data terms, in the rabbit Elder inverse solver as well.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[scale=0.95,>=stealth]
 % physical chart slices
@@ -645,7 +644,7 @@ For a reader used to standard PINNs, the Schwarz idea is simpler than it may fir
 \label{fig:schwarz_schematic}
 \end{figure}
 
-\begin{algorithm}[H]
+\begin{algorithm}[htbp]
 \caption{Fixed-atlas SA-PINN training by multiplicative Schwarz sweeps}
 \label{alg:atlas_sapinn_training}
 \begin{algorithmic}[1]
@@ -683,7 +682,7 @@ All reported runs were executed on an Apple Silicon laptop using MPS with CPU fa
 
 We use the following evaluation criteria throughout this section. For forward Poisson problems, quality is measured by the relative $L^2$ error, the absolute $L^2$ error, and the maximum pointwise error, while performance is summarized by runtime and training difficulty. For the volumetric neural SDF benchmark, we report the surface loss, normal-alignment loss, Eikonal loss, and sign-anchor loss, since these directly measure the geometric quality of the learned level-set representation. For the torus inverse benchmark, quality is judged by the observation mismatch and the relative errors in the recovered constitutive parameters, together with runtime. For the rabbit Elder benchmark, we report the scalar permeability error, the mean and maximum eigenvalue errors, the mean axis-angle error, and the final interface-flux mismatch. In that last case, the canonical validated configuration also includes the weak teacher-guided pre-conditioning term discussed in Section~\ref{sec:limitations}.
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \tiny
 \setlength{\tabcolsep}{1.5pt}
@@ -714,19 +713,19 @@ u=g \quad \text{on }\partial\Omega.
 \end{equation}
 For a chart-local scalar field, the mapped residual is
 \begin{equation}
-\widehat{\mathcal{R}}^{(1)}_i(\xi)
+\widehat{\mathcal{R}}^{(1)}_i(\zeta)
 :=
--\nabla_\xi\cdot\left(
-\mathbf{A}_i(\xi)\nabla_\xi \widehat{u}_i(\xi)
+-\nabla_\zeta\cdot\left(
+\mathbf{A}_i(\zeta)\nabla_\zeta \widehat{u}_i(\zeta)
 \right)
-- j_i(\xi)\,f(\varphi_i(\xi)),
+- j_i(\zeta)\,f(\varphi_i(\zeta)),
 \qquad
-\mathbf{A}_i(\xi):=j_i(\xi)\mathbf{J}_i(\xi)^{-1}\mathbf{J}_i(\xi)^{-T}.
+\mathbf{A}_i(\zeta):=j_i(\zeta)\mathbf{J}_i(\zeta)^{-1}\mathbf{J}_i(\zeta)^{-T}.
 \label{eq:ex1_residual}
 \end{equation}
 The boundary loss is
 \begin{equation}
-\widehat{\mathcal{B}}^{(1)}_{i,D}(\xi):=\widehat{u}_i(\xi)-g(\varphi_i(\xi)).
+\widehat{\mathcal{B}}^{(1)}_{i,D}(\zeta):=\widehat{u}_i(\zeta)-g(\varphi_i(\zeta)).
 \label{eq:ex1_bc}
 \end{equation}
 
@@ -734,11 +733,11 @@ The two validated Example 1 cases differ only in the chart and manufactured solu
 \begin{enumerate}[leftmargin=*]
 \item \textbf{Ellipsoid verification.} A single analytic map
 \[
-\varphi(\xi_1,\xi_2,\xi_3)=(a\xi_1,b\xi_2,c\xi_3)
+\varphi(\zeta_1,\zeta_2,\zeta_3)=(a\zeta_1,b\zeta_2,c\zeta_3)
 \]
 pulls the ellipsoid back to the unit ball. The exact solution in reference coordinates is
 \begin{equation}
-\widehat{u}^{\ast}_{\mathrm{ell}}(\xi)=1-\|\xi\|_2^2,
+\widehat{u}^{\ast}_{\mathrm{ell}}(\zeta)=1-\|\zeta\|_2^2,
 \label{eq:ellipsoid_exact}
 \end{equation}
 which yields a constant mapped forcing.
@@ -760,12 +759,12 @@ Example~1 establishes the baseline numerical behavior of the mapped Poisson oper
 The ellipsoid case is a classical verification problem because the geometry map is analytic and the exact solution is known in closed form. The star-domain case is harder because the geometry itself is learned first, so the PDE solver inherits whatever distortion remains in that map. Together, these two cases separate operator verification from geometry-learning difficulty.
 
 \paragraph{Major finding.}
-The ellipsoid benchmark reaches a relative $L^2$ error of $2.26\times 10^{-3}$ and therefore serves as the clean verification case. The star-domain benchmark reaches a relative $L^2$ error of $2.59\times 10^{-1}$, which is substantially worse but still informative because it exposes the current limitations of the learned global-map pipeline.
+The ellipsoid benchmark reaches a relative $L^2$ error of $2.26\times 10^{-3}$ and therefore serves as the clean verification case. The star-domain benchmark reaches a relative $L^2$ error of $2.59\times 10^{-1}$: this accuracy is substantially lower than the other benchmarks and reflects a current limitation of the learned global-map pipeline (see also Section~\ref{sec:limitations}). The result is retained because it probes the learned-map stage and helps isolate mapped-operator accuracy from the difficulty of learning the geometry itself. A purely analytic or CAD-defined star map would be expected to reduce this error significantly.
 
 \paragraph{Representative numerical results.}
 For the ellipsoid verification case, the solver reaches a relative $L^2$ error of $2.26\times 10^{-3}$, an absolute $L^2$ error of $1.08\times 10^{-3}$, and a maximum pointwise error of $5.23\times 10^{-3}$ in $106.3$\,s. For the star-shaped domain, the canonical run reaches a relative $L^2$ error of $2.59\times 10^{-1}$, an absolute $L^2$ error of $1.04\times 10^{-1}$, and a maximum pointwise error of $5.06\times 10^{-1}$ in $229.4$\,s. The comparison is useful because it separates operator verification from geometry-learning difficulty: the ellipsoid confirms that the mapped Poisson operator is implemented correctly on a benign geometry, while the star-domain result shows that the learned global map remains the limiting factor in the simply connected pipeline.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \subfloat[Ellipsoid Poisson verification.]{
 \includegraphics[width=0.47\textwidth]{figures_cmame_core/example1_forward_poisson/pinn_3d_ellipsoid_mapped_sphere.png}}
@@ -801,7 +800,7 @@ The interior and boundary residuals are the same as in Example~1, but the loss a
 \lambda_{\mathrm{if,val}}\sum_{i<j}\mathbb{E}_{\widehat{\Omega}_{ij}}
 \left[
 \left|
-\widehat{u}_i(\xi)-\widehat{u}_j(\psi_{ij}(\xi))
+\widehat{u}_i(\zeta)-\widehat{u}_j(\psi_{ij}(\zeta))
 \right|^2
 \right]
 \nonumber\\
@@ -828,12 +827,12 @@ Example~2 is the flagship demonstration of the full SA-PINN workflow on a genuin
 The Stanford rabbit interior is much more demanding than the simply connected examples because no single low-distortion global map is available. The benchmark therefore uses a 12-chart atlas and trains chart-local scalar solution networks with interface value and flux penalties. This is the closest example in the codebase to the methodological picture developed in Section~\ref{sec:methodology}.
 
 \paragraph{Major finding.}
-The validated flagship run reaches a relative $L^2$ error of $2.21\times 10^{-2}$ with a final interface-flux mismatch of approximately $1.16\times 10^{-2}$. This is the strongest field-solve evidence in the current release and the main basis for claims about Schwarz-coupled chart-local training on complex volumetric geometry.
+The validated flagship run reaches a relative $L^2$ error of $2.21\times 10^{-2}$ with a final interface-flux mismatch of approximately $1.16\times 10^{-2}$. This result is achieved with the optional manufactured-solution anchor $\mathcal{L}_{\mathrm{sup}}$ active (see \eqref{eq:rabbit_poisson_loss}), which provides weak supervision at interior collocation points and aids Schwarz convergence on the 12-chart atlas. This is the strongest field-solve evidence in the current release and the main basis for claims about Schwarz-coupled chart-local training on complex volumetric geometry.
 
 \paragraph{Representative numerical result.}
 The canonical run \texttt{attempt20c\_compact} attains a relative $L^2$ error of $2.21\times 10^{-2}$, an absolute $L^2$ error of $8.57\times 10^{-3}$, and a maximum pointwise error of $6.78\times 10^{-2}$. Its final interface-flux mismatch is $1.16\times 10^{-2}$, and the total runtime is $3659.0$\,s. A shorter validated run, \texttt{attempt19\_w4}, reaches a slightly larger relative $L^2$ error of $2.53\times 10^{-2}$ in $403.9$\,s while reducing the interface-flux mismatch further to $2.52\times 10^{-3}$. This tradeoff shows that the rabbit solve can be tuned either toward peak accuracy or toward lower cost and tighter overlap agreement without changing the underlying formulation.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \subfloat[Predicted surface field on the canonical run.]{
 \includegraphics[width=0.32\textwidth]{figures_cmame_core/example2_rabbit_poisson/rabbit_poisson_surface_pred.png}}
@@ -843,7 +842,7 @@ The canonical run \texttt{attempt20c\_compact} attains a relative $L^2$ error of
 \hfill
 \subfloat[Interface residual on the canonical surface export.]{
 \includegraphics[width=0.32\textwidth]{figures_cmame_core/example2_rabbit_poisson/rabbit_poisson_surface_interface.png}}
-\caption{Rabbit Poisson benchmark on the fixed atlas. The updated figure is rendered directly from the canonical VTU export of \texttt{attempt20c\_compact}. The left panel shows the recovered scalar field, the middle panel shows the surface error magnitude, and the right panel shows the interface residual. Taken together, the panels show that the solution is accurate and that the remaining chart-overlap mismatch stays localized rather than dominating the field.}
+\caption{Rabbit Poisson benchmark on the fixed atlas. The figure is rendered directly from the canonical VTU export of \texttt{attempt20c\_compact}. The left panel shows the recovered scalar field, the middle panel shows the surface error magnitude, and the right panel shows the interface residual. Taken together, the panels show that the solution is accurate and that the remaining chart-overlap mismatch stays localized rather than dominating the field.}
 \label{fig:rabbit_poisson_example}
 \end{figure}
 
@@ -909,7 +908,7 @@ The validated run reaches a traction relative $L^2$ error of $2.35\times 10^{-7}
 \paragraph{Representative numerical result.}
 The canonical run \texttt{torus\_inverse\_mps} reaches a traction relative $L^2$ error of $2.35\times 10^{-7}$ in $201.1$\,s. The recovered material parameters are essentially exact for practical purposes: the relative error is $9.27\times 10^{-6}\%$ for $\mu$ and $2.29\times 10^{-5}\%$ for $K$. Across the validated run set, the traction mismatch remains on the order of $10^{-4}$ or below, so this benchmark gives a clean lower bound on what the inverse machinery can achieve when interface effects and chartwise state inconsistency are not the main obstacle.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \subfloat[Reference and deformed configurations.]{
 \includegraphics[width=0.47\textwidth]{figures_cmame_core/example3_torus_inverse_original/torus_inverse_deformation.png}}
@@ -995,9 +994,9 @@ The Stanford Bunny PLY is substantially harder than the procedural rabbit becaus
 The validated SDF run reaches a surface loss of $1.66\times 10^{-2}$ and a normal-alignment loss of $3.18\times 10^{-2}$ on the Stanford Bunny PLY, which is strong enough to support downstream geometry usage. At the same time, the sign-anchor loss remains much larger at $3.11\times 10^{-1}$, making the thin-feature sign ambiguity explicit rather than hiding it.
 
 \paragraph{Representative numerical result.}
-The canonical SDF run \texttt{bunny\_sdf\_v3} reaches a final surface loss of $1.66\times 10^{-2}$, a normal-alignment loss of $3.18\times 10^{-2}$, an Eikonal loss of $7.29\times 10^{-1}$, and a sign-anchor loss of $3.11\times 10^{-1}$. Compared with the earlier SDF variants recorded in the repository, version~3 gives the best combination of surface accuracy and normal quality on the Bunny point cloud while keeping the global scale and zero level set stable.
+The canonical SDF run \texttt{bunny\_sdf\_v3} reaches a final surface loss of $1.66\times 10^{-2}$, a normal-alignment loss of $3.18\times 10^{-2}$, an Eikonal loss of $7.29\times 10^{-1}$, and a sign-anchor loss of $3.11\times 10^{-1}$. The elevated Eikonal loss reflects gradient-norm deviations concentrated in the thin-ear region, where the anchor offset $\delta$ is comparable to the local feature thickness and the sign supervision is least stable; the surface and normal losses confirm that the zero level set itself is well positioned on the bulk of the geometry. Compared with the earlier SDF variants recorded in the repository, version~3 gives the best combination of surface accuracy and normal quality on the Bunny point cloud while keeping the global scale and zero level set stable. Training time on Apple Silicon (MPS with CPU fallback) was approximately 60--90 minutes for 10{,}000 epochs.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \subfloat[Learned SDF slices for the canonical volumetric neural SDF run.]{
 \includegraphics[width=0.32\textwidth]{figures_cmame_core/example4_bunny_sdf/bunny_sdf_slices.png}}
@@ -1097,7 +1096,7 @@ The validated run recovers the scalar factor $k_0$ with a relative error of $3.0
 \paragraph{Representative numerical result.}
 In the canonical long run \texttt{elder\_globalfield\_small}, the scalar permeability error is $3.00\times 10^{-2}$, the mean eigenvalue error is $2.97\%$, the maximum eigenvalue error is $6.22\%$, and the mean axis-angle error is $2.70^\circ$. The final interface-flux mismatch is $2.43\times 10^{-3}$, and the runtime is $642.6$\,s. The short run \texttt{elder\_fieldcheck} reaches almost identical parameter errors in only $12.1$\,s, but it leaves a noticeably larger interface mismatch. The longer canonical run is therefore a better representative of solution quality.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \subfloat[Field comparison for the canonical rabbit Elder run.]{
 \includegraphics[width=0.60\textwidth]{figures_cmame_core/example5_rabbit_elder/rabbit_elder_fields.png}}
@@ -1111,10 +1110,10 @@ In the canonical long run \texttt{elder\_globalfield\_small}, the scalar permeab
 \subsection{Cross-example comparison and lessons learned}
 Table~\ref{tab:core_summary} gathers the representative metrics from the canonical cases used in the main text. Read from top to bottom, the table shows a clear progression in difficulty. The ellipsoid case verifies the mapped operator on a benign geometry. The star-domain case shows that learned global maps remain a genuine challenge. The rabbit Poisson benchmark demonstrates that the atlas-based SA-PINN formulation can produce an accurate field solve on a complex geometry when the chart decomposition is fixed and well behaved. The Stanford Bunny neural-SDF benchmark then isolates the geometry-learning stage on a real PLY surface and makes the thin-feature sign issue explicit. Finally, the torus inverse and rabbit Elder examples illustrate two different inverse regimes: one tightly controlled synthetic identification setting and one substantially harder teacher-guided permeability-identification problem.
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \scriptsize
-\caption{Canonical validated results used in the main text. The torus inverse benchmark is a controlled synthetic identification problem, the Stanford Bunny row is a volumetric neural SDF benchmark on a mesh-derived geometry, and the rabbit Elder result is teacher-guided in the sense described in Section~\ref{sec:limitations}.}
+\caption{Canonical validated results used in the main text. The torus inverse benchmark is a controlled synthetic identification problem, the Stanford Bunny row is a volumetric neural SDF benchmark on a mesh-derived geometry, and the rabbit Elder result is teacher-guided in the sense described in Section~\ref{sec:limitations}. $^*$Runtime for the Bunny neural SDF is approximate (training time not precisely recorded; $\approx$60--90\,min on Apple Silicon for 10{,}000 epochs).}
 \label{tab:core_summary}
 \begin{tabular}{>{\raggedright\arraybackslash}p{2.65cm}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{1.45cm}>{\raggedright\arraybackslash}p{3.25cm}>{\raggedright\arraybackslash}p{1.15cm}}
 \toprule
@@ -1124,7 +1123,7 @@ Ellipsoid Poisson & rel-$L^2$ & $2.26\times10^{-3}$ & max error $=5.23\times10^{
 Star Poisson & rel-$L^2$ & $2.59\times10^{-1}$ & max error $=5.06\times10^{-1}$ & 229.4 \\
 Rabbit Poisson & rel-$L^2$ & $2.21\times10^{-2}$ & interface flux $=1.16\times10^{-2}$ & 3659.0 \\
 Torus inverse (original atlas) & traction rel-$L^2$ & $2.35\times10^{-7}$ & \shortstack[l]{$\mu$ error $=9.27\times10^{-6}\%$\\ $K$ error $=2.29\times10^{-5}\%$} & 201.1 \\
-\shortstack[l]{Stanford Bunny\\ neural SDF} & surface loss & $1.66\times10^{-2}$ & \shortstack[l]{normal loss $=3.18\times10^{-2}$\\ sign loss $=3.11\times10^{-1}$} & --- \\
+\shortstack[l]{Stanford Bunny\\ neural SDF} & surface loss & $1.66\times10^{-2}$ & \shortstack[l]{normal loss $=3.18\times10^{-2}$\\ sign loss $=3.11\times10^{-1}$} & ${\approx}4800^*$ \\
 Rabbit Elder inverse & $k_0$ error & $3.00\times10^{-2}$ & \shortstack[l]{eig. mean $=2.97\%$\\ axis mean $=2.70^\circ$} & 642.6 \\
 \bottomrule
 \end{tabular}
@@ -1158,7 +1157,7 @@ The current boundaries of the method are just as important as the successes. The
 
 
 \section*{Acknowledgments}
-The author is supported by the Dynamic Materials and Interactions Program from the Air Force Office of Scientific Research, USA, under grant contracts FA9550-22-1-0310 and the United States Army Research Office under grant contract W911-NF-24-1011.
+The author is supported by the Dynamic Materials and Interactions Program from the Air Force Office of Scientific Research, USA, under grant contract FA9550-22-1-0310, and by the United States Army Research Office under grant contract W911NF-24-1-0011.
 The views and conclusions contained in this document are those of the authors and should not be interpreted as representing the official policies, either expressed or implied, of the sponsors, including the Army Research Laboratory or the U.S. Government.
 The U.S. Government is authorized to reproduce and distribute reprints for Government purposes, notwithstanding any copyright notation herein.
 
