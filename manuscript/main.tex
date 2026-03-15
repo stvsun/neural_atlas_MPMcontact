@@ -672,6 +672,173 @@ For a reader used to standard PINNs, the Schwarz idea is simpler than it may fir
 
 Algorithm~\ref{alg:atlas_sapinn_training} is the core training loop behind the fixed-atlas rabbit Poisson benchmark. The rabbit Elder inverse solver uses the same local-update structure, but adds observation, regularization, and weak teacher-stabilization terms in the benchmark-specific loss.
 
+
+\section{Implementation}
+\label{sec:implementation}
+
+\subsection{AI-assisted development with Claude Sonnet 4.6}
+\label{sec:impl_aiassist}
+
+The entire codebase was developed collaboratively with Claude~Sonnet~4.6
+\citep{anthropic2025claude}, accessed through Claude~Code \citep{claudecode2025},
+an agentic coding interface that operates directly in the project terminal and
+version-control environment.
+Development proceeded through iterative dialogue sessions captured in multiple
+parallel git worktrees.
+The collaboration spanned approximately 85\,MB of conversation history across
+seven worktrees and produced 36 commits, covering every phase of the project:
+from the initial PyTorch scaffold through geometry-pipeline debugging, PINN
+solver refinement, and manuscript preparation.
+
+Within this workflow, Claude~Sonnet~4.6 performed code generation, bug
+diagnosis, and architectural design exploration.
+Representative tasks included: identifying a double-normalization bug in the SDF
+coordinate system that inflated PDE residuals by a factor of roughly $10^3$
+(commit \texttt{e32ca91}); designing the volumetric interior-seed atlas (M6) to
+replace surface-only chart placement that caused boundary-condition sampling
+errors (commit \texttt{31b668c}); implementing PCGrad gradient surgery
+\citep{yu2020gradient} for the per-chart multi-objective loss
+(commit \texttt{37629f4}); and developing the CompactChartNet Voronoi sub-atlas
+architecture with softmax partition-of-unity blending
+(commit \texttt{2a0e54e}).
+The validation infrastructure---including the claim-to-artifact traceability
+matrix, the 177-run metric registry, and the automated artifact-checksum
+manifests---was also built in the same AI-assisted loop.
+All code, scripts, and run artifacts are publicly available with the repository.
+
+\subsection{Technology stack and design principles}
+\label{sec:impl_stack}
+
+All neural networks are implemented in PyTorch \citep{paszke2019pytorch}
+using automatic differentiation (\texttt{torch.autograd.grad}) for both
+the PDE residuals and the Jacobian computations inside each chart decoder.
+Jacobian inversion uses \texttt{torch.linalg.inv} (LU factorization) in the
+forward pass; SVD-based condition-number diagnostics run under
+\texttt{torch.no\_grad()} to avoid gradient instability near singular values.
+The solvers run on Apple Silicon MPS with CPU fallback for unsupported
+operations, and on NVIDIA CUDA without modification; the hardware target is set
+by a single \texttt{PYTORCH\_ENABLE\_MPS\_FALLBACK=1} environment variable.
+Supporting libraries include \texttt{open3d} for raycasting-based signed-distance
+queries, \texttt{pysdf} and \texttt{mesh\_to\_sdf} for cross-validation of
+sign quality, \texttt{trimesh} for surface mesh repair, and
+\texttt{scipy.spatial.cKDTree} for nearest-neighbour SDF initialization.
+Post-processing uses VTK (via \texttt{pyvista}) and ParaView for
+publication-quality volumetric exports.
+
+A deliberate design principle throughout is \emph{separation of geometry from
+PDE solving}.  The geometry stage produces a fixed, validated atlas that is
+checkpointed once and reused by all downstream solvers without modification.
+This makes it possible to swap PINN architectures or loss weights without
+touching the atlas, and to validate each stage independently through its own
+quality gates before proceeding.
+
+\subsection{Four-stage geometry pipeline}
+\label{sec:impl_pipeline}
+
+Constructing a usable atlas from a surface mesh or procedural description
+requires four sequential stages, each with its own quality gate.
+
+\textbf{Stage 1 --- Neural SDF.}
+A six-hidden-layer MLP (width 128, Softplus activations) is trained on surface
+point-cloud data with four loss terms: a surface-loss
+$\mathcal{L}_\text{surf}=\mathbb{E}[|\phi_\theta(x_s)|]$, an Eikonal loss
+$\mathcal{L}_\text{eik}=\mathbb{E}[(|\nabla\phi_\theta|-1)^2]$, a
+normal-alignment loss, and a sign-anchor loss evaluated at points offset along
+the surface normal.  The Adam optimizer runs with initial learning rate
+$8\times10^{-4}$ for up to 20{,}000 epochs.  Sign quality is cross-validated
+against \texttt{open3d} and \texttt{pysdf}; training is gated at
+sign\_error $<5\%$ before the atlas is built.  For geometries with thin features
+(Stanford Bunny ears $\approx 5$\,mm), the chart-partitioned SDF variant
+(\texttt{src/train\_sdf\_chartwise.py}) trains one local SDF network per chart
+with a geometry-adaptive sign-anchor offset, resolving the single-offset
+trade-off that corrupted sign supervision near thin features.
+
+\textbf{Stage 2 --- Atlas construction.}
+A volumetric atlas of $M$ overlapping charts is built by
+(\textit{i})~placing seeds on the surface by Poisson-disk sampling with mutual
+separation $\geq d_\text{min}$;
+(\textit{ii})~assigning each seed a Tangent-Normal-Binormal (TNB) frame
+$\mathbf{F}_i = [\mathbf{t}_{1i}\,|\,\mathbf{t}_{2i}\,|\,\mathbf{n}_i]$
+computed from the SDF gradient at the seed; and
+(\textit{iii})~choosing support radii by binary search so that the balls cover
+at least 99\% of interior samples at a target overlap fraction.
+The 12-chart atlas used in the rabbit benchmarks contains 50{,}000 interior
+points sampled uniformly from the SDF-negative region.
+
+\textbf{Stage 3 --- Chart decoder training.}
+A lightweight \texttt{ChartDecoder} network (two-hidden-layer MLP plus a
+learned nonlinear correction $\Delta\varphi_i$ of amplitude
+$\approx 0.08\,r_i$) is trained jointly with a \texttt{MaskNet} gating network
+per chart.  The decoder loss combines an overlap-consistency term
+$\mathcal{L}_\text{ov}=\mathbb{E}_{\Omega_{ij}}[\|\varphi_i(\pi_j(x))-x\|^2]$,
+a coverage term, and an anti-fold regularizer.  The overlap weight
+\texttt{w-overlap} must be at least 8.0 on the Stanford Bunny (default 0.8 is
+insufficient; the overlap loss \emph{increases} during training with the
+default).
+
+\textbf{Stage 4 --- Quality gate.}
+Before the PINN solver is started, a gate script checks three metrics: (a)
+overlap\_consistency $<0.025$, (b) coverage\_ratio $=1.0$, and (c)
+fold\_ratio $=0.0$.  Only atlases that pass all three gates are used in the main
+benchmarks; exploratory runs that bypass the gate with
+\texttt{--allow-failed-gate} are reported separately in
+Section~\ref{sec:limitations}.
+
+\subsection{Solver architecture and training design}
+\label{sec:impl_solver}
+
+Two PINN architectures are available.
+The \emph{dense MLP} (width 64, depth 4, Tanh activations) places one
+independent network per chart.  The \emph{CompactChartNet} replaces this with
+$M=9$ small Tanh-MLPs (width 32, depth 2) whose outputs are blended by a
+softmax partition-of-unity with bandwidth $\tau=\tau_\text{scale}\times r_i$:
+\begin{equation}
+u_\text{chart}(\zeta)
+=
+\sum_{m=0}^{8}\phi_m(\zeta)\,u_m(\zeta-s_m),
+\qquad
+\phi_m(\zeta)=\frac{\exp(-\|\zeta-s_m\|^2/2\tau^2)}{\sum_{m'}\exp(-\|\zeta-s_{m'}\|^2/2\tau^2)},
+\label{eq:compact_pou}
+\end{equation}
+with sub-seeds $s_0=0$ (chart centre) and $s_1,\dots,s_8$ at the $\pm r_i/3$
+cube corners.  The C$^\infty$ blending ensures that the autograd Laplacian is
+well-defined everywhere, and spatial localization reduces the coupling between
+neighboring charts during Schwarz updates.  A critical implementation detail is
+that $\tau_\text{scale}\geq 0.5$ is mandatory; smaller values
+($\tau_\text{scale}=0.125$) leave isolated Gaussian neighborhoods whose PDE
+residual diverges during the warmup phase.
+
+All chart solvers use \emph{direct-coordinate mode}: since the TNB frame
+$\mathbf{F}_i$ is orthonormal, the pulled-back Laplacian reduces exactly to
+$\Delta_x u = \sum_j \partial^2 u/\partial\zeta_j^2$ when the nonlinear decoder
+correction $\Delta\varphi_i$ is dropped.  This choice eliminates Jacobian
+conditioning issues entirely and decouples Schwarz convergence from decoder
+quality, at the cost of slightly lower geometric fidelity in chart-local
+coordinates.
+
+The per-chart loss combines up to six terms:
+$\mathcal{L}_i = w_\text{pde}\mathcal{L}_\text{pde} + w_\text{bc}\mathcal{L}_\text{bc}
++ w_\text{sup}\mathcal{L}_\text{sup}
++ w_\text{iv}\sum_{j\in\mathcal{N}(i)}\mathcal{L}_\text{iv}
++ w_\text{if}\sum_{j\in\mathcal{N}(i)}\mathcal{L}_\text{if}$.
+The PDE weight is ramped from zero to its target over \texttt{pde-warmup-iters}
+Schwarz iterations to allow boundary conditions to settle first.
+When $\mathcal{L}_\text{pde}$ and $\mathcal{L}_\text{sup}$ exhibit conflicting
+gradients (dot product $<0$), PCGrad \citep{yu2020gradient} is applied
+per-chart: three separate backward passes compute $g_\text{pde}$, $g_\text{sup}$,
+and $g_\text{oth}$; conflicting components are projected out symmetrically before
+accumulation, reducing Schwarz oscillation without increasing the number of
+optimizer steps.
+
+A \emph{trust-region filter} at the Schwarz level rejects any chart update that
+increases the global relative $L^2$ error beyond a threshold and halves the
+local learning rate on rejection.  \emph{Plateau detection} monitors the
+validation rel-$L^2$ with a stale counter; training halts when the counter
+reaches \texttt{plateau-patience} and checkpoints the best-seen iterate.
+Together these two mechanisms kept the flagship rabbit Poisson solve stable for
+61 accepted Schwarz iterations, yielding the $2.21\times10^{-2}$ relative
+$L^2$ reported in Section~\ref{sec:example2}.
+
 \section{Benchmark problems and numerical results}
 \label{sec:benchmark_formulations}
 
