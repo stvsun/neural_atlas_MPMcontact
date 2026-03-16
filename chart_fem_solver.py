@@ -198,11 +198,24 @@ class ChartFEMSolver:
         )
 
     def _build_hex_to_tet_map(self, hex_of_tet: np.ndarray, old_to_new: np.ndarray, n_hex: int) -> None:
-        """Build mapping from hex cell index to list of tet indices (for interpolation)."""
-        # Store as a list of arrays for variable-length (some hexes may have < 6 tets after filtering)
-        self._hex_tet_lists: List[np.ndarray] = [np.empty(0, dtype=np.int64) for _ in range(n_hex)]
-        for tet_idx, hex_idx in enumerate(hex_of_tet):
-            self._hex_tet_lists[hex_idx] = np.append(self._hex_tet_lists[hex_idx], tet_idx)
+        """Build mapping from hex cell index to tet indices (for interpolation).
+
+        For full structured grids (no SDF filtering), builds a dense (n_hex, 6) array
+        for vectorized lookup. For filtered grids, uses a list-of-arrays fallback.
+        """
+        n_tets = len(hex_of_tet)
+
+        # Check if this is a full structured grid (6 tets per hex, no filtering)
+        if n_tets == n_hex * 6:
+            # Dense array: hex i has tets [6*i, 6*i+1, ..., 6*i+5]
+            self._hex_to_tets = np.arange(n_tets, dtype=np.int64).reshape(n_hex, 6)
+            self._hex_tet_lists = None  # not needed
+        else:
+            # Sparse: variable tets per hex (SDF-filtered)
+            self._hex_to_tets = None
+            self._hex_tet_lists: List[np.ndarray] = [np.empty(0, dtype=np.int64) for _ in range(n_hex)]
+            for tet_idx, hex_idx in enumerate(hex_of_tet):
+                self._hex_tet_lists[hex_idx] = np.append(self._hex_tet_lists[hex_idx], tet_idx)
 
     def _decode_points(self, xi: np.ndarray) -> np.ndarray:
         """Map chart-local coords to physical coords using the decoder."""
@@ -229,32 +242,57 @@ class ChartFEMSolver:
     # Node classification
     # ------------------------------------------------------------------
     def _classify_nodes(self) -> None:
-        """Classify nodes into physical boundary, artificial boundary, and interior."""
+        """Classify nodes into physical boundary, artificial boundary, and interior.
+
+        For structured grids (no SDF filtering), uses fast O(n_nodes) boundary
+        detection by checking if any coordinate is on the cube face.
+        Falls back to face-counting for SDF-filtered meshes.
+        """
         if len(self.elements) == 0:
             self.phys_bc_nodes = np.empty(0, dtype=np.int64)
             self.art_bc_nodes = np.empty(0, dtype=np.int64)
             self.interior_nodes = np.arange(self.n_nodes, dtype=np.int64)
             return
 
-        # 1. Find boundary nodes: faces shared by exactly 1 element
-        face_count: Dict[Tuple[int, ...], int] = {}
-        face_to_nodes: Dict[Tuple[int, ...], Tuple[int, int, int]] = {}
+        # Fast path: structured grid — boundary = cube faces of [-r, r]^3
+        if self.sdf_oracle is None:
+            r = self.r
+            tol = self.h * 0.01  # small tolerance for floating point
+            on_face = np.any(np.abs(np.abs(self.nodes) - r) < tol, axis=1)
+            boundary_nodes = np.where(on_face)[0].astype(np.int64)
 
-        # Each tet has 4 triangular faces
-        face_combos = [(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]
-        for e_idx in range(len(self.elements)):
-            nids = self.elements[e_idx]
-            for combo in face_combos:
-                face_nodes = tuple(sorted(nids[list(combo)]))
-                face_count[face_nodes] = face_count.get(face_nodes, 0) + 1
-                face_to_nodes[face_nodes] = face_nodes
+            # Without SDF, all boundary nodes are artificial
+            self.phys_bc_nodes = np.empty(0, dtype=np.int64)
+            self.art_bc_nodes = boundary_nodes
 
-        boundary_node_set = set()
-        for face, count in face_count.items():
-            if count == 1:
-                boundary_node_set.update(face)
+            # Interior = everything else
+            is_boundary = np.zeros(self.n_nodes, dtype=bool)
+            is_boundary[boundary_nodes] = True
+            self.interior_nodes = np.where(~is_boundary)[0].astype(np.int64)
+            return
 
-        boundary_nodes = np.array(sorted(boundary_node_set), dtype=np.int64)
+        # Slow path: SDF-filtered mesh — need face-counting
+        # Vectorized face extraction and counting
+        face_combos = np.array([(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)], dtype=np.int64)
+        n_el = len(self.elements)
+
+        # Extract all faces: (n_el * 4, 3) — sorted node indices per face
+        all_faces = np.empty((n_el * 4, 3), dtype=np.int64)
+        for f_idx, combo in enumerate(face_combos):
+            face_nodes = self.elements[:, combo]  # (n_el, 3)
+            face_nodes.sort(axis=1)
+            all_faces[f_idx::4] = face_nodes
+
+        # Count face occurrences using structured array for hashing
+        face_view = all_faces.view(dtype=[('a', np.int64), ('b', np.int64), ('c', np.int64)])
+        face_view = face_view.ravel()
+        unique_faces, counts = np.unique(face_view, return_counts=True)
+        boundary_face_mask = counts == 1
+        boundary_faces_structured = unique_faces[boundary_face_mask]
+
+        # Extract boundary node indices
+        boundary_faces = boundary_faces_structured.view(np.int64).reshape(-1, 3)
+        boundary_nodes = np.unique(boundary_faces.ravel()).astype(np.int64)
 
         if len(boundary_nodes) == 0:
             self.phys_bc_nodes = np.empty(0, dtype=np.int64)
@@ -262,25 +300,18 @@ class ChartFEMSolver:
             self.interior_nodes = np.arange(self.n_nodes, dtype=np.int64)
             return
 
-        # 2. Among boundary nodes, classify as physical vs artificial
-        if self.sdf_oracle is not None:
-            x_phys = self._decode_points(self.nodes[boundary_nodes])
-            sdf_vals = self._eval_sdf(x_phys)
-            sdf_bc_tol = 2.0 * self.h
-            is_phys = np.abs(sdf_vals) < sdf_bc_tol
-            self.phys_bc_nodes = boundary_nodes[is_phys]
-            self.art_bc_nodes = boundary_nodes[~is_phys]
-        else:
-            # Without SDF, all boundary nodes are artificial
-            self.phys_bc_nodes = np.empty(0, dtype=np.int64)
-            self.art_bc_nodes = boundary_nodes
+        # Among boundary nodes, classify as physical vs artificial
+        x_phys = self._decode_points(self.nodes[boundary_nodes])
+        sdf_vals = self._eval_sdf(x_phys)
+        sdf_bc_tol = 2.0 * self.h
+        is_phys = np.abs(sdf_vals) < sdf_bc_tol
+        self.phys_bc_nodes = boundary_nodes[is_phys]
+        self.art_bc_nodes = boundary_nodes[~is_phys]
 
-        # 3. Interior = everything else
-        all_boundary = set(boundary_nodes.tolist())
-        self.interior_nodes = np.array(
-            [i for i in range(self.n_nodes) if i not in all_boundary],
-            dtype=np.int64,
-        )
+        # Interior = everything else
+        is_boundary = np.zeros(self.n_nodes, dtype=bool)
+        is_boundary[boundary_nodes] = True
+        self.interior_nodes = np.where(~is_boundary)[0].astype(np.int64)
 
     # ------------------------------------------------------------------
     # Diffusion tensor computation
@@ -463,29 +494,47 @@ class ChartFEMSolver:
         bc_indices = np.array(list(bc.keys()), dtype=np.int64)
         bc_vals = np.array([bc[i] for i in bc_indices])
 
-        # Efficient row/column elimination using CSR format
-        K_mod = self.K.tolil()
+        # Fast Dirichlet BC elimination — all numpy, no Python loops
+        K_csr = self.K.tocsr().copy()
         F_mod = self.F.copy()
 
-        # Adjust RHS: subtract BC contribution from non-BC rows
-        # F_mod -= K[:, bc_indices] @ bc_vals, then zero BC rows/cols
-        for k in range(len(bc_indices)):
-            idx = bc_indices[k]
-            val = bc_vals[k]
-            col = np.array(self.K.getcol(idx).todense()).ravel()
-            F_mod -= col * val
+        # 1. Subtract BC contribution from RHS: F -= K[:, bc_indices] @ bc_vals
+        K_csc = K_csr.tocsc()
+        F_mod -= K_csc[:, bc_indices] @ bc_vals
 
-        # Zero BC rows and columns, set diagonal
+        # 2. Build boolean mask for BC nodes
+        is_bc = np.zeros(self.n_nodes, dtype=bool)
+        is_bc[bc_indices] = True
+
+        # 3. Zero BC columns: mask data where column index is BC (O(nnz))
+        col_is_bc = is_bc[K_csr.indices]  # bool array over all non-zeros
+        K_csr.data[col_is_bc] = 0.0
+
+        # 4. Zero BC rows (O(n_bc * nnz_per_row))
         for idx in bc_indices:
-            K_mod[idx, :] = 0
-            K_mod[:, idx] = 0
-            K_mod[idx, idx] = 1.0
+            start, end = K_csr.indptr[idx], K_csr.indptr[idx + 1]
+            K_csr.data[start:end] = 0.0
 
-        # Set BC RHS
-        for k in range(len(bc_indices)):
-            F_mod[bc_indices[k]] = bc_vals[k]
+        # 5. Set diagonal to 1 for BC nodes
+        # Find diagonal entries in CSR: for row i, the diagonal is where indices[k] == i
+        for idx in bc_indices:
+            start, end = K_csr.indptr[idx], K_csr.indptr[idx + 1]
+            row_cols = K_csr.indices[start:end]
+            diag_pos = np.where(row_cols == idx)[0]
+            if len(diag_pos) > 0:
+                K_csr.data[start + diag_pos[0]] = 1.0
+            else:
+                # Diagonal not in sparsity pattern — need to add it
+                # Use LIL only for this one entry
+                K_csr = K_csr.tolil()
+                K_csr[idx, idx] = 1.0
+                K_csr = K_csr.tocsr()
+                break  # restart won't help, but this case is rare for FEM
 
-        K_csr = K_mod.tocsr()
+        # 6. Set BC RHS
+        F_mod[bc_indices] = bc_vals
+
+        K_csr.eliminate_zeros()
         self.u = scipy.sparse.linalg.spsolve(K_csr, F_mod)
         return self.u
 
@@ -495,8 +544,8 @@ class ChartFEMSolver:
     def evaluate_at(self, xi_query: np.ndarray) -> np.ndarray:
         """Interpolate P1 solution at arbitrary ξ-coordinates.
 
-        Uses structured grid lookup (O(1) per point) + barycentric interpolation.
-        Falls back to nearest-node for points outside the mesh.
+        Uses structured grid lookup (O(1) per point) + vectorized barycentric
+        interpolation. Falls back to nearest-node for points outside the mesh.
 
         Args:
             xi_query: (N, 3) chart-local coordinates
@@ -517,24 +566,71 @@ class ChartFEMSolver:
         h = self.h
         nc = self.n_cells
 
-        # Find containing hex cell for each query
+        # Find containing hex cell for each query point
         grid_idx = np.floor((xi_query + r) / h).astype(np.int64)
         grid_idx = np.clip(grid_idx, 0, nc - 1)
         hex_idx = grid_idx[:, 0] * nc * nc + grid_idx[:, 1] * nc + grid_idx[:, 2]
 
         result = np.full(n_query, np.nan)
 
-        # Process point by point (needed due to variable tet count per hex)
-        for q in range(n_query):
-            hi = hex_idx[q]
-            if hi < len(self._hex_tet_lists):
-                for tet_idx in self._hex_tet_lists[hi]:
-                    nids = self.elements[tet_idx]
-                    xe = self.nodes[nids]
-                    lam = self._barycentric(xi_query[q], xe)
-                    if lam is not None and np.all(lam >= -1e-10):
-                        result[q] = np.dot(lam, self.u[nids])
-                        break
+        # For structured grids without SDF filtering, each hex has exactly 6 tets.
+        # Try each tet in the hex using vectorized barycentric computation.
+        if self._hex_to_tets is not None:
+            # _hex_to_tets: (n_hex, 6) array of tet indices — only for full structured grids
+            tet_candidates = self._hex_to_tets[hex_idx]  # (n_query, 6)
+
+            for t in range(tet_candidates.shape[1]):
+                unfound = np.isnan(result)
+                if not np.any(unfound):
+                    break
+
+                tet_ids = tet_candidates[unfound, t]  # (n_unfound,)
+                valid_tet = tet_ids >= 0
+                if not np.any(valid_tet):
+                    continue
+
+                idx_unfound = np.where(unfound)[0]
+                idx_valid = idx_unfound[valid_tet]
+                tids = tet_ids[valid_tet]
+
+                # Vectorized barycentric coordinates
+                nids = self.elements[tids]  # (M, 4)
+                xe = self.nodes[nids]  # (M, 4, 3)
+                v0 = xe[:, 0, :]  # (M, 3)
+                T = np.transpose(xe[:, 1:, :] - v0[:, None, :], (0, 2, 1))  # (M, 3, 3)
+                rhs = xi_query[idx_valid] - v0  # (M, 3)
+
+                try:
+                    lam_123 = np.linalg.solve(T, rhs)  # (M, 3)
+                except np.linalg.LinAlgError:
+                    # Fall back to per-point solve
+                    lam_123 = np.zeros((len(tids), 3))
+                    for k in range(len(tids)):
+                        try:
+                            lam_123[k] = np.linalg.solve(T[k], rhs[k])
+                        except np.linalg.LinAlgError:
+                            lam_123[k] = -1.0  # mark as invalid
+
+                lam_0 = 1.0 - lam_123.sum(axis=1)  # (M,)
+                lam = np.column_stack([lam_0, lam_123])  # (M, 4)
+
+                # Check containment: all barycentric coords >= -tol
+                inside = np.all(lam >= -1e-10, axis=1)
+                if np.any(inside):
+                    u_nids = self.u[nids[inside]]  # (K, 4)
+                    result[idx_valid[inside]] = np.sum(lam[inside] * u_nids, axis=1)
+        else:
+            # Fallback: per-point loop for SDF-filtered meshes with variable tets per hex
+            for q in range(n_query):
+                hi = hex_idx[q]
+                if hi < len(self._hex_tet_lists):
+                    for tet_idx in self._hex_tet_lists[hi]:
+                        nids = self.elements[tet_idx]
+                        xe = self.nodes[nids]
+                        lam = self._barycentric(xi_query[q], xe)
+                        if lam is not None and np.all(lam >= -1e-10):
+                            result[q] = np.dot(lam, self.u[nids])
+                            break
 
         # Fallback for unfound points: nearest node via KDTree
         nan_mask = np.isnan(result)
@@ -553,7 +649,6 @@ class ChartFEMSolver:
 
         Returns (4,) array of barycentric coords, or None if singular.
         """
-        # T = [v1-v0 | v2-v0 | v3-v0]^T
         T = (verts[1:] - verts[0]).T  # (3, 3)
         try:
             lam_123 = np.linalg.solve(T, p - verts[0])

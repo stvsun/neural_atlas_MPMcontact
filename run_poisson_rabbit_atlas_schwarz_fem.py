@@ -114,8 +114,7 @@ def compute_phys_bc(
     return {int(idx): float(val) for idx, val in zip(solver.phys_bc_nodes, u_exact)}
 
 
-def compute_schwarz_bc(
-    chart_i: int,
+def precompute_schwarz_bc_geometry(
     fem_solvers: List[ChartFEMSolver],
     decoders: List[ChartDecoder],
     masks: List[MaskNet],
@@ -127,105 +126,179 @@ def compute_schwarz_bc(
     neighbors: List[List[int]],
     device: torch.device,
     dtype: torch.dtype,
-) -> Dict[int, float]:
-    """For each artificial boundary node of chart i, interpolate neighbor solution values.
+) -> Dict:
+    """Precompute and cache all Newton inversions + mask logits for Schwarz BC.
 
-    Uses PoU-weighted (mask-logit softmax) blend of neighbor FEM solutions.
+    These depend only on the mesh geometry (not the solution), so they need to
+    be computed once per resolution level, not per Schwarz iteration.
+
+    Returns a cache dict keyed by chart index.
     """
-    solver_i = fem_solvers[chart_i]
-    if len(solver_i.art_bc_nodes) == 0:
-        return {}
+    n_charts = len(fem_solvers)
+    cache = {}
 
-    art_bc = {}
-    xi_art = solver_i.nodes[solver_i.art_bc_nodes]  # (N_art, 3)
-    x_phys = solver_i._decode_points(xi_art)  # (N_art, 3)
-
-    nbrs = neighbors[chart_i]
-    if len(nbrs) == 0:
-        # No neighbors: use manufactured solution as fallback
-        u_exact = manufactured_u_np(x_phys)
-        return {int(idx): float(val) for idx, val in zip(solver_i.art_bc_nodes, u_exact)}
-
-    # Evaluate mask logits and neighbor solutions for all art BC nodes at once
-    x_phys_t = torch.tensor(x_phys, device=device, dtype=dtype)
-
-    # Collect logits and values from all charts that cover these points
-    all_logits = []
-    all_vals = []
-    all_chart_ids = []
-
-    for j in nbrs:
-        xi_j_linear = local_coords(x_phys_t, seeds_t[j], t1_t[j], t2_t[j], nvec_t[j])
-        xi_j_lin_np = xi_j_linear.cpu().numpy()
-
-        # Check if points are within support radius (use linear coords for fast check)
-        r_j = float(support_r_t[j].item())
-        in_support = np.all(np.abs(xi_j_lin_np) <= 1.25 * r_j, axis=1)
-
-        if not np.any(in_support):
+    for chart_i in range(n_charts):
+        solver_i = fem_solvers[chart_i]
+        if len(solver_i.art_bc_nodes) == 0:
+            cache[chart_i] = {"empty": True}
             continue
 
-        # Get mask logits (masks work in linear local_coords space)
-        with torch.no_grad():
-            logit_j = masks[j](xi_j_linear, chart_scale=support_r_t[j]).cpu().numpy()
+        xi_art = solver_i.nodes[solver_i.art_bc_nodes]  # (N_art, 3)
+        x_phys = solver_i._decode_points(xi_art)  # (N_art, 3)
+        x_phys_t = torch.tensor(x_phys, device=device, dtype=dtype)
 
-        # Newton-invert the decoder for accurate FEM evaluation
-        # Only invert for points in support to save time
-        xi_j_np = xi_j_lin_np.copy()
-        if np.any(in_support):
-            with torch.enable_grad():
-                xi_j_star = invert_decoder(
-                    decoder=decoders[j],
-                    x_target=x_phys_t[in_support],
-                    seed=seeds_t[j],
-                    t1=t1_t[j],
-                    t2=t2_t[j],
-                    n_vec=nvec_t[j],
-                    chart_scale=support_r_t[j],
-                    xi_init=xi_j_linear[in_support],
-                    max_iter=10,
-                    tol=1e-8,
-                )
-            xi_j_np[in_support] = xi_j_star.cpu().numpy()
+        nbrs = neighbors[chart_i]
+        if len(nbrs) == 0:
+            u_exact = manufactured_u_np(x_phys)
+            cache[chart_i] = {
+                "empty": False,
+                "fallback_values": {int(idx): float(val) for idx, val in
+                                    zip(solver_i.art_bc_nodes, u_exact)},
+                "no_neighbors": True,
+            }
+            continue
 
-        # Get FEM solution values (only for points in support AND in mesh)
-        u_j = np.full(len(xi_j_np), np.nan)
-        if fem_solvers[j].u is not None:
+        # For each neighbor, precompute: inverted coords, mask logits, in-mesh mask
+        nbr_data = []
+        for j in nbrs:
+            xi_j_linear = local_coords(x_phys_t, seeds_t[j], t1_t[j], t2_t[j], nvec_t[j])
+            xi_j_lin_np = xi_j_linear.cpu().numpy()
+
+            r_j = float(support_r_t[j].item())
+            in_support = np.all(np.abs(xi_j_lin_np) <= 1.25 * r_j, axis=1)
+
+            if not np.any(in_support):
+                continue
+
+            # Mask logits (constant)
+            with torch.no_grad():
+                logit_j = masks[j](xi_j_linear, chart_scale=support_r_t[j]).cpu().numpy()
+
+            # Newton inversion (constant — the expensive part, done once)
+            xi_j_np = xi_j_lin_np.copy()
+            if np.any(in_support):
+                with torch.enable_grad():
+                    xi_j_star = invert_decoder(
+                        decoder=decoders[j],
+                        x_target=x_phys_t[in_support],
+                        seed=seeds_t[j],
+                        t1=t1_t[j],
+                        t2=t2_t[j],
+                        n_vec=nvec_t[j],
+                        chart_scale=support_r_t[j],
+                        xi_init=xi_j_linear[in_support],
+                        max_iter=10,
+                        tol=1e-8,
+                    )
+                xi_j_np[in_support] = xi_j_star.cpu().numpy()
+
+            # In-mesh mask (constant)
             r_j_mesh = fem_solvers[j].r
             in_mesh = in_support & np.all(np.abs(xi_j_np) <= r_j_mesh, axis=1)
-            if np.any(in_mesh):
-                u_j[in_mesh] = fem_solvers[j].evaluate_at(xi_j_np[in_mesh])
 
-        all_logits.append(logit_j)
-        all_vals.append(u_j)
-        all_chart_ids.append(j)
+            nbr_data.append({
+                "chart_j": j,
+                "xi_inverted": xi_j_np,
+                "logits": logit_j,
+                "in_mesh": in_mesh,
+            })
 
-    if len(all_logits) == 0:
-        # No neighbors cover these points — use manufactured solution
-        u_exact = manufactured_u_np(x_phys)
-        return {int(idx): float(val) for idx, val in zip(solver_i.art_bc_nodes, u_exact)}
-
-    logits_arr = np.array(all_logits)  # (n_nbrs, N_art)
-    vals_arr = np.array(all_vals)  # (n_nbrs, N_art)
-
-    # For each art BC node, compute PoU-weighted blend
-    for k, node_idx in enumerate(solver_i.art_bc_nodes):
-        valid = ~np.isnan(vals_arr[:, k])
-        if not np.any(valid):
-            art_bc[int(node_idx)] = float(manufactured_u_np(x_phys[k:k+1])[0])
+        # Precompute PoU weights (constant)
+        n_art = len(solver_i.art_bc_nodes)
+        if len(nbr_data) == 0:
+            u_exact = manufactured_u_np(x_phys)
+            cache[chart_i] = {
+                "empty": False,
+                "fallback_values": {int(idx): float(val) for idx, val in
+                                    zip(solver_i.art_bc_nodes, u_exact)},
+                "no_neighbors": True,
+            }
             continue
 
-        logits_k = logits_arr[valid, k]
-        vals_k = vals_arr[valid, k]
+        # Build logits array and validity mask
+        logits_arr = np.array([nd["logits"] for nd in nbr_data])  # (n_nbrs, N_art)
+        in_mesh_arr = np.array([nd["in_mesh"] for nd in nbr_data])  # (n_nbrs, N_art)
 
-        # Softmax weights
-        logits_k = logits_k - logits_k.max()  # numerical stability
-        weights = np.exp(logits_k)
-        weights /= weights.sum()
+        # Compute PoU weights per node (vectorized)
+        # Mask invalid contributions
+        masked_logits = np.where(in_mesh_arr, logits_arr, -1e30)
+        max_logits = masked_logits.max(axis=0, keepdims=True)
+        weights = np.exp(masked_logits - max_logits)
+        weight_sum = weights.sum(axis=0, keepdims=True)
 
-        art_bc[int(node_idx)] = float(np.dot(weights, vals_k))
+        # Handle nodes with no valid neighbors
+        no_valid = weight_sum.ravel() < 1e-20
+        if np.any(no_valid):
+            # Fall back to unmasked logits
+            max_logits_full = logits_arr[:, no_valid].max(axis=0, keepdims=True)
+            weights[:, no_valid] = np.exp(logits_arr[:, no_valid] - max_logits_full)
+            weight_sum[:, no_valid] = weights[:, no_valid].sum(axis=0, keepdims=True)
 
-    return art_bc
+        weights /= np.maximum(weight_sum, 1e-20)  # (n_nbrs, N_art)
+
+        # Identify nodes with no valid in-mesh neighbors
+        any_valid = in_mesh_arr.any(axis=0)  # (N_art,) bool
+        no_valid_mask = ~any_valid
+
+        # Precompute manufactured solution fallback for those nodes
+        fallback_u = np.zeros(n_art)
+        if np.any(no_valid_mask):
+            fallback_u[no_valid_mask] = manufactured_u_np(x_phys[no_valid_mask])
+
+        cache[chart_i] = {
+            "empty": False,
+            "no_neighbors": False,
+            "nbr_data": nbr_data,
+            "weights": weights,  # (n_nbrs, N_art)
+            "no_valid_mask": no_valid_mask,  # (N_art,) bool
+            "fallback_u": fallback_u,  # (N_art,) manufactured solution for no-valid nodes
+            "x_phys": x_phys,
+        }
+
+    return cache
+
+
+def compute_schwarz_bc_cached(
+    chart_i: int,
+    fem_solvers: List[ChartFEMSolver],
+    bc_cache: Dict,
+) -> Dict[int, float]:
+    """Compute Schwarz BC values using precomputed geometry cache.
+
+    Only the FEM evaluate_at calls are done per iteration — all Newton
+    inversions, mask logits, and PoU weights are cached.
+    """
+    solver_i = fem_solvers[chart_i]
+    entry = bc_cache[chart_i]
+
+    if entry["empty"]:
+        return {}
+
+    if entry.get("no_neighbors", False):
+        return entry["fallback_values"]
+
+    nbr_data = entry["nbr_data"]
+    weights = entry["weights"]  # (n_nbrs, N_art)
+    n_art = len(solver_i.art_bc_nodes)
+
+    # Evaluate FEM solutions at cached inverted coordinates (cheap)
+    vals_arr = np.zeros((len(nbr_data), n_art))
+    for ni, nd in enumerate(nbr_data):
+        j = nd["chart_j"]
+        if fem_solvers[j].u is not None and np.any(nd["in_mesh"]):
+            vals_arr[ni, nd["in_mesh"]] = fem_solvers[j].evaluate_at(
+                nd["xi_inverted"][nd["in_mesh"]]
+            )
+
+    # Weighted blend (vectorized)
+    u_blend = np.sum(weights * vals_arr, axis=0)  # (N_art,)
+
+    # Fall back to manufactured solution for nodes with no valid neighbors
+    no_valid_mask = entry.get("no_valid_mask")
+    if no_valid_mask is not None and np.any(no_valid_mask):
+        u_blend[no_valid_mask] = entry["fallback_u"][no_valid_mask]
+
+    return {int(idx): float(val) for idx, val in zip(solver_i.art_bc_nodes, u_blend)}
 
 
 # -------------------------------------------------------------------------
@@ -433,11 +506,23 @@ def main():
     n_points, n_charts = membership.shape
     print(f"Atlas: {n_charts} charts, {n_points} points")
 
-    decoders, masks, atlas_ckpt = load_atlas_models(
-        atlas_checkpoint=args.atlas_checkpoint,
-        device=device,
-        dtype=dtype,
-    )
+    # For MPS: load checkpoint to CPU first (float64), build models in target dtype, then move
+    if device.type == "mps":
+        decoders, masks, atlas_ckpt = load_atlas_models(
+            atlas_checkpoint=args.atlas_checkpoint,
+            device=torch.device("cpu"),
+            dtype=dtype,
+        )
+        for d in decoders:
+            d.to(device=device)
+        for m in masks:
+            m.to(device=device)
+    else:
+        decoders, masks, atlas_ckpt = load_atlas_models(
+            atlas_checkpoint=args.atlas_checkpoint,
+            device=device,
+            dtype=dtype,
+        )
 
     gate = atlas_ckpt.get("gate")
     if isinstance(gate, dict) and (not args.allow_failed_gate) and not bool(gate.get("passed", False)):
@@ -619,6 +704,26 @@ def run_fem_schwarz(
     else:
         eval_points_iter = points
 
+    # 5a. Precompute Schwarz BC geometry (Newton inversions + PoU weights)
+    # This is the expensive step but only done ONCE per resolution level
+    print("Precomputing Schwarz BC geometry (Newton inversions)...")
+    precomp_start = time.time()
+    bc_cache = precompute_schwarz_bc_geometry(
+        fem_solvers=fem_solvers,
+        decoders=decoders,
+        masks=masks,
+        seeds_t=seeds_t,
+        t1_t=t1_t,
+        t2_t=t2_t,
+        nvec_t=nvec_t,
+        support_r_t=support_r_t,
+        neighbors=neighbors,
+        device=device,
+        dtype=dtype,
+    )
+    precomp_elapsed = time.time() - precomp_start
+    print(f"  Schwarz BC precomputation done in {precomp_elapsed:.1f}s")
+
     print(f"\nStarting Schwarz iterations (max={max_schwarz_iters}, eval_points={len(eval_points_iter)})...")
     for iteration in range(1, max_schwarz_iters + 1):
         for color_group in color_groups:
@@ -629,20 +734,11 @@ def run_fem_schwarz(
                 # Physical BC
                 phys_bc = compute_phys_bc(fem_solvers[chart_i])
 
-                # Schwarz BC from neighbors
-                art_bc = compute_schwarz_bc(
+                # Schwarz BC from neighbors (uses precomputed cache — no Newton!)
+                art_bc = compute_schwarz_bc_cached(
                     chart_i=chart_i,
                     fem_solvers=fem_solvers,
-                    decoders=decoders,
-                    masks=masks,
-                    seeds_t=seeds_t,
-                    t1_t=t1_t,
-                    t2_t=t2_t,
-                    nvec_t=nvec_t,
-                    support_r_t=support_r_t,
-                    neighbors=neighbors,
-                    device=device,
-                    dtype=dtype,
+                    bc_cache=bc_cache,
                 )
 
                 # Solve
