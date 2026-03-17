@@ -707,15 +707,16 @@ def run_full_pipeline(
         phi_center_load, phi_halfwidth_load,
         tol_frac=0.2,
     )
-    # If no boundary nodes found (cube mesh), use cube faces
+    # If no boundary nodes found (cube mesh), use partial x-face BCs
+    # (only x-faces constrained, y/z free → lateral contraction is observable)
     if bc_mask.sum() == 0:
-        print("  No torus-surface BC nodes found; using cube-face BCs as fallback.")
+        print("  No torus-surface BC nodes found; using partial x-face BCs.")
         r_mesh = fem.r
         tol_face = fem.h * 0.1
-        bc_mask = fem.boundary_mask.clone()
-        fixed_mask = torch.zeros_like(bc_mask)
-        # Fix one face, load opposite
-        fixed_mask = fem.nodes[:, 0] < -r_mesh + tol_face
+        left_face = fem.nodes[:, 0] < -r_mesh + tol_face
+        right_face = fem.nodes[:, 0] > r_mesh - tol_face
+        bc_mask = left_face | right_face
+        fixed_mask = left_face
         nodes_phys = fem.nodes.clone()  # identity map fallback
 
     print(f"  BC nodes: {bc_mask.sum().item()} "
@@ -742,11 +743,27 @@ def run_full_pipeline(
     print("  STAGE 1: Elastic Moduli Identification (mu, K)")
     print("=" * 70)
 
-    mono_schedule = build_monotonic_bc_schedule(
-        nodes_phys, r_minor, phi_center_load, phi_halfwidth_load,
-        max_amplitude * 0.5,  # smaller load for elastic regime
-        n_steps_mono,
+    # Detect if we're using cube fallback (identity map)
+    using_cube_fallback = (nodes_phys is fem.nodes) or (
+        torch.allclose(nodes_phys, fem.nodes, atol=1e-10)
     )
+
+    if using_cube_fallback:
+        # Simple uniaxial loading for cube geometry
+        r_mesh = fem.r
+        loaded_mask = bc_mask & ~fixed_mask  # right face
+        mono_schedule = []
+        for step in range(n_steps_mono):
+            lam = (step + 1) / n_steps_mono
+            u_bc = torch.zeros_like(fem.nodes)
+            u_bc[loaded_mask, 0] = 0.08 * lam * 2.0 * r_mesh  # uniaxial x
+            mono_schedule.append(u_bc)
+    else:
+        mono_schedule = build_monotonic_bc_schedule(
+            nodes_phys, r_minor, phi_center_load, phi_halfwidth_load,
+            max_amplitude * 0.5,
+            n_steps_mono,
+        )
 
     print("\n  Generating Stage 1 synthetic data (elastic)...")
     tau_y_high = torch.tensor(1e4, device=dev, dtype=dtype)
@@ -775,11 +792,23 @@ def run_full_pipeline(
     print("  STAGE 2A: Yield Stress Identification (tau_y, perfect plasticity)")
     print("=" * 70)
 
-    cyclic_schedule = build_cyclic_bc_schedule(
-        nodes_phys, bc_mask, r_minor,
-        phi_center_load, phi_halfwidth_load,
-        max_amplitude, n_steps_per_half_cyclic, n_cycles,
-    )
+    if using_cube_fallback:
+        r_mesh = fem.r
+        loaded_mask = bc_mask & ~fixed_mask
+        total_cyclic = 4 * n_cycles * n_steps_per_half_cyclic
+        cyclic_schedule = []
+        for step in range(total_cyclic):
+            t_norm = step / max(2 * n_steps_per_half_cyclic, 1)
+            amp = 0.08 * math.sin(2.0 * math.pi * t_norm / (2.0 * n_cycles))
+            u_bc = torch.zeros_like(fem.nodes)
+            u_bc[loaded_mask, 0] = amp * 2.0 * r_mesh
+            cyclic_schedule.append(u_bc)
+    else:
+        cyclic_schedule = build_cyclic_bc_schedule(
+            nodes_phys, bc_mask, r_minor,
+            phi_center_load, phi_halfwidth_load,
+            max_amplitude, n_steps_per_half_cyclic, n_cycles,
+        )
 
     # Use only first loading quarter for Stage 2A
     n_first_load = n_steps_per_half_cyclic
