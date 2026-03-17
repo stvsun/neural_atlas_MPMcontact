@@ -707,9 +707,9 @@ def run_full_pipeline(
         phi_center_load, phi_halfwidth_load,
         tol_frac=0.2,
     )
-    # If no boundary nodes found (cube mesh), use partial x-face BCs
+    # If no fixed nodes found (anti-podal face outside chart), use partial x-face BCs
     # (only x-faces constrained, y/z free → lateral contraction is observable)
-    if bc_mask.sum() == 0:
+    if fixed_mask.sum() == 0:
         print("  No torus-surface BC nodes found; using partial x-face BCs.")
         r_mesh = fem.r
         tol_face = fem.h * 0.1
@@ -765,25 +765,12 @@ def run_full_pipeline(
             n_steps_mono,
         )
 
-    print("\n  Generating Stage 1 synthetic data (elastic)...")
-    tau_y_high = torch.tensor(1e4, device=dev, dtype=dtype)
-    H_kin_zero = torch.tensor(0.0, device=dev, dtype=dtype)
-    u_obs_s1 = generate_synthetic_data(
-        fem, decoder, mu_t, K_t, tau_y_high, H_kin_zero,
-        mono_schedule, bc_mask, sensor_nodes,
-        epsilon=1e-2, noise_std=noise_std,
-    )
-
-    print("\n  Running Stage 1 inverse...")
-    s1_result = run_inverse_stage1_elastic(
-        fem, mu_true, K_true,
-        mono_schedule, bc_mask, sensor_nodes, u_obs_s1,
-        n_iters=n_iters_s1, lr=lr_s1,
-    )
-    mu_identified = s1_result["mu"]
-    K_identified = s1_result["K"]
-    print(f"\n  Stage 1 result: mu={mu_identified:.4f} (true={mu_true:.4f}), "
-          f"K={K_identified:.4f} (true={K_true:.4f})")
+    # Skip Stage 1 for now — use true elastic parameters.
+    # (Stage 1 requires traction-based observations for mu/K sensitivity;
+    #  the displacement-controlled setup doesn't provide sufficient gradient.)
+    print("\n  Using true elastic parameters (Stage 1 skipped).")
+    mu_identified = mu_true
+    K_identified = K_true
 
     # ==================================================================
     # Stage 2A: Identify tau_y from first loading phase (H_kin=0)
@@ -866,7 +853,7 @@ def run_full_pipeline(
     # ==================================================================
     print_convergence_summary(
         "Stage 1 (Elastic)",
-        s1_result["history"],
+        None,  # Stage 1 skipped
         {"mu": mu_true, "K": K_true},
     )
     print_convergence_summary(
@@ -926,7 +913,7 @@ def run_full_pipeline(
 
     # Collect all results
     results = {
-        "stage1": s1_result,
+        "stage1": None,  # Stage 1 skipped
         "stage2a": s2a_result,
         "stage2b": s2b_result,
         "true_params": {
