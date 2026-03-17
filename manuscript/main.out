@@ -5,3 +5,8 @@
 \BOOKMARK [1][-]{section.5}{Discussions}{}% 5
 \BOOKMARK [1][-]{section.6}{Conclusions}{}% 6
 \BOOKMARK [1][-]{appendix.A}{Implementation transparency and hardware backends}{}% 7
+\BOOKMARK [1][-]{appendix.B}{Neural network architecture specifications}{}% 8
+\BOOKMARK [1][-]{appendix.C}{Geometry pipeline equations}{}% 9
+\BOOKMARK [1][-]{appendix.D}{Solver stabilization details}{}% 10
+\BOOKMARK [1][-]{appendix.E}{Rabbit Poisson benchmark: supplementary tables}{}% 11
+\BOOKMARK [1][-]{appendix.F}{Stanford Bunny volumetric neural SDF benchmark}{}% 12

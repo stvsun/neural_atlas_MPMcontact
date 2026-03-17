@@ -1210,6 +1210,15 @@ Most importantly, the FEM convergence study in Table~\ref{tab:rabbit_fem_converg
 \label{fig:rabbit_poisson_example}
 \end{figure}
 
+Figure~\ref{fig:rabbit_poisson_fem_surface} repeats the same surface-rendering protocol for the finest atlas-FEM baseline ($n_{\mathrm{cells}}=56$). Using the same rabbit shell and the same camera angle as Figure~\ref{fig:rabbit_poisson_example} makes the comparison direct: the recovered scalar field is visually consistent with the compact PINN at the scale of the rendered surface, while the FEM absolute-error map is markedly smaller and more uniform. This qualitative contrast matches Table~\ref{tab:rabbit_solver_comparison}: the FEM improves the relative $L^2$ error from $2.21\times10^{-2}$ to $1.79\times10^{-2}$ and reduces the maximum pointwise error from $6.78\times10^{-2}$ to $8.72\times10^{-3}$. The entropy panel is retained only to preserve the same atlas-view convention as the PINN rendering, so that the reader can compare the two surface solutions under identical visual framing.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/example2_rabbit_poisson/example2_rabbit_poisson_fem_surface_pub.png}
+\caption{Rabbit atlas-FEM surface rendering at the finest refinement level ($n_{\mathrm{cells}}=56$). The figure uses the same reconstructed rabbit surface and the same fixed camera as Figure~\ref{fig:rabbit_poisson_example}. Panel (a) shows the FEM scalar field, panel (b) shows the absolute error, and panel (c) shows chart entropy reconstructed from the frozen rabbit atlas masks on the shared surface postprocessor. The first two panels show that the atlas-FEM branch recovers the same large-scale field as the compact PINN while producing a visibly smaller surface error.}
+\label{fig:rabbit_poisson_fem_surface}
+\end{figure}
+
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures_cmame_core/example2_rabbit_poisson/example2_rabbit_poisson_losses_pub.png}
