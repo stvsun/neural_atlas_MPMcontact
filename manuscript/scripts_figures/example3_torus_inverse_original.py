@@ -3,12 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
-import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib.cm import ScalarMappable
+import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
-from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter
 
 from pub_style import DOUBLE_COLUMN_WIDTH, SINGLE_COLUMN_WIDTH, apply_publication_style, save_figure
 
@@ -26,7 +25,7 @@ FIELDS_PDF = FIG_DIR / 'example3_torus_inverse_fields_pub.pdf'
 CONV_PNG = FIG_DIR / 'example3_torus_inverse_convergence_pub.png'
 CONV_PDF = FIG_DIR / 'example3_torus_inverse_convergence_pub.pdf'
 
-CAMERA_POSITION = [(3.2, -2.7, 1.45), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+TWO_PI = 2.0 * np.pi
 
 
 def load_data() -> tuple[pv.DataSet, dict, dict]:
@@ -36,107 +35,95 @@ def load_data() -> tuple[pv.DataSet, dict, dict]:
     return mesh, hist, metrics
 
 
-def periodic_griddata(phi: np.ndarray, theta: np.ndarray, values: np.ndarray, phi_grid: np.ndarray, theta_grid: np.ndarray) -> np.ndarray:
-    pts = np.column_stack([phi, theta])
-    periodic_pts = []
-    periodic_vals = []
-    for dphi in (-2 * np.pi, 0.0, 2 * np.pi):
-        for dtheta in (-2 * np.pi, 0.0, 2 * np.pi):
-            periodic_pts.append(pts + np.array([dphi, dtheta]))
-            periodic_vals.append(values)
-    periodic_pts = np.vstack(periodic_pts)
-    periodic_vals = np.concatenate(periodic_vals)
-    target = np.column_stack([phi_grid.ravel(), theta_grid.ravel()])
-    out = griddata(periodic_pts, periodic_vals, target, method='linear')
-    mask = np.isnan(out)
-    if mask.any():
-        out[mask] = griddata(periodic_pts, periodic_vals, target[mask], method='nearest')
-    return out.reshape(phi_grid.shape)
+def wrap_theta(theta: np.ndarray) -> np.ndarray:
+    return ((theta + np.pi) % TWO_PI) - np.pi
 
 
-def build_structured_surfaces(mesh: pv.DataSet) -> tuple[pv.PolyData, pv.PolyData, tuple[float, float], tuple[float, float]]:
-    phi = np.mod(np.asarray(mesh['phi'], dtype=float), 2 * np.pi)
-    theta = np.mod(np.asarray(mesh['theta'], dtype=float), 2 * np.pi)
-    pts = np.asarray(mesh.points, dtype=float)
-    x_def = np.asarray(mesh['x_deformed'], dtype=float)
-    disp_mag = np.asarray(mesh['displacement_mag'], dtype=float)
-    trac_err = np.asarray(mesh['traction_error_mag'], dtype=float)
+def periodic_binned_field(
+    phi: np.ndarray,
+    theta: np.ndarray,
+    values: np.ndarray,
+    *,
+    n_phi: int = 320,
+    n_theta: int = 180,
+    sigma: float = 1.05,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    phi = np.mod(np.asarray(phi, dtype=float), TWO_PI)
+    theta = wrap_theta(np.asarray(theta, dtype=float))
+    values = np.asarray(values, dtype=float)
 
-    n_phi = 280
-    n_theta = 160
-    phi_lin = np.linspace(0.0, 2 * np.pi, n_phi + 1, endpoint=True)
-    theta_lin = np.linspace(0.0, 2 * np.pi, n_theta + 1, endpoint=True)
-    PHI, THETA = np.meshgrid(phi_lin, theta_lin)
+    phi_edges = np.linspace(0.0, TWO_PI, n_phi + 1)
+    theta_edges = np.linspace(-np.pi, np.pi, n_theta + 1)
 
-    X = periodic_griddata(phi, theta, pts[:, 0], PHI, THETA)
-    Y = periodic_griddata(phi, theta, pts[:, 1], PHI, THETA)
-    Z = periodic_griddata(phi, theta, pts[:, 2], PHI, THETA)
-    XD = periodic_griddata(phi, theta, x_def[:, 0], PHI, THETA)
-    YD = periodic_griddata(phi, theta, x_def[:, 1], PHI, THETA)
-    ZD = periodic_griddata(phi, theta, x_def[:, 2], PHI, THETA)
-    DISP = periodic_griddata(phi, theta, disp_mag, PHI, THETA)
-    TRAC = periodic_griddata(phi, theta, trac_err, PHI, THETA)
+    weighted, _, _ = np.histogram2d(theta, phi, bins=[theta_edges, phi_edges], weights=values)
+    counts, _, _ = np.histogram2d(theta, phi, bins=[theta_edges, phi_edges])
 
-    # Enforce periodic closure explicitly so the visual seam does not appear in
-    # the reconstructed surface.
-    for arr in (X, Y, Z, XD, YD, ZD, DISP, TRAC):
-        arr[:, -1] = arr[:, 0]
-        arr[-1, :] = arr[0, :]
+    weighted_s = gaussian_filter(weighted, sigma=sigma, mode='wrap')
+    counts_s = gaussian_filter(counts, sigma=sigma, mode='wrap')
+    field = weighted_s / np.maximum(counts_s, 1.0e-12)
 
-    sgrid_ref = pv.StructuredGrid(X, Y, Z)
-    sgrid_def = pv.StructuredGrid(XD, YD, ZD)
-    surf_ref = sgrid_ref.extract_surface(algorithm='dataset_surface').triangulate()
-    surf_def = sgrid_def.extract_surface(algorithm='dataset_surface').triangulate()
-    surf_ref['traction_error_mag'] = TRAC.ravel(order='F')
-    surf_def['displacement_mag'] = DISP.ravel(order='F')
-    return surf_ref, surf_def, (float(np.nanmin(DISP)), float(np.nanmax(DISP))), (float(np.nanmin(TRAC)), float(np.nanmax(TRAC)))
+    return phi_edges, theta_edges, field
 
 
-def render_surface(mesh: pv.PolyData, scalars: str, cmap: str, clim: tuple[float, float]) -> np.ndarray:
-    pl = pv.Plotter(off_screen=True, window_size=(1200, 880), lighting='three lights')
-    pl.set_background('white')
-    pl.enable_anti_aliasing('fxaa')
-    pl.add_mesh(
-        mesh,
-        scalars=scalars,
-        cmap=cmap,
-        clim=clim,
-        show_scalar_bar=False,
-        smooth_shading=True,
-        ambient=0.55,
-        diffuse=0.42,
-        specular=0.0,
-    )
-    pl.camera_position = CAMERA_POSITION
-    pl.camera.zoom(1.18)
-    img = pl.screenshot(return_img=True)
-    pl.close()
-    return img
+def angle_ticks() -> tuple[list[float], list[str], list[float], list[str]]:
+    xticks = [0.0, 0.5 * np.pi, np.pi, 1.5 * np.pi, TWO_PI]
+    xlabels = ['0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$']
+    yticks = [-np.pi, -0.5 * np.pi, 0.0, 0.5 * np.pi, np.pi]
+    ylabels = [r'$-\pi$', r'$-\pi/2$', '0', r'$\pi/2$', r'$\pi$']
+    return xticks, xlabels, yticks, ylabels
 
 
-def build_field_figure(surf_ref: pv.PolyData, surf_def: pv.PolyData, disp_clim: tuple[float, float], trac_clim: tuple[float, float]) -> None:
+def style_map_axis(ax: plt.Axes, *, show_xlabel: bool = True, show_ylabel: bool = True) -> None:
+    xticks, xlabels, yticks, ylabels = angle_ticks()
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xlabels)
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(ylabels)
+    if show_xlabel:
+        ax.set_xlabel(r'Major angle $\phi$')
+    if show_ylabel:
+        ax.set_ylabel(r'Minor angle $\theta$')
+    ax.set_xlim(0.0, TWO_PI)
+    ax.set_ylim(-np.pi, np.pi)
+    ax.grid(False)
+
+
+def build_field_figure(mesh: pv.DataSet) -> None:
     apply_publication_style()
     FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    disp_img = render_surface(surf_def, 'displacement_mag', 'viridis', disp_clim)
-    trac_img = render_surface(surf_ref, 'traction_error_mag', 'magma', trac_clim)
+    phi = np.asarray(mesh['phi'], dtype=float)
+    theta = np.asarray(mesh['theta'], dtype=float)
+    disp = np.asarray(mesh['displacement_mag'], dtype=float)
+    trac = np.asarray(mesh['traction_error_mag'], dtype=float)
 
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COLUMN_WIDTH, 2.95))
-    panels = [
-        (axes[0], disp_img, 'Deformed configuration (displacement magnitude)', 'viridis', disp_clim, r'$|u|$'),
-        (axes[1], trac_img, 'Boundary traction-error magnitude', 'magma', trac_clim, r'$|t-t^{\mathrm{obs}}|$'),
-    ]
-    for ax, img, title, cmap, clim, cbar_label in panels:
-        ax.imshow(img)
-        ax.set_axis_off()
-        ax.set_title(title, pad=4)
-        norm = mpl.colors.Normalize(vmin=clim[0], vmax=clim[1])
-        sm = ScalarMappable(norm=norm, cmap=cmap)
-        cbar = fig.colorbar(sm, ax=ax, orientation='horizontal', fraction=0.05, pad=0.06)
-        cbar.ax.tick_params(labelsize=6.6)
-        cbar.set_label(cbar_label, fontsize=7.0)
+    disp_x, disp_y, disp_field = periodic_binned_field(phi, theta, disp, n_phi=320, n_theta=180, sigma=1.0)
+    trac_x, trac_y, trac_field = periodic_binned_field(phi, theta, trac, n_phi=320, n_theta=180, sigma=1.0)
 
-    fig.subplots_adjust(left=0.03, right=0.995, top=0.88, bottom=0.15, wspace=0.10)
+    disp_norm = mpl.colors.Normalize(vmin=0.0, vmax=float(np.nanpercentile(disp, 99.8)))
+    trac_norm = mpl.colors.PowerNorm(gamma=0.55, vmin=0.0, vmax=float(np.nanmax(trac)))
+
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COLUMN_WIDTH, 2.85), sharey=True)
+
+    mesh_disp = axes[0].pcolormesh(disp_x, disp_y, disp_field, shading='auto', cmap='viridis', norm=disp_norm, rasterized=True)
+    style_map_axis(axes[0], show_xlabel=True, show_ylabel=True)
+    axes[0].set_title(r'(a) Boundary displacement magnitude $|u|$', loc='left', pad=3)
+
+    mesh_trac = axes[1].pcolormesh(trac_x, trac_y, trac_field, shading='auto', cmap='magma', norm=trac_norm, rasterized=True)
+    style_map_axis(axes[1], show_xlabel=True, show_ylabel=False)
+    axes[1].set_title(r'(b) Boundary traction error $|t-t^{\mathrm{obs}}|$', loc='left', pad=3)
+
+    cbar1 = fig.colorbar(mesh_disp, ax=axes[0], orientation='horizontal', fraction=0.055, pad=0.18)
+    cbar1.locator = mpl.ticker.MaxNLocator(5)
+    cbar1.update_ticks()
+    cbar1.set_label(r'$|u|$')
+    cbar2 = fig.colorbar(mesh_trac, ax=axes[1], orientation='horizontal', fraction=0.055, pad=0.18)
+    cbar2.locator = mpl.ticker.MaxNLocator(4)
+    cbar2.formatter = mpl.ticker.FormatStrFormatter('%.1e')
+    cbar2.update_ticks()
+    cbar2.set_label(r'$|t-t^{\mathrm{obs}}|$')
+
+    fig.subplots_adjust(left=0.08, right=0.995, top=0.90, bottom=0.24, wspace=0.08)
     save_figure(fig, FIELDS_PNG, FIELDS_PDF)
     plt.close(fig)
 
@@ -155,32 +142,36 @@ def build_convergence_figure(hist: dict, metrics: dict) -> None:
     mu_err_pct = 100.0 * np.abs(mu - mu_true) / mu_true
     K_err_pct = 100.0 * np.abs(K - K_true) / K_true
 
-    fig, ax = plt.subplots(figsize=(SINGLE_COLUMN_WIDTH, 2.65))
-    ax.semilogy(iters, np.maximum(mu_err_pct, 1e-12), label=r'$\mu$ relative error (\%)', color='#1f77b4')
-    ax.semilogy(iters, np.maximum(K_err_pct, 1e-12), label=r'$K$ relative error (\%)', color='#d62728')
-    ax.set_xlabel('Iteration')
-    ax.set_ylabel('Parameter relative error (%)')
-    ax.set_title('Inverse-parameter convergence', pad=4)
-    ax.grid(True, which='both', alpha=0.35)
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(SINGLE_COLUMN_WIDTH, 3.35),
+        sharex=True,
+        gridspec_kw={'height_ratios': [1.3, 1.0]},
+    )
 
-    ax2 = ax.twinx()
-    ax2.semilogy(iters, np.maximum(trac, 1e-16), label='traction mismatch', color='#444444', ls='--')
-    ax2.set_ylabel(r'$\mathcal{L}_{\mathrm{trac}}$')
-    ax2.tick_params(axis='y', colors='#444444')
+    axes[0].semilogy(iters, np.maximum(mu_err_pct, 1e-12), color='#1f77b4', label=r'$\mu$ relative error')
+    axes[0].semilogy(iters, np.maximum(K_err_pct, 1e-12), color='#d62728', label=r'$K$ relative error')
+    axes[0].set_ylabel('Relative error (%)')
+    axes[0].set_title('(a) Parameter recovery', loc='left', pad=2)
+    axes[0].legend(loc='upper right')
 
-    lines = ax.get_lines() + ax2.get_lines()
-    labels = [line.get_label() for line in lines]
-    ax.legend(lines, labels, loc='upper right', fontsize=6.5, frameon=False)
+    axes[1].semilogy(iters, np.maximum(trac, 1e-16), color='#444444')
+    axes[1].set_xlabel('Iteration')
+    axes[1].set_ylabel(r'$\mathcal{L}_{\mathrm{trac}}$')
+    axes[1].set_title('(b) Traction mismatch', loc='left', pad=2)
 
-    fig.subplots_adjust(left=0.14, right=0.86, top=0.88, bottom=0.20)
+    for ax in axes:
+        ax.grid(True, which='both', alpha=0.35)
+
+    fig.subplots_adjust(left=0.18, right=0.98, top=0.96, bottom=0.14, hspace=0.18)
     save_figure(fig, CONV_PNG, CONV_PDF)
     plt.close(fig)
 
 
 def main() -> None:
     mesh, hist, metrics = load_data()
-    surf_ref, surf_def, disp_clim, trac_clim = build_structured_surfaces(mesh)
-    build_field_figure(surf_ref, surf_def, disp_clim, trac_clim)
+    build_field_figure(mesh)
     build_convergence_figure(hist, metrics)
 
 
