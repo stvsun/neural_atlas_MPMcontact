@@ -15,7 +15,7 @@ import sys
 import numpy as np
 import torch
 
-from chart_fem_solver import ChartFEMSolver
+from manuscript_experiments.example2_rabbit_poisson.chart_fem_solver import ChartFEMSolver
 
 
 class IdentityDecoder(torch.nn.Module):

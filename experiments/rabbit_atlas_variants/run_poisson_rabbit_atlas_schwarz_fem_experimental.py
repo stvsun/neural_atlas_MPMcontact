@@ -39,7 +39,7 @@ import sys as _sys
 import os as _os
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
-from run_poisson_rabbit_atlas_schwarz import (
+from run_poisson_rabbit_atlas_schwarz_experimental import (
     ChartDecoder,
     MaskNet,
     MLP,
@@ -59,7 +59,7 @@ from run_poisson_rabbit_atlas_schwarz import (
     build_run_stem,
 )
 
-from chart_fem_solver import (
+from chart_fem_solver_experimental import (
     ChartFEMSolver,
     manufactured_u_np,
     _manufactured_forcing_np,

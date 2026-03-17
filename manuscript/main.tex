@@ -1023,6 +1023,9 @@ Solver stabilization employs staged PDE-weight ramping, PCGrad \citep{yu2020grad
 % Notes:
 %   - This benchmark has no external raw geometry directory because the ellipsoid map, forcing,
 %     and exact solution are generated analytically inside the script.
+% Code location: manuscript_experiments/example1_forward_poisson/
+% Figure scripts: manuscript/scripts_figures/example1_forward_poisson.py
+%                 manuscript/scripts_figures/example1_forward_poisson_3d.py
 \subsection{Example 1: forward Poisson on the ellipsoid}
 \label{sec:example1}
 The common physical problem is
@@ -1095,6 +1098,11 @@ The canonical run reaches relative $L^2$ error $2.26\times 10^{-3}$, absolute $L
 % Notes:
 %   - The PDE forcing and boundary data are manufactured analytically inside the solver code.
 %   - The fixed atlas assets are the geometry input for this example; the FEM baseline compares a classical chart-local discretization against the PINN on the same rabbit geometry and atlas workflow family.
+% Code location: manuscript_experiments/example2_rabbit_poisson/
+% Figure scripts: manuscript/scripts_figures/example2_rabbit_poisson.py
+%                 manuscript/scripts_figures/example2_rabbit_poisson_training.py
+%                 manuscript/scripts_figures/example2_rabbit_poisson_fem_surface.py
+%                 manuscript/scripts_figures/example2_rabbit_fem_refinement.py
 \subsection{Example 2: rabbit Poisson on a fixed atlas}
 \label{sec:example2}
 The rabbit Poisson benchmark asks whether a fixed volumetric atlas can support a complex-geometry forward solve without being tied to a single local solver family. The same atlas-based workflow supports two realizations of the mapped Poisson problem: chart-local PINN surrogates and chart-local P1 FEM solves. The physical PDE is again \eqref{eq:ex1_phys}, with
@@ -1269,6 +1277,10 @@ Figure~\ref{fig:rabbit_poisson_fem_surface} repeats the same surface-rendering p
 %   - The torus geometry, prescribed kinematics, and synthetic traction observations are generated analytically inside the code.
 %   - There is therefore no external raw-data directory; the run directories contain the generated observations,
 %     learned parameters, metric logs, and VTU exports.
+% Code location (global optimizer):  manuscript_experiments/example3_torus_inverse_original/
+% Code location (Schwarz dual):      manuscript_experiments/example4_torus_inverse_schwarz_dual/
+% Figure scripts: manuscript/scripts_figures/example3_torus_inverse_original.py
+%                 manuscript/scripts_figures/example4_torus_inverse_schwarz_dual.py
 \subsection{Example 3: torus inverse Neo-Hookean identification}
 \label{sec:example3}
 
@@ -1331,6 +1343,8 @@ where $\omega_i$ are fixed azimuthal partition-of-unity weights from the eight-c
 
 Starting from $(\mu_0,K_0)=(1.746,26.0)$, the canonical run converges to $(\mu,K)=(1.800000,25.000006)$ after 300 epochs (201\,s), with final relative errors of $9.27\times 10^{-6}\%$ for $\mu$ and $2.29\times 10^{-5}\%$ for $K$, and a traction relative $L^2$ error of $2.35\times 10^{-7}$. The per-chart evaluation MSE values are uniformly below $1.3\times10^{-13}$, confirming that the chart-weighted aggregation introduces no observable inconsistency.
 
+% Code location: manuscript_experiments/example4_torus_inverse_schwarz_dual/
+% Figure scripts: manuscript/scripts_figures/example4_torus_inverse_schwarz_dual.py
 \subsubsection{Solver configurations (b)--(c): multiplicative Schwarz with per-chart parameters}
 
 The Schwarz variant replaces the single $(\mu,K)$ pair with per-chart unknowns $\{(\mu_i,K_i)\}_{i=1}^{8}$, updated through red--black alternating sweeps (even charts, then odd charts). Each chart~$i$ minimizes a local loss comprising three terms: (i)~a chart-weighted data-mismatch term against observations within chart~$i$'s support, (ii)~an interface consensus penalty
@@ -1769,6 +1783,7 @@ CompactChartNet & all W1--W5 features active & \textbf{2.207\%} & 6.783\% & 3659
 \end{tabular}
 \end{table}
 
+% Figure scripts: manuscript/scripts_figures/example3_bunny_sdf.py
 \section{Stanford Bunny volumetric neural SDF benchmark}
 \label{sec:appendix_bunny}
 

@@ -27,7 +27,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
+import sys
+from pathlib import Path
+
 import torch
+
+# Ensure repo root and this directory are on sys.path for sibling / core imports
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+_THIS_DIR = str(Path(__file__).resolve().parent)
+for _p in (_REPO_ROOT, _THIS_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from chart_fem_solver import ChartFEMSolver
 
@@ -53,7 +63,7 @@ from run_poisson_rabbit_atlas_schwarz import (
 )
 
 # SDF network from training script
-from train_sdf_rabbit import SDFNet
+from core.train_sdf_rabbit import SDFNet
 
 torch.set_default_dtype(torch.float64)
 
