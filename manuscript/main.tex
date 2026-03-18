@@ -49,6 +49,7 @@ hyperindex=true
 \usetikzlibrary{shapes.geometric}
 \usetikzlibrary{arrows}
 \usetikzlibrary{trees}
+\usetikzlibrary{positioning, calc, decorations.markings, fit, arrows.meta, backgrounds, patterns, shapes.misc}
 \usepackage{indentfirst}
 \usepackage{caption}
 \usepackage{enumitem}
@@ -199,6 +200,15 @@ The codebase also contains inverse examples, but they are not all of the same ty
 
 The paper is organized accordingly. Section~\ref{sec:methodology} introduces the volumetric atlas, the mapped PDE operator, the special-case global-map training used only for simply connected examples, and the SA-PINN Schwarz update. Section~\ref{sec:implementation} then translates those ideas into the concrete geometry pipeline, quality-assurance gates, and training heuristics used in the code. Section~\ref{sec:benchmark_formulations} presents the benchmark-specific formulations together with the corresponding validated numerical results. Section~\ref{sec:discussion} then interprets those results, records the current boundaries of the method, and outlines the most important development priorities. This organization keeps the general framework separate from implementation choices and from benchmark-specific simplifications while still letting the reader see, example by example, how each model formulation performs in practice.
 
+\subsection{Contributions}
+The paper makes four contributions, demonstrated across five numerical examples:
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Neural volumetric atlas as discretization-agnostic geometric substrate.} Overlapping volumetric charts, equipped with learned decoder maps and quality-assured through geometric gate metrics, define both the domain representation and the Schwarz overlap structure. The same frozen atlas supports PINN- and FEM-based local solvers without re-parametrization (Examples~1--3).
+\item \textbf{Dual PINN/FEM validation on complex geometry.} On a twelve-chart rabbit Poisson problem the compact PINN achieves relative $L^2$ error $2.21\times10^{-2}$, while a P1 tetrahedral FEM on the same atlas recovers the expected $O(h^2)$ convergence rate, confirming that the mapped operator introduces no order-of-accuracy penalty. A Stanford Bunny PLY benchmark further validates the volumetric neural SDF pipeline (Examples~2--3).
+\item \textbf{Constitutive identification on multiply-connected domains.} On a non-simply-connected torus the framework recovers Neo-Hookean material parameters from prescribed kinematics (Example~4), and an elastoplastic extension identifies yield stress and kinematic hardening from cyclic loading data via a smooth return-mapping constitutive law (Example~5).
+\item \textbf{Automatic inter-chart consistency through Schwarz coupling.} A Schwarz variant of the torus identification achieves machine-precision inter-chart consensus ($\mu$ standard deviation $= 1.47\times10^{-13}$ across eight charts), demonstrating that the atlas coupling enforces parameter consistency without additional constraints.
+\end{enumerate}
+
 \section{Methodology}
 \label{sec:methodology}
 
@@ -313,8 +323,81 @@ Figure~\ref{fig:atlas_slice} gives a schematic 2D slice through the volumetric a
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.98\textwidth]{figures_cmame_core/method/atlas_slice_pub.png}
-\caption{Conceptual view of the volumetric neural atlas. The left half shows chart-local reference patches parameterized by $\boldsymbol{\zeta}$; the right half shows their mapped physical images covering overlapping parts of $\Omega$. The arrows represent the chart maps $\varphi_i$, while the lower formula indicates the global blend assembled from the chart-local fields after the local solves are complete. The drawing is a planar slice through a three-dimensional construction, so it illustrates volumetric charts rather than a surface atlas.}
+\begin{tikzpicture}[
+  >=Stealth,
+  every node/.style={font=\small},
+  refball/.style={circle, draw, line width=0.9pt, minimum size=1.6cm, inner sep=0pt},
+  formulabox/.style={draw=gray!50, fill=gray!5, rounded corners=3pt, inner sep=5pt, font=\footnotesize},
+]
+% --- Color definitions ---
+\definecolor{cBlue}{HTML}{4C78A8}
+\definecolor{cGreen}{HTML}{59A14F}
+\definecolor{cOrange}{HTML}{F28E2B}
+
+% --- Section titles ---
+\node[font=\small\bfseries, anchor=west] at (-3.8, 3.4) {Reference charts};
+\node[font=\small\bfseries, anchor=west] at (2.8, 3.4) {Physical atlas};
+
+% --- Reference patches (left): circles = unit balls ---
+\node[refball, draw=cBlue, fill=cBlue!12] (R1) at (-2.8, 2.2) {$\widehat{\Omega}_1$};
+\node[refball, draw=cGreen, fill=cGreen!12] (R2) at (-2.8, 0.4) {$\widehat{\Omega}_2$};
+\node[refball, draw=cOrange, fill=cOrange!12] (R3) at (-2.8,-1.4) {$\widehat{\Omega}_3$};
+
+% --- Physical body (right): smooth Bezier outline ---
+\begin{scope}[shift={(4.8,0.4)}]
+  \draw[line width=1.4pt, fill=gray!6]
+    plot[smooth cycle, tension=0.72] coordinates {
+      (-1.9, 1.6) (-0.5, 2.5) (1.3, 2.2) (2.1, 1.0)
+      (1.9,-0.4) (1.4,-1.8) (-0.2,-2.2) (-1.5,-1.4) (-2.1, 0.2)
+    };
+  \node[font=\small\bfseries] at (1.6, 2.5) {$\Omega$};
+
+  % --- Chart images inside body: overlapping ellipses ---
+  \draw[cBlue, line width=0.9pt, fill=cBlue!14]
+    (0.0, 1.2) ellipse (1.3cm and 0.85cm);
+  \node[font=\small, color=cBlue, font=\small\bfseries] at (-0.8, 1.85) {$\Omega_1$};
+
+  \draw[cGreen, line width=0.9pt, fill=cGreen!14]
+    (0.6, -0.1) ellipse (1.5cm and 0.95cm);
+  \node[font=\small, color=cGreen, font=\small\bfseries] at (-0.6, 0.15) {$\Omega_2$};
+
+  \draw[cOrange, line width=0.9pt, fill=cOrange!14]
+    (0.3, -1.35) ellipse (1.25cm and 0.75cm);
+  \node[font=\small, color=cOrange, font=\small\bfseries] at (-0.65,-1.15) {$\Omega_3$};
+
+  % --- Overlap labels ---
+  \node[fill=white, inner sep=1pt, font=\scriptsize] at (0.4, 0.6) {$\Omega_{12}$};
+  \node[fill=white, inner sep=1pt, font=\scriptsize] at (0.55,-0.7) {$\Omega_{23}$};
+\end{scope}
+
+% --- Bidirectional arrows: phi_i (top, forward) and pi_i (bottom, inverse) ---
+% Chart 1
+\draw[->, cBlue, line width=0.9pt, bend left=12]
+  (R1.east) to node[above, font=\scriptsize, text=cBlue] {$\varphi_1$} ($(4.8,0.4)+(0.0,1.2)+(-1.3,0)$);
+\draw[<-, cBlue, line width=0.9pt, bend right=12, dashed]
+  (R1.east) to node[below, font=\scriptsize, text=cBlue] {$\pi_1$} ($(4.8,0.4)+(0.0,1.2)+(-1.3,0)$);
+
+% Chart 2
+\draw[->, cGreen, line width=0.9pt, bend left=10]
+  (R2.east) to node[above, font=\scriptsize, text=cGreen] {$\varphi_2$} ($(4.8,0.4)+(0.6,-0.1)+(-1.5,0)$);
+\draw[<-, cGreen, line width=0.9pt, bend right=10, dashed]
+  (R2.east) to node[below, font=\scriptsize, text=cGreen] {$\pi_2$} ($(4.8,0.4)+(0.6,-0.1)+(-1.5,0)$);
+
+% Chart 3
+\draw[->, cOrange, line width=0.9pt, bend left=12]
+  (R3.east) to node[above, font=\scriptsize, text=cOrange] {$\varphi_3$} ($(4.8,0.4)+(0.3,-1.35)+(-1.25,0)$);
+\draw[<-, cOrange, line width=0.9pt, bend right=12, dashed]
+  (R3.east) to node[below, font=\scriptsize, text=cOrange] {$\pi_3$} ($(4.8,0.4)+(0.3,-1.35)+(-1.25,0)$);
+
+% --- Formula box (bottom center) ---
+\node[formulabox, anchor=north] at (2.5, -2.8) {%
+  \begin{tabular}{@{}c@{}}
+  {\scriptsize Global blend from local chart fields}\\[2pt]
+  $\displaystyle u_h(x)=\sum_{i}\omega_i(x)\,\widehat{u}_i(\pi_i(x))$
+  \end{tabular}
+};
+\end{tikzpicture}
+\caption{Conceptual view of the volumetric neural atlas. The left side shows chart-local reference patches (unit balls) parameterized by $\boldsymbol{\zeta}$; the right side shows their mapped physical images covering overlapping parts of $\Omega$. Solid arrows represent the chart maps $\varphi_i$; dashed arrows represent the local inverses $\pi_i$. The lower formula indicates the global blend assembled from the chart-local fields. The drawing is a planar slice through a three-dimensional construction.}
 \label{fig:atlas_slice}
 \end{figure}
 
@@ -419,8 +502,115 @@ Equation \eqref{eq:mapped_residual} is the practical rule used inside every char
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.98\textwidth]{figures_cmame_core/method/mapped_operator_pub.png}
-\caption{Mapped-operator view on one chart. The left side shows the local reference patch, the center arrow represents the chart map and its Jacobian, and the right side shows the corresponding physical patch. The formula cards highlight the three identities the implementation uses directly: gradient pullback, Piola-transformed flux, and normal mapping.}
+\begin{tikzpicture}[
+  >=Stealth,
+  every node/.style={font=\small},
+  formulabox/.style={draw=gray!50, fill=gray!5, rounded corners=3pt, inner sep=5pt, font=\footnotesize},
+]
+\definecolor{cBlue}{HTML}{4C78A8}
+\definecolor{cGreen}{HTML}{59A14F}
+
+% --- Section titles ---
+\node[font=\small\bfseries, anchor=south] at (-3.2, 2.8) {Reference patch};
+\node[font=\small\bfseries, anchor=south] at (3.8, 2.8) {Physical patch};
+
+% --- Reference patch (left): circle with grid ---
+\begin{scope}[shift={(-3.2, 0.8)}]
+  % Grid lines inside circle to show structure
+  \clip (0,0) circle (1.5cm);
+  \foreach \x in {-1.2,-0.6,...,1.2} {
+    \draw[cBlue!25, line width=0.3pt] (\x,-1.5) -- (\x,1.5);
+  }
+  \foreach \y in {-1.2,-0.6,...,1.2} {
+    \draw[cBlue!25, line width=0.3pt] (-1.5,\y) -- (1.5,\y);
+  }
+  % Fill
+  \fill[cBlue!8] (0,0) circle (1.5cm);
+\end{scope}
+\draw[cBlue, line width=1.1pt] (-3.2, 0.8) circle (1.5cm);
+\node[font=\normalsize] at (-3.5, 0.5) {$\widehat{\Omega}_i$};
+% Coordinate point
+\fill[black] (-2.8, 1.0) circle (1.5pt);
+\node[font=\scriptsize, anchor=north east] at (-2.85, 0.95) {$\boldsymbol{\zeta}$};
+% Tangent basis vectors at zeta (orthonormal reference frame)
+\definecolor{cRed}{HTML}{C44E52}
+\draw[-{Stealth[length=4pt]}, cRed, line width=0.9pt] (-2.8, 1.0) -- (-2.2, 1.0);
+\node[font=\scriptsize, text=cRed, anchor=south] at (-2.35, 1.02) {$e_1$};
+\draw[-{Stealth[length=4pt]}, cBlue, line width=0.9pt] (-2.8, 1.0) -- (-2.8, 1.6);
+\node[font=\scriptsize, text=cBlue, anchor=west] at (-2.75, 1.45) {$e_2$};
+% Outward normal
+\draw[->, line width=0.8pt] (-3.2, 2.3) -- (-3.2, 2.75);
+\node[font=\scriptsize, anchor=west] at (-3.15, 2.55) {$\widehat{n}_i$};
+
+% --- Physical patch (right): smooth deformed shape with curved grid ---
+\begin{scope}[shift={(3.8, 0.8)}]
+  % Deformed shape
+  \fill[cGreen!8]
+    plot[smooth cycle, tension=0.7] coordinates {
+      (-1.6, -0.9) (-1.2, 1.2) (0.2, 1.7) (1.5, 1.3)
+      (1.9, 0.1) (1.6, -1.0) (0.2, -1.3)
+    };
+  \draw[black, line width=1.1pt]
+    plot[smooth cycle, tension=0.7] coordinates {
+      (-1.6, -0.9) (-1.2, 1.2) (0.2, 1.7) (1.5, 1.3)
+      (1.9, 0.1) (1.6, -1.0) (0.2, -1.3)
+    };
+  % Deformed grid (curved lines to show Jacobian effect)
+  \begin{scope}
+    \clip plot[smooth cycle, tension=0.7] coordinates {
+      (-1.6, -0.9) (-1.2, 1.2) (0.2, 1.7) (1.5, 1.3)
+      (1.9, 0.1) (1.6, -1.0) (0.2, -1.3)
+    };
+    % Curved vertical lines
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(-1.0,-1.4) (-0.8,-0.2) (-0.9,0.8) (-0.7,1.6)};
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(-0.3,-1.3) (-0.1,-0.3) (-0.2,0.6) (0.0,1.7)};
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(0.4,-1.2) (0.5,-0.2) (0.3,0.7) (0.5,1.5)};
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(1.0,-1.0) (1.1,0.0) (0.9,0.8) (1.2,1.4)};
+    % Curved horizontal lines
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(-1.5,-0.5) (-0.5,-0.6) (0.5,-0.7) (1.5,-0.6)};
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(-1.4,0.2) (-0.4,0.1) (0.6,0.0) (1.7,0.1)};
+    \draw[cGreen!30, line width=0.3pt] plot[smooth] coordinates {(-1.3,0.9) (-0.3,0.8) (0.7,0.7) (1.6,0.8)};
+  \end{scope}
+\end{scope}
+\node[font=\normalsize\bfseries] at (4.6, 2.6) {$\Omega_i$};
+% Point
+\fill[black] (4.2, 1.0) circle (1.5pt);
+\node[font=\scriptsize, anchor=north west] at (4.25, 0.90) {$x{=}\varphi_i(\boldsymbol{\zeta})$};
+% Pushed-forward tangent vectors (stretched/rotated by J_i)
+\draw[-{Stealth[length=4pt]}, cRed, line width=0.9pt] (4.2, 1.0) -- (4.95, 1.2);
+\node[font=\scriptsize, text=cRed, anchor=south] at (4.7, 1.18) {$\mathbf{J}_i e_1$};
+\draw[-{Stealth[length=4pt]}, cBlue, line width=0.9pt] (4.2, 1.0) -- (4.0, 1.75);
+\node[font=\scriptsize, text=cBlue, anchor=east] at (4.0, 1.55) {$\mathbf{J}_i e_2$};
+% Normal
+\draw[->, line width=0.8pt] (5.5, 1.85) -- (5.9, 2.35);
+\node[font=\scriptsize, anchor=south west] at (5.85, 2.2) {$n_i$};
+
+% --- Central arrow ---
+\draw[->, line width=1.4pt] (-1.2, 1.0) -- (1.4, 1.0)
+  node[midway, above, font=\small] {$\varphi_i$};
+\node[font=\scriptsize, anchor=north] at (0.1, 0.85) {$\mathbf{J}_i=D_{\boldsymbol{\zeta}}\varphi_i$};
+
+% --- Formula cards (bottom) ---
+\node[formulabox] (f1) at (-3.5, -1.6) {%
+  \begin{tabular}{@{}c@{}}
+  {\scriptsize Gradient pullback}\\[2pt]
+  $\nabla_x u=\nabla_{\zeta}\widehat{u}_i\,\mathbf{J}_i^{-1}$
+  \end{tabular}
+};
+\node[formulabox] (f2) at (0.3, -1.6) {%
+  \begin{tabular}{@{}c@{}}
+  {\scriptsize Piola flux}\\[2pt]
+  $\widehat{\mathcal{P}}_i=j_i\,\widehat{\mathcal{G}}_i\,\mathbf{J}_i^{-T}$
+  \end{tabular}
+};
+\node[formulabox] (f3) at (4.2, -1.6) {%
+  \begin{tabular}{@{}c@{}}
+  {\scriptsize Normal map}\\[2pt]
+  $n_i=\mathbf{J}_i^{-T}\widehat{n}_i\big/\|\mathbf{J}_i^{-T}\widehat{n}_i\|$
+  \end{tabular}
+};
+\end{tikzpicture}
+\caption{Mapped-operator view on one chart. The left side shows the local reference patch (unit ball) with a regular grid; the center arrow represents the chart map $\varphi_i$ and its Jacobian $\mathbf{J}_i$; the right side shows the corresponding physical patch with the grid deformed by the map. The formula cards highlight the three identities the implementation uses directly: gradient pullback, Piola-transformed flux, and normal mapping.}
 \label{fig:mapped_operator_schematic}
 \end{figure}
 
@@ -1383,6 +1573,10 @@ with mixed displacement and traction data induced by the same torsional loading 
 This benchmark is a constitutive-identification problem under known kinematics, not a full inverse boundary-value problem. The state field is not recovered from partial data, and the chart weights are not optimized. Its value is strategic: it shows that the chart-local Piola-mapped operator framework is not limited to Poisson diffusion and is ready for the more challenging problem of history-dependent constitutive identification, which follows in the next example.
 \end{remark}
 
+\begin{remark}[Multi-chart Schwarz consensus]
+A Schwarz variant of the torus identification assigns independent $(\mu_i, K_i)$ to each of eight charts and recovers machine-precision consensus: $\mu$ standard deviation $= 1.47\times10^{-13}$ across charts, demonstrating that the atlas coupling enforces parameter consistency automatically without additional inter-chart constraints.
+\end{remark}
+
 % Code location: experiments/torus_elastoplastic/
 % Figure scripts: manuscript/scripts_figures/example5_torus_elastoplastic.py
 \subsection{Example 5: torus elastoplastic parameter identification}
@@ -1544,6 +1738,12 @@ Table~\ref{tab:core_summary} summarizes the canonical numbers, but the scientifi
 Across the five examples, the main advantage of the atlas formulation is not that it has already displaced classical meshing, but that it changes where geometric effort is spent. In conventional finite-element workflows a difficult three-dimensional body is first turned into a volumetric mesh and then coupled to mature local basis functions and linear or nonlinear solvers \citep{de_souza_neto_computational_2011}. In the present code, geometry is instead represented analytically or by learned level sets and overlapping chart maps; interior collocation is generated by rejection sampling in those reference domains; and compatibility is enforced by interface penalties and multiplicative Schwarz sweeps. This makes the method particularly attractive when volumetric meshing or remeshing is itself the fragile part of the workflow, but it also means that approximation error, geometry error, and coupling error interact inside one optimization loop.
 
 The closest PINN alternatives in the literature, such as XPINNs and FBPINNs \citep{shukla2021parallel,moseley2021fbpinns}, also use decomposition to improve training, yet their partitions are primarily algorithmic. In contrast, the present atlas is geometry-first: the same chart structure is used to represent the domain, to generate collocation, and to organize Schwarz communication. The rabbit benchmark is the clearest evidence that this idea works in practice, because the atlas gate report shows full coverage and zero foldover before the PDE solve begins, and the field solver then maintains cross-chart agreement through explicit interface-value and projected-flux terms. At the same time, the method remains more optimization-sensitive than classical mesh-based Schwarz, and the present evidence does not justify a claim of universal accuracy or efficiency superiority.
+
+\subsection{Relation to isogeometric and multi-patch analysis}
+
+The Piola-mapped operators used in this work---the pullback diffusion tensor $\mathbf{A}_i = j_i \mathbf{J}_i^{-1}\mathbf{J}_i^{-T}$ and the Jacobian-weighted load vector---are standard in isogeometric analysis \citep{hughes2005isogeometric,cottrell2009isogeometric} and in classical mapped finite elements \citep{ciarlet2002finite}. The contribution is not the operator itself but the geometric substrate on which it is defined: neural volumetric charts replace NURBS patches or CAD-derived parametrizations, enabling atlas construction from point-cloud or level-set data without explicit meshing.
+
+The closest classical analogue is multi-patch IGA \citep{brivadis2015isogeometric}, where multiple NURBS patches are coupled through mortar methods or penalty-based interface conditions. Two key differences distinguish the approaches. First, multi-patch IGA requires CAD-quality parametrizations with controlled distortion; the neural atlas instead learns its charts from data, with quality gates (coverage, overlap consistency, foldover ratio) serving as a~posteriori substitutes for the a~priori regularity guarantees of NURBS. Second, IGA patches are typically non-overlapping with shared interface curves, whereas the atlas charts overlap by design and communicate through multiplicative Schwarz coupling. This overlap structure simplifies atlas construction---no watertight interface curves need to be computed---at the cost of requiring an iterative solver for inter-chart consistency.
 
 \subsection{Current limitations and future development priorities}
 The repository still contains broader exploratory tracks, but the validated evidence suggests a clear priority order for future work. More ambitious inverse tracks, including the rabbit Elder and Arruda--Boyce variants, remain outside the main-text claims because their stabilization and interface control are not yet as clean as the five validated examples discussed above.
