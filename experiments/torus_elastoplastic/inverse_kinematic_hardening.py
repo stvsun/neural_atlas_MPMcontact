@@ -249,7 +249,12 @@ def phase2_identify_joint(
                      device=device, dtype=dtype)
     )
 
-    optimizer = torch.optim.Adam([tau_y_raw, H_kin_raw], lr=lr)
+    # Phase 2 strategy: first optimize H_kin only (tau_y frozen),
+    # then jointly optimize both.  This avoids the tau_y-H_kin trade-off.
+    n_freeze_tau_y = n_iters // 3  # freeze tau_y for first 1/3 of iterations
+
+    optimizer_hkin = torch.optim.Adam([H_kin_raw], lr=lr)
+    optimizer_joint = torch.optim.Adam([tau_y_raw, H_kin_raw], lr=lr * 0.5)
 
     history: Dict[str, List[float]] = {
         "loss": [], "tau_y": [], "H_kin": [],
@@ -259,6 +264,14 @@ def phase2_identify_joint(
     t0 = time.time()
 
     for it in range(1, n_iters + 1):
+        # Select optimizer: freeze tau_y for first portion
+        if it <= n_freeze_tau_y:
+            optimizer = optimizer_hkin
+            tau_y_raw.requires_grad_(False)
+        else:
+            optimizer = optimizer_joint
+            tau_y_raw.requires_grad_(True)
+
         optimizer.zero_grad()
 
         tau_y_est = F_func.softplus(tau_y_raw) + tau_y_min
@@ -398,32 +411,52 @@ if __name__ == "__main__":
     right_face = (nodes[:, 0] > r - tol_face)
     bc_mask = left_face | right_face
 
-    # --- Cyclic loading schedule ---
-    eps_max = 0.08
-    n_forward = 5
-    n_reverse = 10
+    # --- Cyclic loading schedule with increasing peak amplitude ---
+    # Each cycle increases the peak strain to accumulate more plastic strain
+    # and expose the Bauschinger effect (back-stress shift).
+    eps_base = 0.04
+    n_cycles = 3
+    n_steps_per_half = 8  # steps per half-cycle (load or unload)
+    amp_growth = 1.5      # peak amplitude multiplier per cycle
 
     bc_schedule_full = []
-    # Forward loading
-    for step in range(n_forward):
-        lam = (step + 1) / n_forward
-        u_bc = torch.zeros_like(nodes)
-        u_bc[right_face, 0] = eps_max * lam * 2.0 * r
-        bc_schedule_full.append(u_bc)
+    for cycle in range(n_cycles):
+        eps_peak = eps_base * (amp_growth ** cycle)
+        # Forward half-cycle: 0 -> +eps_peak
+        for step in range(n_steps_per_half):
+            lam = (step + 1) / n_steps_per_half
+            u_bc = torch.zeros_like(nodes)
+            u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
+            bc_schedule_full.append(u_bc)
+        # Reverse half-cycle: +eps_peak -> -eps_peak
+        for step in range(2 * n_steps_per_half):
+            lam = 1.0 - (step + 1) / n_steps_per_half
+            u_bc = torch.zeros_like(nodes)
+            u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
+            bc_schedule_full.append(u_bc)
+        # Return to zero: -eps_peak -> 0
+        for step in range(n_steps_per_half):
+            lam = -1.0 + (step + 1) / n_steps_per_half
+            u_bc = torch.zeros_like(nodes)
+            u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
+            bc_schedule_full.append(u_bc)
 
-    # Reverse loading: go from eps_max back through zero and to -eps_max
-    for step in range(n_reverse):
-        lam = 1.0 - 2.0 * (step + 1) / n_reverse
+    # Monotonic part: use larger amplitude for better tau_y identification
+    eps_mono = eps_base * amp_growth  # use 2nd cycle's peak for monotonic
+    n_mono = 2 * n_steps_per_half  # more steps for monotonic
+    bc_schedule_mono = []
+    for step in range(n_mono):
+        lam = (step + 1) / n_mono
         u_bc = torch.zeros_like(nodes)
-        u_bc[right_face, 0] = eps_max * lam * 2.0 * r
-        bc_schedule_full.append(u_bc)
-
-    bc_schedule_mono = bc_schedule_full[:n_forward]
+        u_bc[right_face, 0] = eps_mono * lam * 2.0 * r
+        bc_schedule_mono.append(u_bc)
 
     total_steps = len(bc_schedule_full)
     print(f"\n  Mesh: {fem.n_nodes} nodes, {fem.n_elements} elements")
     print(f"  BC nodes: {bc_mask.sum().item()} (left+right x-faces)")
-    print(f"  Loading: {n_forward} forward + {n_reverse} reverse = {total_steps} steps")
+    print(f"  Loading: {n_cycles} cycles, {n_steps_per_half} steps/half, "
+          f"amp growth={amp_growth}x, total={total_steps} steps")
+    print(f"  Peak strains: {[eps_base * amp_growth**c for c in range(n_cycles)]}")
     print(f"  True tau_y = {tau_y_true}, H_kin = {H_kin_true}")
 
     # --- Sensor nodes ---
@@ -439,7 +472,7 @@ if __name__ == "__main__":
         bc_schedule_full, bc_mask, sensor_nodes,
         epsilon=1e-3, noise_std=0.0,
     )
-    u_obs_mono = u_obs_full[:n_forward]
+    u_obs_mono = u_obs_full[:n_mono]
     print(f"  Observations: {len(u_obs_full)} steps total, "
           f"{len(u_obs_mono)} monotonic")
 
@@ -459,10 +492,10 @@ if __name__ == "__main__":
         tau_y_init=1.0,
         H_kin_init=5.0,
         tau_y_min=0.01,
-        n_iters_phase1=100,
-        n_iters_phase2=200,
+        n_iters_phase1=150,
+        n_iters_phase2=300,
         lr_phase1=5e-2,
-        lr_phase2=1e-2,
+        lr_phase2=2e-2,
         epsilon_start=0.1,
         epsilon_end=1e-3,
         max_grad_norm=5.0,
