@@ -729,6 +729,31 @@ and `K`; it does **not** solve a chart-local elasticity PDE for the displacement
 
 ---
 
+### Example 4: Torus Elastoplastic Inverse Identification
+
+**Two-stage constitutive parameter estimation** for finite-strain J₂ elastoplasticity with kinematic hardening on the torus geometry.
+
+- **Scripts**: `experiments/torus_elastoplastic/`
+- **Key contribution**: Smooth return mapping with softplus regularization (`η = softplus(Φ/ε)·ε`) replaces non-differentiable yield-surface check, enabling gradient-based optimization through incremental load-stepping solver
+- **Stage 1**: Yield stress τ_y from monotonic displacement data → **0.25% error**
+- **Stage 2**: Kinematic hardening H_kin from cyclic reaction-force data → **2.11% error**
+- **Sensitivity studies**: Initial guess robustness (6 starting points), noise (up to 5%), mesh refinement, epsilon annealing
+- **FD comparison**: Autograd is 2.9× faster than finite differences; non-smooth (hard max) return mapping stalls
+- **Figures**: `manuscript/scripts_figures/example5_torus_elastoplastic.py`
+
+```bash
+# Run the two-stage inverse identification
+python experiments/torus_elastoplastic/inverse_kinematic_hardening.py
+
+# Run unit tests (14 tests)
+python experiments/torus_elastoplastic/test_elastoplastic.py
+
+# Generate manuscript figures
+cd manuscript/scripts_figures && python example5_torus_elastoplastic.py
+```
+
+---
+
 ### Additional Validated and Experimental Benchmarks
 
 These runs remain useful in the repository, but they are no longer part of the
@@ -792,6 +817,16 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── export_rabbit_error_paraview.py
 │   ├── run_rabbit_inverse_elder_atlas_schwarz.py  # Experimental rabbit Elder inverse
 │   ├── export_rabbit_elder_inverse_paraview.py
+│   ├── torus_elastoplastic/                   # Differentiable elastoplasticity (Example 4)
+│   │   ├── return_mapping.py                  # Smooth softplus return mapping
+│   │   ├── chart_vector_fem.py                # P1 tet vector FEM solver
+│   │   ├── incremental_solver.py              # Load-stepping + IFT gradient
+│   │   ├── schwarz_vector.py                  # Multi-chart Schwarz for vector elasticity
+│   │   ├── inverse_perfect_plasticity.py      # Stage 1: tau_y identification
+│   │   ├── inverse_kinematic_hardening.py     # Stage 2: H_kin identification
+│   │   ├── test_elastoplastic.py              # 14 unit tests
+│   │   ├── compare_fd_autograd.py             # FD vs autograd comparison
+│   │   └── generate_manuscript_figures.py     # Figure data generation
 │   └── experimental_ideas/                    # Archived exploratory variants
 │
 ├── configs/                          # YAML configuration files
