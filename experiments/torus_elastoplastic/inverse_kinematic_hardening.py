@@ -438,9 +438,10 @@ if __name__ == "__main__":
             u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
             bc_schedule_full.append(u_bc)
 
-    # Monotonic part: use moderate amplitude for reliable tau_y identification
-    eps_mono = eps_base * amp_growth  # slightly above base
-    n_mono = n_steps_per_half  # same resolution as cyclic
+    # Monotonic part: use the proven setup from inverse_perfect_plasticity
+    # (eps=0.08, 5 steps → 0.00% tau_y recovery)
+    eps_mono = 0.08
+    n_mono = 5
     bc_schedule_mono = []
     for step in range(n_mono):
         lam = (step + 1) / n_mono
