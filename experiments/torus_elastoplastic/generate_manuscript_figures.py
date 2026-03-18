@@ -169,9 +169,11 @@ def generate_mesh_refinement():
         bc_mask = left | right
         sensor = torch.where(~bc_mask)[0][:min(30, (~bc_mask).sum().item())]
 
+        # Scale load steps with mesh size to keep strain increment constant
+        n_steps = max(5, nc * 2)  # finer mesh → more steps
         bc_schedule = []
-        for step in range(5):
-            lam = (step + 1) / 5
+        for step in range(n_steps):
+            lam = (step + 1) / n_steps
             u_bc = torch.zeros_like(fem.nodes)
             u_bc[right, 0] = 0.08 * lam * 2.0 * r
             bc_schedule.append(u_bc)
@@ -339,21 +341,178 @@ def generate_hysteresis():
 
 
 # =====================================================================
+# Figure 6: Noise sensitivity for tau_y identification
+# =====================================================================
+def generate_noise_sensitivity():
+    print("=== Figure 6: Noise sensitivity ===")
+    import torch.nn.functional as F_func
+
+    fem = ChartVectorFEMSolver(n_cells=4, support_r=1.0, device=DEVICE)
+    mu = torch.tensor(MU_VAL)
+    K = torch.tensor(K_VAL)
+    tau_y_true = 0.5
+
+    tol_f = fem.h * 0.1
+    r = fem.r
+    left = fem.nodes[:, 0] < -r + tol_f
+    right = fem.nodes[:, 0] > r - tol_f
+    bc_mask = left | right
+    sensor = torch.where(~bc_mask)[0][:20]
+
+    bc_schedule = []
+    for step in range(5):
+        lam = (step + 1) / 5
+        u_bc = torch.zeros_like(fem.nodes)
+        u_bc[right, 0] = 0.08 * lam * 2.0 * r
+        bc_schedule.append(u_bc)
+
+    # Clean observations
+    with torch.no_grad():
+        u_obs_clean, _ = IncrementalSolver(
+            fem, mu, K, torch.tensor(tau_y_true), torch.tensor(0.0), epsilon=1e-3
+        ).solve_history(bc_schedule, bc_mask, verbose=False)
+
+    noise_levels = [0.0, 0.01, 0.05, 0.1, 0.2]
+    results = {"noise_std": [], "best_tau_y_err": [], "final_tau_y": [],
+               "n_trials": 3}
+
+    for noise_std in noise_levels:
+        trial_errs = []
+        for trial in range(3):
+            # Add noise
+            torch.manual_seed(42 + trial)
+            u_obs = []
+            for u in u_obs_clean:
+                u_s = u[sensor].clone()
+                if noise_std > 0:
+                    u_max = u_s.abs().max().clamp(min=1e-30)
+                    u_s = u_s + noise_std * u_max * torch.randn_like(u_s)
+                u_obs.append(u_s)
+
+            raw = torch.nn.Parameter(torch.tensor(0.0))
+            opt = torch.optim.Adam([raw], lr=5e-2)
+            best_err = 100.0
+            for it in range(200):
+                opt.zero_grad()
+                tau_y_est = F_func.softplus(raw) + 0.01
+                eps_c = cosine_anneal(it, 200, 0.1, 0.001)
+                u_pred, _ = IncrementalSolver(
+                    fem, mu, K, tau_y_est, torch.tensor(0.0), epsilon=eps_c
+                ).solve_history(bc_schedule, bc_mask, verbose=False, max_newton_iter=25, tol=1e-8)
+                loss = sum(torch.sum((up[sensor] - uo.detach())**2)
+                           for up, uo in zip(u_pred, u_obs))
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_([raw], 5.0)
+                opt.step()
+                err = abs(tau_y_est.item() - tau_y_true) / tau_y_true * 100
+                best_err = min(best_err, err)
+            trial_errs.append(best_err)
+
+        avg_err = sum(trial_errs) / len(trial_errs)
+        final = (F_func.softplus(raw) + 0.01).item()
+        results["noise_std"].append(noise_std)
+        results["best_tau_y_err"].append(trial_errs)
+        results["final_tau_y"].append(final)
+        print(f"  noise={noise_std}: errs={[f'{e:.2f}%' for e in trial_errs]}, avg={avg_err:.2f}%")
+
+    with open(f"{OUT_DIR}/fig6_noise.json", "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"  Saved to {OUT_DIR}/fig6_noise.json\n")
+
+
+# =====================================================================
+# Figure 7: Epsilon sensitivity for inverse
+# =====================================================================
+def generate_epsilon_sensitivity():
+    print("=== Figure 7: Epsilon sensitivity ===")
+    import torch.nn.functional as F_func
+
+    fem = ChartVectorFEMSolver(n_cells=4, support_r=1.0, device=DEVICE)
+    mu = torch.tensor(MU_VAL)
+    K = torch.tensor(K_VAL)
+    tau_y_true = 0.5
+
+    tol_f = fem.h * 0.1
+    r = fem.r
+    left = fem.nodes[:, 0] < -r + tol_f
+    right = fem.nodes[:, 0] > r - tol_f
+    bc_mask = left | right
+    sensor = torch.where(~bc_mask)[0][:20]
+
+    bc_schedule = []
+    for step in range(5):
+        lam = (step + 1) / 5
+        u_bc = torch.zeros_like(fem.nodes)
+        u_bc[right, 0] = 0.08 * lam * 2.0 * r
+        bc_schedule.append(u_bc)
+
+    with torch.no_grad():
+        u_obs, _ = IncrementalSolver(
+            fem, mu, K, torch.tensor(tau_y_true), torch.tensor(0.0), epsilon=1e-3
+        ).solve_history(bc_schedule, bc_mask, verbose=False)
+
+    eps_starts = [1.0, 0.5, 0.1, 0.05, 0.01]
+    results = {}
+    for eps_s in eps_starts:
+        raw = torch.nn.Parameter(torch.tensor(0.0))
+        opt = torch.optim.Adam([raw], lr=5e-2)
+        trajectory = []
+        for it in range(200):
+            opt.zero_grad()
+            tau_y_est = F_func.softplus(raw) + 0.01
+            eps_c = cosine_anneal(it, 200, eps_s, 0.001)
+            u_pred, _ = IncrementalSolver(
+                fem, mu, K, tau_y_est, torch.tensor(0.0), epsilon=eps_c
+            ).solve_history(bc_schedule, bc_mask, verbose=False, max_newton_iter=25, tol=1e-8)
+            loss = sum(torch.sum((up[sensor] - uo[sensor].detach())**2)
+                       for up, uo in zip(u_pred, u_obs))
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_([raw], 5.0)
+            opt.step()
+            trajectory.append(tau_y_est.item())
+        results[f"eps_start={eps_s}"] = trajectory
+        print(f"  eps_start={eps_s}: final={trajectory[-1]:.4f}")
+
+    with open(f"{OUT_DIR}/fig7_epsilon.json", "w") as f:
+        json.dump({"true_tau_y": tau_y_true, "trajectories": results}, f, indent=2)
+    print(f"  Saved to {OUT_DIR}/fig7_epsilon.json\n")
+
+
+# =====================================================================
 # Main
 # =====================================================================
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--only", type=str, default=None,
+                        help="Run only specific figure (e.g. '3' or '6')")
+    args = parser.parse_args()
+
     t0 = time.time()
     print("=" * 60)
     print("Manuscript Figure Data Generation")
     print("=" * 60)
     print()
 
-    generate_smoothing_comparison()   # ~1 sec
-    generate_newton_convergence()     # ~5 sec
-    generate_hysteresis()             # ~2 sec
-    generate_initial_guess_sensitivity()  # ~3 min
-    generate_mesh_refinement()        # ~5 min
+    figs = {
+        "1": ("Smoothing comparison", generate_smoothing_comparison),
+        "4": ("Newton convergence", generate_newton_convergence),
+        "5": ("Hysteresis loops", generate_hysteresis),
+        "2": ("Initial guess sensitivity", generate_initial_guess_sensitivity),
+        "3": ("Mesh refinement", generate_mesh_refinement),
+        "6": ("Noise sensitivity", generate_noise_sensitivity),
+        "7": ("Epsilon sensitivity", generate_epsilon_sensitivity),
+    }
+
+    if args.only:
+        if args.only in figs:
+            figs[args.only][1]()
+        else:
+            print(f"Unknown figure: {args.only}. Available: {list(figs.keys())}")
+    else:
+        for key, (name, fn) in figs.items():
+            fn()
 
     elapsed = time.time() - t0
-    print(f"All figures generated in {elapsed:.0f}s")
+    print(f"Completed in {elapsed:.0f}s")
     print(f"Output directory: {OUT_DIR}/")
