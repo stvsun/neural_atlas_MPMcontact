@@ -251,7 +251,20 @@ class ElastoplasticStepSolver:
             R[bc_mask_dof] = 0.0
 
             du = torch.linalg.solve(K_tan, -R.detach())
-            u = u + du.reshape(-1, 3)
+            du_3d = du.reshape(-1, 3)
+
+            # Backtracking line search to ensure residual decrease
+            alpha = 1.0
+            u_trial = u + alpha * du_3d
+            for ls_it in range(5):
+                R_trial, _, _ = self._compute_residual(u_trial, F_old, state, f_ext)
+                R_trial[bc_mask_dof] = 0.0
+                res_trial = torch.norm(R_trial[free_dof]).item()
+                if res_trial < res_norm:
+                    break
+                alpha *= 0.5
+                u_trial = u + alpha * du_3d
+            u = u_trial
 
             if it == max_iter - 1:
                 print(f"  [EP-Newton] WARNING: did not converge after {max_iter} iters, |R| = {res_norm:.2e}")
