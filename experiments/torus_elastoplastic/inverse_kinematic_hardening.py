@@ -249,12 +249,10 @@ def phase2_identify_joint(
                      device=device, dtype=dtype)
     )
 
-    # Phase 2 strategy: first optimize H_kin only (tau_y frozen),
-    # then jointly optimize both.  This avoids the tau_y-H_kin trade-off.
-    n_freeze_tau_y = n_iters // 3  # freeze tau_y for first 1/3 of iterations
-
-    optimizer_hkin = torch.optim.Adam([H_kin_raw], lr=lr)
-    optimizer_joint = torch.optim.Adam([tau_y_raw, H_kin_raw], lr=lr * 0.5)
+    # Adam with freeze-unfreeze: first H_kin only, then joint.
+    n_freeze = n_iters // 3
+    opt_hkin = torch.optim.Adam([H_kin_raw], lr=lr)
+    opt_joint = torch.optim.Adam([tau_y_raw, H_kin_raw], lr=lr * 0.5)
 
     history: Dict[str, List[float]] = {
         "loss": [], "tau_y": [], "H_kin": [],
@@ -264,19 +262,16 @@ def phase2_identify_joint(
     t0 = time.time()
 
     for it in range(1, n_iters + 1):
-        # Select optimizer: freeze tau_y for first portion
-        if it <= n_freeze_tau_y:
-            optimizer = optimizer_hkin
+        if it <= n_freeze:
+            optimizer = opt_hkin
             tau_y_raw.requires_grad_(False)
         else:
-            optimizer = optimizer_joint
+            optimizer = opt_joint
             tau_y_raw.requires_grad_(True)
 
         optimizer.zero_grad()
-
         tau_y_est = F_func.softplus(tau_y_raw) + tau_y_min
         H_kin_est = F_func.softplus(H_kin_raw)
-
         eps_current = cosine_anneal(it - 1, n_iters, epsilon_start, epsilon_end)
 
         inc_solver = IncrementalSolver(
@@ -414,10 +409,10 @@ if __name__ == "__main__":
     # --- Cyclic loading schedule with increasing peak amplitude ---
     # Each cycle increases the peak strain to accumulate more plastic strain
     # and expose the Bauschinger effect (back-stress shift).
-    eps_base = 0.04
+    eps_base = 0.03
     n_cycles = 3
-    n_steps_per_half = 8  # steps per half-cycle (load or unload)
-    amp_growth = 1.5      # peak amplitude multiplier per cycle
+    n_steps_per_half = 10  # more steps = smaller increments = better Newton convergence
+    amp_growth = 1.3       # gentler growth to keep Newton stable
 
     bc_schedule_full = []
     for cycle in range(n_cycles):
@@ -441,9 +436,9 @@ if __name__ == "__main__":
             u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
             bc_schedule_full.append(u_bc)
 
-    # Monotonic part: use larger amplitude for better tau_y identification
-    eps_mono = eps_base * amp_growth  # use 2nd cycle's peak for monotonic
-    n_mono = 2 * n_steps_per_half  # more steps for monotonic
+    # Monotonic part: use moderate amplitude for reliable tau_y identification
+    eps_mono = eps_base * amp_growth  # slightly above base
+    n_mono = n_steps_per_half  # same resolution as cyclic
     bc_schedule_mono = []
     for step in range(n_mono):
         lam = (step + 1) / n_mono
@@ -492,8 +487,8 @@ if __name__ == "__main__":
         tau_y_init=1.0,
         H_kin_init=5.0,
         tau_y_min=0.01,
-        n_iters_phase1=150,
-        n_iters_phase2=300,
+        n_iters_phase1=100,
+        n_iters_phase2=200,
         lr_phase1=5e-2,
         lr_phase2=2e-2,
         epsilon_start=0.1,
