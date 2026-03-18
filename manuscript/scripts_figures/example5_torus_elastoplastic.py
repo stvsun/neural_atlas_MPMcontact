@@ -150,15 +150,18 @@ def build_sensitivity_figure() -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COLUMN_WIDTH, 2.6))
 
-    # (a) Mesh refinement
+    # (a) Mesh refinement — linear y-axis, explicit x-ticks
     ax = axes[0]
     n_nodes = refine["n_nodes"]
     tau_err = [e * 100 for e in refine["best_tau_y_err"]]
-    ax.loglog(n_nodes, tau_err, "o-", color=C_RED, markersize=4, lw=1.2)
+    ax.plot(n_nodes, tau_err, "o-", color=C_RED, markersize=5, lw=1.4)
     ax.set_xlabel(r"Number of nodes")
     ax.set_ylabel(r"$\tau_y$ error (\%)")
     ax.set_title("(a) Mesh refinement", loc="left", pad=3)
-    ax.grid(True, which="both", alpha=0.3)
+    ax.set_xticks(n_nodes)
+    ax.set_xticklabels([str(n) for n in n_nodes], fontsize=7)
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)
 
     # (b) Epsilon sensitivity
     ax = axes[1]

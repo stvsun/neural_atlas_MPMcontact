@@ -32,6 +32,7 @@ coordinate charts, multiplicative Schwarz domain decomposition, and automatic di
    - [Example 2: Forward Poisson — Stanford Rabbit (Schwarz)](#example-2-forward-poisson--stanford-rabbit-schwarz)
    - [Example 3: Stanford Bunny PLY Volumetric Neural SDF](#example-3-stanford-bunny-ply-volumetric-neural-sdf)
    - [Example 4: Inverse Neo-Hookean Elasticity — Torus (Original Atlas)](#example-4-inverse-neo-hookean-elasticity--torus-original-atlas)
+   - [Example 5: Torus Elastoplastic Inverse Identification](#example-5-torus-elastoplastic-inverse-identification)
    - [Additional Validated and Experimental Benchmarks](#additional-validated-and-experimental-benchmarks)
 5. [Repository Structure](#repository-structure)
 6. [Prerequisites and Installation](#prerequisites-and-installation)
@@ -729,7 +730,7 @@ and `K`; it does **not** solve a chart-local elasticity PDE for the displacement
 
 ---
 
-### Example 4: Torus Elastoplastic Inverse Identification
+### Example 5: Torus Elastoplastic Inverse Identification
 
 **Two-stage constitutive parameter estimation** for finite-strain J₂ elastoplasticity with kinematic hardening on the torus geometry.
 
@@ -751,9 +752,16 @@ and `K`; it does **not** solve a chart-local elasticity PDE for the displacement
 **Generated manuscript figures** (in `manuscript/figures_cmame_core/example5_torus_elastoplastic/`):
 - `ep_constitutive.pdf` — Softplus smoothing comparison + cyclic hysteresis loops
 - `ep_convergence.pdf` — τ_y and H_kin convergence trajectories
-- `ep_hysteresis_overlay.pdf` — Recovered vs true hysteresis (indistinguishable)
+- `ep_hysteresis_multipoint.pdf` — Multi-point recovered vs true hysteresis at 3 torus locations
 - `ep_sensitivity.pdf` — Mesh refinement + epsilon sensitivity
-- `ep_plastic_strain.pdf` — 3D equivalent plastic strain field (PyVista)
+- `ep_plastic_strain.pdf` — 3D equivalent plastic strain on torus sector (PyVista)
+
+**Figure preview**:
+
+<p align="center">
+<img src="manuscript/figures_cmae_core/example5_torus_elastoplastic/ep_plastic_strain.png" width="45%"/>
+<img src="manuscript/figures_cmame_core/example5_torus_elastoplastic/ep_convergence.png" width="50%"/>
+</p>
 
 ```bash
 # Run the two-stage inverse identification
@@ -831,7 +839,7 @@ PINN_coordinate_chart_3Dgeometry/
 │   ├── export_rabbit_error_paraview.py
 │   ├── run_rabbit_inverse_elder_atlas_schwarz.py  # Experimental rabbit Elder inverse
 │   ├── export_rabbit_elder_inverse_paraview.py
-│   ├── torus_elastoplastic/                   # Differentiable elastoplasticity (Example 4)
+│   ├── torus_elastoplastic/                   # Differentiable elastoplasticity (Example 5)
 │   │   ├── return_mapping.py                  # Smooth softplus return mapping
 │   │   ├── chart_vector_fem.py                # P1 tet vector FEM solver
 │   │   ├── incremental_solver.py              # Load-stepping + IFT gradient
