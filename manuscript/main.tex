@@ -982,13 +982,29 @@ Each local chart uses a ball-shaped reference domain $\widehat{\Omega}_i\subset\
 \subsubsection{Atlas quality diagnostics}
 \label{sec:atlas_diagnostics}
 
-Table~\ref{tab:atlas_diagnostics} reports quantitative quality metrics for the canonical 12-chart rabbit atlas, computed on two sample populations per chart: (i)~membership-filtered points (the physical-domain samples actually used by the solver) and (ii)~dense uniform samples over the full reference ball (including regions outside the body).
-On the physical domain, all 12 charts maintain strictly positive Jacobian determinants ($\min_i\min_{\boldsymbol{\zeta}} j_i>0$), confirming zero foldover within the region where the PDE is evaluated.
-The 95th-percentile condition numbers $\kappa({\mathbf{J}_i})=\sigma_1/\sigma_3$ range from 2.2 to 9.5 across charts, with a chart-averaged mean of 7.0.
-On the full reference ball, five charts exhibit negative determinants at 0.3\%--5.6\% of samples; these degenerate regions lie outside the body surface and are filtered by the SDF rejection step (Section~3.1) before any PDE collocation or finite-element assembly.
-The mean transition-map consistency $\|\varphi_i(\boldsymbol{\zeta}_i(x))-\varphi_j(\boldsymbol{\zeta}_j(x))\|$ over 37 overlapping chart pairs is $2.62\times10^{-2}$, matching the gate-reported overlap consistency (Table~\ref{tab:atlas_diagnostics}).
-Coverage is 100\%, with 80\% of surface points belonging to exactly one chart and 20\% in two-or-more chart overlaps.
-Figure~\ref{fig:atlas_quality} visualizes these diagnostics.
+To verify that the frozen atlas provides a well-conditioned coordinate substrate, Table~\ref{tab:atlas_diagnostics} and Figure~\ref{fig:atlas_quality} report four categories of quantitative diagnostics for the canonical 12-chart rabbit atlas, computed on two sample populations per chart: (i)~membership-filtered points (the physical-domain samples actually used by the solver, 1{,}500--5{,}000 per chart) and (ii)~5{,}000 dense uniform samples over the full reference ball (including regions outside the body).
+
+\paragraph{Jacobian determinant histograms.}
+On the physical domain, all 12 charts maintain strictly positive Jacobian determinants ($\min_i\min_{\boldsymbol{\zeta}} j_i>0$; Table~\ref{tab:atlas_diagnostics}, columns~2--4), confirming zero foldover within the region where the PDE is evaluated.
+The per-chart distributions (Figure~\ref{fig:atlas_quality}a) cluster between 3 and 8, reflecting the volume expansion from the reference ball to the irregularly shaped physical patches.
+On the full reference ball, five charts (0, 1, 2, 7, 11) exhibit negative determinants at 0.3\%--5.6\% of samples (Table~\ref{tab:atlas_diagnostics}, columns~5--7); these degenerate regions lie outside the body surface and are filtered by the SDF rejection step before any PDE collocation or finite-element assembly.
+
+\paragraph{Distortion and conditioning.}
+The 95th-percentile condition numbers $\kappa(\mathbf{J}_i)=\sigma_1/\sigma_3$ range from 2.2 (Chart~6) to 9.5 (Chart~7) on the physical domain, with a chart-averaged mean of 7.0 (Figure~\ref{fig:atlas_quality}b).
+Charts 4 and 6, whose seeds lie in geometrically simple regions (torso), have $\kappa_{95}<2.5$; charts near thin features (ears, tail) exhibit moderately higher distortion.
+No chart reaches $\kappa_{95}>15$ on the physical domain, confirming that the rigid-frame-plus-residual decoder design (Eq.~\eqref{eq:impl_decoder_map}) controls distortion without explicit isotropy regularization.
+
+\paragraph{Coverage and overlap volume.}
+Coverage is 100\%: every surface point belongs to at least one chart.
+The overlap degree distribution (Figure~\ref{fig:atlas_quality}c) shows that 80\% of surface points belong to exactly one chart, 16.9\% to two charts, 2.5\% to three, and 0.5\% to four or more.
+This means ${\sim}20\%$ of the body volume participates in Schwarz transmission, providing substantial overlap for interface coupling while keeping the majority of the domain single-chart (and therefore computationally inexpensive).
+The partition-of-unity entropy $H(\omega)=-\sum_i\omega_i\ln\omega_i$ averages 0.048 across surface points, indicating that most points are dominated by a single chart weight close to one.
+
+\paragraph{Transition-map consistency.}
+For each of the 37 overlapping chart pairs $(i,j)$, the round-trip error $\|\varphi_i(\boldsymbol{\zeta}_i(x))-\varphi_j(\boldsymbol{\zeta}_j(x))\|$ is evaluated at shared membership points (Figure~\ref{fig:atlas_quality}d).
+The overall mean is $2.62\times10^{-2}$, and 35 of 37 pairs have mean error below $4\times10^{-2}$.
+The single outlier pair $(4,6)$ has only one shared point and a consistency error of $1.55\times10^{-1}$; this pair contributes negligibly to the global solution because its overlap region is vanishingly small.
+These transition errors are the atlas-level analogue of patch-interface mismatch in multi-patch IGA, and their magnitude is consistent with the downstream Schwarz coupling successfully driving inter-chart agreement to the $10^{-2}$ level observed in the PDE solution (Table~\ref{tab:rabbit_solver_comparison}).
 
 \begin{table}[htbp]
 \centering
