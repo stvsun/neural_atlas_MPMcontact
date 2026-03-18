@@ -132,14 +132,15 @@ def add_losses_panel(ax) -> None:
 
 def build_learning_figure(slices_img: np.ndarray) -> None:
     meta = json.loads(META_JSON.read_text())
-    fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH, 3.15))
-    gs = fig.add_gridspec(1, 2, left=0.04, right=0.995, top=0.91, bottom=0.13, wspace=0.14)
+    fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH * 0.55, 3.15))
+    gs = fig.add_gridspec(1, 1, left=0.14, right=0.97, top=0.91, bottom=0.13)
 
-    ax0 = fig.add_subplot(gs[0, 0])
-    add_image_panel(ax0, slices_img, 'Learned signed-distance slices', '(a)')
-
-    ax1 = fig.add_subplot(gs[0, 1])
+    ax1 = fig.add_subplot(gs[0, 0])
     add_losses_panel(ax1)
+    # Remove the (b) label since this is now the only panel
+    for txt in ax1.texts:
+        if '(b)' in txt.get_text():
+            txt.remove()
 
     fig.text(
         0.5, 0.03,

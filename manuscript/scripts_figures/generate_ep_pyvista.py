@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Generate PyVista 3D visualization of equivalent plastic strain on a torus
-sector, plus multi-point hysteresis figures with true-vs-recovered overlays.
+"""Generate PyVista 3D visualization on the full torus using Lie-group/Lie-algebra
+projection following Mota, Sun, Ostien, Foulk & Long (Comput. Mech., 2013).
+
+The deformation gradient F is computed per chart, interpolated onto a single smooth
+parametric torus surface mesh, polar-decomposed (F = R S), projected to the Lie
+algebra (log R in so(3), log S in S(3)), globally L2-projected to surface nodes
+in the physical domain, and recovered via exponential maps.
 
 Creates:
-  ep_plastic_strain.png / .pdf   -- 3D torus with annotated sample points
+  ep_plastic_strain.png / .pdf   -- 2x2 subfigure on smooth torus surface
   ep_hysteresis_multipoint.png / .pdf -- 1x3 hysteresis loops at A, B, C
 """
 
@@ -22,9 +27,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
+from scipy.interpolate import griddata
 
-# ---------------------------------------------------------------------------
-# Off-screen rendering (must come before any pyvista import)
 # ---------------------------------------------------------------------------
 import pyvista as pv
 pv.OFF_SCREEN = True
@@ -36,116 +40,163 @@ except Exception:
 from experiments.torus_elastoplastic.chart_vector_fem import ChartVectorFEMSolver
 from experiments.torus_elastoplastic.incremental_solver import IncrementalSolver
 from experiments.torus_elastoplastic.return_mapping import (
-    ReturnMappingState,
-    smooth_return_map,
-    sym_logm,
+    ReturnMappingState, smooth_return_map, sym_logm,
 )
 
-# ---------------------------------------------------------------------------
-# Output directory
-# ---------------------------------------------------------------------------
 OUT_DIR = (
     Path(__file__).resolve().parents[1]
-    / "figures_cmame_core"
-    / "example5_torus_elastoplastic"
+    / "figures_cmame_core" / "example5_torus_elastoplastic"
 )
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Torus chart decoder (matches run_torus_elastoplastic_inverse.py)
+# Torus geometry parameters
 # ---------------------------------------------------------------------------
-R_MAJOR = 1.0
-R_MINOR = 0.3
-PHI_CENTER = 0.0
+R_MAJOR, R_MINOR = 1.0, 0.35
+N_CHARTS = 8
 PHI_HALFWIDTH = math.pi / 4
 
 
-def cube_to_torus(xi: torch.Tensor) -> torch.Tensor:
-    """Map reference cube [-1,1]^3 nodes to torus physical coordinates.
+# ---------------------------------------------------------------------------
+# Build a single smooth parametric torus surface mesh
+# ---------------------------------------------------------------------------
+def make_torus_surface(n_phi=200, n_theta=80):
+    """Create a smooth structured torus surface as PyVista PolyData."""
+    phi = np.linspace(0, 2 * np.pi, n_phi, endpoint=False)
+    theta = np.linspace(0, 2 * np.pi, n_theta, endpoint=False)
+    PHI, THETA = np.meshgrid(phi, theta, indexing="ij")
 
-    xi_0 -> phi   = phi_center + phi_halfwidth * xi_0
-    xi_1 -> theta = pi * xi_1
-    xi_2 -> rho   = r_minor * xi_2   (xi_2 in [0,1] after rescaling from [-1,1])
-    """
-    phi = PHI_CENTER + PHI_HALFWIDTH * xi[:, 0]
+    X = (R_MAJOR + R_MINOR * np.cos(THETA)) * np.cos(PHI)
+    Y = (R_MAJOR + R_MINOR * np.cos(THETA)) * np.sin(PHI)
+    Z = R_MINOR * np.sin(THETA)
+
+    grid = pv.StructuredGrid(X, Y, Z)
+    surf = grid.extract_surface()
+    return surf, PHI, THETA
+
+
+# ---------------------------------------------------------------------------
+# Chart-local reference coordinate computation
+# ---------------------------------------------------------------------------
+def cube_to_torus_chart(xi, phi_center, phi_halfwidth):
+    phi = phi_center + phi_halfwidth * xi[:, 0]
     theta = math.pi * xi[:, 1]
-    # Map xi_2 from [-1,1] to [0, r_minor]
-    rho = R_MINOR * 0.5 * (1.0 + xi[:, 2])
+    rho = 0.5 * R_MINOR * (1.0 + xi[:, 2])
+    rr = R_MAJOR + rho * torch.cos(theta)
+    return torch.stack([rr * torch.cos(phi), rr * torch.sin(phi),
+                        rho * torch.sin(theta)], dim=1)
 
-    cos_phi = torch.cos(phi)
-    sin_phi = torch.sin(phi)
-    cos_theta = torch.cos(theta)
-    sin_theta = torch.sin(theta)
 
-    rr = R_MAJOR + rho * cos_theta
-    x = rr * cos_phi
-    y = rr * sin_phi
-    z = rho * sin_theta
-    return torch.stack([x, y, z], dim=1)
+def cube_to_torus(xi):
+    return cube_to_torus_chart(xi, 0.0, PHI_HALFWIDTH)
+
+
+def torus_surface_to_chart_ref(phi_pts, theta_pts, phi_center, phi_halfwidth):
+    """Map (phi, theta) on the torus outer surface (rho=R_MINOR, i.e. xi_2=1)
+    to reference cube coordinates xi in [-1,1]^3."""
+    # Wrap phi difference to [-pi, pi]
+    dphi = np.arctan2(np.sin(phi_pts - phi_center), np.cos(phi_pts - phi_center))
+    xi_0 = dphi / phi_halfwidth
+    xi_1 = theta_pts / math.pi  # theta in [-pi, pi] -> xi_1 in [-1, 1]
+    xi_2 = np.ones_like(xi_0)   # outer surface: rho = R_MINOR -> xi_2 = 1
+    return np.stack([xi_0, xi_1, xi_2], axis=1)
+
+
+# ---------------------------------------------------------------------------
+# Lie-algebra utilities (Mota et al. 2013)
+# ---------------------------------------------------------------------------
+def _polar_decompose(F):
+    U, D, Vt = torch.linalg.svd(F)
+    det_sign = torch.det(U @ Vt)
+    if det_sign < 0:
+        U = U.clone(); U[:, -1] *= -1
+        D = D.clone(); D[-1] *= -1
+    R = U @ Vt
+    S = Vt.T @ torch.diag(D) @ Vt
+    return R, S
+
+
+def _log_rotation(R):
+    tr_R = torch.trace(R).clamp(-1.0 + 1e-7, 3.0 - 1e-7)
+    theta = torch.acos(0.5 * (tr_R - 1.0))
+    if theta.abs() < 1e-10:
+        return torch.zeros(3, 3, dtype=R.dtype)
+    return (theta / (2.0 * torch.sin(theta))) * (R - R.T)
+
+
+def _exp_rotation(W):
+    theta = torch.sqrt(0.5 * torch.sum(W * W)).clamp(min=1e-30)
+    if theta < 1e-10:
+        return torch.eye(3, dtype=W.dtype)
+    return (torch.eye(3, dtype=W.dtype)
+            + (torch.sin(theta) / theta) * W
+            + ((1.0 - torch.cos(theta)) / theta**2) * (W @ W))
+
+
+def _log_spd(S):
+    eigvals, eigvecs = torch.linalg.eigh(S)
+    eigvals = eigvals.clamp(min=1e-30)
+    return eigvecs @ torch.diag(torch.log(eigvals)) @ eigvecs.T
+
+
+def _exp_spd(H):
+    H = 0.5 * (H + H.T)
+    if torch.any(torch.isnan(H)):
+        return torch.eye(3, dtype=H.dtype)
+    eigvals, eigvecs = torch.linalg.eigh(H)
+    eigvals = eigvals.clamp(-20.0, 20.0)
+    return eigvecs @ torch.diag(torch.exp(eigvals)) @ eigvecs.T
 
 
 # ---------------------------------------------------------------------------
 # Forward solve helper
 # ---------------------------------------------------------------------------
-def run_forward_solve(
-    fem, mu, K, tau_y_val, H_kin_val, bc_schedule, bc_mask, device="cpu"
-):
-    """Run the cyclic forward solve and return (u_hist, state_hist)."""
-    tau_y_t = torch.tensor(tau_y_val, device=device)
-    H_kin_t = torch.tensor(H_kin_val, device=device)
-    inc_solver = IncrementalSolver(
-        fem, mu, K, tau_y_t, H_kin_t, epsilon=1e-3,
-    )
+def run_forward_solve(fem, mu, K, tau_y_val, H_kin_val, bc_schedule, bc_mask, device="cpu"):
+    inc = IncrementalSolver(fem, mu, K,
+                            torch.tensor(tau_y_val, device=device),
+                            torch.tensor(H_kin_val, device=device), epsilon=1e-3)
     with torch.no_grad():
-        u_hist, state_hist = inc_solver.solve_history(
-            bc_schedule, bc_mask, verbose=True, max_newton_iter=50, tol=1e-6,
-        )
-    return u_hist, state_hist
+        return inc.solve_history(bc_schedule, bc_mask, verbose=True,
+                                max_newton_iter=50, tol=1e-6)
 
 
 # ---------------------------------------------------------------------------
 # Hysteresis extraction
 # ---------------------------------------------------------------------------
 def extract_hysteresis(fem, u_hist, state_hist, elem_idx):
-    """Extract Kirchhoff stress tau_11 and logarithmic strain eps_11 at elem_idx.
-
-    For each load step:
-      - Compute F = I + grad(u) at the element
-      - Compute log strain: eps = 0.5 * log(F^T F) -> eps_11
-      - Get tau from Be via the return mapping state
-    """
-    eps_list = []
-    tau_list = []
-    mu_val = 200.0 / (2.0 * (1.0 + 0.3))  # for stress reconstruction
-    K_val = 200.0 / (3.0 * (1.0 - 2.0 * 0.3))
-
-    for step_idx in range(len(u_hist)):
-        u = u_hist[step_idx].detach()
-        state = state_hist[step_idx]
-
-        # Deformation gradient at element
-        F = fem.compute_F(u)  # (M, 3, 3)
-        F_e = F[elem_idx]  # (3, 3)
-
-        # Total logarithmic strain
-        C = F_e.T @ F_e
-        eps_log = 0.5 * sym_logm(C.unsqueeze(0)).squeeze(0)
-        eps_11 = eps_log[0, 0].item()
-
-        # Kirchhoff stress from elastic Be
-        Be_e = state.Be[elem_idx]  # (3, 3)
-        eps_e = 0.5 * sym_logm(Be_e.unsqueeze(0)).squeeze(0)
-        tr_eps_e = torch.trace(eps_e).item()
-        dev_eps_e = eps_e - (tr_eps_e / 3.0) * torch.eye(3, dtype=eps_e.dtype)
-        tau_tensor = 2.0 * mu_val * dev_eps_e + K_val * tr_eps_e * torch.eye(
-            3, dtype=eps_e.dtype
-        )
-        tau_11 = tau_tensor[0, 0].item()
-
-        eps_list.append(eps_11)
-        tau_list.append(tau_11)
-
+    eps_list, tau_list = [], []
+    mu_val = 200.0 / (2.0 * 1.3)
+    K_val = 200.0 / (3.0 * 0.4)
+    for si in range(len(u_hist)):
+        u = u_hist[si].detach()
+        F = fem.compute_F(u)[elem_idx]
+        C = F.T @ F
+        eps_list.append((0.5 * sym_logm(C.unsqueeze(0)).squeeze(0))[0, 0].item())
+        Be = state_hist[si].Be[elem_idx]
+        eps_e = 0.5 * sym_logm(Be.unsqueeze(0)).squeeze(0)
+        tr_e = torch.trace(eps_e).item()
+        tau = 2 * mu_val * (eps_e - tr_e / 3 * torch.eye(3)) + K_val * tr_e * torch.eye(3)
+        tau_list.append(tau[0, 0].item())
     return np.array(eps_list), np.array(tau_list)
+
+
+# ---------------------------------------------------------------------------
+# Render one scalar on the smooth torus surface
+# ---------------------------------------------------------------------------
+def render_torus(surf, scalar_name, title, cmap="turbo", fmt="%.4f"):
+    pl = pv.Plotter(off_screen=True, window_size=[900, 700])
+    pl.set_background("white")
+    pl.add_mesh(surf, scalars=scalar_name, cmap=cmap, show_edges=False,
+                smooth_shading=True, scalar_bar_args={
+                    "title": title, "title_font_size": 16, "label_font_size": 12,
+                    "n_labels": 5, "fmt": fmt,
+                    "position_x": 0.78, "position_y": 0.15,
+                    "width": 0.14, "height": 0.65, "color": "black"}, opacity=1.0)
+    pl.camera_position = [(3.0, -2.5, 2.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    pl.screenshot("/tmp/_ep_tmp.png", transparent_background=False)
+    img = plt.imread("/tmp/_ep_tmp.png")
+    pl.close()
+    return img
 
 
 # ---------------------------------------------------------------------------
@@ -155,318 +206,228 @@ def main():
     torch.set_default_dtype(torch.float64)
     device = "cpu"
 
-    # ------------------------------------------------------------------
-    # 1. Material parameters
-    # ------------------------------------------------------------------
     E_val, nu_val = 200.0, 0.3
-    mu_val = E_val / (2.0 * (1.0 + nu_val))
-    K_val = E_val / (3.0 * (1.0 - 2.0 * nu_val))
-    mu = torch.tensor(mu_val, device=device)
-    K = torch.tensor(K_val, device=device)
-
-    # True and recovered parameters
+    mu = torch.tensor(E_val / (2 * (1 + nu_val)), device=device)
+    K = torch.tensor(E_val / (3 * (1 - 2 * nu_val)), device=device)
     tau_y_true, H_kin_true = 0.5, 20.0
     tau_y_rec, H_kin_rec = 0.4988, 19.58
 
-    # ------------------------------------------------------------------
-    # 2. Build mesh
-    # ------------------------------------------------------------------
-    n_cells = 4
-    fem = ChartVectorFEMSolver(
-        n_cells=n_cells, support_r=1.0, device=device, dtype=torch.float64,
-    )
-    nodes = fem.nodes
-    tol_face = fem.h * 0.1
-    r = fem.r
+    n_cells, eps_peak, n_steps_per_half = 4, 0.03, 15
+    chart_phi_centers = [i * 2 * math.pi / N_CHARTS for i in range(N_CHARTS)]
 
-    print(f"Mesh: {fem.n_nodes} nodes, {fem.n_elements} elements")
+    # ── Step 1: Solve each chart and collect element-wise F ──────────────
+    chart_data = []  # list of (fem, F_all, elems_np, nodes_ref_np, phi_center)
+    fem_chart0 = u_true_c0 = st_true_c0 = u_rec_c0 = st_rec_c0 = None
 
-    # ------------------------------------------------------------------
-    # 3. Boundary conditions (cyclic uniaxial)
-    # ------------------------------------------------------------------
-    left_face = nodes[:, 0] < -r + tol_face
-    right_face = nodes[:, 0] > r - tol_face
-    bc_mask = left_face | right_face
+    for ci in range(N_CHARTS):
+        phi_c = chart_phi_centers[ci]
+        print(f"\n=== Chart {ci}: phi = {phi_c:.4f} rad ===")
+        fem = ChartVectorFEMSolver(n_cells=n_cells, support_r=1.0,
+                                   device=device, dtype=torch.float64)
+        nodes = fem.nodes
+        tol, r = fem.h * 0.1, fem.r
+        left = nodes[:, 0] < -r + tol
+        right = nodes[:, 0] > r - tol
+        bc_mask = left | right
 
-    eps_peak = 0.03
-    n_steps_per_half = 15
+        bc_schedule = []
+        for _ in range(2):
+            for s in range(n_steps_per_half):
+                lam = (s + 1) / n_steps_per_half
+                u_bc = torch.zeros_like(nodes)
+                u_bc[right, 0] = eps_peak * lam * 2 * r
+                bc_schedule.append(u_bc)
+            for s in range(2 * n_steps_per_half):
+                lam = 1.0 - (s + 1) / n_steps_per_half
+                u_bc = torch.zeros_like(nodes)
+                u_bc[right, 0] = eps_peak * lam * 2 * r
+                bc_schedule.append(u_bc)
+            for s in range(n_steps_per_half):
+                lam = -1.0 + (s + 1) / n_steps_per_half
+                u_bc = torch.zeros_like(nodes)
+                u_bc[right, 0] = eps_peak * lam * 2 * r
+                bc_schedule.append(u_bc)
 
-    bc_schedule = []
-    for cycle in range(2):
-        # Forward: 0 -> +eps
-        for step in range(n_steps_per_half):
-            lam = (step + 1) / n_steps_per_half
-            u_bc = torch.zeros_like(nodes)
-            u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
-            bc_schedule.append(u_bc)
-        # Reverse: +eps -> -eps
-        for step in range(2 * n_steps_per_half):
-            lam = 1.0 - (step + 1) / n_steps_per_half
-            u_bc = torch.zeros_like(nodes)
-            u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
-            bc_schedule.append(u_bc)
-        # Return: -eps -> 0
-        for step in range(n_steps_per_half):
-            lam = -1.0 + (step + 1) / n_steps_per_half
-            u_bc = torch.zeros_like(nodes)
-            u_bc[right_face, 0] = eps_peak * lam * 2.0 * r
-            bc_schedule.append(u_bc)
+        u_hist, state_hist = run_forward_solve(
+            fem, mu, K, tau_y_true, H_kin_true, bc_schedule, bc_mask, device)
+        if ci == 0:
+            fem_chart0 = fem
+            u_true_c0, st_true_c0 = u_hist, state_hist
+            u_rec_c0, st_rec_c0 = run_forward_solve(
+                fem, mu, K, tau_y_rec, H_kin_rec, bc_schedule, bc_mask, device)
 
-    total_steps = len(bc_schedule)
-    print(
-        f"Cyclic loading: 2 cycles, {n_steps_per_half} steps/half, "
-        f"eps_peak={eps_peak}, total={total_steps} steps"
-    )
+        F_all = fem.compute_F(u_hist[-1].detach())  # (n_elem, 3, 3)
+        Be_all = state_hist[-1].Be.detach()          # (n_elem, 3, 3)
+        elems_np = fem.elements.detach().cpu().numpy()
+        nodes_ref = fem.nodes.detach().cpu().numpy()
+        chart_data.append((fem, F_all, Be_all, elems_np, nodes_ref, phi_c))
 
-    # ------------------------------------------------------------------
-    # 4. Forward solve with TRUE parameters
-    # ------------------------------------------------------------------
-    print("\n=== Forward solve with TRUE parameters ===")
-    u_hist_true, state_hist_true = run_forward_solve(
-        fem, mu, K, tau_y_true, H_kin_true, bc_schedule, bc_mask, device
-    )
+    # ── Step 2: Build smooth torus surface and sample F from charts ──────
+    print("\nBuilding smooth torus surface and sampling F from charts...")
+    surf, PHI_grid, THETA_grid = make_torus_surface(n_phi=200, n_theta=80)
+    surf_pts = np.array(surf.points)
+    n_surf = surf_pts.shape[0]
 
-    # ------------------------------------------------------------------
-    # 5. Forward solve with RECOVERED parameters
-    # ------------------------------------------------------------------
-    print("\n=== Forward solve with RECOVERED parameters ===")
-    u_hist_rec, state_hist_rec = run_forward_solve(
-        fem, mu, K, tau_y_rec, H_kin_rec, bc_schedule, bc_mask, device
-    )
+    # Compute (phi, theta) for each surface point
+    phi_surf = np.arctan2(surf_pts[:, 1], surf_pts[:, 0]) % (2 * math.pi)
+    rho_xy = np.sqrt(surf_pts[:, 0]**2 + surf_pts[:, 1]**2)
+    theta_surf = np.arctan2(surf_pts[:, 2], rho_xy - R_MAJOR)
 
-    # ------------------------------------------------------------------
-    # 6. Select 3 sample points (elements)
-    # ------------------------------------------------------------------
-    # Compute element centroids in reference coords
-    elems_np = fem.elements.detach().cpu().numpy()
-    nodes_np = fem.nodes.detach().cpu().numpy()
-    n_elem = elems_np.shape[0]
+    # Collect element centroids in (phi, theta) space with Lie-algebra values
+    # of the PLASTIC deformation gradient F^p = (F^e)^{-1} F.
+    # F^e is recovered from Be = F^e (F^e)^T via eigendecomposition.
+    all_phi_cent = []
+    all_theta_cent = []
+    all_log_Rp_cent = []   # log(R^p) in so(3)
+    all_log_Sp_cent = []   # log(S^p) in S(3)
 
-    centroids_ref = np.zeros((n_elem, 3))
-    for e in range(n_elem):
-        centroids_ref[e] = nodes_np[elems_np[e]].mean(axis=0)
+    for ci, (fem, F_all, Be_all, elems_np, nodes_ref, phi_c) in enumerate(chart_data):
+        n_elem_c = elems_np.shape[0]
+        centroids_ref = np.array([nodes_ref[elems_np[e]].mean(0) for e in range(n_elem_c)])
 
-    # Sort elements by xi_0 (position along the loading axis)
-    xi0_sorted = np.argsort(centroids_ref[:, 0])
+        for e in range(n_elem_c):
+            F_e = F_all[e]
+            Be_e = Be_all[e]
 
-    # Point A: near the right (loaded) face, high plastic strain
-    elem_A = xi0_sorted[-n_elem // 8]
-    # Point B: in the middle of the domain
-    elem_B = xi0_sorted[n_elem // 2]
-    # Point C: near the left (fixed) face / interior, low strain
-    elem_C = xi0_sorted[n_elem // 8]
+            # Recover F^e from Be = Fe Fe^T  (symmetric positive-definite)
+            # Fe = sqrt(Be) via eigendecomposition
+            eigvals, eigvecs = torch.linalg.eigh(Be_e)
+            eigvals = eigvals.clamp(min=1e-30)
+            Fe = eigvecs @ torch.diag(torch.sqrt(eigvals)) @ eigvecs.T
 
-    sample_elems = {"A": elem_A, "B": elem_B, "C": elem_C}
+            # F^p = (F^e)^{-1} F
+            Fp = torch.linalg.solve(Fe, F_e)
 
-    # Get final ep_bar at each point
-    final_state = state_hist_true[-1]
-    ep_bar_elem = final_state.ep_bar.detach().cpu().numpy()
-    for label, eidx in sample_elems.items():
-        print(
-            f"  Point {label}: element {eidx}, "
-            f"centroid_ref=({centroids_ref[eidx, 0]:.3f}, "
-            f"{centroids_ref[eidx, 1]:.3f}, {centroids_ref[eidx, 2]:.3f}), "
-            f"ep_bar={ep_bar_elem[eidx]:.6f}"
-        )
+            # Polar decompose F^p = R^p S^p, map to Lie algebras
+            Rp, Sp = _polar_decompose(Fp)
+            log_Rp = _log_rotation(Rp).numpy()
+            log_Sp = _log_spd(Sp).numpy()
 
-    # ------------------------------------------------------------------
-    # 7. Map mesh to torus and build PyVista grid
-    # ------------------------------------------------------------------
-    print("\nMapping cube mesh to torus geometry...")
+            # Map centroid to (phi, theta) on torus
+            xi_c = centroids_ref[e]
+            phi_e = phi_c + PHI_HALFWIDTH * xi_c[0]
+            theta_e = math.pi * xi_c[1]
 
-    with torch.no_grad():
-        nodes_torus = cube_to_torus(fem.nodes).cpu().numpy()
+            all_phi_cent.append(phi_e)
+            all_theta_cent.append(theta_e)
+            all_log_Rp_cent.append(log_Rp)
+            all_log_Sp_cent.append(log_Sp)
 
-    # Apply scaled displacement (for visualization; scale factor for visibility)
-    final_u = u_hist_true[-1].detach().cpu().numpy()
-    # The displacement is in reference space; for visualization on the torus
-    # we keep the torus geometry without deforming (the plastic strain is the
-    # primary field to show).
+    all_phi_cent = np.array(all_phi_cent)
+    all_theta_cent = np.array(all_theta_cent)
+    all_log_Rp_cent = np.array(all_log_Rp_cent)
+    all_log_Sp_cent = np.array(all_log_Sp_cent)
 
-    # Node-averaged ep_bar
-    n_nodes = nodes_torus.shape[0]
-    ep_bar_node = np.zeros(n_nodes)
-    node_count = np.zeros(n_nodes)
-    for e in range(n_elem):
-        for ln in range(4):
-            gn = elems_np[e, ln]
-            ep_bar_node[gn] += ep_bar_elem[e]
-            node_count[gn] += 1.0
-    node_count = np.maximum(node_count, 1.0)
-    ep_bar_node /= node_count
+    # Periodic wrapping for interpolation
+    phi_rep = np.concatenate([all_phi_cent, all_phi_cent + 2*math.pi,
+                              all_phi_cent - 2*math.pi])
+    theta_rep = np.concatenate([all_theta_cent, all_theta_cent + 2*math.pi,
+                                all_theta_cent - 2*math.pi])
+    log_Rp_rep = np.concatenate([all_log_Rp_cent]*3, axis=0)
+    log_Sp_rep = np.concatenate([all_log_Sp_cent]*3, axis=0)
+    src_pts = np.column_stack([phi_rep, theta_rep])
 
-    # Build PyVista UnstructuredGrid
-    cells = np.hstack(
-        [np.full((n_elem, 1), 4, dtype=np.int64), elems_np]
-    ).ravel()
-    celltypes = np.full(n_elem, pv.CellType.TETRA, dtype=np.uint8)
-    grid = pv.UnstructuredGrid(cells, celltypes, nodes_torus)
-    grid.point_data["ep_bar"] = ep_bar_node
+    # Interpolate onto smooth surface
+    log_Rp_surf = np.zeros((n_surf, 3, 3))
+    log_Sp_surf = np.zeros((n_surf, 3, 3))
+    tgt_pts = np.column_stack([phi_surf, theta_surf])
 
-    # Sample point locations on the torus (element centroids mapped to torus)
-    centroids_torus = {}
-    for label, eidx in sample_elems.items():
-        c_ref = torch.tensor(
-            centroids_ref[eidx : eidx + 1], dtype=torch.float64
-        )
-        c_torus = cube_to_torus(c_ref).cpu().numpy()[0]
-        centroids_torus[label] = c_torus
+    print("Interpolating Lie-algebra fields of F^p onto smooth surface...")
+    for i in range(3):
+        for j in range(3):
+            log_Rp_surf[:, i, j] = griddata(
+                src_pts, log_Rp_rep[:, i, j], tgt_pts, method="linear",
+                fill_value=0.0)
+            log_Sp_surf[:, i, j] = griddata(
+                src_pts, log_Sp_rep[:, i, j], tgt_pts, method="linear",
+                fill_value=0.0)
 
-    # ------------------------------------------------------------------
-    # 8. Render PyVista 3D plastic strain plot with annotations
-    # ------------------------------------------------------------------
-    print("Rendering PyVista visualization...")
+    # ── Step 3: Recover nodal F^p fields via exponential maps ────────────
+    print("Recovering F^p fields via exponential maps...")
+    det_Fp_surf = np.zeros(n_surf)
+    iso_eig1 = np.zeros(n_surf)
+    iso_eig2 = np.zeros(n_surf)
+    iso_eig3 = np.zeros(n_surf)
 
-    plotter = pv.Plotter(off_screen=True, window_size=[1600, 1200])
-    plotter.set_background("white")
+    for a in range(n_surf):
+        Rp_a = _exp_rotation(torch.tensor(log_Rp_surf[a]))
+        Sp_a = _exp_spd(torch.tensor(log_Sp_surf[a]))
+        Fp_a = Rp_a @ Sp_a
+        Jp = torch.det(Fp_a).item()
+        det_Fp_surf[a] = Jp
+        Jp_abs = max(abs(Jp), 1e-30)
+        Sp_bar = Sp_a / (Jp_abs ** (1.0 / 3.0))
+        eigs = sorted(torch.linalg.eigvalsh(Sp_bar).numpy(), reverse=True)
+        iso_eig1[a], iso_eig2[a], iso_eig3[a] = eigs
 
-    plotter.add_mesh(
-        grid,
-        scalars="ep_bar",
-        cmap="turbo",
-        show_edges=False,
-        scalar_bar_args={
-            "title": "Equiv. Plastic Strain",
-            "title_font_size": 18,
-            "label_font_size": 14,
-            "n_labels": 5,
-            "fmt": "%.4f",
-            "position_x": 0.82,
-            "position_y": 0.15,
-            "width": 0.12,
-            "height": 0.7,
-            "color": "black",
-        },
-        opacity=1.0,
-    )
+    surf.point_data["det_Fp"] = det_Fp_surf
+    surf.point_data["iso_eig1"] = iso_eig1
+    surf.point_data["iso_eig2"] = iso_eig2
+    surf.point_data["iso_eig3"] = iso_eig3
 
-    # Add point labels with annotations
-    colors = {"A": "red", "B": "darkorange", "C": "blue"}
-    for label, eidx in sample_elems.items():
-        pt = centroids_torus[label]
-        ep_val = ep_bar_elem[eidx]
-
-        # Add a sphere marker at the point
-        sphere = pv.Sphere(radius=0.025, center=pt)
-        plotter.add_mesh(sphere, color=colors[label], opacity=1.0)
-
-        # Add text label
-        plotter.add_point_labels(
-            pv.PolyData(pt.reshape(1, 3)),
-            [f"  {label} ($\\bar{{\\epsilon}}_p$={ep_val:.4f})"],
-            font_size=16,
-            text_color=colors[label],
-            point_color=colors[label],
-            point_size=0,
-            render_points_as_spheres=False,
-            always_visible=True,
-            bold=True,
-            shape=None,
-        )
-
-    # Camera: view the torus sector from an angle
-    plotter.camera_position = [
-        (2.0, -1.5, 1.5),  # camera position
-        (0.9, 0.0, 0.0),  # focal point (center of torus sector)
-        (0.0, 0.0, 1.0),  # view up
+    # ── Step 4: Render 2x2 figure ───────────────────────────────────────
+    print("Rendering 2x2 figure...")
+    panels = [
+        ("det_Fp",   r"det $\mathbf{F}^p$",                       "coolwarm", "%.4f"),
+        ("iso_eig1", r"$\bar{\lambda}^p_1$ (max plastic stretch)", "turbo",    "%.4f"),
+        ("iso_eig2", r"$\bar{\lambda}^p_2$ (mid plastic stretch)", "turbo",    "%.4f"),
+        ("iso_eig3", r"$\bar{\lambda}^p_3$ (min plastic stretch)", "turbo",    "%.4f"),
     ]
+    labels = ["(a)", "(b)", "(c)", "(d)"]
+    images = [render_torus(surf, s, t, c, f) for s, t, c, f in panels]
 
-    # Save PNG
-    png_path = OUT_DIR / "ep_plastic_strain.png"
-    plotter.screenshot(str(png_path), transparent_background=False)
-    print(f"Saved PNG: {png_path}")
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9), dpi=200)
+    for ax, img, lbl in zip(axes.ravel(), images, labels):
+        ax.imshow(img); ax.axis("off")
+        ax.text(0.02, 0.98, lbl, transform=ax.transAxes, ha="left", va="top",
+                fontsize=14, fontweight="bold",
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.8,
+                          boxstyle="round,pad=0.2"))
+    fig.tight_layout(pad=0.5)
+    for ext in ("png", "pdf"):
+        fig.savefig(str(OUT_DIR / f"ep_plastic_strain.{ext}"),
+                    bbox_inches="tight", dpi=200)
+    plt.close(fig)
+    print("Saved ep_plastic_strain.png/.pdf")
 
-    # Save PDF via matplotlib
-    try:
-        img = plt.imread(str(png_path))
-        fig, ax = plt.subplots(1, 1, figsize=(10, 7.5), dpi=200)
-        ax.imshow(img)
-        ax.axis("off")
-        fig.tight_layout(pad=0)
-        pdf_path = OUT_DIR / "ep_plastic_strain.pdf"
-        fig.savefig(str(pdf_path), bbox_inches="tight", pad_inches=0.02, dpi=200)
-        plt.close(fig)
-        print(f"Saved PDF: {pdf_path}")
-    except Exception as e:
-        print(f"Warning: could not save PDF: {e}")
+    # ── Step 5: Hysteresis (chart 0) ────────────────────────────────────
+    fem = fem_chart0
+    elems_c0 = fem.elements.detach().cpu().numpy()
+    nodes_c0 = fem.nodes.detach().cpu().numpy()
+    n_e0 = elems_c0.shape[0]
+    centroids = np.array([nodes_c0[elems_c0[e]].mean(0) for e in range(n_e0)])
+    xi0_sorted = np.argsort(centroids[:, 0])
+    sample = {"A": xi0_sorted[-n_e0 // 8],
+              "B": xi0_sorted[n_e0 // 2],
+              "C": xi0_sorted[n_e0 // 8]}
 
-    plotter.close()
-
-    # ------------------------------------------------------------------
-    # 9. Extract hysteresis data at 3 sample points
-    # ------------------------------------------------------------------
-    print("\nExtracting hysteresis data...")
-
-    hysteresis_true = {}
-    hysteresis_rec = {}
-    for label, eidx in sample_elems.items():
-        print(f"  Extracting at point {label} (element {eidx})...")
-        eps_t, tau_t = extract_hysteresis(
-            fem, u_hist_true, state_hist_true, eidx
-        )
-        eps_r, tau_r = extract_hysteresis(
-            fem, u_hist_rec, state_hist_rec, eidx
-        )
-        hysteresis_true[label] = (eps_t, tau_t)
-        hysteresis_rec[label] = (eps_r, tau_r)
-
-    # ------------------------------------------------------------------
-    # 10. Plot multi-point hysteresis figure (1x3)
-    # ------------------------------------------------------------------
-    print("\nGenerating multi-point hysteresis figure...")
+    print("\nExtracting hysteresis from chart 0...")
+    ht, hr = {}, {}
+    for lbl, eidx in sample.items():
+        ht[lbl] = extract_hysteresis(fem_chart0, u_true_c0, st_true_c0, eidx)
+        hr[lbl] = extract_hysteresis(fem_chart0, u_rec_c0, st_rec_c0, eidx)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5), dpi=200)
-    labels_list = ["A", "B", "C"]
-    subtitles = [
-        "Point A (near loaded face)",
-        "Point B (mid-domain)",
-        "Point C (near fixed face)",
-    ]
-
-    for i, (label, subtitle) in enumerate(zip(labels_list, subtitles)):
+    for i, (lbl, sub) in enumerate(zip(
+            ["A", "B", "C"],
+            ["Point A (near loaded face)", "Point B (mid-domain)",
+             "Point C (near fixed face)"])):
         ax = axes[i]
-        eps_t, tau_t = hysteresis_true[label]
-        eps_r, tau_r = hysteresis_rec[label]
-
-        # True
-        ax.plot(
-            eps_t, tau_t, "b-", linewidth=1.5, label="True", zorder=3
-        )
-        # Recovered
-        ax.plot(
-            eps_r,
-            tau_r,
-            "r--",
-            linewidth=1.5,
-            label="Recovered",
-            zorder=2,
-        )
-
+        ax.plot(*ht[lbl], "b-", lw=1.5, label="True", zorder=3)
+        ax.plot(*hr[lbl], "r--", lw=1.5, label="Recovered", zorder=2)
         ax.set_xlabel(r"$\varepsilon_{11}$ (log strain)", fontsize=12)
-        if i == 0:
-            ax.set_ylabel(r"$\tau_{11}$ (Kirchhoff stress)", fontsize=12)
-        ax.set_title(subtitle, fontsize=13)
-        ax.legend(fontsize=10, loc="best")
-        ax.grid(True, alpha=0.3)
-        ax.tick_params(labelsize=10)
-
+        if i == 0: ax.set_ylabel(r"$\tau_{11}$ (Kirchhoff stress)", fontsize=12)
+        ax.set_title(sub, fontsize=13); ax.legend(fontsize=10); ax.grid(True, alpha=0.3)
     fig.suptitle(
-        r"Stress--strain hysteresis: true ($\tau_y=0.5,\, H_\mathrm{kin}=20$) "
-        r"vs recovered ($\tau_y=0.4988,\, H_\mathrm{kin}=19.58$)",
-        fontsize=13,
-        y=1.02,
-    )
+        r"Stress--strain: true ($\tau_y\!=\!0.5,\,H_\mathrm{kin}\!=\!20$) "
+        r"vs recovered ($\tau_y\!=\!0.4988,\,H_\mathrm{kin}\!=\!19.58$)",
+        fontsize=13, y=1.02)
     fig.tight_layout()
-
-    hyst_png = OUT_DIR / "ep_hysteresis_multipoint.png"
-    hyst_pdf = OUT_DIR / "ep_hysteresis_multipoint.pdf"
-    fig.savefig(str(hyst_png), bbox_inches="tight", dpi=200)
-    fig.savefig(str(hyst_pdf), bbox_inches="tight", dpi=200)
+    for ext in ("png", "pdf"):
+        fig.savefig(str(OUT_DIR / f"ep_hysteresis_multipoint.{ext}"),
+                    bbox_inches="tight", dpi=200)
     plt.close(fig)
-    print(f"Saved: {hyst_png}")
-    print(f"Saved: {hyst_pdf}")
-
-    print("\nDone.")
+    print("Done.")
 
 
 if __name__ == "__main__":
