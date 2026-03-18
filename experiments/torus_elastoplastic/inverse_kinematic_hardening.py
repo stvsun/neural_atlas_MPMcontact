@@ -249,10 +249,14 @@ def phase2_identify_joint(
                      device=device, dtype=dtype)
     )
 
-    # Adam with freeze-unfreeze: first H_kin only, then joint.
-    n_freeze = n_iters // 3
-    opt_hkin = torch.optim.Adam([H_kin_raw], lr=lr)
-    opt_joint = torch.optim.Adam([tau_y_raw, H_kin_raw], lr=lr * 0.5)
+    # Sequential strategy: fix tau_y at Phase 1 estimate, optimize H_kin only.
+    # This avoids the tau_y-H_kin trade-off that plagues joint optimization.
+    # After H_kin converges, optionally do a few joint refinement steps.
+    tau_y_raw.requires_grad_(False)  # freeze tau_y
+    optimizer = torch.optim.Adam([H_kin_raw], lr=lr)
+
+    # Joint refinement in last 20% of iterations
+    n_hkin_only = int(0.8 * n_iters)
 
     history: Dict[str, List[float]] = {
         "loss": [], "tau_y": [], "H_kin": [],
@@ -262,12 +266,10 @@ def phase2_identify_joint(
     t0 = time.time()
 
     for it in range(1, n_iters + 1):
-        if it <= n_freeze:
-            optimizer = opt_hkin
-            tau_y_raw.requires_grad_(False)
-        else:
-            optimizer = opt_joint
+        # Switch to joint after H_kin-only phase
+        if it == n_hkin_only + 1:
             tau_y_raw.requires_grad_(True)
+            optimizer = torch.optim.Adam([tau_y_raw, H_kin_raw], lr=lr * 0.3)
 
         optimizer.zero_grad()
         tau_y_est = F_func.softplus(tau_y_raw) + tau_y_min
