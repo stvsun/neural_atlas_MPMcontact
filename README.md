@@ -729,6 +729,31 @@ and `K`; it does **not** solve a chart-local elasticity PDE for the displacement
 
 ---
 
+### Example 4: Torus Elastoplastic Inverse Identification
+
+**Two-stage constitutive parameter estimation** for finite-strain J₂ elastoplasticity with kinematic hardening on the torus geometry.
+
+- **Scripts**: `experiments/torus_elastoplastic/`
+- **Key contribution**: Smooth return mapping with softplus regularization (`η = softplus(Φ/ε)·ε`) replaces non-differentiable yield-surface check, enabling gradient-based optimization through incremental load-stepping solver
+- **Stage 1**: Yield stress τ_y from monotonic displacement data → **0.25% error**
+- **Stage 2**: Kinematic hardening H_kin from cyclic reaction-force data → **2.11% error**
+- **Sensitivity studies**: Initial guess robustness (6 starting points), noise (up to 5%), mesh refinement, epsilon annealing
+- **FD comparison**: Autograd is 2.9× faster than finite differences; non-smooth (hard max) return mapping stalls
+- **Figures**: `manuscript/scripts_figures/example5_torus_elastoplastic.py`
+
+```bash
+# Run the two-stage inverse identification
+python experiments/torus_elastoplastic/inverse_kinematic_hardening.py
+
+# Run unit tests (14 tests)
+python experiments/torus_elastoplastic/test_elastoplastic.py
+
+# Generate manuscript figures
+cd manuscript/scripts_figures && python example5_torus_elastoplastic.py
+```
+
+---
+
 ### Additional Validated and Experimental Benchmarks
 
 These runs remain useful in the repository, but they are no longer part of the
@@ -766,66 +791,80 @@ main numbered sequence used in the manuscript.
 ```
 PINN_coordinate_chart_3Dgeometry/
 │
-├── manuscript_experiments/            # Validated numerical examples from the paper
-│   ├── example1_forward_poisson/      # Forward Poisson on ellipsoid + star domain
-│   │   ├── pinn_3d_ellipsoid_mapped_sphere.py
-│   │   └── run_poisson_star3d_mapped.py
-│   ├── example2_rabbit_poisson/       # Forward Poisson on Stanford rabbit (Schwarz)
-│   │   ├── run_poisson_rabbit_atlas_schwarz.py
-│   │   ├── run_poisson_rabbit_atlas_schwarz_fem.py
-│   │   └── chart_fem_solver.py
-│   ├── example3_torus_inverse_original/  # Inverse Neo-Hookean on torus
-│   │   └── run_torus_inverse_neohookean_atlas.py
-│   └── example4_torus_inverse_schwarz_dual/  # Schwarz dual torus inverse
-│       └── run_torus_inverse_neohookean_schwarz_dual.py
+├── src/                              # Core verified solvers
+│   ├── pinn_3d_ellipsoid_mapped_sphere.py     # Forward Poisson on 3D ellipsoid
+│   ├── pinn_gradient_surgery.py               # 2D PINN with PCGrad (reference impl)
+│   ├── run_poisson_star3d_mapped.py           # Forward Poisson on 3D star domain
+│   ├── run_torus_inverse_neohookean_atlas.py  # Torus inverse benchmark (Example 4)
+│   ├── run_torus_inverse_neohookean_schwarz_dual.py  # Additional torus chart-consensus inverse benchmark
+│   ├── run_rabbit_inverse_elder_atlas_schwarz.py     # Compatibility wrapper for experimental rabbit Elder inverse
+│   ├── run_rabbit_inverse_neohookean_mapped.py       # Neo-Hookean inverse on rabbit
+│   ├── train_sdf_rabbit.py                    # Stanford Bunny volumetric neural SDF (Example 3)
+│   ├── build_mesh_sdf.py                      # Exact mesh SDF via open3d+pysdf+mesh_to_sdf (Stanford Bunny)
+│   ├── train_sdf_chartwise.py                 # Additional chart-partitioned SDF experiments
+│   ├── train_mapping_from_sdf.py              # Sphere-to-domain mapping network
+│   └── export_rabbit_elder_inverse_paraview.py
 │
-├── core/                              # Shared training modules
-│   ├── train_sdf_rabbit.py            # Neural SDF training (with PLY support)
-│   ├── train_mapping_from_sdf.py      # Chart decoder training
-│   ├── train_rabbit_atlas.py          # Atlas construction
-│   ├── build_rabbit_atlas_poissondisk.py  # Poisson-disk atlas seeding
-│   ├── pinn_gradient_surgery.py       # PCGrad reference implementation
-│   ├── build_mesh_sdf.py             # Mesh-based SDF (open3d+pysdf)
-│   └── train_sdf_chartwise.py        # Chart-partitioned SDF training
+├── experiments/                      # Research-stage solvers
+│   ├── run_poisson_rabbit_atlas_schwarz.py    # ← MAIN rabbit Schwarz Poisson solver (Example 2)
+│   ├── compact_chart_net.py                   # CompactChartNet (Algorithm 5)
+│   ├── train_rabbit_atlas.py                  # Atlas decoder + mask network training
+│   ├── build_rabbit_atlas_poissondisk.py      # Atlas seed selection (Algorithm 2)
+│   ├── build_rabbit_atlas_volumetric.py       # Volumetric interior-seed atlas build
+│   ├── run_rabbit_inverse_ti_arruda_boyce_atlas_schwarz.py  # TI Arruda-Boyce inverse
+│   ├── postprocess_rabbit_poisson_dense_fields.py
+│   ├── export_rabbit_atlas_paraview.py
+│   ├── export_rabbit_error_paraview.py
+│   ├── run_rabbit_inverse_elder_atlas_schwarz.py  # Experimental rabbit Elder inverse
+│   ├── export_rabbit_elder_inverse_paraview.py
+│   ├── torus_elastoplastic/                   # Differentiable elastoplasticity (Example 4)
+│   │   ├── return_mapping.py                  # Smooth softplus return mapping
+│   │   ├── chart_vector_fem.py                # P1 tet vector FEM solver
+│   │   ├── incremental_solver.py              # Load-stepping + IFT gradient
+│   │   ├── schwarz_vector.py                  # Multi-chart Schwarz for vector elasticity
+│   │   ├── inverse_perfect_plasticity.py      # Stage 1: tau_y identification
+│   │   ├── inverse_kinematic_hardening.py     # Stage 2: H_kin identification
+│   │   ├── test_elastoplastic.py              # 14 unit tests
+│   │   ├── compare_fd_autograd.py             # FD vs autograd comparison
+│   │   └── generate_manuscript_figures.py     # Figure data generation
+│   └── experimental_ideas/                    # Archived exploratory variants
 │
-├── experiments/                       # Exploratory / non-manuscript experiments
-│   ├── rabbit_elder/                  # Inverse Elder on rabbit (experimental)
-│   ├── rabbit_inverse_neohookean/     # Inverse elasticity variants
-│   ├── torus_variants/                # Torus geometry variations
-│   ├── rabbit_atlas_variants/         # Atlas construction & CompactChartNet experiments
-│   ├── paraview_exporters/            # ParaView VTK export scripts
-│   └── experimental_ideas/           # Archived early-stage ideas
+├── configs/                          # YAML configuration files
+│   ├── rabbit_atlas_poisson.yaml
+│   ├── rabbit_inverse_elder_atlas.yaml
+│   └── rabbit_inverse_ti_arruda_boyce.yaml
 │
-├── postprocessing/                    # Figure generation and convergence plotting
-│   ├── plot_all_convergence.py
-│   ├── render_3d_figures.py
-│   ├── poisson_rabbit_convergence.py
-│   ├── torus_inverse_figures.py
-│   ├── elder_rabbit_paraview.py
-│   └── utils.py
+├── docs/
+│   ├── chatgpt52_paper_starter.md             # Paper outline (draft)
+│   └── chatgpt52_handoff_mindmap.md           # Research mindmap
 │
-├── manuscript/                        # LaTeX paper and figure generation
-│   ├── main.tex                       # CMAME paper source
-│   ├── scripts_figures/               # Scripts that generate publication figures
-│   ├── figures_cmame_core/            # Final publication figures
-│   └── tables_cmame_core/             # Final publication tables
+├── scripts/
+│   ├── successful/                    # Canonical reproduction scripts
+│   │   ├── run_poisson_rabbit_best.sh          # Reproduces 2.21% Poisson (procedural rabbit)
+│   │   ├── build_bunny_sdf_atlas_v3.sh         # Reproduces SDF v3 + atlas v3 + decoders
+│   │   └── run_bunny_poisson_intpre.sh         # Reproduces 4.73% Stanford Bunny Poisson continuation
+│   └── experimental/                  # Failed / in-progress attempts
+│       ├── run_chartwise_sdf_example.sh        # Chart-partitioned Stanford Bunny SDF pipeline
+│       ├── fix_decoders.sh            # Failed: standard atlas (gate failed, pde=165k)
+│       ├── fix_decoders_v2.sh         # Partial: high overlap weight (gate=True, PINN diverges)
+│       └── diagnostic_supervised.sh   # Failed: manufactured supervision negligible vs PDE
 │
-├── configs/                           # YAML configuration files
-├── scripts/                           # Shell scripts (successful, experimental, release)
-├── docs/                              # Research notes and context
-│
-├── CLAUDE.md                          # Agent onboarding for Claude
-├── CODEX.md                           # Agent onboarding for Codex
-├── RESULTS.md                         # Results summary and analysis
-├── test_chart_fem_solver.py           # Unit tests
-│
-├── runs/                              # Saved checkpoints and metrics
-│   ├── attempt20c_compact/            # Best Poisson result (rel_l2=2.207%)
-│   ├── torus_inverse_mps/             # Torus inverse benchmark
-│   ├── bunny_sdf_v3/                  # Stanford Bunny neural SDF
-│   └── ...                            # (many more run directories)
-│
-└── figures/                           # Generated output figures
+├── RESULTS.md                         # Comprehensive results summary and analysis
+├── schwarz_poisson_attempt_status.md  # Detailed Schwarz Poisson attempt log
+├── pinn_only_improvement_plan.md      # W-series and architecture roadmap
+└── runs/                              # Saved checkpoints and metrics
+    ├── attempt19_w4/                  # Dense MLP best run (rel_l2=2.531%)
+    ├── attempt20c_compact/            # CompactChartNet best run (rel_l2=2.207%) ← procedural rabbit
+    ├── bunny_sdf_repaired/            # Stanford Bunny exact mesh SDF (open3d+pysdf, sign_error<5%)
+    ├── atlas_bunny_repaired_8chart/   # Stanford Bunny 8-chart volumetric atlas (support_r≈0.378)
+    ├── atlas_bunny_repaired_8chart_dec/  # 8-chart atlas decoders (overlap=6.07e-3)
+    ├── bunny_poisson_8chart_intpre20k/   # Best Stanford Bunny run (rel_l2=4.73%, 20k pretrain)
+    ├── bunny_poisson_8chart_intpre10k/   # 8-chart 10k pretrain (rel_l2=5.03%)
+    ├── bunny_poisson_8chart_intpre5k/    # 8-chart 5k pretrain (rel_l2=6.83%)
+    ├── torus_inverse_mps/             # Torus inverse benchmark
+    ├── torus_inverse_mps_dense_v4/    # Dense torus inverse visualization run
+    ├── bunny_sdf_v3/                  # Canonical Bunny volumetric neural SDF run
+    └── rabbit_inverse_elder_globalfield_small/  # Experimental Elder inverse run
 ```
 
 ---
