@@ -241,6 +241,40 @@ def build_newton_figure() -> None:
     print("  [OK] ep_newton")
 
 
+# ── Figure E: recovered vs true hysteresis overlay ──────────────────────
+
+def build_hysteresis_overlay_figure() -> None:
+    apply_publication_style()
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    hyst_path = JSON_DIR / "fig_hysteresis_comparison.json"
+    if not hyst_path.exists():
+        print("  [SKIP] ep_hysteresis_overlay (no data)")
+        return
+
+    data = json.loads(hyst_path.read_text())
+
+    fig, ax = plt.subplots(figsize=(SINGLE_COLUMN_WIDTH, 2.8))
+
+    ax.plot(data["true_strain"], data["true_stress"],
+            color=C_BLUE, lw=1.4, label=r"True ($H_{\mathrm{kin}}=20.0$)")
+    ax.plot(data["recovered_strain"], data["recovered_stress"],
+            color=C_RED, lw=1.2, ls="--",
+            label=r"Recovered ($H_{\mathrm{kin}}=19.58$)")
+
+    ax.set_xlabel("Axial strain")
+    ax.set_ylabel(r"Kirchhoff stress $\tau_{11}$")
+    ax.set_title("Recovered vs.\ true hysteresis", loc="left", pad=3)
+    ax.legend(loc="lower right", fontsize=6.5)
+    ax.axhline(0, color="#aaa", lw=0.5, zorder=0)
+
+    fig.subplots_adjust(left=0.18, right=0.96, top=0.88, bottom=0.18)
+    save_figure(fig, FIG_DIR / "ep_hysteresis_overlay.png",
+                FIG_DIR / "ep_hysteresis_overlay.pdf")
+    plt.close(fig)
+    print("  [OK] ep_hysteresis_overlay")
+
+
 # ── Main ────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -249,6 +283,7 @@ def main() -> None:
     build_convergence_figure()
     build_sensitivity_figure()
     build_newton_figure()
+    build_hysteresis_overlay_figure()
     print(f"All figures saved to {FIG_DIR}")
 
 
