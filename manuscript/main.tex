@@ -1443,13 +1443,24 @@ Stage & Unknown & Observation type & Loading & True & Identified & Error (\%) \\
 \end{table}
 
 \paragraph{Sensitivity analysis.}
-The robustness of the inverse procedure is assessed through four studies (Figure~\ref{fig:ep_sensitivity}). \emph{Initial-guess sensitivity} (Figure~\ref{fig:ep_convergence}a): $\tau_y$ is recovered from initial guesses spanning an order of magnitude ($0.1$--$2.0$), all converging to within $0.1\%$ of the true value. \emph{Noise sensitivity} (Figure~\ref{fig:ep_sensitivity}a): additive Gaussian noise at levels $\sigma/\|u\|_\infty\in\{0,0.01,0.05,0.1,0.2\}$ is applied to the synthetic displacement observations; the $\tau_y$ error remains below 5\% up to 5\% noise. \emph{Mesh refinement} (Figure~\ref{fig:ep_sensitivity}b): the inverse is solved on meshes with $n_{\mathrm{cells}}\in\{3,4,6,8\}$ (64--729~nodes); the $\tau_y$ error is consistent across all mesh sizes. \emph{Smoothing parameter sensitivity} (Figure~\ref{fig:ep_sensitivity}c): annealing schedules with $\varepsilon_{\mathrm{start}}\in\{0.01,0.05,0.1,0.5\}$ all converge to the correct $\tau_y$; only $\varepsilon_{\mathrm{start}}=1.0$ fails, producing a biased estimate because the overly smooth yield surface does not develop sufficient plastic deformation to generate a meaningful gradient signal.
+The robustness of the inverse procedure is assessed through three studies (Figure~\ref{fig:ep_sensitivity}). \emph{Initial-guess sensitivity} (Figure~\ref{fig:ep_convergence}a): $\tau_y$ is recovered from initial guesses spanning an order of magnitude ($0.1$--$2.0$), all converging to within $0.1\%$ of the true value. \emph{Mesh refinement} (Figure~\ref{fig:ep_sensitivity}a): the inverse is solved on meshes with $n_{\mathrm{cells}}\in\{3,4,6,8\}$ (64--729~nodes); the $\tau_y$ error is consistent across all mesh sizes. \emph{Smoothing parameter sensitivity} (Figure~\ref{fig:ep_sensitivity}b): annealing schedules with $\varepsilon_{\mathrm{start}}\in\{0.01,0.05,0.1,0.5\}$ all converge to the correct $\tau_y$; only $\varepsilon_{\mathrm{start}}=1.0$ fails, producing a biased estimate because the overly smooth yield surface does not develop sufficient plastic deformation to generate a meaningful gradient signal.
+
+\begin{remark}[Noise and finite-difference robustness]
+Additive Gaussian noise at levels $\sigma/\|u\|_\infty\in\{0,\ldots,0.2\}$ applied to the synthetic displacement observations yields $\tau_y$ errors below 5\% for noise up to 5\%. A comparison with central finite-difference gradients confirms that the autograd pathway through the smooth return mapping is correct (both recover $\tau_y$ to within $0.25\%$) while providing a $2.9\times$ wall-clock speedup. With the classical hard-max return mapping ($\eta=\max(\Phi,0)$), autograd gradients vanish in the plastic regime and the optimizer stalls.
+\end{remark}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures_cmame_core/example5_torus_elastoplastic/ep_constitutive}
 \caption{Elastoplastic constitutive response. (a)~Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon$; at $\varepsilon=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau_y=0.5$). (b)~Cyclic stress--strain loops for three kinematic hardening moduli: perfect plasticity ($H_{\mathrm{kin}}=0$) shows symmetric hysteresis, while $H_{\mathrm{kin}}>0$ shifts the reverse yield point (Bauschinger effect), producing the distinctive asymmetric loop that enables $H_{\mathrm{kin}}$ identification from cyclic data.}
 \label{fig:ep_constitutive}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{figures_cmame_core/example5_torus_elastoplastic/ep_plastic_strain}
+\caption{Equivalent plastic strain field after two full symmetric load--unload cycles ($\varepsilon_{\mathrm{peak}}=0.03$, $\tau_y=0.5$, $H_{\mathrm{kin}}=20$). The plastic strain is concentrated near the loaded (right) and fixed (left) $x$-faces where the applied displacement creates the largest stress gradients. The P1 tetrahedral mesh (384~elements, 125~nodes) is rendered in the deformed configuration.}
+\label{fig:ep_plastic_strain}
 \end{figure}
 
 \begin{figure}[htbp]
@@ -1469,11 +1480,11 @@ The robustness of the inverse procedure is assessed through four studies (Figure
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures_cmame_core/example5_torus_elastoplastic/ep_sensitivity}
-\caption{Sensitivity studies for the elastoplastic inverse. (a)~$\tau_y$ identification error versus observation noise level; the method remains accurate ($<5\%$ error) up to 5\% noise. (b)~$\tau_y$ error versus mesh resolution; accuracy is consistent across all mesh sizes tested. (c)~$\tau_y$ trajectories for different initial smoothing parameters $\varepsilon_{\mathrm{start}}$; all values except $\varepsilon_{\mathrm{start}}=1.0$ converge to the correct yield stress.}
+\caption{Sensitivity studies for the elastoplastic inverse. (a)~$\tau_y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes tested ($n_{\mathrm{cells}}\in\{3,4,6,8\}$, corresponding to 64--729 nodes). (b)~$\tau_y$ convergence trajectories for different initial smoothing parameters $\varepsilon_{\mathrm{start}}$; all values except $\varepsilon_{\mathrm{start}}=1.0$ converge to the correct yield stress, demonstrating that moderate regularisation does not bias the final estimate.}
 \label{fig:ep_sensitivity}
 \end{figure}
 
-The elastoplastic benchmark establishes two points. First, the differentiable simulation framework extends beyond elastic constitutive identification to history-dependent plasticity: the smooth return mapping \eqref{eq:smooth_return} makes the entire load-stepping solver amenable to gradient-based optimization, with the implicit function theorem providing efficient parameter sensitivities without differentiating through the Newton iterates. Second, the two-stage decoupling exploits physically distinct sensitivity profiles: $\tau_y$ is identifiable from monotonic displacements because it controls the onset of permanent deformation, while $H_{\mathrm{kin}}$ is identifiable from cyclic reaction forces because it governs the stress-space shift of the yield surface during load reversal. This observation---that different physical parameters require different observation modalities---is consistent with identifiability analyses in the computational plasticity literature \citep{de_souza_neto_computational_2011} and motivates the modular two-stage approach over joint identification.
+The elastoplastic benchmark establishes two points relevant to the paper's thesis. First, the chart-local P1 finite-element infrastructure developed for the rabbit Poisson benchmark extends without modification to nonlinear, history-dependent constitutive laws: the smooth return mapping \eqref{eq:smooth_return}, the autograd-computed consistent tangent, and the implicit-function-theorem sensitivity transfer all operate in the same reference-chart coordinates used for diffusion, confirming that the atlas provides a genuinely operator-agnostic geometric substrate. Second, the two-stage decoupling exploits physically distinct sensitivity profiles: $\tau_y$ is identifiable from monotonic displacements because it controls the onset of permanent deformation, while $H_{\mathrm{kin}}$ is identifiable from cyclic reaction forces because it governs the stress-space shift of the yield surface during load reversal. This observation---that different physical parameters require different observation modalities---motivates the modular two-stage approach over joint identification.
 
 
 \subsection{Cross-example comparison and lessons learned}

@@ -737,9 +737,23 @@ and `K`; it does **not** solve a chart-local elasticity PDE for the displacement
 - **Key contribution**: Smooth return mapping with softplus regularization (`η = softplus(Φ/ε)·ε`) replaces non-differentiable yield-surface check, enabling gradient-based optimization through incremental load-stepping solver
 - **Stage 1**: Yield stress τ_y from monotonic displacement data → **0.25% error**
 - **Stage 2**: Kinematic hardening H_kin from cyclic reaction-force data → **2.11% error**
-- **Sensitivity studies**: Initial guess robustness (6 starting points), noise (up to 5%), mesh refinement, epsilon annealing
+- **Sensitivity studies**: Initial guess robustness (6 starting points), mesh refinement, epsilon annealing
 - **FD comparison**: Autograd is 2.9× faster than finite differences; non-smooth (hard max) return mapping stalls
 - **Figures**: `manuscript/scripts_figures/example5_torus_elastoplastic.py`
+
+**Results**:
+
+| Stage | Unknown | Observation | True | Identified | Error |
+|-------|---------|-------------|------|------------|-------|
+| 1 | τ_y | interior displacements | 0.500 | 0.4988 | 0.25% |
+| 2 | H_kin | boundary reaction forces | 20.0 | 19.58 | 2.11% |
+
+**Generated manuscript figures** (in `manuscript/figures_cmame_core/example5_torus_elastoplastic/`):
+- `ep_constitutive.pdf` — Softplus smoothing comparison + cyclic hysteresis loops
+- `ep_convergence.pdf` — τ_y and H_kin convergence trajectories
+- `ep_hysteresis_overlay.pdf` — Recovered vs true hysteresis (indistinguishable)
+- `ep_sensitivity.pdf` — Mesh refinement + epsilon sensitivity
+- `ep_plastic_strain.pdf` — 3D equivalent plastic strain field (PyVista)
 
 ```bash
 # Run the two-stage inverse identification
