@@ -4,4 +4,10 @@
 \BOOKMARK [1][-]{section.4}{Benchmark problems and numerical results}{}% 4
 \BOOKMARK [1][-]{section.5}{Discussions}{}% 5
 \BOOKMARK [1][-]{section.6}{Conclusions}{}% 6
-\BOOKMARK [1][-]{appendix.A}{Implementation details and hardware backends}{}% 7
+\BOOKMARK [1][-]{appendix.A}{Implementation transparency and hardware backends}{}% 7
+\BOOKMARK [1][-]{appendix.B}{Neural network architecture specifications}{}% 8
+\BOOKMARK [1][-]{appendix.C}{Global map training for simply connected domains}{}% 9
+\BOOKMARK [1][-]{appendix.D}{Geometry pipeline equations}{}% 10
+\BOOKMARK [1][-]{appendix.E}{Solver stabilization details}{}% 11
+\BOOKMARK [1][-]{appendix.F}{Rabbit Poisson benchmark: supplementary tables}{}% 12
+\BOOKMARK [1][-]{appendix.G}{Stanford Bunny volumetric neural SDF benchmark}{}% 13
