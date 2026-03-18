@@ -145,39 +145,23 @@ def build_sensitivity_figure() -> None:
     apply_publication_style()
     FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    noise = _load("fig6_noise")
     refine = _load("fig3_refinement")
     eps_data = _load("fig7_epsilon")
 
-    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_WIDTH, 2.4))
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COLUMN_WIDTH, 2.6))
 
-    # (a) Noise sensitivity
+    # (a) Mesh refinement
     ax = axes[0]
-    noise_std = noise["noise_std"]
-    err_trials = noise["best_tau_y_err"]  # list of lists (n_trials per noise level)
-    means = [np.mean(t) * 100 for t in err_trials]
-    stds = [np.std(t) * 100 for t in err_trials]
-    x_pos = np.arange(len(noise_std))
-    labels = [str(s) for s in noise_std]
-    ax.bar(x_pos, means, yerr=stds, color=C_BLUE, alpha=0.75, capsize=3, width=0.6)
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(labels)
-    ax.set_xlabel(r"Noise std ($\sigma / \|u\|_\infty$)")
-    ax.set_ylabel(r"$\tau_y$ error (\%)")
-    ax.set_title("(a) Noise sensitivity", loc="left", pad=3)
-
-    # (b) Mesh refinement
-    ax = axes[1]
     n_nodes = refine["n_nodes"]
     tau_err = [e * 100 for e in refine["best_tau_y_err"]]
     ax.loglog(n_nodes, tau_err, "o-", color=C_RED, markersize=4, lw=1.2)
     ax.set_xlabel(r"Number of nodes")
     ax.set_ylabel(r"$\tau_y$ error (\%)")
-    ax.set_title("(b) Mesh refinement", loc="left", pad=3)
+    ax.set_title("(a) Mesh refinement", loc="left", pad=3)
     ax.grid(True, which="both", alpha=0.3)
 
-    # (c) Epsilon sensitivity
-    ax = axes[2]
+    # (b) Epsilon sensitivity
+    ax = axes[1]
     true_ty = eps_data["true_tau_y"]
     trajs = eps_data["trajectories"]
     colors = {
@@ -196,11 +180,11 @@ def build_sensitivity_figure() -> None:
     ax.axhline(true_ty, color=C_RED, ls="--", lw=0.8, alpha=0.5)
     ax.set_xlabel("Iteration")
     ax.set_ylabel(r"$\tau_y$ estimate")
-    ax.set_title(r"(c) $\varepsilon$ sensitivity", loc="left", pad=3)
+    ax.set_title(r"(b) $\varepsilon$ sensitivity", loc="left", pad=3)
     ax.legend(loc="upper right", fontsize=5.0)
     ax.set_xlim(1, len(list(trajs.values())[0]))
 
-    fig.subplots_adjust(left=0.07, right=0.98, top=0.86, bottom=0.20, wspace=0.38)
+    fig.subplots_adjust(left=0.09, right=0.98, top=0.86, bottom=0.20, wspace=0.32)
     save_figure(fig, FIG_DIR / "ep_sensitivity.png", FIG_DIR / "ep_sensitivity.pdf")
     plt.close(fig)
     print("  [OK] ep_sensitivity")
