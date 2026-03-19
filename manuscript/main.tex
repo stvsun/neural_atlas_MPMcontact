@@ -263,16 +263,16 @@ This condition guarantees a locally invertible change of variables. It does \emp
 \end{equation}
 we mean the inverse on a patch where the chart is assumed or verified to be injective. In the implementation, positive Jacobian determinant is enforced or monitored at sampled points, while global injectivity is treated as a trained geometric property rather than a theorem following automatically from \eqref{eq:atlas_nondegenerate}.
 
-The rabbit atlas used later in the paper makes this local-coordinate idea concrete. Each chart is anchored at a seed point $s_i$ with an orthonormal local frame $\{t_{1i},t_{2i},n_i\}$, and a physical sample $x$ is first expressed in rigid local coordinates by
+The rabbit atlas used later in the paper makes this local-coordinate idea concrete. Each chart is anchored at a seed point $s_i$ with an orthonormal local frame $\{\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i\}$, and a physical sample $x$ is first expressed in rigid local coordinates by
 \begin{equation}
 \boldsymbol{\zeta}^{\mathrm{rig}}_i(x)
 :=
 \left(
-(x-s_i)\cdot t_{1i},
+(x-s_i)\cdot \mathbf{t}_{1i},
 \,
-(x-s_i)\cdot t_{2i},
+(x-s_i)\cdot \mathbf{t}_{2i},
 \,
-(x-s_i)\cdot n_i
+(x-s_i)\cdot \mathbf{n}_i
 \right).
 \label{eq:atlas_rigid_local_coords}
 \end{equation}
@@ -464,11 +464,11 @@ Physical boundary conditions are written as
 \begin{equation}
 u=u_D \quad \text{on }\Gamma_D,
 \qquad
-\mathcal{G}(x,u,\nabla_x u;\eta)\,n = t_N
+\mathcal{G}(x,u,\nabla_x u;\eta)\,\mathbf{n} = \mathbf{t}_N
 \quad \text{on }\Gamma_N,
 \label{eq:abstract_bc}
 \end{equation}
-with outward unit normal $n$.
+with outward unit normal $\mathbf{n}$.
 
 On chart $i$, let $\boldsymbol{\zeta}\in\widehat{\Omega}_i$ denote the local reference coordinate and define the pulled-back state by
 \begin{equation}
@@ -518,22 +518,22 @@ For the Dirichlet boundary we use
 \qquad \boldsymbol{\zeta}\in \widehat{\Gamma}_{i,D}:=\pi_i(\Gamma_D\cap \Omega_i).
 \label{eq:mapped_dirichlet}
 \end{equation}
-For Neumann or traction conditions, if $\widehat{n}_i(\boldsymbol{\zeta})$ is a reference outward normal on the relevant portion of $\partial\widehat{\Omega}_i$, the physical normal is
+For Neumann or traction conditions, if $\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})$ is a reference outward normal on the relevant portion of $\partial\widehat{\Omega}_i$, the physical normal is
 \begin{equation}
-n_i(\varphi_i(\boldsymbol{\zeta}))
+\mathbf{n}_i(\varphi_i(\boldsymbol{\zeta}))
 =
-\frac{\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{n}_i(\boldsymbol{\zeta})}
-{\|\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{n}_i(\boldsymbol{\zeta})\|},
+\frac{\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})}
+{\|\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})\|},
 \label{eq:mapped_normal}
 \end{equation}
 and the pulled-back Neumann residual is
 \begin{equation}
 \widehat{\mathcal{B}}_{i,N}(\boldsymbol{\zeta};\eta)
 :=
-\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)\,n_i(\varphi_i(\boldsymbol{\zeta})) - t_N(\varphi_i(\boldsymbol{\zeta})),
+\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)\,\mathbf{n}_i(\varphi_i(\boldsymbol{\zeta})) - \mathbf{t}_N(\varphi_i(\boldsymbol{\zeta})),
 \label{eq:mapped_neumann}
 \end{equation}
-where $\widehat{\mathcal{G}}_i$ is the physical flux from \eqref{eq:pullback_flux} and $n_i$ is the physical normal from \eqref{eq:mapped_normal}, both evaluated at the chart-mapped point $\varphi_i(\boldsymbol{\zeta})$.
+where $\widehat{\mathcal{G}}_i$ is the physical flux from \eqref{eq:pullback_flux} and $\mathbf{n}_i$ is the physical normal from \eqref{eq:mapped_normal}, both evaluated at the chart-mapped point $\varphi_i(\boldsymbol{\zeta})$.
 
 Table~\ref{tab:operator_map} summarizes the correspondence between physical-space operators and their chart-local counterparts.
 
@@ -553,9 +553,9 @@ Flux $\mathcal{G}(x,u,\nabla u)$ & $\widehat{\mathcal{G}}_i = \mathcal{G}(\varph
 Piola flux $\widehat{\mathcal{P}}_i$ & $j_i\,\widehat{\mathcal{G}}_i\,\mathbf{J}_i^{-T}$ & \eqref{eq:piola_flux} \\
 Source $\mathcal{S}(x,u,\nabla u)$ & $\widehat{\mathcal{S}}_i = \mathcal{S}(\varphi_i,\widehat{u}_i,\nabla_{\boldsymbol{\zeta}}\widehat{u}_i \mathbf{J}_i^{-1})$ & \eqref{eq:pullback_source} \\
 PDE residual & $\widehat{\mathcal{R}}_i = \nabla_{\boldsymbol{\zeta}}\cdot\widehat{\mathcal{P}}_i + j_i\,\widehat{\mathcal{S}}_i$ & \eqref{eq:mapped_residual} \\
-Outward normal $n$ & $\mathbf{J}_i^{-T}\widehat{n}_i / \|\mathbf{J}_i^{-T}\widehat{n}_i\|$ & \eqref{eq:mapped_normal} \\
+Outward normal $\mathbf{n}$ & $\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i / \|\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i\|$ & \eqref{eq:mapped_normal} \\
 Dirichlet BC & $\widehat{u}_i(\boldsymbol{\zeta}) - u_D(\varphi_i(\boldsymbol{\zeta}))$ & \eqref{eq:mapped_dirichlet} \\
-Neumann BC & $\widehat{\mathcal{G}}_i\,n_i - t_N$ & \eqref{eq:mapped_neumann} \\
+Neumann BC & $\widehat{\mathcal{G}}_i\,\mathbf{n}_i - \mathbf{t}_N$ & \eqref{eq:mapped_neumann} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -595,12 +595,12 @@ Neumann BC & $\widehat{\mathcal{G}}_i\,n_i - t_N$ & \eqref{eq:mapped_neumann} \\
 % Tangent basis vectors at zeta (orthonormal reference frame)
 \definecolor{cRed}{HTML}{C44E52}
 \draw[-{Stealth[length=4pt]}, cRed, line width=0.9pt] (-2.8, 1.0) -- (-2.2, 1.0);
-\node[font=\scriptsize, text=cRed, anchor=south] at (-2.35, 1.02) {$e_1$};
+\node[font=\scriptsize, text=cRed, anchor=south] at (-2.35, 1.02) {$\mathbf{e}_1$};
 \draw[-{Stealth[length=4pt]}, cBlue, line width=0.9pt] (-2.8, 1.0) -- (-2.8, 1.6);
-\node[font=\scriptsize, text=cBlue, anchor=west] at (-2.75, 1.45) {$e_2$};
+\node[font=\scriptsize, text=cBlue, anchor=west] at (-2.75, 1.45) {$\mathbf{e}_2$};
 % Outward normal
 \draw[->, line width=0.8pt] (-3.2, 2.3) -- (-3.2, 2.75);
-\node[font=\scriptsize, anchor=west] at (-3.15, 2.55) {$\widehat{n}_i$};
+\node[font=\scriptsize, anchor=west] at (-3.15, 2.55) {$\widehat{\mathbf{n}}_i$};
 
 % --- Physical patch (right): smooth deformed shape with curved grid ---
 \begin{scope}[shift={(3.8, 0.8)}]
@@ -638,12 +638,12 @@ Neumann BC & $\widehat{\mathcal{G}}_i\,n_i - t_N$ & \eqref{eq:mapped_neumann} \\
 \node[font=\scriptsize, anchor=north west] at (4.25, 0.90) {$x{=}\varphi_i(\boldsymbol{\zeta})$};
 % Pushed-forward tangent vectors (stretched/rotated by J_i)
 \draw[-{Stealth[length=4pt]}, cRed, line width=0.9pt] (4.2, 1.0) -- (4.95, 1.2);
-\node[font=\scriptsize, text=cRed, anchor=south] at (4.7, 1.18) {$\mathbf{J}_i e_1$};
+\node[font=\scriptsize, text=cRed, anchor=south] at (4.7, 1.18) {$\mathbf{J}_i \mathbf{e}_1$};
 \draw[-{Stealth[length=4pt]}, cBlue, line width=0.9pt] (4.2, 1.0) -- (4.0, 1.75);
-\node[font=\scriptsize, text=cBlue, anchor=east] at (4.0, 1.55) {$\mathbf{J}_i e_2$};
+\node[font=\scriptsize, text=cBlue, anchor=east] at (4.0, 1.55) {$\mathbf{J}_i \mathbf{e}_2$};
 % Normal
 \draw[->, line width=0.8pt] (5.5, 1.85) -- (5.9, 2.35);
-\node[font=\scriptsize, anchor=south west] at (5.85, 2.2) {$n_i$};
+\node[font=\scriptsize, anchor=south west] at (5.85, 2.2) {$\mathbf{n}_i$};
 
 % --- Central arrow ---
 \draw[->, line width=1.4pt] (-1.2, 1.0) -- (1.4, 1.0)
@@ -654,7 +654,7 @@ Neumann BC & $\widehat{\mathcal{G}}_i\,n_i - t_N$ & \eqref{eq:mapped_neumann} \\
 \node[formulabox] (f1) at (-3.5, -1.6) {%
   \begin{tabular}{@{}c@{}}
   {\scriptsize Gradient pullback}\\[2pt]
-  $\nabla_x u=\nabla_{\zeta}\widehat{u}_i\,\mathbf{J}_i^{-1}$
+  $\nabla_x u=\nabla_{\boldsymbol{\zeta}}\widehat{u}_i\,\mathbf{J}_i^{-1}$
   \end{tabular}
 };
 \node[formulabox] (f2) at (0.3, -1.6) {%
@@ -666,7 +666,7 @@ Neumann BC & $\widehat{\mathcal{G}}_i\,n_i - t_N$ & \eqref{eq:mapped_neumann} \\
 \node[formulabox] (f3) at (4.2, -1.6) {%
   \begin{tabular}{@{}c@{}}
   {\scriptsize Normal map}\\[2pt]
-  $n_i=\mathbf{J}_i^{-T}\widehat{n}_i\big/\|\mathbf{J}_i^{-T}\widehat{n}_i\|$
+  $\mathbf{n}_i=\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i\big/\|\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i\|$
   \end{tabular}
 };
 \end{tikzpicture}
@@ -719,11 +719,11 @@ In the continuous Schwarz method one would impose Dirichlet, Neumann, or Robin d
 \right].
 \label{eq:schwarz_iv_loss}
 \end{equation}
-For scalar Poisson problems the default configuration also penalizes projected normal-flux mismatch. Let $n_{ij}(\boldsymbol{\zeta})$ denote the outward unit normal of $\partial\Omega_i$ at the physical point $\varphi_i(\boldsymbol{\zeta})$, restricted to the interface $\Gamma_{ij}$. Define
+For scalar Poisson problems the default configuration also penalizes projected normal-flux mismatch. Let $\mathbf{n}_{ij}(\boldsymbol{\zeta})$ denote the outward unit normal of $\partial\Omega_i$ at the physical point $\varphi_i(\boldsymbol{\zeta})$, restricted to the interface $\Gamma_{ij}$. Define
 \begin{equation}
 q_i(\boldsymbol{\zeta};\theta_i)
 :=
-n_{ij}(\boldsymbol{\zeta})\cdot
+\mathbf{n}_{ij}(\boldsymbol{\zeta})\cdot
 \nabla_x u_i\!\left(\varphi_i(\boldsymbol{\zeta});\theta_i\right),
 \label{eq:schwarz_flux_trace}
 \end{equation}
@@ -972,7 +972,7 @@ All neural networks are implemented in PyTorch \citep{paszke2019pytorch} with au
 The geometry stage follows a four-step pipeline, each producing a mathematical object required by the downstream solver:
 \begin{enumerate}
 \item \textbf{Volumetric signed-distance modeling.} A neural SDF $s_\vartheta:\mathbb{R}^3\to\mathbb{R}$ is trained from surface samples with oriented normals, providing inside/outside classification and volumetric chart seeding without a tetrahedral mesh. The training loss combines surface fit, normal alignment, Eikonal regularization, and sign supervision (Appendix~\ref{sec:appendix_pipeline}, Eqs.~\eqref{eq:impl_sdf_loss}--\eqref{eq:impl_sdf_sign}).
-\item \textbf{Seed placement and local frames.} The domain is covered by $M$ overlapping ball charts with seeds $\{c_i\}$, orthonormal frames $Q_i$, and support radii $\{r_i\}$. Seeds are accepted only where $s_\vartheta(c_i)<0$.
+\item \textbf{Seed placement and local frames.} The domain is covered by $M$ overlapping ball charts with seeds $\{c_i\}$, orthonormal frames $\mathbf{Q}_i$, and support radii $\{r_i\}$. Seeds are accepted only where $s_\vartheta(c_i)<0$.
 \item \textbf{Decoder and mask training.} Each chart map $\varphi_i$ is realized as a rigid affine frame plus a learned residual (Eq.~\eqref{eq:impl_decoder_map}), paired with a mask network producing validity logits and partition-of-unity weights. The atlas loss combines reconstruction, domain containment, mask classification, overlap consistency, Jacobian positivity, and coverage terms (Appendix~\ref{sec:appendix_pipeline}, Eqs.~\eqref{eq:impl_atlas_total}--\eqref{eq:impl_atlas_cov}).
 \item \textbf{Quality gates.} The atlas is accepted only if coverage, overlap consistency, foldover ratio, and boundary RMSE lie within prescribed bands (Appendix~\ref{sec:appendix_pipeline}, Eqs.~\eqref{eq:impl_gate_metrics}--\eqref{eq:impl_gate_rmse}). Failed gates trigger iterative refinement of seeds, radii, and network parameters.
 \end{enumerate}
@@ -1194,7 +1194,7 @@ The interior and boundary residuals are the same as in Example~1, but the loss a
 \lambda_{\mathrm{if,flux}}\sum_{i<j}\mathbb{E}_{\widehat{\Omega}_{ij}}
 \left[
 \left|
-n_{ij}\cdot \nabla_x u_i - n_{ij}\cdot \nabla_x u_j
+\mathbf{n}_{ij}\cdot \nabla_x u_i - \mathbf{n}_{ij}\cdot \nabla_x u_j
 \right|^2
 \right]
 +
@@ -1348,19 +1348,19 @@ This example demonstrates constitutive parameter identification on a three-dimen
 
 Let
 \begin{equation}
-u_{\tau}^{\mathrm{pres}}:\Omega_{\mathrm{torus}}\rightarrow \mathbb{R}^3
+\mathbf{u}_{\tau}^{\mathrm{pres}}:\Omega_{\mathrm{torus}}\rightarrow \mathbb{R}^3
 \label{eq:torus_prescribed_u}
 \end{equation}
 be the prescribed torsional displacement field. In physical coordinates $x=(x_1,x_2,x_3)$, the displacement takes the form
 \begin{equation}
-u_{\tau}^{\mathrm{pres}}(x) = \tau\,w(\phi)\,(1+\alpha\, x_3/r)\,(-x_2,\;x_1,\;0)^T,
+\mathbf{u}_{\tau}^{\mathrm{pres}}(x) = \tau\,w(\phi)\,(1+\alpha\, x_3/r)\,(-x_2,\;x_1,\;0)^T,
 \label{eq:torus_torsion_formula}
 \end{equation}
 where $\phi=\arctan(x_2/x_1)$ is the azimuthal angle, $\tau=0.085$ is the torsion amplitude, $\alpha=0.75$ is a through-thickness scaling factor, and $w(\phi)=\tfrac{1}{2}[1+\cos(\pi\,(\phi-\phi_c)/\phi_w)]$ is a smooth cosine window centred at $\phi_c=\pi/2$ with half-width $\phi_w=0.35\pi$ (${\approx}63^{\circ}$). The window localizes the torsion to one part of the torus; outside the window the displacement vanishes.
 
 From this we construct the deformation gradient
 \begin{equation}
-\mathbf{F}_{\tau}^{\mathrm{pres}} = \mathbf{I} + \nabla_x u_{\tau}^{\mathrm{pres}}.
+\mathbf{F}_{\tau}^{\mathrm{pres}} = \mathbf{I} + \nabla_x \mathbf{u}_{\tau}^{\mathrm{pres}}.
 \label{eq:torus_prescribed_F}
 \end{equation}
 The constitutive law is the compressible Neo-Hookean first Piola--Kirchhoff stress
@@ -1374,9 +1374,9 @@ K\ln(\det\mathbf{F})\,\mathbf{F}^{-T}.
 \end{equation}
 Synthetic boundary observations are generated on a loaded surface subset $\Gamma_{\mathrm{obs}}$ spanning a ${\sim}126^{\circ}$ azimuthal arc, with $N_{\mathrm{obs}}=6{,}000$ observation points. For traction-mode experiments the observed quantity is
 \begin{equation}
-t^{\mathrm{obs}}(x)
+\mathbf{t}^{\mathrm{obs}}(x)
 =
-\mathbf{P}\!\left(\mathbf{F}_{\tau}^{\mathrm{pres}}(x);\mu_{\mathrm{true}},K_{\mathrm{true}}\right)n(x),
+\mathbf{P}\!\left(\mathbf{F}_{\tau}^{\mathrm{pres}}(x);\mu_{\mathrm{true}},K_{\mathrm{true}}\right)\mathbf{n}(x),
 \qquad x\in \Gamma_{\mathrm{obs}},
 \label{eq:torus_obs_traction}
 \end{equation}
@@ -1391,7 +1391,7 @@ In the global configuration, a single pair $(\mu,K)$ is optimized by minimizing 
 \frac{1}{M}\sum_{i=1}^{M}
 \frac{\sum_{k=1}^{N_{\mathrm{obs}}}\omega_i(x_k)\,
 \left\|
-t(x_k;\mu,K)-t^{\mathrm{obs}}(x_k)
+\mathbf{t}(x_k;\mu,K)-\mathbf{t}^{\mathrm{obs}}(x_k)
 \right\|_2^2}
 {\sum_{k=1}^{N_{\mathrm{obs}}}\omega_i(x_k)+\varepsilon},
 \label{eq:torus_original_loss}
@@ -1750,7 +1750,7 @@ Algorithm~\ref{alg:global_map_training} records the training pattern used by the
 \label{sec:appendix_pipeline}
 
 \paragraph{Stage 1: SDF training loss.}
-For imported geometry with observed surface samples $X_{\partial}=\{(x_k,n_k)\}_{k=1}^{N}$ and oriented normals, the neural SDF $s_\vartheta$ satisfies
+For imported geometry with observed surface samples $X_{\partial}=\{(x_k,\mathbf{n}_k)\}_{k=1}^{N}$ and oriented normals, the neural SDF $s_\vartheta$ satisfies
 \begin{equation}
 s_{\vartheta}:\mathbb{R}^3\rightarrow \mathbb{R},
 \qquad
@@ -1767,9 +1767,9 @@ and is trained with the loss
 \mathbb{E}_{x\sim X_{\partial}}\!\left[|s_{\vartheta}(x)|\right]
 +
 \lambda_{\mathrm{norm}}\,
-\mathbb{E}_{(x,n)\sim (X_{\partial},N_{\partial})}
+\mathbb{E}_{(x,\mathbf{n})\sim (X_{\partial},N_{\partial})}
 \left[
-1-\frac{\nabla s_{\vartheta}(x)}{\|\nabla s_{\vartheta}(x)\|_2}\cdot n
+1-\frac{\nabla s_{\vartheta}(x)}{\|\nabla s_{\vartheta}(x)\|_2}\cdot \mathbf{n}
 \right]
 \nonumber\\
 &+
@@ -1788,11 +1788,11 @@ with sign supervision
 \mathcal{L}_{\mathrm{sign}}
 =&\;
 \tfrac12\,
-\mathbb{E}_{(x,n)\sim (X_{\partial},N_{\partial})}
+\mathbb{E}_{(x,\mathbf{n})\sim (X_{\partial},N_{\partial})}
 \left[
-\operatorname{softplus}\!\big(s_{\vartheta}(x-\delta n)\big)
+\operatorname{softplus}\!\big(s_{\vartheta}(x-\delta \mathbf{n})\big)
 +
-\operatorname{softplus}\!\big(-s_{\vartheta}(x+\delta n)\big)
+\operatorname{softplus}\!\big(-s_{\vartheta}(x+\delta \mathbf{n})\big)
 \right]
 \nonumber\\
 &+
@@ -1811,9 +1811,9 @@ Chart-local coordinates are initialized by
 \boldsymbol{\zeta}_i(x)
 =
 \begin{bmatrix}
-(x-c_i)\cdot t_{1,i}\\
-(x-c_i)\cdot t_{2,i}\\
-(x-c_i)\cdot n_i
+(x-c_i)\cdot \mathbf{t}_{1,i}\\
+(x-c_i)\cdot \mathbf{t}_{2,i}\\
+(x-c_i)\cdot \mathbf{n}_i
 \end{bmatrix},
 \label{eq:impl_local_coords}
 \end{equation}
@@ -1835,11 +1835,11 @@ The abstract chart map $\varphi_i$ is realized as
 =&\;
 c_i
 +
-\zeta_1 t_{1,i}
+\zeta_1 \mathbf{t}_{1,i}
 +
-\zeta_2 t_{2,i}
+\zeta_2 \mathbf{t}_{2,i}
 +
-\zeta_3 n_i
+\zeta_3 \mathbf{n}_i
 +
 a_i r_i\,\mathcal{N}_i(\boldsymbol{\zeta}/r_i),
 \label{eq:impl_decoder_map}\\
@@ -2015,7 +2015,7 @@ CompactChartNet & all W1--W5 features active & \textbf{2.207\%} & 6.783\% & 3659
 \section{Stanford Bunny volumetric neural SDF benchmark}
 \label{sec:appendix_bunny}
 
-The Stanford Bunny benchmark tests whether the atlas pipeline can start from imported PLY data. Its input is an oriented surface sample set $X_{\partial}=\{(x_k,n_k)\}_{k=1}^{N_s}$ obtained from the watertight mesh \texttt{bun\_zipper.ply}. The goal is to learn a volumetric scalar field whose zero level set captures the Bunny surface and whose sign defines a usable interior for atlas construction---i.e., the benchmark instantiation of Stage~1 in Appendix~\ref{sec:appendix_pipeline}.
+The Stanford Bunny benchmark tests whether the atlas pipeline can start from imported PLY data. Its input is an oriented surface sample set $X_{\partial}=\{(x_k,\mathbf{n}_k)\}_{k=1}^{N_s}$ obtained from the watertight mesh \texttt{bun\_zipper.ply}. The goal is to learn a volumetric scalar field whose zero level set captures the Bunny surface and whose sign defines a usable interior for atlas construction---i.e., the benchmark instantiation of Stage~1 in Appendix~\ref{sec:appendix_pipeline}.
 
 Let $y=(x-c)/s$ denote the normalized coordinate, where $c$ is the bounding-box center and $s$ the global length scale. The learned volumetric model $s_\theta:\mathbb{R}^3\to\mathbb{R}$ defines the reconstructed body as
 \begin{equation}
@@ -2032,7 +2032,7 @@ The training loss combines surface fit, normal alignment, Eikonal regularization
 \qquad
 \mathcal{L}_{\mathrm{norm}}
 =
-\frac{1}{N_s}\sum_{k=1}^{N_s}\left(1-\widehat{\nabla_y s_\theta}(y_k)\cdot n_k\right),
+\frac{1}{N_s}\sum_{k=1}^{N_s}\left(1-\widehat{\nabla_y s_\theta}(y_k)\cdot \mathbf{n}_k\right),
 \label{eq:bunny_sdf_surface_normal}
 \end{equation}
 \begin{equation}
@@ -2047,9 +2047,9 @@ The training loss combines surface fit, normal alignment, Eikonal regularization
 =
 \frac{1}{2N_s}\sum_{k=1}^{N_s}
 \left[
-\operatorname{softplus}\!\big(s_\theta(y_k-\delta n_k)\big)
+\operatorname{softplus}\!\big(s_\theta(y_k-\delta \mathbf{n}_k)\big)
 +
-\operatorname{softplus}\!\big(-s_\theta(y_k+\delta n_k)\big)
+\operatorname{softplus}\!\big(-s_\theta(y_k+\delta \mathbf{n}_k)\big)
 \right]
 +
 \mathcal{L}_{\mathrm{far}},
