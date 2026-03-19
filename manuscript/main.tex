@@ -353,6 +353,11 @@ Group & Symbol & Role in the method \\
 & $\mathbf{J}_i=D_{\boldsymbol{\zeta}}\varphi_i,\; j_i=\det\mathbf{J}_i$ & Jacobian matrix and Jacobian determinant of chart $i$ \\
 & $\omega_i$ & partition-of-unity weight used in the global blend \\
 \midrule
+\multirow{3}{*}{\shortstack[l]{Vectors and\\boundary data}}
+& $\mathbf{n},\,\mathbf{n}_i,\,\widehat{\mathbf{n}}_i$ & outward unit normal (physical and reference) \\
+& $\mathbf{t}_N,\,\mathbf{t}^{\mathrm{obs}}$ & prescribed Neumann traction and observed traction \\
+& $\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i$ & orthonormal local frame at chart seed $s_i$ \\
+\midrule
 \shortstack[l]{Shared solver\\ quantities}
 & $\eta,\lambda_*$ & $\eta$ denotes global material or inverse parameters; $\lambda_*$ denotes loss weights shared across charts \\
 \bottomrule
@@ -395,15 +400,15 @@ Figure~\ref{fig:atlas_slice} gives a schematic planar slice through this volumet
   % --- Chart images inside body: overlapping ellipses ---
   \draw[cBlue, line width=0.9pt, fill=cBlue!14]
     (0.0, 1.2) ellipse (1.3cm and 0.85cm);
-  \node[font=\small, color=cBlue, font=\small\bfseries] at (-0.8, 1.85) {$\Omega_1$};
+  \node[color=cBlue, font=\small\bfseries] at (-0.8, 1.85) {$\Omega_1$};
 
   \draw[cGreen, line width=0.9pt, fill=cGreen!14]
     (0.6, -0.1) ellipse (1.5cm and 0.95cm);
-  \node[font=\small, color=cGreen, font=\small\bfseries] at (-0.6, 0.15) {$\Omega_2$};
+  \node[color=cGreen, font=\small\bfseries] at (-0.6, 0.15) {$\Omega_2$};
 
   \draw[cOrange, line width=0.9pt, fill=cOrange!14]
     (0.3, -1.35) ellipse (1.25cm and 0.75cm);
-  \node[font=\small, color=cOrange, font=\small\bfseries] at (-0.65,-1.15) {$\Omega_3$};
+  \node[color=cOrange, font=\small\bfseries] at (-0.65,-1.15) {$\Omega_3$};
 
   % --- Overlap labels ---
   \node[fill=white, inner sep=1pt, font=\scriptsize] at (0.4, 0.6) {$\Omega_{12}$};
@@ -1065,6 +1070,7 @@ u_{\mathrm{chart}}(\boldsymbol{\zeta})
 This localized construction produces smoother Schwarz convergence histories than the dense baseline. The same frozen atlas also hosts a chart-local P1 FEM variant that reuses the decoder, mask, overlap graph, and Schwarz infrastructure, demonstrating that the atlas is a discretization-agnostic geometric substrate.
 
 Solver stabilization employs staged PDE-weight ramping, PCGrad \citep{yu2020gradient} for gradient-conflict mitigation, and a trust-region filter that rejects Schwarz updates causing unacceptable error increases. Adaptive regularization heuristics for the overlap weight and CompactChartNet bandwidth are detailed in Appendix~\ref{sec:appendix_stabilization}.
+
 \section{Benchmark problems and numerical results}
 \label{sec:benchmark_formulations}
 
@@ -1129,7 +1135,7 @@ The canonical run reaches relative $L^2$ error $2.26\times 10^{-3}$, absolute $L
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.97\textwidth]{figures_cmame_core/example1_forward_poisson/example1_ellipsoid_3d_pub.png}
-\caption{Ellipsoidal verification benchmark rendered in 3D. The ellipsoid is clipped along a symmetry plane to expose the interior solution field. Panel~(a) shows the predicted field $u_h$, which peaks at the center and vanishes on the boundary as expected for the quadratic exact solution $u^*=1-(\xi^2+\eta^2+\zeta^2)$. Panel~(b) shows the absolute error $|u_h-u^*|$, confirming that the operator pullback and the analytic geometric map are implemented correctly (relative $L^2$ error $=2.26\times10^{-3}$, maximum error $=5.23\times10^{-3}$).}
+\caption{Ellipsoidal verification benchmark rendered in 3D. The ellipsoid is clipped along a symmetry plane to expose the interior solution field. Panel~(a) shows the predicted field $u_h$, which peaks at the center and vanishes on the boundary as expected for the quadratic exact solution $u^*=1-\|\boldsymbol{\xi}\|^2$. Panel~(b) shows the absolute error $|u_h-u^*|$, confirming that the operator pullback and the analytic geometric map are implemented correctly (relative $L^2$ error $=2.26\times10^{-3}$, maximum error $=5.23\times10^{-3}$).}
 \label{fig:forward_poisson_ellipsoid}
 \end{figure}
 
@@ -1495,21 +1501,21 @@ where $\boldsymbol{\beta}$ is the deviatoric back-stress tensor that tracks the 
 
 The classical radial return algorithm \citep{simo_computational_1998} uses a conditional branch: if $\Phi > 0$ (yield), compute a plastic correction; otherwise, accept the elastic trial state. This non-differentiable branching prevents gradient flow through the yield surface. We replace it with a smooth approximation from the differentiable simulation literature \citep{hu_difftaichi_2020,bark_differentiable_2025}: the plastic correction magnitude is set to
 \begin{equation}
-\eta = \mathrm{softplus}(\Phi/\varepsilon)\cdot\varepsilon,
+\Delta\gamma_s = \mathrm{softplus}(\Phi/\varepsilon_s)\cdot\varepsilon_s,
 \qquad
 \mathrm{softplus}(x) = \ln(1+e^x),
 \label{eq:smooth_return}
 \end{equation}
-which provides a $C^\infty$ approximation to $\max(\Phi,0)$. The sharpness parameter $\varepsilon$ controls the transition width and is annealed from $\varepsilon_{\mathrm{start}}=0.1\,\tau_y$ to $\varepsilon_{\mathrm{end}}=0.001\,\tau_y$ via a cosine schedule. At $\varepsilon=0.001$, the softplus curve is visually indistinguishable from the sharp yield point (Figure~\ref{fig:ep_constitutive}a). A comparison with central finite differences confirms that the autograd gradient through the smooth return mapping is correct (both methods recover $\tau_y$ to within $0.25\%$) while providing a $2.9\times$ wall-clock speedup. With the classical hard-max return mapping ($\eta = \max(\Phi,0)$), autograd gradients are zero in the plastic regime and the optimizer stalls.
+which provides a $C^\infty$ approximation to $\max(\Phi,0)$. The sharpness parameter $\varepsilon_s$ controls the transition width and is annealed from $\varepsilon_{s,\mathrm{start}}=0.1\,\tau_y$ to $\varepsilon_{s,\mathrm{end}}=0.001\,\tau_y$ via a cosine schedule. At $\varepsilon_s=0.001$, the softplus curve is visually indistinguishable from the sharp yield point (Figure~\ref{fig:ep_constitutive}a). A comparison with central finite differences confirms that the autograd gradient through the smooth return mapping is correct (both methods recover $\tau_y$ to within $0.25\%$) while providing a $2.9\times$ wall-clock speedup. With the classical hard-max return mapping ($\Delta\gamma_s = \max(\Phi,0)$), autograd gradients are zero in the plastic regime and the optimizer stalls.
 
-The forward solver is a P1 tetrahedral finite-element method on a structured hexahedral grid with Freudenthal six-tet decomposition ($4^3 = 64$ hexahedra, 384~elements, 125~nodes), operating on a single torus chart sector ($R=1.0$, $r=0.35$, azimuthal half-width $\Delta\phi=\pi/4$). In chart-local reference coordinates $\boldsymbol{\xi}\in[-1,1]^3$, the boundary conditions are:
+The forward solver is a P1 tetrahedral finite-element method on a structured hexahedral grid with Freudenthal six-tet decomposition ($4^3 = 64$ hexahedra, 384~elements, 125~nodes), operating on a single torus chart sector ($R=1.0$, $r=0.35$, azimuthal half-width $\Delta\phi=\pi/4$). In chart-local reference coordinates $\boldsymbol{\zeta}\in[-1,1]^3$, the boundary conditions are:
 \begin{equation}
-\mathbf{u}\big|_{\xi_1=-1}=\mathbf{0} \quad\text{(clamped)},
+\mathbf{u}\big|_{\zeta_1=-1}=\mathbf{0} \quad\text{(clamped)},
 \qquad
-u_1\big|_{\xi_1=+1}=\varepsilon_{\mathrm{app}}\cdot 2r \quad\text{(prescribed extension)},
+u_1\big|_{\zeta_1=+1}=\varepsilon_{\mathrm{app}}\cdot 2r \quad\text{(prescribed extension)},
 \label{eq:ep_bc}
 \end{equation}
-where $r$ is the chart support radius and $\varepsilon_{\mathrm{app}}$ is the applied nominal strain, incremented over the loading history. All other boundary faces are traction-free. At each load step, Newton--Raphson iteration solves $\mathbf{R}(\mathbf{u};\theta)=\mathbf{0}$ with an autograd-computed consistent tangent through the smooth return mapping. Gradients with respect to material parameters $\theta=(\tau_y, H_{\mathrm{kin}})$ are obtained via the implicit function theorem.
+where $r$ is the chart support radius and $\varepsilon_{\mathrm{app}}$ is the applied nominal strain, incremented over the loading history. All other boundary faces are traction-free. At each load step, Newton--Raphson iteration solves the global FEM residual $\mathbf{R}(\mathbf{u};\theta):=\mathbf{f}_{\mathrm{int}}(\mathbf{u};\theta)-\mathbf{f}_{\mathrm{ext}}=\mathbf{0}$ with an autograd-computed consistent tangent through the smooth return mapping. Gradients with respect to material parameters $\theta=(\tau_y, H_{\mathrm{kin}})$ are obtained via the implicit function theorem.
 
 \subsubsection{Two-stage inverse identification}
 
@@ -1546,12 +1552,12 @@ Stage & Unknown & Observation type & Loading & True & Identified & Error (\%) \\
 \end{table}
 
 \subsubsection{Sensitivity analysis}
-The robustness of the inverse procedure is assessed through three studies (Figure~\ref{fig:ep_sensitivity}). \emph{Initial-guess sensitivity}: $\tau_y$ is recovered from initial guesses spanning an order of magnitude ($0.1$--$2.0$), all converging to within $0.1\%$ of the true value. \emph{Mesh refinement}: the inverse is solved on meshes with $n_{\mathrm{cells}}\in\{3,4,6,8\}$ (64--729~nodes); the $\tau_y$ error is consistent across all mesh sizes. \emph{Smoothing parameter sensitivity}: annealing schedules with $\varepsilon_{\mathrm{start}}\in\{0.01,0.05,0.1,0.5\}$ all converge to the correct $\tau_y$; only $\varepsilon_{\mathrm{start}}=1.0$ fails, producing a biased estimate because the overly smooth yield surface does not develop sufficient plastic deformation to generate a meaningful gradient signal. Additive Gaussian noise at levels up to $5\%$ yields $\tau_y$ errors below $5\%$.
+The robustness of the inverse procedure is assessed through three studies (Figure~\ref{fig:ep_sensitivity}). \emph{Initial-guess sensitivity}: $\tau_y$ is recovered from initial guesses spanning an order of magnitude ($0.1$--$2.0$), all converging to within $0.1\%$ of the true value. \emph{Mesh refinement}: the inverse is solved on meshes with $n_{\mathrm{cells}}\in\{3,4,6,8\}$ (64--729~nodes); the $\tau_y$ error is consistent across all mesh sizes. \emph{Smoothing parameter sensitivity}: annealing schedules with $\varepsilon_{s,\mathrm{start}}\in\{0.01,0.05,0.1,0.5\}$ all converge to the correct $\tau_y$; only $\varepsilon_{s,\mathrm{start}}=1.0$ fails, producing a biased estimate because the overly smooth yield surface does not develop sufficient plastic deformation to generate a meaningful gradient signal. Additive Gaussian noise at levels up to $5\%$ yields $\tau_y$ errors below $5\%$.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures_cmame_core/example5_torus_elastoplastic/ep_constitutive}
-\caption{Elastoplastic constitutive response. (a)~Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon$; at $\varepsilon=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau_y=0.5$). (b)~Cyclic stress--strain loops for three kinematic hardening moduli: $H_{\mathrm{kin}}>0$ shifts the reverse yield point (Bauschinger effect), enabling $H_{\mathrm{kin}}$ identification from cyclic data.}
+\caption{Elastoplastic constitutive response. (a)~Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon_s$; at $\varepsilon_s=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau_y=0.5$). (b)~Cyclic stress--strain loops for three kinematic hardening moduli: $H_{\mathrm{kin}}>0$ shifts the reverse yield point (Bauschinger effect), enabling $H_{\mathrm{kin}}$ identification from cyclic data.}
 \label{fig:ep_constitutive}
 \end{figure}
 
@@ -1573,7 +1579,7 @@ The robustness of the inverse procedure is assessed through three studies (Figur
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures_cmame_core/example5_torus_elastoplastic/ep_sensitivity}
-\caption{Sensitivity studies. (a)~$\tau_y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes ($n_{\mathrm{cells}}\in\{3,4,6,8\}$). (b)~$\tau_y$ convergence trajectories for different initial smoothing parameters $\varepsilon_{\mathrm{start}}$; all values except $\varepsilon_{\mathrm{start}}=1.0$ converge to the correct yield stress.}
+\caption{Sensitivity studies. (a)~$\tau_y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes ($n_{\mathrm{cells}}\in\{3,4,6,8\}$). (b)~$\tau_y$ convergence trajectories for different initial smoothing parameters $\varepsilon_{s,\mathrm{start}}$; all values except $\varepsilon_{s,\mathrm{start}}=1.0$ converge to the correct yield stress.}
 \label{fig:ep_sensitivity}
 \end{figure}
 
@@ -1597,7 +1603,7 @@ Case & Supports claim about & Main evidence & Key caution & Runtime (s) \\
 Ellipsoid Poisson & mapped-operator verification & rel-$L^2 = 2.26\times10^{-3}$ & analytic geometry only & 106.3 \\
 Rabbit Poisson & complex-geometry atlas solve & \shortstack[l]{PINN rel-$L^2 = 2.21\times10^{-2}$\\ FEM rel-$L^2 = 1.79\times10^{-2}$} & \shortstack[l]{PINN uses weak supervision\\ FEM needs $1.48\times10^{6}$ DOFs} & \shortstack[l]{3659\\8395} \\
 Torus inverse (3 configs) & constitutive identification & \shortstack[l]{global: $\mu$ err $= 9.27\times10^{-6}\%$\\Schwarz: chart $\mu$ std $= 10^{-13}$} & known kinematics; not a field solve & \shortstack[l]{201\\38.6--76.9} \\
-Torus elastoplastic & \shortstack[l]{history-dependent\\identification} & \shortstack[l]{$\tau_y$ err $= 0.25\%$\\$H_{\mathrm{kin}}$ err $= 2.11\%$} & single chart; small mesh & 32.5 \\
+Torus elastoplastic\newline(single chart) & \shortstack[l]{history-dependent\\identification} & \shortstack[l]{$\tau_y$ err $= 0.25\%$\\$H_{\mathrm{kin}}$ err $= 2.11\%$} & single chart; small mesh & 32.5 \\
 \bottomrule
 \end{tabular}
 \end{table}
