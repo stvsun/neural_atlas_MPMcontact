@@ -89,6 +89,9 @@ def cube_to_torus_chart(xi, phi_c, phw):
     return torch.stack([rr * torch.cos(phi), rr * torch.sin(phi),
                         rho * torch.sin(theta)], dim=1)
 
+# ── Camera shared across all panels ───────────────────────────────────
+CAMERA_POS = [(3.0, -2.5, 2.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+
 # ── Render helper ─────────────────────────────────────────────────────
 def render_panel(surf, scalar, title, cmap="turbo", fmt="%.4f"):
     pl = pv.Plotter(off_screen=True, window_size=[900, 700])
@@ -100,11 +103,74 @@ def render_panel(surf, scalar, title, cmap="turbo", fmt="%.4f"):
                     "position_x": 0.78, "position_y": 0.15,
                     "width": 0.14, "height": 0.65, "color": "black"}, opacity=1.0)
     # Same camera as torus inverse figures (Fig 9/11 in manuscript)
-    pl.camera_position = [(3.0, -2.5, 2.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    pl.camera_position = CAMERA_POS
     pl.screenshot("/tmp/_ep_bvp_tmp.png", transparent_background=False)
     img = plt.imread("/tmp/_ep_bvp_tmp.png")
     pl.close()
     return img
+
+
+def render_mesh_and_displacement(combined, out_dir):
+    """Render (a) mesh colored by chart_id  (b) displacement arrows on the torus."""
+    # ── (a) Mesh with chart coloring ──────────────────────────────────
+    pl = pv.Plotter(off_screen=True, window_size=[900, 700])
+    pl.set_background("white")
+    surf_mesh = combined.extract_surface(algorithm=None)
+    pl.add_mesh(surf_mesh, scalars="chart_id", cmap="Set2", show_edges=True,
+                edge_color="gray", line_width=0.3, opacity=1.0,
+                scalar_bar_args={
+                    "title": "Chart ID", "title_font_size": 16,
+                    "label_font_size": 12, "n_labels": 8, "fmt": "%.0f",
+                    "position_x": 0.78, "position_y": 0.15,
+                    "width": 0.14, "height": 0.65, "color": "black"})
+    pl.camera_position = CAMERA_POS
+    pl.screenshot("/tmp/_mesh_tmp.png", transparent_background=False)
+    img_mesh = plt.imread("/tmp/_mesh_tmp.png")
+    pl.close()
+
+    # ── (b) Displacement arrows ───────────────────────────────────────
+    pl = pv.Plotter(off_screen=True, window_size=[900, 700])
+    pl.set_background("white")
+    # Show torus surface as semi-transparent backdrop
+    pl.add_mesh(surf_mesh, color="lightgray", opacity=0.3, show_edges=False,
+                smooth_shading=True)
+
+    # Subsample points for readable arrows (every Nth node)
+    n_pts = combined.n_points
+    stride = max(1, n_pts // 600)
+    ids = np.arange(0, n_pts, stride)
+    sub = combined.extract_points(ids)
+
+    u_mag = sub.point_data["displacement_mag"]
+    scale = 0.4 * R_MINOR / max(u_mag.max(), 1e-30)
+    arrows = sub.glyph(orient="displacement", scale="displacement_mag",
+                       factor=scale, geom=pv.Arrow())
+    pl.add_mesh(arrows, scalars="displacement_mag", cmap="coolwarm",
+                show_edges=False,
+                scalar_bar_args={
+                    "title": "|u|", "title_font_size": 16,
+                    "label_font_size": 12, "n_labels": 5, "fmt": "%.3e",
+                    "position_x": 0.78, "position_y": 0.15,
+                    "width": 0.14, "height": 0.65, "color": "black"})
+    pl.camera_position = CAMERA_POS
+    pl.screenshot("/tmp/_disp_tmp.png", transparent_background=False)
+    img_disp = plt.imread("/tmp/_disp_tmp.png")
+    pl.close()
+
+    # ── Compose 1x2 figure ────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), dpi=200)
+    for ax, img, lbl in zip(axes, [img_mesh, img_disp], ["(a)", "(b)"]):
+        ax.imshow(img); ax.axis("off")
+        ax.text(0.02, 0.98, lbl, transform=ax.transAxes, ha="left", va="top",
+                fontsize=14, fontweight="bold",
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.8,
+                          boxstyle="round,pad=0.2"))
+    fig.tight_layout(pad=0.3)
+    for ext in ("png", "pdf"):
+        fig.savefig(str(out_dir / f"forward_bvp_mesh_displacement.{ext}"),
+                    bbox_inches="tight", dpi=200)
+    plt.close(fig)
+    print(f"Saved forward_bvp_mesh_displacement.{{png,pdf}} to {out_dir}")
 
 # ── Main ──────────────────────────────────────────────────────────────
 def main():
@@ -208,7 +274,7 @@ def main():
             if blocks.n_blocks > 0:
                 combined = blocks[0]
                 for bi in range(1, blocks.n_blocks):
-                    combined = combined.merge(blocks[bi])
+                    combined = combined.merge(blocks[bi], merge_points=False)
                 combined.save(str(step_dir / "all_charts_concatenated.vtu"))
             print(f"    Saved VTU snapshot step {step_idx+1}: {step_dir}")
 
@@ -274,9 +340,12 @@ def main():
         # Also save flat concatenation
         combined = final_blocks[0]
         for bi in range(1, final_blocks.n_blocks):
-            combined = combined.merge(final_blocks[bi])
+            combined = combined.merge(final_blocks[bi], merge_points=False)
         combined.save(str(vtu_dir / "all_charts_concatenated.vtu"))
         print(f"  Combined: all_charts_concatenated.vtu ({combined.n_cells} cells)")
+
+        # Render mesh and displacement arrow figure
+        render_mesh_and_displacement(combined, OUT_DIR)
 
     # ── Collect F^p via Lie algebra ───────────────────────────────────
     print("\nCollecting F^p fields...")
