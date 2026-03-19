@@ -110,7 +110,7 @@ def render_panel(surf, scalar, title, cmap="turbo", fmt="%.4f"):
 def main():
     torch.set_default_dtype(torch.float64)
     device = "cpu"
-    n_cells = 8  # finest mesh
+    n_cells = 8  # finest mesh for publication
 
     E, nu = 200.0, 0.3
     mu = torch.tensor(E / (2 * (1 + nu)), device=device)
@@ -176,9 +176,107 @@ def main():
                 _, ns = smooth_return_map(Fdi, states[ci], mu, K_mat, tau_y, H_kin, eps_rm)
                 states[ci] = ns; F_olds[ci] = Fc.detach().clone()
 
+        me = max(states[ci].ep_bar.max().item() for ci in range(N_CHARTS) if solvers[ci].n_elements > 0)
         if (step_idx + 1) % 20 == 0 or step_idx == len(deltas) - 1:
-            me = max(states[ci].ep_bar.max().item() for ci in range(N_CHARTS) if solvers[ci].n_elements > 0)
             print(f"  Step {step_idx+1}/{len(deltas)}: ep_bar={me:.4e}")
+
+        # Save per-step VTU snapshots every 10 steps (in physical coordinates)
+        if (step_idx + 1) % 10 == 0 or step_idx == len(deltas) - 1:
+            step_dir = OUT_DIR / "vtu" / f"step_{step_idx+1:04d}"
+            step_dir.mkdir(parents=True, exist_ok=True)
+            blocks = pv.MultiBlock()
+            for ci in range(N_CHARTS):
+                if solvers[ci].n_elements == 0: continue
+                enp_s = solvers[ci].elements.detach().cpu().numpy()
+                u_s = schwarz.u_charts[ci].detach().cpu().numpy()
+                ep_s = states[ci].ep_bar.detach().cpu().numpy()
+                with torch.no_grad():
+                    np_s = cube_to_torus_chart(solvers[ci].nodes, phi_centers[ci], PHI_HALFWIDTH).cpu().numpy()
+                ne_s = enp_s.shape[0]
+                cells_s = np.hstack([np.full((ne_s, 1), 4, dtype=np.int64), enp_s]).ravel()
+                ct_s = np.full(ne_s, pv.CellType.TETRA, dtype=np.uint8)
+                g = pv.UnstructuredGrid(cells_s, ct_s, np_s)
+                g.point_data["displacement"] = u_s
+                g.point_data["displacement_mag"] = np.linalg.norm(u_s, axis=1)
+                g.cell_data["ep_bar"] = ep_s
+                g.cell_data["chart_id"] = np.full(ne_s, ci)
+                g.save(str(step_dir / f"chart_{ci:02d}.vtu"))
+                blocks.append(g, f"chart_{ci}")
+            # Save combined multi-block (preserves all charts without merge artifacts)
+            blocks.save(str(step_dir / "all_charts.vtm"))
+            # Also save a flat concatenation for convenience
+            if blocks.n_blocks > 0:
+                combined = blocks[0]
+                for bi in range(1, blocks.n_blocks):
+                    combined = combined.merge(blocks[bi])
+                combined.save(str(step_dir / "all_charts_concatenated.vtu"))
+            print(f"    Saved VTU snapshot step {step_idx+1}: {step_dir}")
+
+    # ── Export per-chart VTU files for inspection ───────────────────
+    vtu_dir = OUT_DIR / "vtu"
+    vtu_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\nExporting per-chart VTU files to {vtu_dir}...")
+    for ci in range(N_CHARTS):
+        if solvers[ci].n_elements == 0:
+            continue
+        enp = solvers[ci].elements.detach().cpu().numpy()
+        nnp = solvers[ci].nodes.detach().cpu().numpy()
+        u_ci = schwarz.u_charts[ci].detach().cpu().numpy()
+        Fa = solvers[ci].compute_F(schwarz.u_charts[ci])
+        Be_ci = states[ci].Be.detach()
+        ep_bar_ci = states[ci].ep_bar.detach().cpu().numpy()
+
+        # Map nodes to torus
+        with torch.no_grad():
+            nodes_phys = cube_to_torus_chart(solvers[ci].nodes, phi_centers[ci], PHI_HALFWIDTH).cpu().numpy()
+
+        # Compute per-element F^p quantities
+        ne = enp.shape[0]
+        det_Fp_e = np.zeros(ne)
+        eig1_Sp_e = np.zeros(ne)
+        eig_diff_e = np.zeros(ne)
+        for e in range(ne):
+            ev, V = torch.linalg.eigh(Be_ci[e])
+            Fe_e = V @ torch.diag(torch.sqrt(ev.clamp(min=1e-30))) @ V.T
+            Fp_e = torch.linalg.solve(Fe_e, Fa[e])
+            det_Fp_e[e] = torch.det(Fp_e).item()
+            _, Sp_e = _polar_decompose(Fp_e)
+            eigs = sorted(torch.linalg.eigvalsh(Sp_e).numpy(), reverse=True)
+            eig1_Sp_e[e] = eigs[0]
+            eig_diff_e[e] = eigs[0] - eigs[2]
+
+        # Build PyVista grid in physical (torus) coordinates
+        cells = np.hstack([np.full((ne, 1), 4, dtype=np.int64), enp]).ravel()
+        ctypes = np.full(ne, pv.CellType.TETRA, dtype=np.uint8)
+        grid = pv.UnstructuredGrid(cells, ctypes, nodes_phys)
+        grid.point_data["displacement"] = u_ci
+        grid.point_data["displacement_mag"] = np.linalg.norm(u_ci, axis=1)
+        grid.cell_data["ep_bar"] = ep_bar_ci
+        grid.cell_data["det_Fp"] = det_Fp_e
+        grid.cell_data["eig1_Sp"] = eig1_Sp_e
+        grid.cell_data["eig_diff_Sp"] = eig_diff_e
+        grid.cell_data["chart_id"] = np.full(ne, ci)
+
+        vtu_path = vtu_dir / f"chart_{ci:02d}.vtu"
+        grid.save(str(vtu_path))
+        print(f"  Chart {ci}: {vtu_path.name} ({ne} elements, "
+              f"det_Fp range [{det_Fp_e.min():.4f}, {det_Fp_e.max():.4f}], "
+              f"ep_bar max {ep_bar_ci.max():.4e})")
+
+    # Save combined multi-block (correct: preserves all charts separately)
+    final_blocks = pv.MultiBlock()
+    for ci in range(N_CHARTS):
+        vtu_path = vtu_dir / f"chart_{ci:02d}.vtu"
+        if vtu_path.exists():
+            final_blocks.append(pv.read(str(vtu_path)), f"chart_{ci}")
+    if final_blocks.n_blocks > 0:
+        final_blocks.save(str(vtu_dir / "all_charts.vtm"))
+        # Also save flat concatenation
+        combined = final_blocks[0]
+        for bi in range(1, final_blocks.n_blocks):
+            combined = combined.merge(final_blocks[bi])
+        combined.save(str(vtu_dir / "all_charts_concatenated.vtu"))
+        print(f"  Combined: all_charts_concatenated.vtu ({combined.n_cells} cells)")
 
     # ── Collect F^p via Lie algebra ───────────────────────────────────
     print("\nCollecting F^p fields...")
@@ -189,40 +287,67 @@ def main():
     rho_xy = np.sqrt(sp[:, 0]**2 + sp[:, 1]**2)
     theta_s = np.arctan2(sp[:, 2], rho_xy - R_MAJOR)
 
-    all_phi, all_theta, all_logRp, all_logSp = [], [], [], []
+    # Collect element centroid positions in PHYSICAL Cartesian (x,y,z) on the
+    # torus surface, plus their Lie-algebra F^p data.
+    all_xyz_src = []   # (N_total, 3) physical coords of element centroids
+    all_logRp, all_logSp = [], []
+
     for ci in range(N_CHARTS):
         if solvers[ci].n_elements == 0: continue
         enp = solvers[ci].elements.detach().cpu().numpy()
         nnp = solvers[ci].nodes.detach().cpu().numpy()
         Fa = solvers[ci].compute_F(schwarz.u_charts[ci])
         Be = states[ci].Be.detach()
-        cents = np.array([nnp[enp[e]].mean(0) for e in range(enp.shape[0])])
+        cents_ref = np.array([nnp[enp[e]].mean(0) for e in range(enp.shape[0])])
+
+        # Map centroids to physical torus coordinates
+        with torch.no_grad():
+            cents_phys = cube_to_torus_chart(
+                torch.tensor(cents_ref, dtype=torch.float64),
+                phi_centers[ci], PHI_HALFWIDTH
+            ).cpu().numpy()
+
         for e in range(enp.shape[0]):
             ev, V = torch.linalg.eigh(Be[e])
             Fe = V @ torch.diag(torch.sqrt(ev.clamp(min=1e-30))) @ V.T
             Fp = torch.linalg.solve(Fe, Fa[e])
             Rp, Sp = _polar_decompose(Fp)
-            xi = cents[e]
-            all_phi.append(phi_centers[ci] + PHI_HALFWIDTH * xi[0])
-            all_theta.append(math.pi * xi[1])
+            all_xyz_src.append(cents_phys[e])
             all_logRp.append(_log_rotation(Rp).numpy())
             all_logSp.append(_log_spd(Sp).numpy())
 
-    all_phi = np.array(all_phi); all_theta = np.array(all_theta)
-    all_logRp = np.array(all_logRp); all_logSp = np.array(all_logSp)
+    all_xyz_src = np.array(all_xyz_src)  # (N_total, 3)
+    all_logRp = np.array(all_logRp)
+    all_logSp = np.array(all_logSp)
 
-    # Periodic wrapping + interpolation
-    pr = np.concatenate([all_phi, all_phi + 2*math.pi, all_phi - 2*math.pi])
-    tr = np.concatenate([all_theta]*3)
-    lRr = np.concatenate([all_logRp]*3); lSr = np.concatenate([all_logSp]*3)
-    src = np.column_stack([pr, tr]); tgt = np.column_stack([phi_s, theta_s])
+    # Interpolate in 3D Cartesian space (no periodicity wrapping needed —
+    # the torus surface is closed and the physical coordinates are unique)
+    src_3d = all_xyz_src
+    tgt_3d = sp  # surface mesh points in physical (x,y,z)
 
-    print("Interpolating Lie-algebra fields...")
+    # Use linear interpolation with nearest-neighbor fallback for points
+    # outside the convex hull (surface points may lie outside the hull of
+    # volumetric element centroids).
+    print("Interpolating Lie-algebra fields in Cartesian (x,y,z)...")
     logRs = np.zeros((n_s, 3, 3)); logSs = np.zeros((n_s, 3, 3))
     for i in range(3):
         for j in range(3):
-            logRs[:, i, j] = griddata(src, lRr[:, i, j], tgt, method="linear", fill_value=0)
-            logSs[:, i, j] = griddata(src, lSr[:, i, j], tgt, method="linear", fill_value=0)
+            vals_lin_R = griddata(src_3d, all_logRp[:, i, j],
+                                 tgt_3d, method="linear", fill_value=np.nan)
+            vals_nn_R = griddata(src_3d, all_logRp[:, i, j],
+                                tgt_3d, method="nearest")
+            mask_R = np.isnan(vals_lin_R)
+            logRs[:, i, j] = np.where(mask_R, vals_nn_R, vals_lin_R)
+
+            vals_lin_S = griddata(src_3d, all_logSp[:, i, j],
+                                 tgt_3d, method="linear", fill_value=np.nan)
+            vals_nn_S = griddata(src_3d, all_logSp[:, i, j],
+                                tgt_3d, method="nearest")
+            mask_S = np.isnan(vals_lin_S)
+            logSs[:, i, j] = np.where(mask_S, vals_nn_S, vals_lin_S)
+    n_fallback = int(mask_R.sum())
+    print(f"  {n_fallback}/{n_s} surface points used nearest-neighbor fallback "
+          f"({100*n_fallback/n_s:.1f}%)")
 
     # Recover fields
     print("Recovering nodal fields via exp maps...")
