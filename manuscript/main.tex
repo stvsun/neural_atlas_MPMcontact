@@ -184,7 +184,7 @@ hyperindex=true
 \maketitle
 
 \begin{abstract}
-When three-dimensional bodies contain thin features, non-trivial topology, or surfaces imported from scanning data, volumetric meshing itself becomes a dominant engineering bottleneck. This paper presents a geometry-informed neural atlas that absorbs the meshing step into the geometry stage: the domain is represented by overlapping volumetric coordinate charts, each equipped with a learned decoder map and its Jacobian. Governing equations are pulled back to chart-local reference coordinates via the Piola identity, yielding mapped residuals discretized by either physics-informed neural networks (PINNs) or classical finite elements on the same frozen atlas, coupled through multiplicative Schwarz iterations. Four benchmarks demonstrate the framework: (i)~an ellipsoid Poisson problem verifies the mapped operator; (ii)~a rabbit Poisson problem on a learned twelve-chart atlas is solved by both a compact PINN (relative $L^2$ error $2.21\times10^{-2}$) and a P1~FEM that recovers the expected $O(h^2)$ convergence and reaches $1.79\times10^{-2}$ at $1.48\times10^{6}$~DOFs; (iii)~a torus inverse problem on a non-simply-connected domain---where a multi-chart atlas is topologically necessary---recovers Neo-Hookean constitutive parameters with machine-precision inter-chart consensus ($\mu$ std $=1.47\times10^{-13}$); and (iv)~an elastoplastic torus benchmark identifies yield stress ($0.25\%$ error) and kinematic hardening modulus ($2.11\%$ error) from cyclic loading via a smooth return mapping. A single frozen atlas thus serves as a discretization-agnostic geometric substrate, decoupling domain representation from PDE solver choice.
+When three-dimensional bodies contain thin features, non-trivial topology, or surfaces imported from scanning data, volumetric meshing itself becomes a dominant engineering bottleneck. This paper presents a geometry-informed neural atlas that absorbs the meshing step into the geometry stage: the domain is represented by overlapping volumetric coordinate charts, each equipped with a learned decoder map and its Jacobian. Governing equations are pulled back to chart-local reference coordinates via the Piola identity, yielding mapped residuals discretized by either physics-informed neural networks (PINNs) or classical finite elements on the same frozen atlas, coupled through multiplicative Schwarz iterations. Five benchmarks demonstrate the framework: (i)~an ellipsoid Poisson problem verifies the mapped operator; (ii)~a rabbit Poisson problem on a learned twelve-chart atlas is solved by both a compact PINN (relative $L^2$ error $2.21\times10^{-2}$) and a P1~FEM that recovers the expected $O(h^2)$ convergence and reaches $1.79\times10^{-2}$ at $1.48\times10^{6}$~DOFs; (iii)~a forward elastoplastic boundary-value problem on a torus with eight-chart Schwarz coupling demonstrates that the atlas infrastructure supports genuine nonlinear equilibrium solves with history-dependent plasticity; (iv)~a torus inverse problem on the same domain recovers Neo-Hookean constitutive parameters with machine-precision inter-chart consensus ($\mu$ std $=1.47\times10^{-13}$); and (v)~an elastoplastic extension identifies yield stress ($0.25\%$ error) and kinematic hardening modulus ($2.11\%$ error) from cyclic loading via a smooth return mapping. A single frozen atlas thus serves as a discretization-agnostic geometric substrate, decoupling domain representation from PDE solver choice.
 \end{abstract}
 
 \keywords{coordinate charts, Schwarz method, physics-informed neural networks, meshfree methods, complex geometry, elastoplasticity}
@@ -202,7 +202,7 @@ Relative to overlapping Schwarz and domain-decomposition methods \citep{quartero
 
 In the neural operator literature, DeepONet \citep{lu2021deeponet} and the Fourier Neural Operator \citep{li2021fno} learn solution maps across parameterized PDE families but require training data from an existing solver and do not supply coordinate chart structure. Physics-informed neural operators (PINO) \citep{li2024pino} reduce the data requirement by incorporating PDE residuals during training but still operate on a fixed spatial grid. The present atlas approach is complementary: it provides the geometric infrastructure on which either data-driven or physics-informed solvers can operate.
 
-In data-driven computational mechanics, \citet{kirchdoerfer2016datadriven} proposed a model-free approach that bypasses constitutive equations entirely, while neural-network constitutive models \citep{vlassis2021sobolev,fuhg2024review} learn material response from data while respecting thermodynamic constraints. The inverse identification benchmarks in the present work (Examples~3--4) use parametric constitutive laws rather than learned energy functionals, but the chart-local FEM infrastructure could accommodate neural constitutive models in the same reference-coordinate framework.
+In data-driven computational mechanics, \citet{kirchdoerfer2016datadriven} proposed a model-free approach that bypasses constitutive equations entirely, while neural-network constitutive models \citep{vlassis2021sobolev,fuhg2024review} learn material response from data while respecting thermodynamic constraints. The inverse identification benchmarks in the present work (Examples~4--5) use parametric constitutive laws rather than learned energy functionals, but the chart-local FEM infrastructure could accommodate neural constitutive models in the same reference-coordinate framework.
 
 Neural implicit representations \citep{park2019deepsdf,mescheder2019occupancy} reconstruct surfaces from data but do not by themselves furnish solver-ready volumetric atlases with chart Jacobians, overlap structure, and transition operators for mapped PDE evaluation. Geometry-aware positional encodings based on Laplace-Beltrami eigenfunctions ($\Delta$-PINNs, \citealt{sahli2024deltapinns}) improve PINN training on complex shapes but still require a background mesh to compute the eigenfunctions and operators, whereas the present atlas provides both the coordinate system and the PDE operator pullback in a single geometric object.
 
@@ -211,8 +211,8 @@ The paper makes four contributions:
 \begin{enumerate}[leftmargin=*]
 \item \textbf{Neural volumetric atlas as discretization-agnostic geometric substrate.} Overlapping volumetric charts, equipped with learned decoder maps and quality-assured through geometric gate metrics, define both the domain representation and the Schwarz overlap structure. The same frozen atlas supports multiple local solver families without re-parametrization (Examples~1--2).
 \item \textbf{Dual PINN/FEM validation on a complex-geometry benchmark.} On a twelve-chart rabbit Poisson problem, a compact PINN achieves relative $L^2$ error $2.21\times10^{-2}$, while a P1 tetrahedral FEM on the same atlas recovers the expected $O(h^2)$ convergence rate across five refinement levels and reaches $1.79\times10^{-2}$ at the finest resolution. This head-to-head result confirms that the mapped operator, Schwarz coupling, and partition-of-unity blending introduce no order-of-accuracy penalty, and that the atlas is a reusable geometric scaffold rather than a PINN-specific training convenience (Example~2).
-\item \textbf{Constitutive identification on a multiply-connected domain.} On a non-simply-connected torus---where a multi-chart atlas is topologically necessary---the framework recovers Neo-Hookean material parameters from prescribed kinematics, with a Schwarz variant achieving machine-precision inter-chart consensus ($\mu$ standard deviation $= 1.47\times10^{-13}$ across eight charts). This extends the atlas infrastructure from scalar diffusion to finite-deformation constitutive operators (Example~3).
-\item \textbf{Elastoplastic extension to history-dependent constitutive laws.} A companion torus benchmark identifies yield stress and kinematic hardening modulus from cyclic loading via a smooth softplus return mapping, demonstrating that the chart-local finite-element infrastructure extends from hyperelastic to history-dependent constitutive identification (Example~4).
+\item \textbf{Forward nonlinear equilibrium with history-dependent plasticity.} An eight-chart Schwarz forward BVP solves $J_2$ elastoplasticity with kinematic hardening under cyclic loading on the torus, demonstrating that the atlas infrastructure supports genuine nonlinear equilibrium solves where the displacement field is unknown and must be determined from the balance of momentum (Example~3). Constitutive identification on the same domain recovers Neo-Hookean parameters with machine-precision inter-chart consensus ($\mu$ std $=1.47\times10^{-13}$), and an elastoplastic extension identifies yield stress and hardening modulus from cyclic data (Examples~4--5).
+\item \textbf{Automatic inter-chart consistency through Schwarz coupling.} The multiplicative Schwarz iteration maintains interface displacement jumps at $O(10^{-7})$ throughout history-dependent cyclic loading, and per-chart material parameters converge to machine-precision consensus in the inverse setting, demonstrating that the coupling enforces global consistency without additional constraints.
 \end{enumerate}
 
 The paper is organized as follows. Section~\ref{sec:methodology} introduces the volumetric atlas, the mapped PDE operator, and the Schwarz solver on a fixed atlas. Section~\ref{sec:implementation} summarizes the geometry pipeline and quality gates. Section~\ref{sec:benchmark_formulations} presents numerical evidence, and Section~\ref{sec:discussion} discusses the relation to isogeometric analysis, current limitations, and future directions.
@@ -1337,6 +1337,103 @@ Figure~\ref{fig:rabbit_poisson_fem_surface} repeats the same surface-rendering p
 %     Canonical archived torus inverse run used for the best reported identification metrics.
 %   - runs/torus_inverse_mps_dense_v4/
 %     Archived torus inverse figure run used for the manuscript field/convergence visualizations.
+% ======================================================================
+% EXAMPLE 3: Forward elastoplastic BVP on the torus (Schwarz FEM)
+% Code location: experiments/torus_elastoplastic/run_forward_bvp_schwarz.py
+% Figure scripts: manuscript/scripts_figures/example_forward_bvp.py
+% ======================================================================
+\subsection{Example 3: forward elastoplastic boundary-value problem on the torus}
+\label{sec:example3_bvp}
+
+This example solves a genuine forward boundary-value problem for finite-strain $J_2$ elastoplasticity with kinematic hardening on the full torus, using the eight-chart atlas and multiplicative Schwarz coupling. Unlike the inverse benchmarks that follow, the displacement field is \emph{unknown} and must be determined from equilibrium: at each load step the Newton--Raphson iteration solves $\mathbf{R}(\mathbf{u})=\mathbf{f}_{\mathrm{int}}(\mathbf{u})-\mathbf{f}_{\mathrm{ext}}=\mathbf{0}$ on every chart, with Schwarz interface conditions transmitting displacement continuity across chart boundaries. This is the first example in the manuscript where nonlinear material response, incremental history dependence, mapped PDE operators, and multi-chart Schwarz coupling are all active simultaneously.
+
+\subsubsection{Problem definition}
+
+The torus geometry ($R=1.0$, $r=0.35$) is covered by eight azimuthal charts with $\Delta\phi=\pi/4$ half-width, as in the Neo-Hookean identification benchmark. The material is the same compressible $J_2$ elastoplastic model described in Section~\ref{sec:example4_ep}: elastic moduli $E=200$, $\nu=0.3$ ($\mu=76.92$, $K=166.67$), yield stress $\tau_y=0.5$, and kinematic hardening modulus $H_{\mathrm{kin}}=20$, with the smooth softplus return mapping \eqref{eq:smooth_return} at $\varepsilon=0.01$.
+
+Cyclic opposite displacements are prescribed on two cross-sections of the torus to squeeze the central hole:
+\begin{equation}
+u_x\big|_{\phi\approx 0} = +\delta(t),
+\qquad
+u_x\big|_{\phi\approx \pi} = -\delta(t),
+\label{eq:bvp_bc}
+\end{equation}
+where $\delta(t)$ follows a triangular cyclic profile: $0\to+\delta_{\max}\to-\delta_{\max}\to0$ with $\delta_{\max}=0.02\,r$. All other torus-surface nodes are traction-free, and Schwarz interface displacement continuity is enforced on chart boundaries. Each chart uses a P1 tetrahedral mesh on a structured hexahedral grid with Freudenthal decomposition, and Newton--Raphson equilibrium is solved with an autograd-computed consistent tangent through the smooth return mapping.
+
+At each load step, 8~multiplicative Schwarz sweeps are performed. Within each sweep, charts are visited by color groups from the overlap adjacency graph: non-overlapping charts may be updated concurrently, while overlapping neighbours exchange frozen displacement traces at their shared interface nodes. The per-chart Newton solver typically converges in 1--4 iterations with residual tolerance $10^{-7}$.
+
+\subsubsection{Mesh refinement study}
+
+Three mesh resolutions are tested with an identical cyclic loading protocol (30~steps per half-cycle, 120~total steps, 1~cycle):
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Mesh refinement study for the 8-chart Schwarz forward elastoplastic BVP. All runs use the same cyclic loading protocol ($\delta_{\max}=0.02\,r$, 120~steps).}
+\label{tab:bvp_mesh}
+\begin{tabular}{cccccccc}
+\toprule
+$n_{\mathrm{cells}}$ & Nodes & Elements & DOF & Final $\bar{\varepsilon}_p$ & Interface jump & Time (s) & s/step \\
+\midrule
+4  & 1{,}000  & 3{,}072  & 3{,}000  & $3.18\times10^{-2}$ & $2.21\times10^{-7}$ & 189  & 1.6 \\
+6  & 2{,}744  & 10{,}368 & 8{,}232  & $5.41\times10^{-2}$ & $4.83\times10^{-8}$ & 502  & 4.2 \\
+8  & 5{,}832  & 24{,}576 & 17{,}496 & $7.83\times10^{-2}$ & $1.97\times10^{-7}$ & 1{,}394 & 11.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:bvp_mesh} shows that the solver converges at all three resolutions with Newton requiring only 1--4 iterations per chart per sweep. The accumulated plastic strain $\bar{\varepsilon}_p$ increases with mesh refinement because finer meshes resolve sharper strain gradients near the loaded cross-sections where plastic flow concentrates. The Schwarz interface displacement jump remains $O(10^{-7})$ or better throughout, confirming tight inter-chart coupling under nonlinear, history-dependent loading.
+
+\subsubsection{Load-step sensitivity}
+
+To verify temporal convergence, the $n_{\mathrm{cells}}=6$ mesh is run with $\text{steps per half-cycle}\in\{10,20,40\}$ (Table~\ref{tab:bvp_timestep}).
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Load-step sensitivity for the forward BVP at $n_{\mathrm{cells}}=6$. The final accumulated plastic strain varies by $0.16\%$ across a $4\times$ range of step sizes.}
+\label{tab:bvp_timestep}
+\begin{tabular}{ccccc}
+\toprule
+Steps/half & Total steps & Final $\bar{\varepsilon}_p$ & Interface jump & Time (s) \\
+\midrule
+10 & 40  & $5.407\times10^{-2}$ & $1.40\times10^{-7}$ & 171 \\
+20 & 80  & $5.413\times10^{-2}$ & $7.20\times10^{-8}$ & 330 \\
+40 & 160 & $5.416\times10^{-2}$ & $3.62\times10^{-8}$ & 657 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The final accumulated plastic strain varies by only $0.16\%$ across the tested range, confirming that the smooth return mapping and incremental load-stepping produce temporally converged results. The interface jump halves with each step-size refinement, consistent with first-order splitting in the multiplicative Schwarz scheme.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/example_forward_bvp/forward_bvp_diagnostics}
+\caption{Diagnostics for the 8-chart Schwarz forward elastoplastic BVP. (a)~Accumulated plastic strain $\bar{\varepsilon}_p$ vs.\ load step for three mesh resolutions; finer meshes resolve larger peak strains near the loaded sections. (b)~Schwarz interface displacement jump remains $O(10^{-7})$ throughout. (c)~Load-step convergence: the final plastic strain varies by $0.16\%$ across a $4\times$ range of step sizes. (d)~Computational cost scaling with total DOF.}
+\label{fig:bvp_diagnostics}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{figures_cmame_core/example_forward_bvp/forward_bvp_Fp_fields}
+\caption{Plastic deformation gradient fields on the torus surface at the end of the cyclic loading ($n_{\mathrm{cells}}=8$, 120~steps). The element-wise $\mathbf{F}^p = (\mathbf{F}^e)^{-1}\mathbf{F}$ is polar-decomposed, mapped to Lie algebras, interpolated onto a smooth parametric torus surface via scattered linear interpolation in $(\phi,\theta)$ space, and recovered via exponential maps following \citet{mota_lie-group_2013}. (a)~$\det\mathbf{F}^p \approx 1$ everywhere, confirming isochoric $J_2$ plastic flow. (b)~Largest eigenvalue $\lambda_1^p$ of the plastic stretch $\mathbf{S}^p$, showing maximum plastic extension near the loaded cross-sections at $\phi\approx0$ and $\phi\approx\pi$. (c)~Eigenvalue spread $\lambda_1^p-\lambda_3^p$, highlighting the anisotropy of plastic flow localized at the squeeze points.}
+\label{fig:bvp_Fp_fields}
+\end{figure}
+
+\begin{remark}[Volumetric locking and mapped quadrature]
+\label{rem:locking}
+The $J_2$ flow rule produces isochoric plastic deformation ($\det\mathbf{F}^p=1$), which is well known to cause volumetric locking in low-order displacement-based finite elements \citep{de_souza_neto_computational_2011}. In the present atlas-based formulation, two additional considerations arise. First, the chart map $\varphi_i$ introduces a nonconstant Jacobian determinant $j_i(\boldsymbol{\zeta})$ into the reference-domain integrals, so the effective integration weight at each quadrature point is $j_i$ times the reference element weight. If $j_i$ varies strongly within an element---as may happen near the inner surface of the torus where the minor radius is small---the mapped quadrature approximation of the volumetric constraint can be less accurate than on a conventional mesh with uniform element shapes. Second, the Schwarz overlap regions do not enforce the incompressibility constraint between charts: each chart satisfies its own discrete volumetric balance independently, and consistency is enforced only through displacement continuity at interfaces, not through a shared pressure space.
+
+In the present benchmark the locking effect is mitigated by three factors: (i)~the applied strain is moderate ($\varepsilon_{\mathrm{peak}}=0.02$), so the nearly incompressible regime is not reached globally; (ii)~the compressible Neo-Hookean elastic law provides a finite bulk modulus that regularizes the volumetric response; and (iii)~the softplus return mapping introduces a smooth transition zone near the yield surface that avoids the sharp elastic--plastic switch. Nevertheless, for problems with large plastic strains or nearly incompressible elastic response ($\nu\to 0.5$), a mixed $\mathbf{u}$--$p$ formulation or $\bar{B}$/F-bar stabilization on each chart would be necessary. Extending the chart-local element technology to include such stabilization is straightforward in principle---the same mapped-operator infrastructure applies---but has not been validated in the present work.
+\end{remark}
+
+The forward BVP benchmark demonstrates that the atlas-based Schwarz infrastructure extends from scalar diffusion (Example~2) and hyperelastic identification (Example~4) to a genuine nonlinear equilibrium problem with history-dependent plasticity. The Newton--Raphson solver converges robustly across all mesh sizes and loading steps, the interface displacement jump remains $O(10^{-7})$, and the temporal convergence study confirms that the smooth return mapping produces consistent plastic strain accumulation independent of step size.
+
+% ======================================================================
+% EXAMPLE 4: Torus inverse Neo-Hookean identification
+% ======================================================================
 % Notes:
 %   - The torus geometry, prescribed kinematics, and synthetic traction observations are generated analytically inside the code.
 %   - There is therefore no external raw-data directory; the run directories contain the generated observations,
@@ -1345,7 +1442,7 @@ Figure~\ref{fig:rabbit_poisson_fem_surface} repeats the same surface-rendering p
 % Code location (Schwarz dual):      manuscript_experiments/example4_torus_inverse_schwarz_dual/
 % Figure scripts: manuscript/scripts_figures/example3_torus_inverse_original.py
 %                 manuscript/scripts_figures/example4_torus_inverse_schwarz_dual.py
-\subsection{Example 3: torus inverse Neo-Hookean identification}
+\subsection{Example 4: torus inverse Neo-Hookean identification}
 \label{sec:example3}
 
 This example demonstrates constitutive parameter identification on a three-dimensional torus ($R=1.0$, $r=0.35$) under prescribed torsional kinematics. Unlike the rabbit and ellipsoid, the torus is \emph{not simply connected}: its fundamental group $\pi_1(\mathbb{T}^2)\cong\mathbb{Z}\times\mathbb{Z}$ prevents any single homeomorphism from a reference ball $B^3$ onto the toroidal solid. A multi-chart atlas is therefore topologically necessary, not merely algorithmically convenient. The domain is covered by eight azimuthal charts with 20\% overlap, each mapping a reference cube to a sector of the torus. The unknowns are the global shear modulus $\mu$ and bulk modulus $K$ of a compressible Neo-Hookean material. Three solver configurations are compared: (a)~a single-optimizer global solve, (b)~multiplicative Schwarz with per-chart parameters and traction observations, and (c)~multiplicative Schwarz with per-chart parameters and displacement observations.
@@ -1477,10 +1574,10 @@ Table~\ref{tab:torus_comparison} reveals two complementary findings. First, the 
 
 The torus benchmark establishes three points relevant to the paper's thesis. First, the atlas-based constitutive operator is not limited to Poisson diffusion: the Neo-Hookean stress evaluation and its derivatives are correctly mediated through the chart decomposition (Figures~\ref{fig:torus_inverse_original_fields}a--b). Second, the multiplicative Schwarz framework extends naturally from field coupling (Example~2) to parameter-level consensus enforcement across charts, as evidenced by the near-uniform $\hat{\mu}_i$ field in Figure~\ref{fig:torus_schwarz_3d}d. In displacement mode, the chart-averaged $\mu$ converges to the true value within ${\sim}50$ epochs and the inter-chart standard deviation collapses to machine precision; in traction mode, $\mu$ oscillates more strongly before settling near $1.794$, reflecting the richer but noisier gradient signal from traction observations.  Both modes drive $K$ monotonically downward from $26.0$ toward the true value $25.0$, though traction data reaches closer ($25.14$ vs.\ $25.25$) within the allotted epochs. Third, the per-chart standard deviation provides a built-in consistency diagnostic: large inter-chart parameter disagreement would signal atlas or observation pathologies before any external validation is needed.
 
-\subsection{Example 4: torus elastoplastic parameter identification}
+\subsection{Example 5: torus elastoplastic parameter identification}
 \label{sec:example4_ep}
 
-This example extends the torus inverse benchmark from elastic to \emph{history-dependent elastoplastic} constitutive parameter estimation. While Example~3 recovers constant elastic moduli $(\mu,K)$ from a single prescribed deformation, Example~4 introduces a two-stage problem in which the yield stress $\tau_y$ and kinematic hardening modulus $H_{\mathrm{kin}}$ are recovered from incremental loading histories that include cyclic plastic deformation. The key methodological contribution is a \emph{smooth return mapping} that replaces the non-differentiable yield-surface check with a softplus regularisation, enabling end-to-end gradient-based optimization through the full elastoplastic load-stepping solver. The forward solver uses the same chart-local P1 finite-element infrastructure developed for the rabbit Poisson benchmark (Section~\ref{sec:example2}), operating in a single reference chart of the torus atlas; this demonstrates that the Piola-mapped operator framework extends naturally from linear diffusion to nonlinear, history-dependent constitutive laws.
+This example extends the torus inverse benchmark from elastic to \emph{history-dependent elastoplastic} constitutive parameter estimation. While Example~4 recovers constant elastic moduli $(\mu,K)$ from a single prescribed deformation, Example~5 introduces a two-stage problem in which the yield stress $\tau_y$ and kinematic hardening modulus $H_{\mathrm{kin}}$ are recovered from incremental loading histories that include cyclic plastic deformation. The key methodological contribution is a \emph{smooth return mapping} that replaces the non-differentiable yield-surface check with a softplus regularisation, enabling end-to-end gradient-based optimization through the full elastoplastic load-stepping solver. The forward solver uses the same chart-local P1 finite-element infrastructure validated in Example~3 (Section~\ref{sec:example3_bvp}), operating in a single reference chart of the torus atlas; this demonstrates that the Piola-mapped operator framework extends naturally from forward equilibrium to gradient-based inverse identification.
 
 \subsubsection{Constitutive model and smooth return mapping}
 The material is governed by finite-strain $J_2$ elastoplasticity with kinematic hardening following the multiplicative framework of \citet{de_souza_neto_computational_2011}. The deformation gradient admits the multiplicative decomposition
@@ -1588,7 +1685,7 @@ The elastoplastic benchmark establishes two points relevant to the paper's thesi
 \emph{Remark.} Example~4 operates on a single torus chart sector rather than the full eight-chart atlas used in Example~3. This scope restriction is deliberate: the purpose of the elastoplastic example is to verify that the chart-local FEM infrastructure extends from hyperelastic to history-dependent constitutive laws, not to test multi-chart Schwarz coupling under plasticity. Extending the multi-chart Schwarz framework to elastoplasticity would require transmitting internal-variable fields (back-stress, plastic strain) across chart interfaces---a nontrivial extension that is left to future work.
 
 \subsection{Cross-example comparison and lessons learned}
-Taken together, the four main-text examples support a staged numerical argument. The ellipsoid verifies the mapped operator on analytic geometry; the rabbit benchmark provides the strongest evidence that a fixed atlas plus Schwarz coupling can deliver a forward field solve on complex geometry; the torus Neo-Hookean inverse benchmark demonstrates that the atlas infrastructure extends from Poisson diffusion to finite-deformation constitutive identification on a topologically nontrivial domain, with the Schwarz variant achieving machine-precision consensus across charts; and the elastoplastic extension confirms that the same chart-local FEM infrastructure handles history-dependent constitutive laws, recovering yield stress and kinematic hardening from cyclic loading data. A Stanford Bunny study demonstrating that the atlas pipeline can also start from imported PLY data is reported in Appendix~\ref{sec:appendix_bunny}.
+Taken together, the five main-text examples support a staged numerical argument. The ellipsoid verifies the mapped operator on analytic geometry; the rabbit benchmark provides the strongest evidence that a fixed atlas plus Schwarz coupling can deliver a forward field solve on complex geometry; the torus forward BVP demonstrates that the same infrastructure handles genuine nonlinear equilibrium with history-dependent plasticity under cyclic loading; the torus Neo-Hookean inverse benchmark extends the atlas from Poisson diffusion to finite-deformation constitutive identification, with the Schwarz variant achieving machine-precision consensus across charts; and the elastoplastic inverse extension confirms that gradient-based identification through a smooth return mapping recovers yield stress and kinematic hardening from cyclic data. A Stanford Bunny study demonstrating that the atlas pipeline can also start from imported PLY data is reported in Appendix~\ref{sec:appendix_bunny}.
 
 \begin{table}[htbp]
 \centering
@@ -1602,6 +1699,7 @@ Case & Supports claim about & Main evidence & Key caution & Runtime (s) \\
 \midrule
 Ellipsoid Poisson & mapped-operator verification & rel-$L^2 = 2.26\times10^{-3}$ & analytic geometry only & 106.3 \\
 Rabbit Poisson & complex-geometry atlas solve & \shortstack[l]{PINN rel-$L^2 = 2.21\times10^{-2}$\\ FEM rel-$L^2 = 1.79\times10^{-2}$} & \shortstack[l]{PINN uses weak supervision\\ FEM needs $1.48\times10^{6}$ DOFs} & \shortstack[l]{3659\\8395} \\
+Torus forward BVP\newline(8-chart Schwarz) & \shortstack[l]{forward nonlinear\\equilibrium} & \shortstack[l]{interface jump $O(10^{-7})$\\Newton 1--4 iters/chart} & moderate strain; dense solver & \shortstack[l]{189--\\1394} \\
 Torus inverse (3 configs) & constitutive identification & \shortstack[l]{global: $\mu$ err $= 9.27\times10^{-6}\%$\\Schwarz: chart $\mu$ std $= 10^{-13}$} & known kinematics; not a field solve & \shortstack[l]{201\\38.6--76.9} \\
 Torus elastoplastic\newline(single chart) & \shortstack[l]{history-dependent\\identification} & \shortstack[l]{$\tau_y$ err $= 0.25\%$\\$H_{\mathrm{kin}}$ err $= 2.11\%$} & single chart; small mesh & 32.5 \\
 \bottomrule
@@ -1655,7 +1753,7 @@ The atlas framework is most effective when geometry acquisition or volumetric me
 \section{Conclusions} \label{sec:conclusions}
 This paper establishes a geometry-informed atlas framework for boundary-value problems on complex three-dimensional bodies without requiring a global volumetric mesh. The central contribution is an end-to-end computational pipeline in which geometry representation, mapped PDE operators, and inter-chart transmission are designed and tested together. The strongest evidence is the fixed-atlas rabbit benchmark: the frozen rabbit atlas supports a complex-geometry Poisson solve, and the atlas-based P1 FEM baseline recovers the expected $O(h^2)$ convergence (with rates from $1.45$ to $2.10$) and reaches relative $L^2$ error $1.79\times10^{-2}$ at the finest refinement level. That head-to-head result shows that the atlas is a reusable geometric scaffold for more than one local discretization family: at matched accuracy the two methods are broadly competitive in wall-clock time, while the FEM requires roughly $8.5\times$ fewer neural-network evaluations (${\sim}23$M cached geometric queries versus ${\sim}195$M iterative training passes) and offers mesh-refinement convergence guarantees that the PINN does not.
 
-The remaining benchmarks define the present scope of that contribution. Analytic ellipsoid verification confirms correctness of the mapped operator, the Stanford Bunny study shows that real PLY data can be turned into a usable volumetric prior, and the torus benchmark demonstrates constitutive identification under prescribed kinematics---including a Schwarz variant where eight per-chart parameter pairs converge to machine-precision consensus ($\mu$ inter-chart std $= 1.47\times10^{-13}$), demonstrating that the Schwarz coupling extends naturally from field quantities to material parameters. An elastoplastic extension further shows that the same chart-local FEM infrastructure handles history-dependent constitutive laws, recovering yield stress ($0.25\%$ error) and kinematic hardening ($2.11\%$ error) from cyclic loading via a smooth return mapping. Atlas-based computation is most effective when geometry acquisition or volumetric meshing is itself the dominant obstacle; nonlinear forward field solves, stronger thin-feature geometry learning, and broader classical FEM comparisons remain open priorities.
+The remaining benchmarks define the present scope of that contribution. Analytic ellipsoid verification confirms correctness of the mapped operator, and the Stanford Bunny study shows that real PLY data can be turned into a usable volumetric prior. The torus forward BVP demonstrates that the eight-chart Schwarz infrastructure supports genuine nonlinear equilibrium with history-dependent $J_2$ elastoplasticity under cyclic loading, with Newton converging in 1--4 iterations per chart and interface displacement jumps remaining at $O(10^{-7})$ throughout. The torus inverse benchmark further demonstrates constitutive identification under prescribed kinematics---including a Schwarz variant where eight per-chart parameter pairs converge to machine-precision consensus ($\mu$ inter-chart std $= 1.47\times10^{-13}$)---and an elastoplastic extension recovers yield stress ($0.25\%$ error) and kinematic hardening ($2.11\%$ error) from cyclic loading via a smooth return mapping. Atlas-based computation is most effective when geometry acquisition or volumetric meshing is itself the dominant obstacle; mixed $\mathbf{u}$--$p$ formulations for nearly incompressible plasticity, stronger thin-feature geometry learning, and broader classical FEM comparisons remain open priorities.
 
 \appendix
 \section{Implementation transparency and hardware backends}

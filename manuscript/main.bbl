@@ -1,4 +1,4 @@
-\begin{thebibliography}{28}
+\begin{thebibliography}{20}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -45,22 +45,6 @@ E.~Brivadis, A.~Buffa, B.~Wohlmuth, and L.~Wunderlich.
 \newblock Isogeometric mortar methods.
 \newblock \emph{Computer Methods in Applied Mechanics and Engineering},
   284:\penalty0 292--312, 2015.
-
-\bibitem[Apostolatos et~al.(2014)Apostolatos, Schmidt, W{\"u}chner, and
-  Bletzinger]{apostolatos2014nitsche}
-A.~Apostolatos, R.~Schmidt, R.~W{\"u}chner, and K.-U. Bletzinger.
-\newblock A {Nitsche}-type formulation and comparison of the most common domain
-  decomposition methods in isogeometric analysis.
-\newblock \emph{International Journal for Numerical Methods in Engineering},
-  97\penalty0 (7):\penalty0 473--504, 2014.
-
-\bibitem[Dittmann et~al.(2019)Dittmann, Schu{\ss}, Wohlmuth, and
-  Hesch]{dittmann2019isogeometric}
-M.~Dittmann, S.~Schu{\ss}, B.~Wohlmuth, and C.~Hesch.
-\newblock Weak {Cn} coupling for multipatch isogeometric analysis in solid
-  mechanics.
-\newblock \emph{International Journal for Numerical Methods in Engineering},
-  118\penalty0 (11):\penalty0 678--699, 2019.
 
 \bibitem[Quarteroni and Valli(1999)]{quarteroni1999domain}
 Alfio Quarteroni and Alberto Valli.
@@ -170,61 +154,5 @@ Maziar Raissi, Paris Perdikaris, and George~E. Karniadakis.
   equations.
 \newblock \emph{Journal of Computational Physics}, 378:\penalty0 686--707,
   2019.
-
-\bibitem[Lu et~al.(2021)Lu, Jin, Pang, Zhang, and
-  Karniadakis]{lu2021deeponet}
-Lu~Lu, Pengzhan Jin, Guofei Pang, Zhongqiang Zhang, and George~E.
-  Karniadakis.
-\newblock Learning nonlinear operators via {DeepONet} based on the universal
-  approximation theorem of operators.
-\newblock \emph{Nature Machine Intelligence}, 3\penalty0 (3):\penalty0
-  218--229, 2021.
-
-\bibitem[Li et~al.(2021)Li, Kovachki, Azizzadenesheli, Liu, Bhatt,
-  Stuart, and Anandkumar]{li2021fno}
-Zongyi Li, Nikola Kovachki, Kamyar Azizzadenesheli, Burigede Liu, Kaushik
-  Bhatt, Andrew Stuart, and Anima Anandkumar.
-\newblock Fourier neural operator for parametric partial differential
-  equations.
-\newblock In \emph{International Conference on Learning Representations}, 2021.
-
-\bibitem[Li et~al.(2024)Li, Zheng, Kovachki, Jin, Chen, Liu, Azizzadenesheli,
-  and Anandkumar]{li2024pino}
-Zongyi Li, Hongkai Zheng, Nikola Kovachki, David Jin, Haoxuan Chen, Burigede
-  Liu, Kamyar Azizzadenesheli, and Anima Anandkumar.
-\newblock Physics-informed neural operator for learning partial differential
-  equations.
-\newblock \emph{ACM/JMS Journal of Data Science}, 1\penalty0 (3):\penalty0
-  1--27, 2024.
-
-\bibitem[Kirchdoerfer and Ortiz(2016)]{kirchdoerfer2016datadriven}
-T.~Kirchdoerfer and M.~Ortiz.
-\newblock Data-driven computational mechanics.
-\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
-  304:\penalty0 81--101, 2016.
-
-\bibitem[Fuhg et~al.(2024)Fuhg, Bouklas, and Jones]{fuhg2024review}
-Jan~N. Fuhg, Nikolaos Bouklas, and Reese~E. Jones.
-\newblock Modular machine learning-based elastoplasticity: generalization in the
-  context of limited data.
-\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
-  418:\penalty0 116569, 2024.
-
-\bibitem[Schneider et~al.(2022)Schneider, Hu, Gao, Dumas, Zorin, and
-  Panozzo]{schneider2022large}
-Teseo Schneider, Yixin Hu, Xifeng Gao, J{\'e}r{\'e}mie Dumas, Denis Zorin, and
-  Daniele Panozzo.
-\newblock A large-scale comparison of tetrahedral and hexahedral elements for
-  solving elliptic {PDEs} with the finite element method.
-\newblock \emph{ACM Transactions on Graphics}, 41\penalty0 (3):\penalty0
-  1--14, 2022.
-
-\bibitem[Sahli~Costabal et~al.(2024)Sahli~Costabal, Pezzuto, and
-  Perdikaris]{sahli2024deltapinns}
-Francisco Sahli~Costabal, Simone Pezzuto, and Paris Perdikaris.
-\newblock $\Delta$-{PINNs}: Physics-informed neural networks on complex
-  geometries.
-\newblock \emph{Engineering Applications of Artificial Intelligence},
-  127:\penalty0 107324, 2024.
 
 \end{thebibliography}
