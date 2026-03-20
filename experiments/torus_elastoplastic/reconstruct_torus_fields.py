@@ -473,6 +473,23 @@ def unique_points_to_polydata(data: Dict[str, np.ndarray]):
     return poly
 
 
+def unique_points_to_unstructured_grid(data: Dict[str, np.ndarray]):
+    """Convert a unique-point dataset to a vertex-based VTU grid."""
+    import pyvista as pv
+
+    n_points = data["points"].shape[0]
+    cells = np.hstack(
+        [np.ones((n_points, 1), dtype=np.int64), np.arange(n_points, dtype=np.int64)[:, None]]
+    ).ravel()
+    cell_types = np.full(n_points, pv.CellType.VERTEX, dtype=np.uint8)
+    grid = pv.UnstructuredGrid(cells, cell_types, data["points"])
+    for key, value in data.items():
+        if key in {"points", "cluster_inverse"}:
+            continue
+        grid.point_data[key] = value
+    return grid
+
+
 def make_torus_surface(n_phi: int = 200, n_theta: int = 80):
     """Create a smooth torus surface for field visualization."""
     import pyvista as pv
@@ -498,14 +515,55 @@ def _polar_decompose(F: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def _log_rotation(R: torch.Tensor) -> torch.Tensor:
-    tr = torch.trace(R).clamp(-1.0 + 1e-7, 3.0 - 1e-7)
-    theta = torch.acos(0.5 * (tr - 1.0))
+    """Logarithmic map SO(3) -> so(3) following Mota et al. (2013), Eq. (5.2).
+
+    Handles three regimes:
+      theta ≈ 0:  log R = 0  (identity rotation)
+      theta in (0, pi):  log R = (theta / 2 sin theta) (R - R^T)
+      theta ≈ pi: log R = ±pi * hat(v), where v is the eigenvector of R
+                  for eigenvalue 1, sign chosen by continuity with (R - R^T).
+    """
+    tr = torch.trace(R)
+    # cos(theta) = (tr - 1) / 2, clamp to valid range
+    cos_theta = (0.5 * (tr - 1.0)).clamp(-1.0, 1.0)
+    theta = torch.acos(cos_theta)
+
+    # Case 1: theta ≈ 0 — near identity
     if theta.abs() < 1e-10:
         return torch.zeros(3, 3, dtype=R.dtype)
+
+    # Case 2: theta ≈ pi — sinθ → 0, use eigenvector method
+    if theta > math.pi - 1e-6:
+        # R has eigenvalue 1 with eigenvector v.
+        # Compute from R + I (which has rank ≥ 1 when θ = π):
+        # pick the column of (R + I) with largest norm as v.
+        B = R + torch.eye(3, dtype=R.dtype)
+        norms = torch.norm(B, dim=0)
+        col = torch.argmax(norms).item()
+        v = B[:, col]
+        v = v / torch.norm(v)
+        # hat(v): skew-symmetric matrix such that hat(v) x = v × x
+        W = torch.zeros(3, 3, dtype=R.dtype)
+        W[0, 1] = -v[2]; W[0, 2] = v[1]
+        W[1, 0] = v[2];  W[1, 2] = -v[0]
+        W[2, 0] = -v[1]; W[2, 1] = v[0]
+        # Choose sign consistent with (R - R^T)
+        skew = R - R.T
+        if torch.sum(skew * W) < 0:
+            W = -W
+        return math.pi * W
+
+    # Case 3: generic — standard formula
     return (theta / (2.0 * torch.sin(theta))) * (R - R.T)
 
 
 def _exp_rotation(W: torch.Tensor) -> torch.Tensor:
+    """Exponential map so(3) -> SO(3), Rodrigues formula (Mota et al. Eq. 5.6).
+
+    Input W is skew-symmetric (or approximately so after interpolation).
+    """
+    # Ensure skew-symmetry
+    W = 0.5 * (W - W.T)
     theta = torch.sqrt(0.5 * torch.sum(W * W)).clamp(min=1e-30)
     if theta < 1e-10:
         return torch.eye(3, dtype=W.dtype)
@@ -528,67 +586,192 @@ def _exp_spd(H: torch.Tensor) -> torch.Tensor:
     return eigvecs @ torch.diag(torch.exp(eigvals)) @ eigvecs.T
 
 
+def _l2_project_to_nodes(
+    elements: np.ndarray,
+    volumes: np.ndarray,
+    n_nodes: int,
+    elem_values: np.ndarray,
+) -> np.ndarray:
+    """Global L2 projection of element-centroid values to P1 nodal values.
+
+    Assembles the consistent P1 mass matrix M and right-hand side f,
+    then solves M z_node = f via sparse direct solve.
+
+    Parameters
+    ----------
+    elements : (n_elem, 4) int array — tetrahedral connectivity
+    volumes : (n_elem,) float array — element volumes
+    n_nodes : int — total number of nodes
+    elem_values : (n_elem,) float array — one scalar field at centroids
+
+    Returns
+    -------
+    nodal_values : (n_nodes,) float array
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.linalg import spsolve
+
+    n_elem = elements.shape[0]
+
+    # Consistent P1 tet mass matrix:
+    #   M_{ab} = sum_e V_e * (1 + delta_{ab}) / 20   for nodes a,b in element e
+    rows = []
+    cols = []
+    vals = []
+    for a in range(4):
+        for b in range(4):
+            factor = 2.0 / 20.0 if a == b else 1.0 / 20.0
+            rows.append(elements[:, a])
+            cols.append(elements[:, b])
+            vals.append(volumes * factor)
+
+    row_idx = np.concatenate(rows)
+    col_idx = np.concatenate(cols)
+    val_arr = np.concatenate(vals)
+    M = coo_matrix((val_arr, (row_idx, col_idx)), shape=(n_nodes, n_nodes)).tocsr()
+
+    # RHS: f_a = sum_{e containing a} V_e / 4 * z_e  (1-point centroid quadrature)
+    f = np.zeros(n_nodes, dtype=np.float64)
+    contrib = (volumes * elem_values) / 4.0
+    for a in range(4):
+        np.add.at(f, elements[:, a], contrib)
+
+    return spsolve(M, f)
+
+
+def _matrix_log_taylor(B: np.ndarray, n_terms: int = 12) -> np.ndarray:
+    """Matrix logarithm via Taylor series (Ortiz 2002, Eq. 8.1.2).
+
+    log(B) = sum_{k=1}^{n_terms} (-1)^{k-1}/k * (B - I)^k
+
+    Convergent when ||B - I|| < 1 (i.e. B close to identity).
+    """
+    I = np.eye(3, dtype=B.dtype)
+    X = B - I  # (B - I)
+    result = np.zeros_like(B)
+    power = I.copy()  # will accumulate (B - I)^k
+    for k in range(1, n_terms + 1):
+        power = power @ X
+        result += ((-1.0) ** (k - 1) / k) * power
+    return result
+
+
+def _matrix_exp_taylor(A: np.ndarray, n_terms: int = 12) -> np.ndarray:
+    """Matrix exponential via Taylor series (Ortiz 2002, Eq. 8.1.1).
+
+    exp(A) = sum_{k=0}^{n_terms} (1/k!) * A^k
+    """
+    I = np.eye(3, dtype=A.dtype)
+    result = I.copy()
+    term = I.copy()  # A^k / k!
+    for k in range(1, n_terms + 1):
+        term = term @ A / k
+        result += term
+    return result
+
+
+def _compute_chart_Fp_fields(chart: Dict[str, Any]):
+    """Compute per-element F^p and its matrix logarithm via Taylor expansion.
+
+    Uses Ortiz (2002) Eq. 8.1.2 for log(F^p) — no polar decomposition needed.
+    The Taylor series converges when ||F^p - I|| < 1 (small plastic deformation).
+    """
+    F_phys = chart["F_phys"]
+    Be = chart["Be"]
+    n_elem = F_phys.shape[0]
+
+    Fp_arr = np.zeros((n_elem, 3, 3), dtype=np.float64)
+    log_Fp = np.zeros((n_elem, 3, 3), dtype=np.float64)
+
+    for e in range(n_elem):
+        Feig, Fvec = torch.linalg.eigh(torch.from_numpy(Be[e]))
+        Feig = Feig.clamp(min=1e-30)
+        Fe = Fvec @ torch.diag(torch.sqrt(Feig)) @ Fvec.T
+        Fp = torch.linalg.solve(Fe, torch.from_numpy(F_phys[e]))
+        Fp_np = _to_numpy(Fp)
+        Fp_arr[e] = Fp_np
+        log_Fp[e] = _matrix_log_taylor(Fp_np)
+
+    return Fp_arr, log_Fp
+
+
 def interpolate_plastic_surface_fields(
     result: ReconstructionResult,
     *,
     n_phi: int = 200,
     n_theta: int = 80,
 ):
-    """Interpolate physical F^p-derived fields from chart cells to a smooth torus surface."""
+    """Interpolate F^p fields to a smooth torus surface via global L2 projection.
+
+    Uses Taylor series expansion (Ortiz 2002, Eq. 8.1.1-8.1.2) instead of
+    polar decomposition + Lie algebra:
+    - Compute F^p = Fe^{-1} F at each element centroid
+    - Take log(F^p) via Taylor series (no polar decomposition needed)
+    - L2-project log(F^p) components to nodes
+    - Interpolate to visualization surface via griddata
+    - Recover F^p = exp(log(F^p)) via Taylor series
+    """
     from scipy.interpolate import griddata
 
     surf, _, _ = make_torus_surface(n_phi=n_phi, n_theta=n_theta)
     surface_points = np.asarray(surf.points)
     n_surface = surface_points.shape[0]
 
-    src_xyz: List[np.ndarray] = []
-    src_log_Rp: List[np.ndarray] = []
-    src_log_Sp: List[np.ndarray] = []
+    # Step 1: Compute element-centroid F^p and log(F^p), L2-project to nodes
+    all_node_xyz: List[np.ndarray] = []
+    all_node_log_Fp: List[np.ndarray] = []
+    all_node_ep_bar: List[np.ndarray] = []
 
     for chart in result.charts:
-        F_phys = chart["F_phys"]
-        Be = chart["Be"]
-        centroids_phys = chart["centroids_phys"]
-        for elem_idx in range(F_phys.shape[0]):
-            Feig, Fvec = torch.linalg.eigh(torch.from_numpy(Be[elem_idx]))
-            Feig = Feig.clamp(min=1e-30)
-            Fe = Fvec @ torch.diag(torch.sqrt(Feig)) @ Fvec.T
-            Fp = torch.linalg.solve(Fe, torch.from_numpy(F_phys[elem_idx]))
-            Rp, Sp = _polar_decompose(Fp)
-            src_xyz.append(centroids_phys[elem_idx])
-            src_log_Rp.append(_to_numpy(_log_rotation(Rp)))
-            src_log_Sp.append(_to_numpy(_log_spd(Sp)))
+        Fp_elem, log_Fp_elem = _compute_chart_Fp_fields(chart)
+        elements = chart["elements"]
+        nodes_phys = chart["nodes_phys"]
+        n_nodes = nodes_phys.shape[0]
 
-    src_xyz_np = np.asarray(src_xyz)
-    src_log_Rp_np = np.asarray(src_log_Rp)
-    src_log_Sp_np = np.asarray(src_log_Sp)
+        solver = chart["solver"]
+        vol = _to_numpy(solver.vol_phys)
 
-    log_Rp_surface = np.zeros((n_surface, 3, 3), dtype=np.float64)
-    log_Sp_surface = np.zeros((n_surface, 3, 3), dtype=np.float64)
+        # L2 project each component of log(F^p) to nodes
+        log_Fp_nodes = np.zeros((n_nodes, 3, 3), dtype=np.float64)
+        for i in range(3):
+            for j in range(3):
+                log_Fp_nodes[:, i, j] = _l2_project_to_nodes(
+                    elements, vol, n_nodes, log_Fp_elem[:, i, j])
+
+        # L2 project ep_bar (accumulated plastic strain) to nodes
+        ep_bar_nodes = _l2_project_to_nodes(
+            elements, vol, n_nodes, chart["ep_bar"].ravel())
+
+        all_node_xyz.append(nodes_phys)
+        all_node_log_Fp.append(log_Fp_nodes)
+        all_node_ep_bar.append(ep_bar_nodes)
+
+    # Step 2: Pool all chart nodal values and interpolate to surface
+    src_xyz = np.vstack(all_node_xyz)
+    src_log_Fp = np.vstack(all_node_log_Fp)
+    src_ep_bar = np.concatenate(all_node_ep_bar)
+
+    log_Fp_surface = np.zeros((n_surface, 3, 3), dtype=np.float64)
     for i in range(3):
         for j in range(3):
-            vals_lin_R = griddata(
-                src_xyz_np, src_log_Rp_np[:, i, j], surface_points,
+            vals_lin = griddata(
+                src_xyz, src_log_Fp[:, i, j], surface_points,
                 method="linear", fill_value=np.nan,
             )
-            vals_nn_R = griddata(
-                src_xyz_np, src_log_Rp_np[:, i, j], surface_points,
+            vals_nn = griddata(
+                src_xyz, src_log_Fp[:, i, j], surface_points,
                 method="nearest",
             )
-            mask_R = np.isnan(vals_lin_R)
-            log_Rp_surface[:, i, j] = np.where(mask_R, vals_nn_R, vals_lin_R)
+            mask = np.isnan(vals_lin)
+            log_Fp_surface[:, i, j] = np.where(mask, vals_nn, vals_lin)
 
-            vals_lin_S = griddata(
-                src_xyz_np, src_log_Sp_np[:, i, j], surface_points,
-                method="linear", fill_value=np.nan,
-            )
-            vals_nn_S = griddata(
-                src_xyz_np, src_log_Sp_np[:, i, j], surface_points,
-                method="nearest",
-            )
-            mask_S = np.isnan(vals_lin_S)
-            log_Sp_surface[:, i, j] = np.where(mask_S, vals_nn_S, vals_lin_S)
+    # Interpolate ep_bar
+    ep_lin = griddata(src_xyz, src_ep_bar, surface_points,
+                      method="linear", fill_value=np.nan)
+    ep_nn = griddata(src_xyz, src_ep_bar, surface_points, method="nearest")
+    ep_bar_surface = np.where(np.isnan(ep_lin), ep_nn, ep_lin)
 
+    # Step 3: Recover F^p = exp(log(F^p)) via Taylor series, compute diagnostics
     det_Fp = np.zeros(n_surface, dtype=np.float64)
     eig1_Sp = np.zeros(n_surface, dtype=np.float64)
     eig_diff_Sp = np.zeros(n_surface, dtype=np.float64)
@@ -597,21 +780,24 @@ def interpolate_plastic_surface_fields(
     iso_eig3 = np.zeros(n_surface, dtype=np.float64)
 
     for idx in range(n_surface):
-        Rp = _exp_rotation(torch.from_numpy(log_Rp_surface[idx]))
-        Sp = _exp_spd(torch.from_numpy(log_Sp_surface[idx]))
-        Fp = Rp @ Sp
-        Jp = torch.det(Fp).item()
+        Fp = _matrix_exp_taylor(log_Fp_surface[idx])
+        Jp = np.linalg.det(Fp)
         det_Fp[idx] = Jp
-        eigs = np.sort(_to_numpy(torch.linalg.eigvalsh(Sp)))[::-1]
-        eig1_Sp[idx] = eigs[0]
-        eig_diff_Sp[idx] = eigs[0] - eigs[-1]
+
+        # Right stretch via polar decomposition of recovered F^p for eigenvalue diagnostics
+        C = Fp.T @ Fp  # right Cauchy-Green of F^p
+        C = 0.5 * (C + C.T)
+        eigs = np.sort(np.linalg.eigvalsh(C))[::-1]
+        # eigenvalues of C = λ²; stretch eigenvalues = sqrt(λ²)
+        stretch_eigs = np.sqrt(np.maximum(eigs, 0.0))
+        eig1_Sp[idx] = stretch_eigs[0]
+        eig_diff_Sp[idx] = stretch_eigs[0] - stretch_eigs[-1]
 
         Jp_abs = max(abs(Jp), 1e-30)
-        Sp_bar = Sp / (Jp_abs ** (1.0 / 3.0))
-        iso_eigs = np.sort(_to_numpy(torch.linalg.eigvalsh(Sp_bar)))[::-1]
-        iso_eig1[idx] = iso_eigs[0]
-        iso_eig2[idx] = iso_eigs[1]
-        iso_eig3[idx] = iso_eigs[2]
+        stretch_bar = stretch_eigs / (Jp_abs ** (1.0 / 3.0))
+        iso_eig1[idx] = stretch_bar[0]
+        iso_eig2[idx] = stretch_bar[1]
+        iso_eig3[idx] = stretch_bar[2]
 
     surf.point_data["det_Fp"] = det_Fp
     surf.point_data["eig1_Sp"] = eig1_Sp
@@ -619,7 +805,76 @@ def interpolate_plastic_surface_fields(
     surf.point_data["iso_eig1"] = iso_eig1
     surf.point_data["iso_eig2"] = iso_eig2
     surf.point_data["iso_eig3"] = iso_eig3
+    surf.point_data["ep_bar"] = ep_bar_surface
+
+    # Attach per-chart projected data for VTU export
+    surf._l2_chart_data = []
+    for ci, chart in enumerate(result.charts):
+        surf._l2_chart_data.append({
+            "chart_id": ci,
+            "elements": chart["elements"],
+            "nodes_phys": all_node_xyz[ci],
+            "log_Fp": all_node_log_Fp[ci],
+            "ep_bar": all_node_ep_bar[ci],
+        })
+
     return surf
+
+
+def export_l2_projected_vtk(surf, out_dir):
+    """Export L2-projected F^p fields as VTU files for ParaView inspection.
+
+    Saves per-chart tetrahedral grids with L2-projected nodal fields.
+    Returns a MultiBlock of the per-chart grids for rendering.
+    """
+    import pyvista as pv
+
+    out_dir = Path(out_dir)
+    l2_dir = out_dir / "vtu" / "l2_projected"
+    l2_dir.mkdir(parents=True, exist_ok=True)
+
+    chart_data_list = getattr(surf, "_l2_chart_data", [])
+    blocks = pv.MultiBlock()
+
+    for cdata in chart_data_list:
+        ci = cdata["chart_id"]
+        elements = cdata["elements"]
+        nodes_phys = cdata["nodes_phys"]
+        log_Fp = cdata["log_Fp"]
+        n_elem = elements.shape[0]
+        n_nodes = nodes_phys.shape[0]
+
+        cells = np.hstack([np.full((n_elem, 1), 4, dtype=np.int64), elements]).ravel()
+        cell_types = np.full(n_elem, pv.CellType.TETRA, dtype=np.uint8)
+        grid = pv.UnstructuredGrid(cells, cell_types, nodes_phys)
+
+        # Recover per-node F^p diagnostics from log(F^p) via Taylor exp
+        det_Fp_node = np.zeros(n_nodes, dtype=np.float64)
+        eig1_node = np.zeros(n_nodes, dtype=np.float64)
+        eig_diff_node = np.zeros(n_nodes, dtype=np.float64)
+        for n in range(n_nodes):
+            Fp = _matrix_exp_taylor(log_Fp[n])
+            det_Fp_node[n] = np.linalg.det(Fp)
+            C = Fp.T @ Fp
+            C = 0.5 * (C + C.T)
+            eigs = np.sort(np.linalg.eigvalsh(C))[::-1]
+            stretch = np.sqrt(np.maximum(eigs, 0.0))
+            eig1_node[n] = stretch[0]
+            eig_diff_node[n] = stretch[0] - stretch[-1]
+
+        grid.point_data["det_Fp"] = det_Fp_node
+        grid.point_data["eig1_Sp"] = eig1_node
+        grid.point_data["eig_diff_Sp"] = eig_diff_node
+        grid.point_data["log_Fp"] = log_Fp.reshape(n_nodes, 9)
+        if "ep_bar" in cdata:
+            grid.point_data["ep_bar"] = cdata["ep_bar"]
+        grid.cell_data["chart_id"] = np.full(n_elem, ci, dtype=np.int64)
+
+        grid.save(str(l2_dir / f"chart_{ci:02d}_l2_projected.vtu"))
+        blocks.append(grid, f"chart_{ci}")
+
+    print(f"  L2-projected VTU files saved to {l2_dir}")
+    return blocks
 
 
 def _write_report(result: ReconstructionResult, output_path: str | Path) -> None:
