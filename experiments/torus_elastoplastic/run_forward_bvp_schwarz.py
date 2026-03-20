@@ -48,6 +48,7 @@ from experiments.torus_elastoplastic.schwarz_vector import (
 R_MAJOR = 1.0
 R_MINOR = 0.35
 N_CHARTS = 8
+PHI_HALFWIDTH = math.pi / 4.0
 
 
 class TorusSDF:
@@ -63,7 +64,7 @@ class TorusSDF:
 class TorusChartDecoder(torch.nn.Module):
     """Analytic map from reference cube [-1,1]^3 to a torus sector."""
     def __init__(self, R=R_MAJOR, r=R_MINOR, phi_center=0.0,
-                 phi_halfwidth=math.pi / 4):
+                 phi_halfwidth=PHI_HALFWIDTH):
         super().__init__()
         self.R, self.r = R, r
         self.phi_center = phi_center
@@ -76,6 +77,35 @@ class TorusChartDecoder(torch.nn.Module):
         rr = self.R + rho * torch.cos(theta)
         return torch.stack([rr * torch.cos(phi), rr * torch.sin(phi),
                             rho * torch.sin(theta)], dim=1)
+
+    def jacobian(self, xi: torch.Tensor, **kw) -> torch.Tensor:
+        """Exact Jacobian dx/dxi of the analytic torus chart map."""
+        phi = self.phi_center + xi[:, 0] * self.phi_halfwidth
+        theta = math.pi * xi[:, 1]
+        rho = 0.5 * self.r * (1.0 + xi[:, 2])
+
+        sin_phi = torch.sin(phi)
+        cos_phi = torch.cos(phi)
+        sin_theta = torch.sin(theta)
+        cos_theta = torch.cos(theta)
+        rr = self.R + rho * cos_theta
+
+        dphi_dxi0 = self.phi_halfwidth
+        dtheta_dxi1 = math.pi
+        drho_dxi2 = 0.5 * self.r
+
+        J = torch.zeros(xi.shape[0], 3, 3, device=xi.device, dtype=xi.dtype)
+        J[:, 0, 0] = -rr * sin_phi * dphi_dxi0
+        J[:, 1, 0] = rr * cos_phi * dphi_dxi0
+
+        J[:, 0, 1] = -rho * sin_theta * dtheta_dxi1 * cos_phi
+        J[:, 1, 1] = -rho * sin_theta * dtheta_dxi1 * sin_phi
+        J[:, 2, 1] = rho * cos_theta * dtheta_dxi1
+
+        J[:, 0, 2] = cos_theta * drho_dxi2 * cos_phi
+        J[:, 1, 2] = cos_theta * drho_dxi2 * sin_phi
+        J[:, 2, 2] = sin_theta * drho_dxi2
+        return J
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -204,6 +234,8 @@ def main():
     parser.add_argument("--eps", type=float, default=0.01,
                         help="Softplus sharpness for return mapping")
     parser.add_argument("--n-threads", type=int, default=4)
+    parser.add_argument("--checkpoint-every", type=int, default=10,
+                        help="Save a checkpoint every N load steps (and always at the final step).")
     parser.add_argument("--out-dir", type=str, default="runs/torus_forward_bvp")
     args = parser.parse_args()
 
@@ -235,7 +267,7 @@ def main():
     print(f"\nBuilding {N_CHARTS}-chart torus atlas (n_cells={args.n_cells})...")
     for ci in range(N_CHARTS):
         phi_c = chart_phi_centers[ci]
-        dec = TorusChartDecoder(phi_center=phi_c)
+        dec = TorusChartDecoder(phi_center=phi_c, phi_halfwidth=PHI_HALFWIDTH)
         decoders.append(dec)
         sol = ChartVectorFEMSolver(
             n_cells=args.n_cells,
@@ -390,10 +422,15 @@ def main():
               f"{jump:12.4e} {dt:8.1f}")
 
         # Checkpoint every 10 steps
-        if (step_idx + 1) % 10 == 0 or step_idx == n_steps - 1:
+        if (step_idx + 1) % args.checkpoint_every == 0 or step_idx == n_steps - 1:
             ckpt = {
                 "step": step_idx,
                 "delta": delta,
+                "n_cells": args.n_cells,
+                "n_charts": N_CHARTS,
+                "support_r": 1.0,
+                "chart_phi_centers": chart_phi_centers,
+                "phi_halfwidth": PHI_HALFWIDTH,
                 "u_charts": [u.cpu() for u in schwarz.u_charts],
                 "states": [{
                     "Be": states[ci].Be.cpu(),

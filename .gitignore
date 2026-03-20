@@ -21,6 +21,7 @@ downloads/
 *.svg
 *.vtu
 *.vtp
+*.vtm
 *.pvtu
 *.pvd
 *.xdmf

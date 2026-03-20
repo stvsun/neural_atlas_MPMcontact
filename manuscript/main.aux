@@ -131,163 +131,172 @@
 \newlabel{tab:rabbit_solver_comparison}{{5}{15}{Head-to-head rabbit comparison on the frozen atlas workflow. The compact PINN row reports the selected best-rel-$L^2$ checkpoint; the FEM rows report final metrics after five Schwarz sweeps. The FEM artifacts are stored as 8-chart runs, while the compact PINN uses the frozen 12-chart rabbit atlas.\relax }{table.caption.14}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Representative rabbit-surface visualization for the fixed-atlas SA-PINN solver. The surface is reconstructed from a dense boundary postprocessing pass of the rabbit Poisson solution family and shown from one fixed camera in all three panels. Panel (a) shows the recovered scalar field, panel (b) shows the absolute error, and panel (c) shows the chart entropy induced by the partition-of-unity weights. The first two panels show that the solved field remains smooth on the complex geometry, while the entropy panel shows that uncertainty is confined to narrow overlap traces rather than spreading over the whole surface.\relax }}{16}{figure.caption.15}\protected@file@percent }
 \newlabel{fig:rabbit_poisson_example}{{6}{16}{Representative rabbit-surface visualization for the fixed-atlas SA-PINN solver. The surface is reconstructed from a dense boundary postprocessing pass of the rabbit Poisson solution family and shown from one fixed camera in all three panels. Panel (a) shows the recovered scalar field, panel (b) shows the absolute error, and panel (c) shows the chart entropy induced by the partition-of-unity weights. The first two panels show that the solved field remains smooth on the complex geometry, while the entropy panel shows that uncertainty is confined to narrow overlap traces rather than spreading over the whole surface.\relax }{figure.caption.15}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Example 3: torus inverse Neo-Hookean identification}{16}{subsection.4.3}\protected@file@percent }
-\newlabel{sec:example3}{{4.3}{16}{Example 3: torus inverse Neo-Hookean identification}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Example 3: forward elastoplastic boundary-value problem on the torus}{16}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:example3_bvp}{{4.3}{16}{Example 3: forward elastoplastic boundary-value problem on the torus}{subsection.4.3}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Rabbit atlas-FEM surface rendering at the finest refinement level ($n_{\mathrm  {cells}}=56$). The figure uses the same reconstructed rabbit surface and the same fixed camera as Figure\nobreakspace  {}\ref  {fig:rabbit_poisson_example}. Panel (a) shows the FEM scalar field, panel (b) shows the absolute error, and panel (c) shows chart entropy reconstructed from the frozen rabbit atlas masks on the shared surface postprocessor. The first two panels show that the atlas-FEM branch recovers the same large-scale field as the compact PINN while producing a visibly smaller surface error.\relax }}{17}{figure.caption.16}\protected@file@percent }
 \newlabel{fig:rabbit_poisson_fem_surface}{{7}{17}{Rabbit atlas-FEM surface rendering at the finest refinement level ($n_{\mathrm {cells}}=56$). The figure uses the same reconstructed rabbit surface and the same fixed camera as Figure~\ref {fig:rabbit_poisson_example}. Panel (a) shows the FEM scalar field, panel (b) shows the absolute error, and panel (c) shows chart entropy reconstructed from the frozen rabbit atlas masks on the shared surface postprocessor. The first two panels show that the atlas-FEM branch recovers the same large-scale field as the compact PINN while producing a visibly smaller surface error.\relax }{figure.caption.16}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Training diagnostics for the canonical rabbit Poisson compact PINN run. Each panel reports one scalar trace over Schwarz iterations: total objective, PDE residual, boundary loss, interface-value loss, interface-flux loss, and evaluation relative $L^2$ error.\relax }}{17}{figure.caption.17}\protected@file@percent }
 \newlabel{fig:rabbit_poisson_training_losses}{{8}{17}{Training diagnostics for the canonical rabbit Poisson compact PINN run. Each panel reports one scalar trace over Schwarz iterations: total objective, PDE residual, boundary loss, interface-value loss, interface-flux loss, and evaluation relative $L^2$ error.\relax }{figure.caption.17}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Atlas-based FEM convergence on the rabbit benchmark. The dashed line gives an $O(h^2)$ reference slope; the dotted horizontal line marks the compact PINN accuracy $2.21\times 10^{-2}$. The FEM trajectory crosses the PINN level near $n_{\mathrm  {cells}}=48$.\relax }}{18}{figure.caption.18}\protected@file@percent }
 \newlabel{fig:rabbit_poisson_fem_refinement}{{9}{18}{Atlas-based FEM convergence on the rabbit benchmark. The dashed line gives an $O(h^2)$ reference slope; the dotted horizontal line marks the compact PINN accuracy $2.21\times 10^{-2}$. The FEM trajectory crosses the PINN level near $n_{\mathrm {cells}}=48$.\relax }{figure.caption.18}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.1}Problem formulation}{18}{subsubsection.4.3.1}\protected@file@percent }
-\newlabel{eq:torus_prescribed_u}{{40}{18}{Problem formulation}{equation.4.40}{}}
-\newlabel{eq:torus_torsion_formula}{{41}{18}{Problem formulation}{equation.4.41}{}}
-\newlabel{eq:torus_prescribed_F}{{42}{18}{Problem formulation}{equation.4.42}{}}
-\newlabel{eq:nh_stress}{{43}{18}{Problem formulation}{equation.4.43}{}}
-\newlabel{eq:torus_obs_traction}{{44}{18}{Problem formulation}{equation.4.44}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.2}Solver configuration (a): global atlas optimizer}{19}{subsubsection.4.3.2}\protected@file@percent }
-\newlabel{eq:torus_original_loss}{{45}{19}{Solver configuration (a): global atlas optimizer}{equation.4.45}{}}
-\newlabel{eq:torus_original_total_loss}{{46}{19}{Solver configuration (a): global atlas optimizer}{equation.4.46}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.3}Solver configurations (b)--(c): multiplicative Schwarz with per-chart parameters}{19}{subsubsection.4.3.3}\protected@file@percent }
-\newlabel{eq:torus_schwarz_interface}{{47}{19}{Solver configurations (b)--(c): multiplicative Schwarz with per-chart parameters}{equation.4.47}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Torus inverse identification: comparison of three solver configurations on the same eight-chart atlas. All runs use the same prescribed torsional kinematics and true parameters $(\mu _{\mathrm  {true}},K_{\mathrm  {true}})=(1.8,25.0)$. The Schwarz variants report mean $\pm $ standard deviation across eight per-chart parameter estimates.\relax }}{19}{table.caption.19}\protected@file@percent }
-\newlabel{tab:torus_comparison}{{6}{19}{Torus inverse identification: comparison of three solver configurations on the same eight-chart atlas. All runs use the same prescribed torsional kinematics and true parameters $(\mu _{\mathrm {true}},K_{\mathrm {true}})=(1.8,25.0)$. The Schwarz variants report mean $\pm $ standard deviation across eight per-chart parameter estimates.\relax }{table.caption.19}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Torus inverse benchmark (global optimizer), rendered from VTU exports on the three-dimensional surface. (a)\nobreakspace  {}Prescribed deformed configuration colored by displacement magnitude\nobreakspace  {}$|\mathbf  {u}|$; the torsional load is localized over a ${\sim }126^{\circ }$ azimuthal arc. (b)\nobreakspace  {}Traction-error magnitude $|\mathbf  {t}-\mathbf  {t}^{\mathrm  {obs}}|$; the mismatch is concentrated in the loaded region and remains below $1.2\times 10^{-3}$ everywhere. (c)\nobreakspace  {}Eight-chart atlas decomposition of the torus, with each color denoting a distinct azimuthal chart; the multi-chart atlas is topologically necessary because the solid torus is not simply connected.\relax }}{20}{figure.caption.20}\protected@file@percent }
-\newlabel{fig:torus_inverse_original_fields}{{10}{20}{Torus inverse benchmark (global optimizer), rendered from VTU exports on the three-dimensional surface. (a)~Prescribed deformed configuration colored by displacement magnitude~$|\mathbf {u}|$; the torsional load is localized over a ${\sim }126^{\circ }$ azimuthal arc. (b)~Traction-error magnitude $|\mathbf {t}-\mathbf {t}^{\mathrm {obs}}|$; the mismatch is concentrated in the loaded region and remains below $1.2\times 10^{-3}$ everywhere. (c)~Eight-chart atlas decomposition of the torus, with each color denoting a distinct azimuthal chart; the multi-chart atlas is topologically necessary because the solid torus is not simply connected.\relax }{figure.caption.20}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Parameter convergence history for the global torus optimizer. (a)\nobreakspace  {}Relative errors of\nobreakspace  {}$\mu $ and\nobreakspace  {}$K$ decrease monotonically over 100 epochs, reaching ${\sim }10^{-2}\%$ for both parameters. (b)\nobreakspace  {}Traction mismatch\nobreakspace  {}$\EuScript  {L}_{\mathrm  {trac}}$ decreases by five orders of magnitude from initialization to the $10^{-8}$ level. The oscillatory pattern in\nobreakspace  {}(a) reflects the alternating descent directions in the two-parameter landscape.\relax }}{20}{figure.caption.21}\protected@file@percent }
-\newlabel{fig:torus_inverse_original_convergence}{{11}{20}{Parameter convergence history for the global torus optimizer. (a)~Relative errors of~$\mu $ and~$K$ decrease monotonically over 100 epochs, reaching ${\sim }10^{-2}\%$ for both parameters. (b)~Traction mismatch~$\mathcal {L}_{\mathrm {trac}}$ decreases by five orders of magnitude from initialization to the $10^{-8}$ level. The oscillatory pattern in~(a) reflects the alternating descent directions in the two-parameter landscape.\relax }{figure.caption.21}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Schwarz-based distributed parameter identification on the torus, rendered from VTU exports. Top row: traction-mode Schwarz. Bottom row: displacement-mode Schwarz. (a,\tmspace  +\thinmuskip {.1667em}c)\nobreakspace  {}Observation-error magnitude on the torus surface; the traction-mode error is roughly $10\times $ larger than the displacement-mode error. (b,\tmspace  +\thinmuskip {.1667em}d)\nobreakspace  {}Per-chart shear-modulus estimate\nobreakspace  {}$\mathaccentV {hat}05E{\mu }_i$ mapped onto the torus surface; the color range is $[1.79,\tmspace  +\thinmuskip {.1667em}1.81]$ centered on $\mu _{\mathrm  {true}}=1.8$. In displacement mode\nobreakspace  {}(d), the surface is nearly uniform, consistent with the machine-precision inter-chart consensus ($\mu $ std $= 1.47\times 10^{-13}$) reported in Table\nobreakspace  {}\ref  {tab:torus_comparison}.\relax }}{21}{figure.caption.22}\protected@file@percent }
-\newlabel{fig:torus_schwarz_3d}{{12}{21}{Schwarz-based distributed parameter identification on the torus, rendered from VTU exports. Top row: traction-mode Schwarz. Bottom row: displacement-mode Schwarz. (a,\,c)~Observation-error magnitude on the torus surface; the traction-mode error is roughly $10\times $ larger than the displacement-mode error. (b,\,d)~Per-chart shear-modulus estimate~$\hat {\mu }_i$ mapped onto the torus surface; the color range is $[1.79,\,1.81]$ centered on $\mu _{\mathrm {true}}=1.8$. In displacement mode~(d), the surface is nearly uniform, consistent with the machine-precision inter-chart consensus ($\mu $ std $= 1.47\times 10^{-13}$) reported in Table~\ref {tab:torus_comparison}.\relax }{figure.caption.22}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Example 4: torus elastoplastic parameter identification}{21}{subsection.4.4}\protected@file@percent }
-\newlabel{sec:example4_ep}{{4.4}{21}{Example 4: torus elastoplastic parameter identification}{subsection.4.4}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.1}Problem definition}{18}{subsubsection.4.3.1}\protected@file@percent }
+\newlabel{eq:bvp_bc}{{40}{18}{Problem definition}{equation.4.40}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.2}Mesh refinement study}{18}{subsubsection.4.3.2}\protected@file@percent }
+\citation{mota_lie-group_2013}
+\citation{mota_lie-group_2013}
 \citation{de_souza_neto_computational_2011}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Mesh refinement study for the 8-chart Schwarz forward elastoplastic BVP. All runs use the same cyclic loading protocol ($\delta _{\qopname  \relax m{max}}=0.02\tmspace  +\thinmuskip {.1667em}r$, 120\nobreakspace  {}steps).\relax }}{19}{table.caption.19}\protected@file@percent }
+\newlabel{tab:bvp_mesh}{{6}{19}{Mesh refinement study for the 8-chart Schwarz forward elastoplastic BVP. All runs use the same cyclic loading protocol ($\delta _{\max }=0.02\,r$, 120~steps).\relax }{table.caption.19}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.3}Load-step sensitivity}{19}{subsubsection.4.3.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Load-step sensitivity for the forward BVP at $n_{\mathrm  {cells}}=6$. The final accumulated plastic strain varies by $0.16\%$ across a $4\times $ range of step sizes.\relax }}{19}{table.caption.20}\protected@file@percent }
+\newlabel{tab:bvp_timestep}{{7}{19}{Load-step sensitivity for the forward BVP at $n_{\mathrm {cells}}=6$. The final accumulated plastic strain varies by $0.16\%$ across a $4\times $ range of step sizes.\relax }{table.caption.20}{}}
+\newlabel{rem:locking}{{1}{19}{Load-step sensitivity}{remark.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Example 4: torus inverse Neo-Hookean identification}{19}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:example3}{{4.4}{19}{Example 4: torus inverse Neo-Hookean identification}{subsection.4.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Diagnostics for the 8-chart Schwarz forward elastoplastic BVP. (a)\nobreakspace  {}Accumulated plastic strain $\mathaccentV {bar}016{\varepsilon }_p$ vs.\ load step for three mesh resolutions; finer meshes resolve larger peak strains near the loaded sections. (b)\nobreakspace  {}Schwarz interface displacement jump remains $O(10^{-7})$ throughout. (c)\nobreakspace  {}Load-step convergence: the final plastic strain varies by $0.16\%$ across a $4\times $ range of step sizes. (d)\nobreakspace  {}Computational cost scaling with total DOF.\relax }}{20}{figure.caption.21}\protected@file@percent }
+\newlabel{fig:bvp_diagnostics}{{10}{20}{Diagnostics for the 8-chart Schwarz forward elastoplastic BVP. (a)~Accumulated plastic strain $\bar {\varepsilon }_p$ vs.\ load step for three mesh resolutions; finer meshes resolve larger peak strains near the loaded sections. (b)~Schwarz interface displacement jump remains $O(10^{-7})$ throughout. (c)~Load-step convergence: the final plastic strain varies by $0.16\%$ across a $4\times $ range of step sizes. (d)~Computational cost scaling with total DOF.\relax }{figure.caption.21}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Plastic deformation gradient fields on the torus surface at the end of the cyclic loading ($n_{\mathrm  {cells}}=8$, 120\nobreakspace  {}steps). The element-wise $\mathbf  {F}^p = (\mathbf  {F}^e)^{-1}\mathbf  {F}$ is polar-decomposed, mapped to Lie algebras, interpolated onto a smooth parametric torus surface via scattered linear interpolation in $(\phi ,\theta )$ space, and recovered via exponential maps following \citet  {mota_lie-group_2013}. (a)\nobreakspace  {}$\qopname  \relax m{det}\mathbf  {F}^p \approx 1$ everywhere, confirming isochoric $J_2$ plastic flow. (b)\nobreakspace  {}Largest eigenvalue $\lambda _1^p$ of the plastic stretch $\mathbf  {S}^p$, showing maximum plastic extension near the loaded cross-sections at $\phi \approx 0$ and $\phi \approx \pi $. (c)\nobreakspace  {}Eigenvalue spread $\lambda _1^p-\lambda _3^p$, highlighting the anisotropy of plastic flow localized at the squeeze points.\relax }}{20}{figure.caption.22}\protected@file@percent }
+\newlabel{fig:bvp_Fp_fields}{{11}{20}{Plastic deformation gradient fields on the torus surface at the end of the cyclic loading ($n_{\mathrm {cells}}=8$, 120~steps). The element-wise $\mathbf {F}^p = (\mathbf {F}^e)^{-1}\mathbf {F}$ is polar-decomposed, mapped to Lie algebras, interpolated onto a smooth parametric torus surface via scattered linear interpolation in $(\phi ,\theta )$ space, and recovered via exponential maps following \citet {mota_lie-group_2013}. (a)~$\det \mathbf {F}^p \approx 1$ everywhere, confirming isochoric $J_2$ plastic flow. (b)~Largest eigenvalue $\lambda _1^p$ of the plastic stretch $\mathbf {S}^p$, showing maximum plastic extension near the loaded cross-sections at $\phi \approx 0$ and $\phi \approx \pi $. (c)~Eigenvalue spread $\lambda _1^p-\lambda _3^p$, highlighting the anisotropy of plastic flow localized at the squeeze points.\relax }{figure.caption.22}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.1}Problem formulation}{21}{subsubsection.4.4.1}\protected@file@percent }
+\newlabel{eq:torus_prescribed_u}{{41}{21}{Problem formulation}{equation.4.41}{}}
+\newlabel{eq:torus_torsion_formula}{{42}{21}{Problem formulation}{equation.4.42}{}}
+\newlabel{eq:torus_prescribed_F}{{43}{21}{Problem formulation}{equation.4.43}{}}
+\newlabel{eq:nh_stress}{{44}{21}{Problem formulation}{equation.4.44}{}}
+\newlabel{eq:torus_obs_traction}{{45}{21}{Problem formulation}{equation.4.45}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.2}Solver configuration (a): global atlas optimizer}{21}{subsubsection.4.4.2}\protected@file@percent }
+\newlabel{eq:torus_original_loss}{{46}{21}{Solver configuration (a): global atlas optimizer}{equation.4.46}{}}
+\newlabel{eq:torus_original_total_loss}{{47}{21}{Solver configuration (a): global atlas optimizer}{equation.4.47}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.3}Solver configurations (b)--(c): multiplicative Schwarz with per-chart parameters}{22}{subsubsection.4.4.3}\protected@file@percent }
+\newlabel{eq:torus_schwarz_interface}{{48}{22}{Solver configurations (b)--(c): multiplicative Schwarz with per-chart parameters}{equation.4.48}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Torus inverse identification: comparison of three solver configurations on the same eight-chart atlas. All runs use the same prescribed torsional kinematics and true parameters $(\mu _{\mathrm  {true}},K_{\mathrm  {true}})=(1.8,25.0)$. The Schwarz variants report mean $\pm $ standard deviation across eight per-chart parameter estimates.\relax }}{22}{table.caption.23}\protected@file@percent }
+\newlabel{tab:torus_comparison}{{8}{22}{Torus inverse identification: comparison of three solver configurations on the same eight-chart atlas. All runs use the same prescribed torsional kinematics and true parameters $(\mu _{\mathrm {true}},K_{\mathrm {true}})=(1.8,25.0)$. The Schwarz variants report mean $\pm $ standard deviation across eight per-chart parameter estimates.\relax }{table.caption.23}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Torus inverse benchmark (global optimizer), rendered from VTU exports on the three-dimensional surface. (a)\nobreakspace  {}Prescribed deformed configuration colored by displacement magnitude\nobreakspace  {}$|\mathbf  {u}|$; the torsional load is localized over a ${\sim }126^{\circ }$ azimuthal arc. (b)\nobreakspace  {}Traction-error magnitude $|\mathbf  {t}-\mathbf  {t}^{\mathrm  {obs}}|$; the mismatch is concentrated in the loaded region and remains below $1.2\times 10^{-3}$ everywhere. (c)\nobreakspace  {}Eight-chart atlas decomposition of the torus, with each color denoting a distinct azimuthal chart; the multi-chart atlas is topologically necessary because the solid torus is not simply connected.\relax }}{23}{figure.caption.24}\protected@file@percent }
+\newlabel{fig:torus_inverse_original_fields}{{12}{23}{Torus inverse benchmark (global optimizer), rendered from VTU exports on the three-dimensional surface. (a)~Prescribed deformed configuration colored by displacement magnitude~$|\mathbf {u}|$; the torsional load is localized over a ${\sim }126^{\circ }$ azimuthal arc. (b)~Traction-error magnitude $|\mathbf {t}-\mathbf {t}^{\mathrm {obs}}|$; the mismatch is concentrated in the loaded region and remains below $1.2\times 10^{-3}$ everywhere. (c)~Eight-chart atlas decomposition of the torus, with each color denoting a distinct azimuthal chart; the multi-chart atlas is topologically necessary because the solid torus is not simply connected.\relax }{figure.caption.24}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Parameter convergence history for the global torus optimizer. (a)\nobreakspace  {}Relative errors of\nobreakspace  {}$\mu $ and\nobreakspace  {}$K$ decrease monotonically over 100 epochs, reaching ${\sim }10^{-2}\%$ for both parameters. (b)\nobreakspace  {}Traction mismatch\nobreakspace  {}$\EuScript  {L}_{\mathrm  {trac}}$ decreases by five orders of magnitude from initialization to the $10^{-8}$ level. The oscillatory pattern in\nobreakspace  {}(a) reflects the alternating descent directions in the two-parameter landscape.\relax }}{23}{figure.caption.25}\protected@file@percent }
+\newlabel{fig:torus_inverse_original_convergence}{{13}{23}{Parameter convergence history for the global torus optimizer. (a)~Relative errors of~$\mu $ and~$K$ decrease monotonically over 100 epochs, reaching ${\sim }10^{-2}\%$ for both parameters. (b)~Traction mismatch~$\mathcal {L}_{\mathrm {trac}}$ decreases by five orders of magnitude from initialization to the $10^{-8}$ level. The oscillatory pattern in~(a) reflects the alternating descent directions in the two-parameter landscape.\relax }{figure.caption.25}{}}
+\citation{de_souza_neto_computational_2011}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Schwarz-based distributed parameter identification on the torus, rendered from VTU exports. Top row: traction-mode Schwarz. Bottom row: displacement-mode Schwarz. (a,\tmspace  +\thinmuskip {.1667em}c)\nobreakspace  {}Observation-error magnitude on the torus surface; the traction-mode error is roughly $10\times $ larger than the displacement-mode error. (b,\tmspace  +\thinmuskip {.1667em}d)\nobreakspace  {}Per-chart shear-modulus estimate\nobreakspace  {}$\mathaccentV {hat}05E{\mu }_i$ mapped onto the torus surface; the color range is $[1.79,\tmspace  +\thinmuskip {.1667em}1.81]$ centered on $\mu _{\mathrm  {true}}=1.8$. In displacement mode\nobreakspace  {}(d), the surface is nearly uniform, consistent with the machine-precision inter-chart consensus ($\mu $ std $= 1.47\times 10^{-13}$) reported in Table\nobreakspace  {}\ref  {tab:torus_comparison}.\relax }}{24}{figure.caption.26}\protected@file@percent }
+\newlabel{fig:torus_schwarz_3d}{{14}{24}{Schwarz-based distributed parameter identification on the torus, rendered from VTU exports. Top row: traction-mode Schwarz. Bottom row: displacement-mode Schwarz. (a,\,c)~Observation-error magnitude on the torus surface; the traction-mode error is roughly $10\times $ larger than the displacement-mode error. (b,\,d)~Per-chart shear-modulus estimate~$\hat {\mu }_i$ mapped onto the torus surface; the color range is $[1.79,\,1.81]$ centered on $\mu _{\mathrm {true}}=1.8$. In displacement mode~(d), the surface is nearly uniform, consistent with the machine-precision inter-chart consensus ($\mu $ std $= 1.47\times 10^{-13}$) reported in Table~\ref {tab:torus_comparison}.\relax }{figure.caption.26}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Example 5: torus elastoplastic parameter identification}{24}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:example4_ep}{{4.5}{24}{Example 5: torus elastoplastic parameter identification}{subsection.4.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.1}Constitutive model and smooth return mapping}{24}{subsubsection.4.5.1}\protected@file@percent }
+\newlabel{eq:ep_multiplicative}{{49}{24}{Constitutive model and smooth return mapping}{equation.4.49}{}}
 \citation{simo_computational_1998}
 \citation{hu_difftaichi_2020,bark_differentiable_2025}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.1}Constitutive model and smooth return mapping}{22}{subsubsection.4.4.1}\protected@file@percent }
-\newlabel{eq:ep_multiplicative}{{48}{22}{Constitutive model and smooth return mapping}{equation.4.48}{}}
-\newlabel{eq:von_mises_yield}{{50}{22}{Constitutive model and smooth return mapping}{equation.4.50}{}}
-\newlabel{eq:smooth_return}{{51}{22}{Constitutive model and smooth return mapping}{equation.4.51}{}}
-\newlabel{eq:ep_bc}{{52}{22}{Constitutive model and smooth return mapping}{equation.4.52}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.2}Two-stage inverse identification}{23}{subsubsection.4.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Stage\nobreakspace  {}1: yield stress.}{23}{section*.23}\protected@file@percent }
-\newlabel{eq:disp_loss}{{53}{23}{Stage~1: yield stress}{equation.4.53}{}}
-\@writefile{toc}{\contentsline {paragraph}{Stage\nobreakspace  {}2: kinematic hardening.}{23}{section*.24}\protected@file@percent }
-\newlabel{eq:rf_loss}{{54}{23}{Stage~2: kinematic hardening}{equation.4.54}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Two-stage elastoplastic inverse identification results. Stage\nobreakspace  {}1 identifies $\tau _y$ from monotonic displacement data; Stage\nobreakspace  {}2 identifies $H_{\mathrm  {kin}}$ from cyclic reaction-force data. Material: $E=200$, $\nu =0.3$. Mesh: $4^3$ hexahedra (384\nobreakspace  {}P1 tetrahedra, 125\nobreakspace  {}nodes).\relax }}{23}{table.caption.25}\protected@file@percent }
-\newlabel{tab:ep_results}{{7}{23}{Two-stage elastoplastic inverse identification results. Stage~1 identifies $\tau _y$ from monotonic displacement data; Stage~2 identifies $H_{\mathrm {kin}}$ from cyclic reaction-force data. Material: $E=200$, $\nu =0.3$. Mesh: $4^3$ hexahedra (384~P1 tetrahedra, 125~nodes).\relax }{table.caption.25}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.3}Sensitivity analysis}{23}{subsubsection.4.4.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Elastoplastic constitutive response. (a)\nobreakspace  {}Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon _s$; at $\varepsilon _s=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau _y=0.5$). (b)\nobreakspace  {}Cyclic stress--strain loops for three kinematic hardening moduli: $H_{\mathrm  {kin}}>0$ shifts the reverse yield point (Bauschinger effect), enabling $H_{\mathrm  {kin}}$ identification from cyclic data.\relax }}{24}{figure.caption.26}\protected@file@percent }
-\newlabel{fig:ep_constitutive}{{13}{24}{Elastoplastic constitutive response. (a)~Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon _s$; at $\varepsilon _s=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau _y=0.5$). (b)~Cyclic stress--strain loops for three kinematic hardening moduli: $H_{\mathrm {kin}}>0$ shifts the reverse yield point (Bauschinger effect), enabling $H_{\mathrm {kin}}$ identification from cyclic data.\relax }{figure.caption.26}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Inverse parameter recovery convergence. (a)\nobreakspace  {}Stage\nobreakspace  {}1: $\tau _y$ trajectories from six initial guesses; all converge to $\tau _{y,\mathrm  {true}}=0.5$ within 100 iterations. (b)\nobreakspace  {}Stage\nobreakspace  {}2: $H_{\mathrm  {kin}}$ recovery from $H_{\mathrm  {kin},0}=5$ using reaction-force observations; the estimate reaches $19.58$ ($2.11\%$ error) after 150 iterations.\relax }}{24}{figure.caption.27}\protected@file@percent }
-\newlabel{fig:ep_convergence}{{14}{24}{Inverse parameter recovery convergence. (a)~Stage~1: $\tau _y$ trajectories from six initial guesses; all converge to $\tau _{y,\mathrm {true}}=0.5$ within 100 iterations. (b)~Stage~2: $H_{\mathrm {kin}}$ recovery from $H_{\mathrm {kin},0}=5$ using reaction-force observations; the estimate reaches $19.58$ ($2.11\%$ error) after 150 iterations.\relax }{figure.caption.27}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Recovered versus true cyclic stress--strain response at three sample locations on a single torus chart sector. At all three locations the hysteresis loops generated by the true parameters (solid) and the identified parameters (dashed) are visually indistinguishable.\relax }}{24}{figure.caption.28}\protected@file@percent }
-\newlabel{fig:ep_hysteresis_multipoint}{{15}{24}{Recovered versus true cyclic stress--strain response at three sample locations on a single torus chart sector. At all three locations the hysteresis loops generated by the true parameters (solid) and the identified parameters (dashed) are visually indistinguishable.\relax }{figure.caption.28}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Sensitivity studies. (a)\nobreakspace  {}$\tau _y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes ($n_{\mathrm  {cells}}\in \{3,4,6,8\}$). (b)\nobreakspace  {}$\tau _y$ convergence trajectories for different initial smoothing parameters $\varepsilon _{s,\mathrm  {start}}$; all values except $\varepsilon _{s,\mathrm  {start}}=1.0$ converge to the correct yield stress.\relax }}{25}{figure.caption.29}\protected@file@percent }
-\newlabel{fig:ep_sensitivity}{{16}{25}{Sensitivity studies. (a)~$\tau _y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes ($n_{\mathrm {cells}}\in \{3,4,6,8\}$). (b)~$\tau _y$ convergence trajectories for different initial smoothing parameters $\varepsilon _{s,\mathrm {start}}$; all values except $\varepsilon _{s,\mathrm {start}}=1.0$ converge to the correct yield stress.\relax }{figure.caption.29}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Cross-example comparison and lessons learned}{25}{subsection.4.5}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Main-text results organized by argumentative role. Each example supports a distinct part of the paper's claim.\relax }}{25}{table.caption.30}\protected@file@percent }
-\newlabel{tab:core_summary}{{8}{25}{Main-text results organized by argumentative role. Each example supports a distinct part of the paper's claim.\relax }{table.caption.30}{}}
+\newlabel{eq:von_mises_yield}{{51}{25}{Constitutive model and smooth return mapping}{equation.4.51}{}}
+\newlabel{eq:smooth_return}{{52}{25}{Constitutive model and smooth return mapping}{equation.4.52}{}}
+\newlabel{eq:ep_bc}{{53}{25}{Constitutive model and smooth return mapping}{equation.4.53}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.2}Two-stage inverse identification}{25}{subsubsection.4.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Stage\nobreakspace  {}1: yield stress.}{25}{section*.27}\protected@file@percent }
+\newlabel{eq:disp_loss}{{54}{25}{Stage~1: yield stress}{equation.4.54}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage\nobreakspace  {}2: kinematic hardening.}{26}{section*.28}\protected@file@percent }
+\newlabel{eq:rf_loss}{{55}{26}{Stage~2: kinematic hardening}{equation.4.55}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Two-stage elastoplastic inverse identification results. Stage\nobreakspace  {}1 identifies $\tau _y$ from monotonic displacement data; Stage\nobreakspace  {}2 identifies $H_{\mathrm  {kin}}$ from cyclic reaction-force data. Material: $E=200$, $\nu =0.3$. Mesh: $4^3$ hexahedra (384\nobreakspace  {}P1 tetrahedra, 125\nobreakspace  {}nodes).\relax }}{26}{table.caption.29}\protected@file@percent }
+\newlabel{tab:ep_results}{{9}{26}{Two-stage elastoplastic inverse identification results. Stage~1 identifies $\tau _y$ from monotonic displacement data; Stage~2 identifies $H_{\mathrm {kin}}$ from cyclic reaction-force data. Material: $E=200$, $\nu =0.3$. Mesh: $4^3$ hexahedra (384~P1 tetrahedra, 125~nodes).\relax }{table.caption.29}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.3}Sensitivity analysis}{26}{subsubsection.4.5.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Elastoplastic constitutive response. (a)\nobreakspace  {}Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon _s$; at $\varepsilon _s=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau _y=0.5$). (b)\nobreakspace  {}Cyclic stress--strain loops for three kinematic hardening moduli: $H_{\mathrm  {kin}}>0$ shifts the reverse yield point (Bauschinger effect), enabling $H_{\mathrm  {kin}}$ identification from cyclic data.\relax }}{26}{figure.caption.30}\protected@file@percent }
+\newlabel{fig:ep_constitutive}{{15}{26}{Elastoplastic constitutive response. (a)~Uniaxial stress--strain curves for three softplus sharpness values $\varepsilon _s$; at $\varepsilon _s=0.001$, the smooth response is indistinguishable from the sharp classical yield point ($\tau _y=0.5$). (b)~Cyclic stress--strain loops for three kinematic hardening moduli: $H_{\mathrm {kin}}>0$ shifts the reverse yield point (Bauschinger effect), enabling $H_{\mathrm {kin}}$ identification from cyclic data.\relax }{figure.caption.30}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Inverse parameter recovery convergence. (a)\nobreakspace  {}Stage\nobreakspace  {}1: $\tau _y$ trajectories from six initial guesses; all converge to $\tau _{y,\mathrm  {true}}=0.5$ within 100 iterations. (b)\nobreakspace  {}Stage\nobreakspace  {}2: $H_{\mathrm  {kin}}$ recovery from $H_{\mathrm  {kin},0}=5$ using reaction-force observations; the estimate reaches $19.58$ ($2.11\%$ error) after 150 iterations.\relax }}{27}{figure.caption.31}\protected@file@percent }
+\newlabel{fig:ep_convergence}{{16}{27}{Inverse parameter recovery convergence. (a)~Stage~1: $\tau _y$ trajectories from six initial guesses; all converge to $\tau _{y,\mathrm {true}}=0.5$ within 100 iterations. (b)~Stage~2: $H_{\mathrm {kin}}$ recovery from $H_{\mathrm {kin},0}=5$ using reaction-force observations; the estimate reaches $19.58$ ($2.11\%$ error) after 150 iterations.\relax }{figure.caption.31}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Recovered versus true cyclic stress--strain response at three sample locations on a single torus chart sector. At all three locations the hysteresis loops generated by the true parameters (solid) and the identified parameters (dashed) are visually indistinguishable.\relax }}{27}{figure.caption.32}\protected@file@percent }
+\newlabel{fig:ep_hysteresis_multipoint}{{17}{27}{Recovered versus true cyclic stress--strain response at three sample locations on a single torus chart sector. At all three locations the hysteresis loops generated by the true parameters (solid) and the identified parameters (dashed) are visually indistinguishable.\relax }{figure.caption.32}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Sensitivity studies. (a)\nobreakspace  {}$\tau _y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes ($n_{\mathrm  {cells}}\in \{3,4,6,8\}$). (b)\nobreakspace  {}$\tau _y$ convergence trajectories for different initial smoothing parameters $\varepsilon _{s,\mathrm  {start}}$; all values except $\varepsilon _{s,\mathrm  {start}}=1.0$ converge to the correct yield stress.\relax }}{27}{figure.caption.33}\protected@file@percent }
+\newlabel{fig:ep_sensitivity}{{18}{27}{Sensitivity studies. (a)~$\tau _y$ identification error versus mesh resolution; accuracy is consistent across all mesh sizes ($n_{\mathrm {cells}}\in \{3,4,6,8\}$). (b)~$\tau _y$ convergence trajectories for different initial smoothing parameters $\varepsilon _{s,\mathrm {start}}$; all values except $\varepsilon _{s,\mathrm {start}}=1.0$ converge to the correct yield stress.\relax }{figure.caption.33}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Cross-example comparison and lessons learned}{28}{subsection.4.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Main-text results organized by argumentative role. Each example supports a distinct part of the paper's claim.\relax }}{28}{table.caption.34}\protected@file@percent }
+\newlabel{tab:core_summary}{{10}{28}{Main-text results organized by argumentative role. Each example supports a distinct part of the paper's claim.\relax }{table.caption.34}{}}
 \citation{de_souza_neto_computational_2011}
 \citation{shukla2021parallel,moseley2021fbpinns}
 \citation{hughes2005isogeometric,cottrell2009isogeometric}
 \citation{ciarlet2002finite}
-\@writefile{toc}{\contentsline {section}{\numberline {5}Discussions}{26}{section.5}\protected@file@percent }
-\newlabel{sec:discussion}{{5}{26}{Discussions}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Method-level comparison with alternative workflows}{26}{subsection.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Relation to isogeometric and multi-patch analysis}{26}{subsection.5.2}\protected@file@percent }
 \citation{brivadis2015isogeometric}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Discussions}{29}{section.5}\protected@file@percent }
+\newlabel{sec:discussion}{{5}{29}{Discussions}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Method-level comparison with alternative workflows}{29}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Relation to isogeometric and multi-patch analysis}{29}{subsection.5.2}\protected@file@percent }
 \citation{schneider2022large}
 \citation{sahli2024deltapinns}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Scope of external comparison}{27}{subsection.5.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Current limitations and future development priorities}{27}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Scope of external comparison}{30}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Current limitations and future development priorities}{30}{subsection.5.4}\protected@file@percent }
 \citation{raissi2019physicsinformed}
-\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusions}{28}{section.6}\protected@file@percent }
-\newlabel{sec:conclusions}{{6}{28}{Conclusions}{section.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation transparency and hardware backends}{28}{appendix.A}\protected@file@percent }
-\newlabel{sec:appendix_impl_details}{{A}{28}{Implementation transparency and hardware backends}{appendix.A}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Research workflow and implementation assistance}{28}{subsection.A.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Hardware backends}{28}{subsection.A.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {B}Neural network architecture specifications}{28}{appendix.B}\protected@file@percent }
-\newlabel{sec:appendix_architectures}{{B}{28}{Neural network architecture specifications}{appendix.B}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Neural-network families. Configurations are quoted from source code class definitions and canonical checkpoint metadata.\relax }}{29}{table.caption.32}\protected@file@percent }
-\newlabel{tab:impl_networks}{{9}{29}{Neural-network families. Configurations are quoted from source code class definitions and canonical checkpoint metadata.\relax }{table.caption.32}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {C}Global map training for simply connected domains}{29}{appendix.C}\protected@file@percent }
-\newlabel{sec:appendix_global_map}{{C}{29}{Global map training for simply connected domains}{appendix.C}{}}
-\newlabel{eq:global_map}{{55}{29}{Global map training for simply connected domains}{equation.C.55}{}}
-\newlabel{eq:global_map_loss}{{56}{29}{Global map training for simply connected domains}{equation.C.56}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {D}Geometry pipeline equations}{29}{appendix.D}\protected@file@percent }
-\newlabel{sec:appendix_pipeline}{{D}{29}{Geometry pipeline equations}{appendix.D}{}}
-\@writefile{toc}{\contentsline {paragraph}{Stage 1: SDF training loss.}{29}{section*.33}\protected@file@percent }
-\newlabel{eq:impl_sdf_levelset}{{57}{29}{Stage 1: SDF training loss}{equation.D.57}{}}
-\newlabel{eq:impl_sdf_loss}{{58}{29}{Stage 1: SDF training loss}{equation.D.58}{}}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Special-case training of a learned global volumetric map\relax }}{30}{algorithm.2}\protected@file@percent }
-\newlabel{alg:global_map_training}{{2}{30}{Special-case training of a learned global volumetric map\relax }{algorithm.2}{}}
-\newlabel{eq:impl_sdf_sign}{{59}{30}{Stage 1: SDF training loss}{equation.D.59}{}}
-\@writefile{toc}{\contentsline {paragraph}{Stage 2: atlas seed placement.}{30}{section*.34}\protected@file@percent }
-\newlabel{eq:impl_local_coords}{{60}{30}{Stage 2: atlas seed placement}{equation.D.60}{}}
-\newlabel{eq:impl_membership}{{61}{30}{Stage 2: atlas seed placement}{equation.D.61}{}}
-\@writefile{toc}{\contentsline {paragraph}{Stage 3: decoder and mask training.}{30}{section*.35}\protected@file@percent }
-\newlabel{eq:impl_decoder_map}{{62}{30}{Stage 3: decoder and mask training}{equation.D.62}{}}
-\newlabel{eq:impl_mask_weights}{{63}{30}{Stage 3: decoder and mask training}{equation.D.63}{}}
-\newlabel{eq:impl_atlas_total}{{64}{30}{Stage 3: decoder and mask training}{equation.D.64}{}}
-\newlabel{eq:impl_atlas_recon}{{65}{30}{Stage 3: decoder and mask training}{equation.D.65}{}}
-\newlabel{eq:impl_atlas_domain}{{66}{30}{Stage 3: decoder and mask training}{equation.D.66}{}}
-\newlabel{eq:impl_atlas_mask}{{67}{30}{Stage 3: decoder and mask training}{equation.D.67}{}}
-\newlabel{eq:impl_atlas_overlap}{{68}{30}{Stage 3: decoder and mask training}{equation.D.68}{}}
-\newlabel{eq:impl_atlas_jac}{{69}{30}{Stage 3: decoder and mask training}{equation.D.69}{}}
-\newlabel{eq:impl_atlas_cov}{{70}{30}{Stage 3: decoder and mask training}{equation.D.70}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusions}{31}{section.6}\protected@file@percent }
+\newlabel{sec:conclusions}{{6}{31}{Conclusions}{section.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation transparency and hardware backends}{31}{appendix.A}\protected@file@percent }
+\newlabel{sec:appendix_impl_details}{{A}{31}{Implementation transparency and hardware backends}{appendix.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Research workflow and implementation assistance}{31}{subsection.A.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Hardware backends}{31}{subsection.A.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Neural network architecture specifications}{31}{appendix.B}\protected@file@percent }
+\newlabel{sec:appendix_architectures}{{B}{31}{Neural network architecture specifications}{appendix.B}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Neural-network families. Configurations are quoted from source code class definitions and canonical checkpoint metadata.\relax }}{32}{table.caption.36}\protected@file@percent }
+\newlabel{tab:impl_networks}{{11}{32}{Neural-network families. Configurations are quoted from source code class definitions and canonical checkpoint metadata.\relax }{table.caption.36}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Global map training for simply connected domains}{32}{appendix.C}\protected@file@percent }
+\newlabel{sec:appendix_global_map}{{C}{32}{Global map training for simply connected domains}{appendix.C}{}}
+\newlabel{eq:global_map}{{56}{32}{Global map training for simply connected domains}{equation.C.56}{}}
+\newlabel{eq:global_map_loss}{{57}{32}{Global map training for simply connected domains}{equation.C.57}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Geometry pipeline equations}{32}{appendix.D}\protected@file@percent }
+\newlabel{sec:appendix_pipeline}{{D}{32}{Geometry pipeline equations}{appendix.D}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 1: SDF training loss.}{32}{section*.37}\protected@file@percent }
+\newlabel{eq:impl_sdf_levelset}{{58}{32}{Stage 1: SDF training loss}{equation.D.58}{}}
+\newlabel{eq:impl_sdf_loss}{{59}{32}{Stage 1: SDF training loss}{equation.D.59}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Special-case training of a learned global volumetric map\relax }}{33}{algorithm.2}\protected@file@percent }
+\newlabel{alg:global_map_training}{{2}{33}{Special-case training of a learned global volumetric map\relax }{algorithm.2}{}}
+\newlabel{eq:impl_sdf_sign}{{60}{33}{Stage 1: SDF training loss}{equation.D.60}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 2: atlas seed placement.}{33}{section*.38}\protected@file@percent }
+\newlabel{eq:impl_local_coords}{{61}{33}{Stage 2: atlas seed placement}{equation.D.61}{}}
+\newlabel{eq:impl_membership}{{62}{33}{Stage 2: atlas seed placement}{equation.D.62}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 3: decoder and mask training.}{33}{section*.39}\protected@file@percent }
+\newlabel{eq:impl_decoder_map}{{63}{33}{Stage 3: decoder and mask training}{equation.D.63}{}}
+\newlabel{eq:impl_mask_weights}{{64}{33}{Stage 3: decoder and mask training}{equation.D.64}{}}
+\newlabel{eq:impl_atlas_total}{{65}{33}{Stage 3: decoder and mask training}{equation.D.65}{}}
+\newlabel{eq:impl_atlas_recon}{{66}{33}{Stage 3: decoder and mask training}{equation.D.66}{}}
+\newlabel{eq:impl_atlas_domain}{{67}{33}{Stage 3: decoder and mask training}{equation.D.67}{}}
+\newlabel{eq:impl_atlas_mask}{{68}{33}{Stage 3: decoder and mask training}{equation.D.68}{}}
+\newlabel{eq:impl_atlas_overlap}{{69}{33}{Stage 3: decoder and mask training}{equation.D.69}{}}
+\newlabel{eq:impl_atlas_jac}{{70}{33}{Stage 3: decoder and mask training}{equation.D.70}{}}
+\newlabel{eq:impl_atlas_cov}{{71}{33}{Stage 3: decoder and mask training}{equation.D.71}{}}
 \citation{yu2020gradient}
-\@writefile{toc}{\contentsline {paragraph}{Stage 4: quality gates.}{31}{section*.36}\protected@file@percent }
-\newlabel{eq:impl_gate_metrics}{{71}{31}{Stage 4: quality gates}{equation.D.71}{}}
-\newlabel{eq:impl_gate_rmse}{{72}{31}{Stage 4: quality gates}{equation.D.72}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {E}Solver stabilization details}{31}{appendix.E}\protected@file@percent }
-\newlabel{sec:appendix_stabilization}{{E}{31}{Solver stabilization details}{appendix.E}{}}
-\newlabel{eq:adaptive_overlap_weight}{{73}{31}{Solver stabilization details}{equation.E.73}{}}
-\newlabel{eq:adaptive_tau_schedule}{{74}{31}{Solver stabilization details}{equation.E.74}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {F}Rabbit Poisson benchmark: supplementary tables}{31}{appendix.F}\protected@file@percent }
-\newlabel{sec:appendix_rabbit_details}{{F}{31}{Rabbit Poisson benchmark: supplementary tables}{appendix.F}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Reinforcement progression for the rabbit Poisson benchmark. Each row adds one stabilization ingredient cumulatively.\relax }}{31}{table.caption.37}\protected@file@percent }
-\newlabel{tab:rabbit_reinforcement_progression}{{10}{31}{Reinforcement progression for the rabbit Poisson benchmark. Each row adds one stabilization ingredient cumulatively.\relax }{table.caption.37}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {G}Stanford Bunny volumetric neural SDF benchmark}{31}{appendix.G}\protected@file@percent }
-\newlabel{sec:appendix_bunny}{{G}{31}{Stanford Bunny volumetric neural SDF benchmark}{appendix.G}{}}
+\@writefile{toc}{\contentsline {paragraph}{Stage 4: quality gates.}{34}{section*.40}\protected@file@percent }
+\newlabel{eq:impl_gate_metrics}{{72}{34}{Stage 4: quality gates}{equation.D.72}{}}
+\newlabel{eq:impl_gate_rmse}{{73}{34}{Stage 4: quality gates}{equation.D.73}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {E}Solver stabilization details}{34}{appendix.E}\protected@file@percent }
+\newlabel{sec:appendix_stabilization}{{E}{34}{Solver stabilization details}{appendix.E}{}}
+\newlabel{eq:adaptive_overlap_weight}{{74}{34}{Solver stabilization details}{equation.E.74}{}}
+\newlabel{eq:adaptive_tau_schedule}{{75}{34}{Solver stabilization details}{equation.E.75}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {F}Rabbit Poisson benchmark: supplementary tables}{34}{appendix.F}\protected@file@percent }
+\newlabel{sec:appendix_rabbit_details}{{F}{34}{Rabbit Poisson benchmark: supplementary tables}{appendix.F}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Reinforcement progression for the rabbit Poisson benchmark. Each row adds one stabilization ingredient cumulatively.\relax }}{34}{table.caption.41}\protected@file@percent }
+\newlabel{tab:rabbit_reinforcement_progression}{{12}{34}{Reinforcement progression for the rabbit Poisson benchmark. Each row adds one stabilization ingredient cumulatively.\relax }{table.caption.41}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {G}Stanford Bunny volumetric neural SDF benchmark}{34}{appendix.G}\protected@file@percent }
+\newlabel{sec:appendix_bunny}{{G}{34}{Stanford Bunny volumetric neural SDF benchmark}{appendix.G}{}}
 \bibstyle{unsrtnat}
 \bibdata{main}
 \bibcite{de_souza_neto_computational_2011}{{1}{2011}{{de~Souza~Neto et~al.}}{{de~Souza~Neto, Peric, and Owen}}}
 \bibcite{quey_large-scale_2011}{{2}{2011}{{Quey et~al.}}{{Quey, Dawson, and Barbe}}}
-\newlabel{eq:bunny_sdf_body}{{75}{32}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.75}{}}
-\newlabel{eq:bunny_sdf_surface_normal}{{76}{32}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.76}{}}
-\newlabel{eq:bunny_sdf_eikonal}{{77}{32}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.77}{}}
-\newlabel{eq:bunny_sdf_sign}{{78}{32}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.78}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces 8-chart Stanford Bunny Poisson continuation study. All runs use the repaired Bunny atlas and CompactChartNet; the primary variable is the number of interior supervised pretraining epochs before Schwarz iteration.\relax }}{32}{table.caption.38}\protected@file@percent }
-\newlabel{tab:bunny_poisson_continuation}{{11}{32}{8-chart Stanford Bunny Poisson continuation study. All runs use the repaired Bunny atlas and CompactChartNet; the primary variable is the number of interior supervised pretraining epochs before Schwarz iteration.\relax }{table.caption.38}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Stanford Bunny SDF benchmark: optimization traces for the four training objectives. Surface and normal terms decay strongly, while Eikonal and sign-anchor terms remain the dominant error sources.\relax }}{33}{figure.caption.39}\protected@file@percent }
-\newlabel{fig:bunny_sdf_learning}{{17}{33}{Stanford Bunny SDF benchmark: optimization traces for the four training objectives. Surface and normal terms decay strongly, while Eikonal and sign-anchor terms remain the dominant error sources.\relax }{figure.caption.39}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Stanford Bunny downstream continuation. Chart-partition and dominant blend-weight views from the best 8-chart Poisson continuation run. The eight charts cover most of the imported PLY surface, with active chart weight close to one on most surface points.\relax }}{33}{figure.caption.40}\protected@file@percent }
-\newlabel{fig:bunny_sdf_surface}{{18}{33}{Stanford Bunny downstream continuation. Chart-partition and dominant blend-weight views from the best 8-chart Poisson continuation run. The eight charts cover most of the imported PLY surface, with active chart weight close to one on most surface points.\relax }{figure.caption.40}{}}
+\newlabel{eq:bunny_sdf_body}{{76}{35}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.76}{}}
+\newlabel{eq:bunny_sdf_surface_normal}{{77}{35}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.77}{}}
+\newlabel{eq:bunny_sdf_eikonal}{{78}{35}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.78}{}}
+\newlabel{eq:bunny_sdf_sign}{{79}{35}{Stanford Bunny volumetric neural SDF benchmark}{equation.G.79}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces 8-chart Stanford Bunny Poisson continuation study. All runs use the repaired Bunny atlas and CompactChartNet; the primary variable is the number of interior supervised pretraining epochs before Schwarz iteration.\relax }}{35}{table.caption.42}\protected@file@percent }
+\newlabel{tab:bunny_poisson_continuation}{{13}{35}{8-chart Stanford Bunny Poisson continuation study. All runs use the repaired Bunny atlas and CompactChartNet; the primary variable is the number of interior supervised pretraining epochs before Schwarz iteration.\relax }{table.caption.42}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {19}{\ignorespaces Stanford Bunny SDF benchmark: optimization traces for the four training objectives. Surface and normal terms decay strongly, while Eikonal and sign-anchor terms remain the dominant error sources.\relax }}{36}{figure.caption.43}\protected@file@percent }
+\newlabel{fig:bunny_sdf_learning}{{19}{36}{Stanford Bunny SDF benchmark: optimization traces for the four training objectives. Surface and normal terms decay strongly, while Eikonal and sign-anchor terms remain the dominant error sources.\relax }{figure.caption.43}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {20}{\ignorespaces Stanford Bunny downstream continuation. Chart-partition and dominant blend-weight views from the best 8-chart Poisson continuation run. The eight charts cover most of the imported PLY surface, with active chart weight close to one on most surface points.\relax }}{36}{figure.caption.44}\protected@file@percent }
+\newlabel{fig:bunny_sdf_surface}{{20}{36}{Stanford Bunny downstream continuation. Chart-partition and dominant blend-weight views from the best 8-chart Poisson continuation run. The eight charts cover most of the imported PLY surface, with active chart weight close to one on most surface points.\relax }{figure.caption.44}{}}
 \bibcite{hughes2005isogeometric}{{3}{2005}{{Hughes et~al.}}{{Hughes, Cottrell, and Bazilevs}}}
 \bibcite{cottrell2009isogeometric}{{4}{2009}{{Cottrell et~al.}}{{Cottrell, Hughes, and Bazilevs}}}
 \bibcite{ciarlet2002finite}{{5}{2002}{{Ciarlet}}{{}}}
 \bibcite{brivadis2015isogeometric}{{6}{2015}{{Brivadis et~al.}}{{Brivadis, Buffa, Wohlmuth, and Wunderlich}}}
-\bibcite{apostolatos2014nitsche}{{7}{2014}{{Apostolatos et~al.}}{{Apostolatos, Schmidt, W{\"u}chner, and Bletzinger}}}
-\bibcite{dittmann2019isogeometric}{{8}{2019}{{Dittmann et~al.}}{{Dittmann, Schu{\ss }, Wohlmuth, and Hesch}}}
-\bibcite{quarteroni1999domain}{{9}{1999}{{Quarteroni and Valli}}{{}}}
-\bibcite{toselli2005domain}{{10}{2005}{{Toselli and Widlund}}{{}}}
-\bibcite{jagtap2020xpinns}{{11}{2020}{{Jagtap et~al.}}{{Jagtap, Kharazmi, and Karniadakis}}}
-\bibcite{shukla2021parallel}{{12}{2021}{{Shukla et~al.}}{{Shukla, Jagtap, and Karniadakis}}}
-\bibcite{moseley2021fbpinns}{{13}{2023}{{Moseley et~al.}}{{Moseley, Markham, and Nissen-Meyer}}}
-\bibcite{vlassis2021sobolev}{{14}{2021}{{Vlassis and Sun}}{{}}}
-\bibcite{park2019deepsdf}{{15}{2019}{{Park et~al.}}{{Park, Florence, Straub, Newcombe, and Lovegrove}}}
-\bibcite{mescheder2019occupancy}{{16}{2019}{{Mescheder et~al.}}{{Mescheder, Oechsle, Niemeyer, Nowozin, and Geiger}}}
-\bibcite{paszke2019pytorch}{{17}{2019}{{Paszke et~al.}}{{Paszke, Gross, Massa, Lerer, Bradbury, Chanan, Killeen, Lin, Gimelshein, Antiga, et~al.}}}
-\bibcite{yu2020gradient}{{18}{2020}{{Yu et~al.}}{{Yu, Kumar, Gupta, Levine, Hausman, and Finn}}}
-\bibcite{simo_computational_1998}{{19}{1998}{{Simo and Hughes}}{{}}}
-\bibcite{hu_difftaichi_2020}{{20}{2020}{{Hu et~al.}}{{Hu, Anderson, Li, Sun, Carr, Ragan-Kelley, and Durand}}}
-\bibcite{bark_differentiable_2025}{{21}{2025}{{Bark and Sun}}{{}}}
-\bibcite{raissi2019physicsinformed}{{22}{2019}{{Raissi et~al.}}{{Raissi, Perdikaris, and Karniadakis}}}
-\bibcite{lu2021deeponet}{{23}{2021}{{Lu et~al.}}{{Lu, Jin, Pang, Zhang, and Karniadakis}}}
-\bibcite{li2021fno}{{24}{2021}{{Li et~al.}}{{Li, Kovachki, Azizzadenesheli, Liu, Bhatt, Stuart, and Anandkumar}}}
-\bibcite{li2024pino}{{25}{2024}{{Li et~al.}}{{Li, Zheng, Kovachki, Jin, Chen, Liu, Azizzadenesheli, and Anandkumar}}}
-\bibcite{kirchdoerfer2016datadriven}{{26}{2016}{{Kirchdoerfer and Ortiz}}{{}}}
-\bibcite{fuhg2024review}{{27}{2024}{{Fuhg et~al.}}{{Fuhg, Bouklas, and Jones}}}
-\bibcite{schneider2022large}{{28}{2022}{{Schneider et~al.}}{{Schneider, Hu, Gao, Dumas, Zorin, and Panozzo}}}
-\bibcite{sahli2024deltapinns}{{29}{2024}{{Sahli~Costabal et~al.}}{{Sahli~Costabal, Pezzuto, and Perdikaris}}}
+\bibcite{quarteroni1999domain}{{7}{1999}{{Quarteroni and Valli}}{{}}}
+\bibcite{toselli2005domain}{{8}{2005}{{Toselli and Widlund}}{{}}}
+\bibcite{jagtap2020xpinns}{{9}{2020}{{Jagtap et~al.}}{{Jagtap, Kharazmi, and Karniadakis}}}
+\bibcite{shukla2021parallel}{{10}{2021}{{Shukla et~al.}}{{Shukla, Jagtap, and Karniadakis}}}
+\bibcite{moseley2021fbpinns}{{11}{2023}{{Moseley et~al.}}{{Moseley, Markham, and Nissen-Meyer}}}
+\bibcite{vlassis2021sobolev}{{12}{2021}{{Vlassis and Sun}}{{}}}
+\bibcite{park2019deepsdf}{{13}{2019}{{Park et~al.}}{{Park, Florence, Straub, Newcombe, and Lovegrove}}}
+\bibcite{mescheder2019occupancy}{{14}{2019}{{Mescheder et~al.}}{{Mescheder, Oechsle, Niemeyer, Nowozin, and Geiger}}}
+\bibcite{paszke2019pytorch}{{15}{2019}{{Paszke et~al.}}{{Paszke, Gross, Massa, Lerer, Bradbury, Chanan, Killeen, Lin, Gimelshein, Antiga, et~al.}}}
+\bibcite{yu2020gradient}{{16}{2020}{{Yu et~al.}}{{Yu, Kumar, Gupta, Levine, Hausman, and Finn}}}
+\bibcite{simo_computational_1998}{{17}{1998}{{Simo and Hughes}}{{}}}
+\bibcite{hu_difftaichi_2020}{{18}{2020}{{Hu et~al.}}{{Hu, Anderson, Li, Sun, Carr, Ragan-Kelley, and Durand}}}
+\bibcite{bark_differentiable_2025}{{19}{2025}{{Bark and Sun}}{{}}}
+\bibcite{raissi2019physicsinformed}{{20}{2019}{{Raissi et~al.}}{{Raissi, Perdikaris, and Karniadakis}}}

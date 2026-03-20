@@ -53,7 +53,8 @@ class ChartVectorFEMSolver:
         filter elements and classify boundary nodes.
     chart_decoder : optional
         ``torch.nn.Module`` mapping chart coords xi -> physical coords x.
-        Used only for SDF evaluation of mesh centroids.
+        When provided, physical mapped geometry is used for SDF filtering,
+        deformation gradients, internal forces, and tangent assembly.
     decoder_kwargs : dict, optional
         Extra kwargs passed to chart_decoder (seed, t1, t2, n, chart_scale, ...).
     sdf_threshold : float
@@ -93,6 +94,7 @@ class ChartVectorFEMSolver:
 
         # Populated by _build_mesh
         self.nodes: torch.Tensor = torch.empty(0, 3, device=self.device, dtype=self.dtype)
+        self.nodes_phys: torch.Tensor = torch.empty(0, 3, device=self.device, dtype=self.dtype)
         self.elements: torch.Tensor = torch.empty(0, 4, device=self.device, dtype=torch.long)
         self.n_nodes: int = 0
         self.n_elements: int = 0
@@ -101,6 +103,15 @@ class ChartVectorFEMSolver:
         # Cached per-element quantities (set by _build_mesh)
         self.dNdx: torch.Tensor = torch.empty(0, 4, 3, device=self.device, dtype=self.dtype)
         self.vol: torch.Tensor = torch.empty(0, device=self.device, dtype=self.dtype)
+        self.dNdx_ref: torch.Tensor = torch.empty(0, 4, 3, device=self.device, dtype=self.dtype)
+        self.dNdx_phys: torch.Tensor = torch.empty(0, 4, 3, device=self.device, dtype=self.dtype)
+        self.vol_ref: torch.Tensor = torch.empty(0, device=self.device, dtype=self.dtype)
+        self.vol_phys: torch.Tensor = torch.empty(0, device=self.device, dtype=self.dtype)
+        self.elem_centroids_ref: torch.Tensor = torch.empty(0, 3, device=self.device, dtype=self.dtype)
+        self.elem_centroids_phys: torch.Tensor = torch.empty(0, 3, device=self.device, dtype=self.dtype)
+        self.geom_J: torch.Tensor = torch.empty(0, 3, 3, device=self.device, dtype=self.dtype)
+        self.geom_J_inv: torch.Tensor = torch.empty(0, 3, 3, device=self.device, dtype=self.dtype)
+        self.geom_detJ: torch.Tensor = torch.empty(0, device=self.device, dtype=self.dtype)
 
         self._build_mesh()
 
@@ -152,6 +163,11 @@ class ChartVectorFEMSolver:
 
         if all_tets.shape[0] == 0:
             self.nodes = all_nodes
+            if self.chart_decoder is not None:
+                with torch.no_grad():
+                    self.nodes_phys = self.chart_decoder(self.nodes, **self.decoder_kwargs)
+            else:
+                self.nodes_phys = self.nodes.clone()
             self.n_nodes = all_nodes.shape[0]
             self.n_elements = 0
             self.boundary_mask = torch.zeros(self.n_nodes, device=self.device, dtype=torch.bool)
@@ -168,6 +184,11 @@ class ChartVectorFEMSolver:
         self.elements = old_to_new[all_tets]
         self.n_nodes = self.nodes.shape[0]
         self.n_elements = self.elements.shape[0]
+        if self.chart_decoder is not None:
+            with torch.no_grad():
+                self.nodes_phys = self.chart_decoder(self.nodes, **self.decoder_kwargs)
+        else:
+            self.nodes_phys = self.nodes.clone()
 
         # Classify boundary nodes
         self._classify_boundary()
@@ -240,48 +261,119 @@ class ChartVectorFEMSolver:
             dN_0/dx = -sum of rows of B^{-1}
             dN_k/dx = row (k-1) of B^{-1}, k=1,2,3
         """
-        xe = self.nodes[self.elements]  # (M, 4, 3)
-        # B: columns are edge vectors from v0
-        B = (xe[:, 1:, :] - xe[:, 0:1, :]).permute(0, 2, 1)  # (M, 3, 3)
-        detB = torch.det(B)  # (M,)
-        self.vol = torch.abs(detB) / 6.0  # (M,)
+        def _metrics_from_nodes(xe: torch.Tensor):
+            n_elem = xe.shape[0]
+            B = (xe[:, 1:, :] - xe[:, 0:1, :]).permute(0, 2, 1)  # (M, 3, 3)
+            detB = torch.det(B)  # (M,)
+            invB = torch.linalg.inv(B)  # (M, 3, 3)
+            dN = torch.zeros(n_elem, 4, 3, device=self.device, dtype=self.dtype)
+            dN[:, 1:, :] = invB
+            dN[:, 0, :] = -invB.sum(dim=1)
+            vol = torch.abs(detB) / 6.0
+            return B, detB, invB, dN, vol
 
-        # Inverse of B
-        invB = torch.linalg.inv(B)  # (M, 3, 3)
+        xe_ref = self.nodes[self.elements]  # (M, 4, 3)
+        self.elem_centroids_ref = xe_ref.mean(dim=1)
+        _, _, _, dN_ref, vol_ref = _metrics_from_nodes(xe_ref)
+        self.dNdx_ref = dN_ref
+        self.vol_ref = vol_ref
 
-        # Shape function gradients: dNdx (M, 4, 3)
-        # invB rows are gradients of lambda_1, lambda_2, lambda_3
-        # (invB is 3x3, row k = dN_{k+1}/dx)
-        self.dNdx = torch.zeros(self.n_elements, 4, 3, device=self.device, dtype=self.dtype)
-        self.dNdx[:, 1:, :] = invB  # rows of B^{-1}
-        self.dNdx[:, 0, :] = -invB.sum(dim=1)  # dN_0 = -sum of others
+        if self.chart_decoder is not None:
+            # Use the exact decoder Jacobian at the element centroid.  This avoids
+            # singular nodal-map tets at the torus centerline while still giving a
+            # consistent physical push-forward for P1 chart gradients.
+            self.geom_J = self.decoder_jacobian(self.elem_centroids_ref)
+            self.geom_J_inv = torch.linalg.inv(self.geom_J)
+            self.geom_detJ = torch.det(self.geom_J)
+            self.elem_centroids_phys = self.chart_decoder(
+                self.elem_centroids_ref, **self.decoder_kwargs
+            )
+            self.dNdx_phys = torch.einsum("eaj,ejk->eak", self.dNdx_ref, self.geom_J_inv)
+            self.vol_phys = self.vol_ref * torch.abs(self.geom_detJ)
+            self.dNdx = self.dNdx_phys
+            self.vol = self.vol_phys
+        else:
+            self.elem_centroids_phys = self.elem_centroids_ref.clone()
+            eye = torch.eye(3, device=self.device, dtype=self.dtype)
+            self.geom_J = eye.unsqueeze(0).expand(self.n_elements, 3, 3).clone()
+            self.geom_J_inv = self.geom_J.clone()
+            self.geom_detJ = torch.ones(self.n_elements, device=self.device, dtype=self.dtype)
+            self.dNdx_phys = self.dNdx_ref.clone()
+            self.vol_phys = self.vol_ref.clone()
+            self.dNdx = self.dNdx_ref
+            self.vol = self.vol_ref
+
+    def decoder_jacobian(self, xi: torch.Tensor) -> torch.Tensor:
+        """Compute the exact decoder Jacobian dx/dxi at the supplied points."""
+        if self.chart_decoder is None:
+            I = torch.eye(3, device=xi.device, dtype=xi.dtype)
+            return I.unsqueeze(0).expand(xi.shape[0], 3, 3).clone()
+
+        if hasattr(self.chart_decoder, "jacobian"):
+            return self.chart_decoder.jacobian(xi, **self.decoder_kwargs)
+
+        xi_var = xi.detach().clone().requires_grad_(True)
+        x = self.chart_decoder(xi_var, **self.decoder_kwargs)
+        rows = []
+        for d in range(3):
+            grad_out = torch.zeros_like(x)
+            grad_out[:, d] = 1.0
+            g = torch.autograd.grad(
+                x,
+                xi_var,
+                grad_outputs=grad_out,
+                retain_graph=(d < 2),
+                create_graph=False,
+            )[0]
+            rows.append(g)
+        return torch.stack(rows, dim=1)
+
+    def compute_grad_u_ref(self, u: torch.Tensor) -> torch.Tensor:
+        """Compute the chart-coordinate displacement gradient grad_xi(u)."""
+        u_elem = u[self.elements]
+        return torch.einsum("eai, eaj -> eij", u_elem, self.dNdx_ref)
+
+    def compute_grad_u_phys(self, u: torch.Tensor) -> torch.Tensor:
+        """Compute the physical displacement gradient grad_x(u)."""
+        u_elem = u[self.elements]
+        basis_grads = self.dNdx_phys if self.chart_decoder is not None else self.dNdx_ref
+        return torch.einsum("eai, eaj -> eij", u_elem, basis_grads)
+
+    def compute_F_ref(self, u: torch.Tensor) -> torch.Tensor:
+        """Compute the reference-space deformation gradient I + grad_xi(u)."""
+        grad_u = self.compute_grad_u_ref(u)
+        I = torch.eye(3, device=self.device, dtype=self.dtype).unsqueeze(0)
+        return I + grad_u
+
+    def compute_F_phys(self, u: torch.Tensor) -> torch.Tensor:
+        """Compute the physical deformation gradient I + grad_x(u)."""
+        grad_u = self.compute_grad_u_phys(u)
+        I = torch.eye(3, device=self.device, dtype=self.dtype).unsqueeze(0)
+        return I + grad_u
 
     # ------------------------------------------------------------------
     # Deformation gradient
     # ------------------------------------------------------------------
-    def compute_F(self, u: torch.Tensor) -> torch.Tensor:
+    def compute_F(self, u: torch.Tensor, physical: Optional[bool] = None) -> torch.Tensor:
         """Compute deformation gradient F = I + grad(u) at each element.
 
         Parameters
         ----------
         u : torch.Tensor, shape (N, 3)
             Nodal displacement vector.
+        physical : bool, optional
+            When ``True``, use the physical mapped geometry.  When ``False``,
+            use the chart/reference coordinates.  Defaults to physical space
+            whenever a chart decoder is present.
 
         Returns
         -------
         F : torch.Tensor, shape (M, 3, 3)
             Deformation gradient per element.
         """
-        # u at element nodes: (M, 4, 3)
-        u_elem = u[self.elements]
-
-        # grad(u) = sum_a dN_a/dx_j * u_a_i = dNdx^T @ u_elem
-        # grad_u[e, i, j] = sum_a u_elem[e, a, i] * dNdx[e, a, j]
-        grad_u = torch.einsum("eai, eaj -> eij", u_elem, self.dNdx)  # (M, 3, 3)
-
-        I = torch.eye(3, device=self.device, dtype=self.dtype).unsqueeze(0)  # (1, 3, 3)
-        F = I + grad_u
-        return F
+        if physical is None:
+            physical = self.chart_decoder is not None
+        return self.compute_F_phys(u) if physical else self.compute_F_ref(u)
 
     # ------------------------------------------------------------------
     # Internal force vector
@@ -440,13 +532,15 @@ class ChartVectorFEMSolver:
         bc_mask_dof = bc_mask.unsqueeze(1).expand(-1, 3).reshape(-1)  # (3N,)
         free_dof = ~bc_mask_dof
 
+        def residual_vector(u_cur: torch.Tensor) -> torch.Tensor:
+            f_int = self.internal_forces(u_cur, stress_fn)
+            R_cur = (f_int - f_ext).reshape(-1)
+            R_cur[bc_mask_dof] = 0.0
+            return R_cur
+
         for it in range(max_iter):
             # Residual: R = f_int(u) - f_ext
-            f_int = self.internal_forces(u, stress_fn)
-            R = (f_int - f_ext).reshape(-1)  # (3N,)
-
-            # Zero out BC residual (those equations are satisfied by construction)
-            R[bc_mask_dof] = 0.0
+            R = residual_vector(u)  # (3N,)
 
             res_norm = torch.norm(R[free_dof]).item()
             if it == 0:
@@ -469,8 +563,26 @@ class ChartVectorFEMSolver:
             # Solve K @ du = -R
             du = torch.linalg.solve(K, -R)  # (3N,)
 
-            # Update
-            u = u + du.reshape(-1, 3)
+            # Backtracking line search improves robustness for the atlas-coupled
+            # elastoplastic solves where a full Newton step can overshoot.
+            du_3d = du.reshape(-1, 3)
+            alpha = 1.0
+            accepted = False
+            u_trial = u + du_3d
+            u_trial[bc_mask] = u_bc[bc_mask]
+
+            for _ in range(8):
+                R_trial = residual_vector(u_trial)
+                res_trial = torch.norm(R_trial[free_dof]).item()
+                if res_trial < res_norm:
+                    accepted = True
+                    break
+                alpha *= 0.5
+                u_trial = u + alpha * du_3d
+                u_trial[bc_mask] = u_bc[bc_mask]
+
+            u = u_trial if accepted else (u + du_3d)
+            u[bc_mask] = u_bc[bc_mask]
 
             if it == max_iter - 1:
                 print(f"  [Newton] WARNING: did not converge after {max_iter} iters, |R| = {res_norm:.2e}")

@@ -11,6 +11,7 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -31,6 +32,14 @@ from experiments.torus_elastoplastic.chart_vector_fem import ChartVectorFEMSolve
 from experiments.torus_elastoplastic.incremental_solver import (
     IncrementalSolver,
     cosine_anneal,
+)
+from experiments.torus_elastoplastic.reconstruct_torus_fields import (
+    _aggregate_field,
+    _cluster_points,
+)
+from experiments.torus_elastoplastic.run_forward_bvp_schwarz import (
+    TorusChartDecoder,
+    TorusSDF,
 )
 
 
@@ -277,6 +286,110 @@ class TestChartVectorFEM:
 
         assert mu.grad is not None and torch.isfinite(mu.grad)
         assert K_val.grad is not None and torch.isfinite(K_val.grad)
+
+    def test_torus_mapped_kinematics_pushes_forward_reference_gradients(self):
+        """Mapped charts should push constant grad_xi(u) to grad_x(u)=grad_xi(u) J^{-1}."""
+        sdf = TorusSDF()
+        A = torch.tensor(
+            [[0.02, -0.01, 0.015],
+             [0.005, 0.01, -0.02],
+             [-0.01, 0.012, 0.008]],
+            device=DEVICE, dtype=DTYPE,
+        )
+        b = torch.tensor([0.03, -0.02, 0.01], device=DEVICE, dtype=DTYPE)
+        I = torch.eye(3, device=DEVICE, dtype=DTYPE)
+
+        for phi_center in [0.0, math.pi / 2.0]:
+            solver = ChartVectorFEMSolver(
+                n_cells=3,
+                support_r=1.0,
+                chart_decoder=TorusChartDecoder(phi_center=phi_center),
+                sdf_oracle=sdf,
+                sdf_threshold=-0.005,
+                device=DEVICE,
+                dtype=DTYPE,
+            )
+            u = solver.nodes @ A.T + b
+
+            grad_ref = solver.compute_grad_u_ref(u)
+            grad_phys = solver.compute_grad_u_phys(u)
+            F_phys = solver.compute_F(u)
+            expected_grad_phys = torch.einsum("ij,ejk->eik", A, solver.geom_J_inv)
+            expected_F_phys = I.unsqueeze(0) + expected_grad_phys
+
+            assert torch.allclose(
+                grad_ref,
+                A.unsqueeze(0).expand_as(grad_phys),
+                atol=1e-10,
+                rtol=1e-10,
+            )
+            assert torch.allclose(
+                grad_phys,
+                expected_grad_phys,
+                atol=1e-10,
+                rtol=1e-10,
+            )
+            assert torch.allclose(
+                F_phys,
+                expected_F_phys,
+                atol=1e-10,
+                rtol=1e-10,
+            )
+
+    def test_overlap_clustering_collapses_duplicate_physical_nodes(self):
+        """Coincident torus nodes from overlapping charts should blend cleanly."""
+        sdf = TorusSDF()
+        solvers = [
+            ChartVectorFEMSolver(
+                n_cells=3,
+                support_r=1.0,
+                chart_decoder=TorusChartDecoder(phi_center=phi_center),
+                sdf_oracle=sdf,
+                sdf_threshold=-0.005,
+                device=DEVICE,
+                dtype=DTYPE,
+            )
+            for phi_center in [0.0, math.pi / 4.0, math.pi / 2.0]
+        ]
+
+        all_points = torch.cat([solver.nodes_phys for solver in solvers], dim=0).cpu().numpy()
+        all_u = torch.cat(
+            [
+                torch.stack(
+                    [
+                        solver.nodes_phys[:, 0] + 0.2 * solver.nodes_phys[:, 1],
+                        solver.nodes_phys[:, 1] - 0.1 * solver.nodes_phys[:, 2],
+                        0.3 * solver.nodes_phys[:, 2],
+                    ],
+                    dim=1,
+                )
+                for solver in solvers
+            ],
+            dim=0,
+        ).cpu().numpy()
+
+        clusters = _cluster_points(all_points, decimals=10)
+        unique_points, point_spread = _aggregate_field(
+            all_points, clusters["inverse"], clusters["counts"]
+        )
+        unique_u, u_spread = _aggregate_field(
+            all_u, clusters["inverse"], clusters["counts"]
+        )
+        overlap_mask = clusters["counts"] > 1
+
+        assert np.any(overlap_mask)
+        assert point_spread[overlap_mask].max() < 1e-10
+        assert u_spread[overlap_mask].max() < 1e-10
+
+        expected_u = np.stack(
+            [
+                unique_points[:, 0] + 0.2 * unique_points[:, 1],
+                unique_points[:, 1] - 0.1 * unique_points[:, 2],
+                0.3 * unique_points[:, 2],
+            ],
+            axis=1,
+        )
+        assert np.allclose(unique_u, expected_u, atol=1e-10, rtol=1e-10)
 
 
 # ===================================================================
