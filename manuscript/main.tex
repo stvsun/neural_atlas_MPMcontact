@@ -961,7 +961,111 @@ u_h^{(k)}(x)=\sum_{i=1}^{M}\omega_i(x)\,u_i(x;\theta_i^{(k)}).
 
 Algorithm~\ref{alg:atlas_sapinn_training} records the core training loop behind the fixed-atlas rabbit Poisson benchmark. The accepted state is decided at the sweep level rather than chart by chart, and any parallelism is restricted to non-overlapping color groups, so the released solver still behaves as a multiplicative Schwarz method on every true overlap pair.
 
+\subsection{Chart-local finite-element solver on a fixed atlas}
+\label{sec:schwarz_fem}
 
+A central claim of this paper is that the coordinate-chart atlas is a \emph{discretization-agnostic} geometric substrate: the same frozen atlas, overlap graph, and Schwarz transmission logic should host not only the neural-network solver of Section~\ref{sec:schwarz_pinn} but also a classical finite-element method. This subsection makes that claim concrete by describing a chart-local P1 FEM that operates on the identical atlas infrastructure.
+
+The key observation is that the mapped residual \eqref{eq:mapped_residual} and the Piola-transformed flux \eqref{eq:piola_flux} are coordinate-level identities: they hold for any admissible trial function on the reference chart, regardless of whether that trial function is a neural network $\widehat{u}_i(\boldsymbol{\zeta};\theta_i)$ or a piecewise-linear finite-element expansion $\widehat{u}_i^h(\boldsymbol{\zeta}) = \sum_a N_a(\boldsymbol{\zeta})\,d_{i,a}$ with nodal coefficients $\mathbf{d}_i\in\mathbb{R}^{n_i\times q}$ and standard Lagrange shape functions $N_a$. The Galerkin weak form on chart~$i$ reads: find $\widehat{u}_i^h\in V_i^h$ such that
+\begin{equation}
+\int_{\widehat{\Omega}_i}
+(\nabla_{\boldsymbol{\zeta}} N_a)^T\,
+\widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\widehat{u}_i^h)\,
+d\boldsymbol{\zeta}
+\;=\;
+\int_{\widehat{\Omega}_i}
+j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\widehat{u}_i^h)\,N_a\,
+d\boldsymbol{\zeta}
+\qquad \forall\,N_a\in V_i^h,
+\label{eq:fem_weak_form}
+\end{equation}
+where $\widehat{\mathcal{P}}_i$ is the same Piola flux \eqref{eq:piola_flux} that the PINN evaluates pointwise, and the reference-domain integrals are evaluated by standard Gauss quadrature on each tetrahedron. For linear problems \eqref{eq:fem_weak_form} yields a sparse linear system; for nonlinear constitutive laws (hyperelasticity, plasticity) it yields a nonlinear residual $\mathbf{R}_i(\mathbf{d}_i) = \mathbf{f}_{\mathrm{int},i}(\mathbf{d}_i) - \mathbf{f}_{\mathrm{ext},i} = \mathbf{0}$ that is solved by Newton--Raphson iteration with a consistent tangent stiffness assembled through the same autograd infrastructure used by the PINN.
+
+The reference domain $\widehat{\Omega}_i \subset [-r_i, r_i]^3$ is discretized by a structured hexahedral grid with Freudenthal six-tetrahedron decomposition, yielding $(n_{\mathrm{cells}}+1)^3$ nodes and $6\,n_{\mathrm{cells}}^3$ P1 tetrahedra per chart. This structured mesh is generated once per chart from the support radius $r_i$ alone, with no surface-conforming mesh generation step---the geometry is encoded entirely through the chart map $\varphi_i$ and its Jacobian $\mathbf{J}_i$, which enter the integrands of \eqref{eq:fem_weak_form}. Nodes whose reference-domain images fall outside the physical body (detected by the frozen SDF) may be masked or left unconstrained, depending on the application.
+
+\subsubsection{Schwarz coupling for the FEM solver}
+
+Inter-chart coupling follows the same multiplicative Schwarz logic as the PINN (Section~\ref{sec:schwarz_pinn}), with one structural simplification: each chart-local FEM problem is solved \emph{exactly} (to Newton tolerance) rather than approximately, making the iteration a classical multiplicative Schwarz method rather than its PINN-relaxed variant. At Schwarz sweep~$k$, the solver visits charts by color groups from the overlap adjacency graph. For each active chart~$i$:
+\begin{enumerate}
+\item Schwarz interface nodes $\boldsymbol{\zeta}_a \in \widehat{\Gamma}_{ij}$ receive Dirichlet values from the current solution on neighboring chart~$j$:
+\begin{equation}
+d_{i,a} \;\leftarrow\; \widehat{u}_j^h\!\left(\psi_{ij}(\boldsymbol{\zeta}_a);\,\mathbf{d}_j^{(k)}\right),
+\qquad a \in \mathcal{I}_{ij},
+\label{eq:fem_schwarz_bc}
+\end{equation}
+where $\psi_{ij}$ is the chart transition map and $\mathcal{I}_{ij}$ denotes the index set of chart-$i$ boundary nodes that lie within chart~$j$'s support.
+\item Physical boundary conditions (Dirichlet or Neumann) are imposed on nodes $\boldsymbol{\zeta}_a \in \widehat{\Gamma}_{i,\partial\Omega}$ via the mapped boundary operators \eqref{eq:mapped_dirichlet}--\eqref{eq:mapped_neumann}.
+\item The chart-local system \eqref{eq:fem_weak_form} is assembled and solved for $\mathbf{d}_i^{(k+1)}$.
+\end{enumerate}
+For problems with history-dependent constitutive laws (e.g., the elastoplastic forward BVP of Example~3), internal variables---accumulated plastic strain, back-stress tensors---are stored at each quadrature point within each chart and updated locally during the Newton iteration. Only displacement traces are exchanged across chart boundaries; internal-variable fields remain private to each chart. This locality is a direct consequence of the multiplicative decomposition $\mathbf{F}=\mathbf{F}^e\mathbf{F}^p$: the plastic state is determined by the local deformation history, and Schwarz coupling need enforce only displacement continuity at interfaces for the global equilibrium problem to be well-posed.
+
+\begin{algorithm}[htbp]
+\caption{Chart-local P1 FEM solver with multiplicative Schwarz coupling}
+\label{alg:atlas_fem_schwarz}
+\small
+\begin{algorithmic}[1]
+\Statex \textbf{Inputs:} frozen atlas $\mathcal{A}=\{(\varphi_i,\mathbf{J}_i,r_i)\}_{i=1}^M$; overlap graph $G_{\mathcal{A}}$ with coloring;
+\StateX mesh parameter $n_{\mathrm{cells}}$; loading schedule $\{\delta^{(t)}\}_{t=1}^{N_{\mathrm{step}}}$; Schwarz sweep budget $K$;
+\StateX Newton tolerance $\epsilon_{\mathrm{NR}}$; constitutive law $\widehat{\mathcal{P}}_i(\cdot)$
+\Statex \textbf{Outputs:} chart-local nodal solutions $\{\mathbf{d}_i\}_{i=1}^M$ and internal-variable fields
+\Statex
+\State Generate structured P1 tetrahedral meshes on each $\widehat{\Omega}_i\subset[-r_i,r_i]^3$
+\State Precompute shape-function gradients, quadrature weights, $\mathbf{J}_i$, $j_i$ at each Gauss point
+\State Identify boundary node sets: $\widehat{\Gamma}_{i,\partial\Omega}$ (physical BC) and $\widehat{\Gamma}_{ij}$ (Schwarz interface) for each chart pair
+\State Initialize $\mathbf{d}_i^{(0)}=\mathbf{0}$, internal variables $\leftarrow$ elastic reference state
+\For{$t=1,\dots,N_{\mathrm{step}}$} \Comment{Incremental load stepping}
+    \State Update external load $\delta^{(t)}$ and corresponding physical boundary data
+    \For{$k=1,\dots,K$} \Comment{Multiplicative Schwarz sweeps}
+        \For{each color group $g$ from the overlap graph coloring}
+            \For{each chart $i\in g$}
+                \State Impose physical BCs: $d_{i,a}\leftarrow u_D(\varphi_i(\boldsymbol{\zeta}_a))$ for $a\in\widehat{\Gamma}_{i,\partial\Omega}$
+                \State Impose Schwarz BCs: $d_{i,a}\leftarrow \widehat{u}_j^h(\psi_{ij}(\boldsymbol{\zeta}_a);\mathbf{d}_j^{(k)})$ for $a\in\mathcal{I}_{ij}$, $j\in\mathcal{N}(i)$
+                \State \textbf{Newton--Raphson:}
+                \Indent
+                    \State Assemble $\mathbf{R}_i(\mathbf{d}_i)$ and tangent $\mathbf{K}_i$ from mapped weak form \eqref{eq:fem_weak_form}
+                    \State Solve $\mathbf{K}_i\,\Delta\mathbf{d}_i=-\mathbf{R}_i$; update $\mathbf{d}_i\leftarrow\mathbf{d}_i+\Delta\mathbf{d}_i$
+                    \State Repeat until $\|\mathbf{R}_i\|/\|\mathbf{f}_{\mathrm{ext},i}\|<\epsilon_{\mathrm{NR}}$
+                \EndIndent
+            \EndFor
+        \EndFor
+        \State Evaluate inter-chart displacement jump $\max_{(i,j)\in G_{\mathcal{A}}}\|\mathbf{d}_i-\mathbf{d}_j\|_{\Gamma_{ij}}$
+    \EndFor
+    \State Update history-dependent internal variables (plastic strain, back-stress)
+    \State Store checkpoint if requested
+\EndFor
+\State Form global blended field $u_h(x)=\sum_i\omega_i(x)\,\widehat{u}_i^h(\pi_i(x);\mathbf{d}_i)$ via partition of unity
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{PINN versus FEM: complementary chart-local discretizations}
+
+Table~\ref{tab:pinn_vs_fem} compares the two chart-local solver families on the same atlas. The comparison is not intended to declare a winner---each strategy has structural advantages that the other lacks---but to demonstrate that the atlas framework does not privilege one discretization over another.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Structural comparison of the two chart-local solver families on a fixed atlas. Both solvers share the same decoder maps, overlap graph, Schwarz transmission logic, and partition-of-unity blending.}
+\label{tab:pinn_vs_fem}
+\begin{tabular}{p{3.5cm}p{5.2cm}p{5.2cm}}
+\toprule
+& \textbf{Chart-local PINN} (Alg.~\ref{alg:atlas_sapinn_training}) & \textbf{Chart-local FEM} (Alg.~\ref{alg:atlas_fem_schwarz}) \\
+\midrule
+Trial function & Neural network $\widehat{u}_i(\boldsymbol{\zeta};\theta_i)$ & P1 expansion $\sum_a N_a\,d_{i,a}$ \\
+Local solve & Approximate (gradient descent) & Exact (Newton to tolerance) \\
+Mesh generation & None (meshfree collocation) & Structured Freudenthal tets on $[-r_i,r_i]^3$ \\
+Convergence guarantee & Empirical & $O(h^2)$ for P1 on smooth solutions \\
+Nonlinear operators & Natural (autograd residual) & Requires tangent assembly per Newton step \\
+Schwarz coupling & Penalty-based on sampled overlaps & Dirichlet trace injection at interface nodes \\
+History-dependent laws & Not yet demonstrated & Demonstrated (Example~3, $J_2$ plasticity) \\
+Gradient w.r.t.\ parameters & Direct (backpropagation) & Implicit function theorem \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The PINN solver avoids reference-domain mesh generation and stiffness-matrix assembly, and it extends naturally to nonlinear operators because the PDE residual is evaluated pointwise through autograd. These are genuine advantages when the constitutive law is complex or when the user wishes to explore different PDE operators on the same geometry without regenerating element connectivity. The FEM solver, by contrast, provides a mesh-refinement convergence guarantee ($O(h^2)$ for P1 elements on sufficiently smooth solutions) that the PINN does not, and each chart-local subproblem is solved to machine-precision Newton tolerance rather than driven by stochastic gradient descent. For incremental problems with history-dependent internal variables---where each load step must equilibrate before advancing to the next---the exactness of the Newton solve is essential, because approximate gradient-descent updates cannot guarantee equilibrium at every step and would corrupt the stored plastic state.
+
+The broader methodological point is that the atlas construction pipeline (SDF learning, chart seeding, decoder training, quality gating) and the Schwarz coupling logic (overlap graph, color groups, interface transmission) are \emph{shared infrastructure} that both solvers consume without modification. Once the atlas passes its quality gates, either Algorithm~\ref{alg:atlas_sapinn_training} or Algorithm~\ref{alg:atlas_fem_schwarz} may be applied, and new chart-local discretization families---spectral elements, isogeometric patches, or neural operators---could be introduced by supplying only a local trial-function class and the corresponding assembly or evaluation routine. The benchmarks that follow exercise both branches: Examples~1--2 use the PINN and FEM on the Poisson operator, Example~3 uses the FEM for forward elastoplasticity, and Examples~4--5 use both the FEM (forward solve) and autograd (inverse sensitivity) for constitutive identification.
 
 \section{Implementation}
 \label{sec:implementation}
