@@ -3,54 +3,44 @@ Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
 The top-level auxiliary file: main.aux
 The style file: unsrtnat.bst
 Database file #1: main.bib
-Warning--I didn't find a database entry for "apostolatos2014nitsche"
-Warning--I didn't find a database entry for "dittmann2019isogeometric"
-Warning--I didn't find a database entry for "lu2021deeponet"
-Warning--I didn't find a database entry for "li2021fno"
-Warning--I didn't find a database entry for "li2024pino"
-Warning--I didn't find a database entry for "kirchdoerfer2016datadriven"
-Warning--I didn't find a database entry for "fuhg2024review"
-Warning--I didn't find a database entry for "sahli2024deltapinns"
-Warning--I didn't find a database entry for "schneider2022large"
-You've used 20 entries,
+You've used 29 entries,
             2481 wiz_defined-function locations,
-            686 strings with 8789 characters,
-and the built_in function-call counts, 8313 in all, are:
-= -- 670
-> -- 496
-< -- 10
-+ -- 186
-- -- 146
-* -- 689
-:= -- 1351
-add.period$ -- 68
-call.type$ -- 20
-change.case$ -- 35
-chr.to.int$ -- 20
-cite$ -- 20
-duplicate$ -- 406
-empty$ -- 725
-format.name$ -- 176
-if$ -- 1747
+            734 strings with 10700 characters,
+and the built_in function-call counts, 12288 in all, are:
+= -- 984
+> -- 775
+< -- 11
++ -- 288
+- -- 230
+* -- 1053
+:= -- 2020
+add.period$ -- 101
+call.type$ -- 29
+change.case$ -- 53
+chr.to.int$ -- 29
+cite$ -- 29
+duplicate$ -- 580
+empty$ -- 1050
+format.name$ -- 271
+if$ -- 2559
 int.to.chr$ -- 1
-int.to.str$ -- 21
-missing$ -- 26
-newline$ -- 115
-num.names$ -- 60
-pop$ -- 166
+int.to.str$ -- 30
+missing$ -- 35
+newline$ -- 166
+num.names$ -- 87
+pop$ -- 229
 preamble$ -- 1
-purify$ -- 20
+purify$ -- 29
 quote$ -- 0
-skip$ -- 236
+skip$ -- 328
 stack$ -- 0
-substring$ -- 365
-swap$ -- 67
+substring$ -- 540
+swap$ -- 86
 text.length$ -- 4
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 122
+type$ -- 185
 warning$ -- 0
-while$ -- 63
+while$ -- 96
 width$ -- 0
-write$ -- 281
-(There were 9 warnings)
+write$ -- 409

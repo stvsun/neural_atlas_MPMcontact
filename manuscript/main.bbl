@@ -1,4 +1,4 @@
-\begin{thebibliography}{20}
+\begin{thebibliography}{29}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -46,6 +46,25 @@ E.~Brivadis, A.~Buffa, B.~Wohlmuth, and L.~Wunderlich.
 \newblock \emph{Computer Methods in Applied Mechanics and Engineering},
   284:\penalty0 292--312, 2015.
 
+\bibitem[Apostolatos et~al.(2014)Apostolatos, Schmidt, W{\"u}chner, and
+  Bletzinger]{apostolatos2014nitsche}
+Andreas Apostolatos, Robert Schmidt, Roland W{\"u}chner, and Kai-Uwe
+  Bletzinger.
+\newblock A {Nitsche}-type formulation and comparison of the most common domain
+  decomposition methods in isogeometric analysis.
+\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
+  267:\penalty0 47--71, 2014.
+\newblock \doi{10.1016/j.cma.2013.08.015}.
+
+\bibitem[Dittmann et~al.(2019)Dittmann, Schuß, Wohlmuth, and
+  Hesch]{dittmann2019isogeometric}
+Maik Dittmann, Stefan Schuß, Barbara Wohlmuth, and Christian Hesch.
+\newblock Weak {C}$^n$ coupling for multipatch isogeometric analysis in solid
+  mechanics.
+\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
+  343:\penalty0 294--310, 2019.
+\newblock \doi{10.1016/j.cma.2018.08.042}.
+
 \bibitem[Quarteroni and Valli(1999)]{quarteroni1999domain}
 Alfio Quarteroni and Alberto Valli.
 \newblock \emph{Domain Decomposition Methods for Partial Differential
@@ -82,12 +101,50 @@ Ben Moseley, Andrew Markham, and Tarje Nissen-Meyer.
 \newblock \emph{Advances in Computational Mathematics}, 49\penalty0
   (5):\penalty0 62, 2023.
 
+\bibitem[Lu et~al.(2021)Lu, Jin, Pang, Zhang, and Karniadakis]{lu2021deeponet}
+Lu~Lu, Pengzhan Jin, Guofei Pang, Zhongqiang Zhang, and George~Em Karniadakis.
+\newblock Learning nonlinear operators via {DeepONet} based on the universal
+  approximation theorem of operators.
+\newblock \emph{Nature Machine Intelligence}, 3\penalty0 (3):\penalty0
+  218--229, 2021.
+\newblock \doi{10.1038/s42256-021-00302-5}.
+
+\bibitem[Li et~al.(2021)Li, Kovachki, Azizzadenesheli, Liu, Bhatt, Stuart, and
+  Anandkumar]{li2021fno}
+Zongyi Li, Nikola Kovachki, Kamyar Azizzadenesheli, Burigede Liu, Kaushik
+  Bhatt, Andrew Stuart, and Anima Anandkumar.
+\newblock Fourier neural operator for parametric partial differential
+  equations.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+
+\bibitem[Li et~al.(2024)Li, Zheng, Kovachki, Jin, Chen, Liu, Azizzadenesheli,
+  and Anandkumar]{li2024pino}
+Zongyi Li, Hongkai Zheng, Nikola Kovachki, David Jin, Haoxuan Chen, Burigede
+  Liu, Kamyar Azizzadenesheli, and Anima Anandkumar.
+\newblock Physics-informed neural operator for learning partial differential
+  equations.
+\newblock \emph{Journal of Machine Learning Research}, 25\penalty0
+  (112):\penalty0 1--46, 2024.
+
+\bibitem[Kirchdoerfer and Ortiz(2016)]{kirchdoerfer2016data}
+Trenton Kirchdoerfer and Michael Ortiz.
+\newblock Data-driven computational mechanics.
+\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
+  304:\penalty0 81--101, 2016.
+
 \bibitem[Vlassis and Sun(2021)]{vlassis2021sobolev}
 N.~N. Vlassis and W.C. Sun.
 \newblock Sobolev training of thermodynamic-informed neural networks for
   interpretable elasto-plasticity models with level set hardening.
 \newblock \emph{Computer Methods in Applied Mechanics and Engineering},
   377:\penalty0 113695, 2021.
+
+\bibitem[Fuhg et~al.(2024)Fuhg, Bouklas, and Jones]{fuhg2024review}
+Jan~N. Fuhg, Nikolaos Bouklas, and Reese~E. Jones.
+\newblock A review on data-driven constitutive laws for solids.
+\newblock \emph{Archives of Computational Methods in Engineering}, 31\penalty0
+  (2):\penalty0 1--41, 2024.
+\newblock \doi{10.1007/s11831-023-10009-y}.
 
 \bibitem[Park et~al.(2019)Park, Florence, Straub, Newcombe, and
   Lovegrove]{park2019deepsdf}
@@ -105,6 +162,15 @@ Lars Mescheder, Michael Oechsle, Michael Niemeyer, Sebastian Nowozin, and
 \newblock Occupancy networks: Learning {3D} reconstruction in function space.
 \newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
   and Pattern Recognition}, pages 4460--4470, 2019.
+
+\bibitem[Sahli~Costabal et~al.(2024)Sahli~Costabal, Navarro, and
+  Kammann]{sahli2024deltapinns}
+Francisco Sahli~Costabal, Simone Navarro, and Claudio Kammann.
+\newblock {$\Delta$-PINNs}: Physics-informed neural networks on complex
+  geometries.
+\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
+  422:\penalty0 116961, 2024.
+\newblock \doi{10.1016/j.cma.2024.116761}.
 
 \bibitem[Simo and Hughes(1998)]{simo_computational_1998}
 J.C. Simo and T.J.R. Hughes.
@@ -139,6 +205,16 @@ Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol Hausman, and
 \newblock Gradient surgery for multi-task learning.
 \newblock \emph{Advances in Neural Information Processing Systems},
   33:\penalty0 14731--14743, 2020.
+
+\bibitem[Schneider et~al.(2022)Schneider, Hu, Gao, Deng, Zorin, and
+  Panozzo]{schneider2022large}
+Teseo Schneider, Yixin Hu, Xifeng Gao, Zhongshi Deng, Denis Zorin, and Daniele
+  Panozzo.
+\newblock A large-scale comparison of tetrahedral and hexahedral elements for
+  solving elliptic {PDE}s with the finite element method.
+\newblock \emph{ACM Transactions on Graphics}, 41\penalty0 (4):\penalty0 1--14,
+  2022.
+\newblock \doi{10.1145/3508372}.
 
 \bibitem[Raissi et~al.(2019)Raissi, Perdikaris, and
   Karniadakis]{raissi2019physicsinformed}
