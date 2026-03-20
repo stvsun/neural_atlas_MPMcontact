@@ -964,9 +964,9 @@ Algorithm~\ref{alg:atlas_sapinn_training} records the core training loop behind 
 \subsection{Chart-local finite-element solver on a fixed atlas}
 \label{sec:schwarz_fem}
 
-A central claim of this paper is that the coordinate-chart atlas is a \emph{discretization-agnostic} geometric substrate: the same frozen atlas, overlap graph, and Schwarz transmission logic should host not only the neural-network solver of Section~\ref{sec:schwarz_pinn} but also a classical finite-element method. This subsection makes that claim concrete by describing a chart-local P1 FEM that operates on the identical atlas infrastructure.
+A central claim of this paper is that the coordinate-chart atlas is a \emph{discretization-agnostic} geometric substrate: the same frozen atlas, overlap graph, and Schwarz transmission logic should host not only the neural-network solver of Section~\ref{sec:schwarz_pinn} but also a classical finite-element method. This subsection makes that claim concrete by describing a chart-local P1 FEM that operates on the identical atlas infrastructure. The two discretization families---meshfree neural collocation and Galerkin finite elements---are cast as interchangeable chart-local solvers that consume the same geometric data structures and Schwarz coupling protocol, differing only in the choice of trial space and the mechanism by which the local subproblem is solved.
 
-The key observation is that the mapped residual \eqref{eq:mapped_residual} and the Piola-transformed flux \eqref{eq:piola_flux} are coordinate-level identities: they hold for any admissible trial function on the reference chart, regardless of whether that trial function is a neural network $\widehat{u}_i(\boldsymbol{\zeta};\theta_i)$ or a piecewise-linear finite-element expansion $\widehat{u}_i^h(\boldsymbol{\zeta}) = \sum_a N_a(\boldsymbol{\zeta})\,d_{i,a}$ with nodal coefficients $\mathbf{d}_i\in\mathbb{R}^{n_i\times q}$ and standard Lagrange shape functions $N_a$. The Galerkin weak form on chart~$i$ reads: find $\widehat{u}_i^h\in V_i^h$ such that
+The starting point is the observation that the mapped residual \eqref{eq:mapped_residual} and the Piola-transformed flux \eqref{eq:piola_flux} are coordinate-level identities: they hold for \emph{any} admissible trial function on the reference chart, regardless of whether that trial function is a neural network $\widehat{u}_i(\boldsymbol{\zeta};\theta_i)$ or a piecewise-linear finite-element expansion $\widehat{u}_i^h(\boldsymbol{\zeta}) = \sum_a N_a(\boldsymbol{\zeta})\,d_{i,a}$ with nodal coefficients $\mathbf{d}_i\in\mathbb{R}^{n_i\times q}$ and standard Lagrange shape functions $N_a$. The Galerkin weak form on chart~$i$ reads: find $\widehat{u}_i^h\in V_i^h$ such that
 \begin{equation}
 \int_{\widehat{\Omega}_i}
 (\nabla_{\boldsymbol{\zeta}} N_a)^T\,
@@ -979,13 +979,22 @@ d\boldsymbol{\zeta}
 \qquad \forall\,N_a\in V_i^h,
 \label{eq:fem_weak_form}
 \end{equation}
-where $\widehat{\mathcal{P}}_i$ is the same Piola flux \eqref{eq:piola_flux} that the PINN evaluates pointwise, and the reference-domain integrals are evaluated by standard Gauss quadrature on each tetrahedron. For linear problems \eqref{eq:fem_weak_form} yields a sparse linear system; for nonlinear constitutive laws (hyperelasticity, plasticity) it yields a nonlinear residual $\mathbf{R}_i(\mathbf{d}_i) = \mathbf{f}_{\mathrm{int},i}(\mathbf{d}_i) - \mathbf{f}_{\mathrm{ext},i} = \mathbf{0}$ that is solved by Newton--Raphson iteration with a consistent tangent stiffness assembled through the same autograd infrastructure used by the PINN.
+where $\widehat{\mathcal{P}}_i$ is the same Piola flux \eqref{eq:piola_flux} that the PINN evaluates pointwise, and the reference-domain integrals are evaluated by standard Gauss quadrature on each tetrahedron. This is the standard Bubnov--Galerkin statement pulled back to the reference chart through the map $\varphi_i$; the only non-standard ingredient is that the metric coefficients $\mathbf{J}_i$ and $j_i$ are supplied by the frozen atlas rather than by a conventional body-fitted mesh.
 
-The reference domain $\widehat{\Omega}_i \subset [-r_i, r_i]^3$ is discretized by a structured hexahedral grid with Freudenthal six-tetrahedron decomposition, yielding $(n_{\mathrm{cells}}+1)^3$ nodes and $6\,n_{\mathrm{cells}}^3$ P1 tetrahedra per chart. This structured mesh is generated once per chart from the support radius $r_i$ alone, with no surface-conforming mesh generation step---the geometry is encoded entirely through the chart map $\varphi_i$ and its Jacobian $\mathbf{J}_i$, which enter the integrands of \eqref{eq:fem_weak_form}. Nodes whose reference-domain images fall outside the physical body (detected by the frozen SDF) may be masked or left unconstrained, depending on the application.
+For linear elliptic operators, \eqref{eq:fem_weak_form} yields a sparse symmetric positive-definite system whose assembly and solution follow the standard finite-element workflow. For nonlinear constitutive laws---hyperelasticity, rate-independent plasticity, or coupled multi-physics---the weak form yields a nonlinear residual
+\begin{equation}
+\mathbf{R}_i(\mathbf{d}_i) \;=\; \mathbf{f}_{\mathrm{int},i}(\mathbf{d}_i) - \mathbf{f}_{\mathrm{ext},i} \;=\; \mathbf{0},
+\label{eq:fem_residual}
+\end{equation}
+which is solved by Newton--Raphson iteration. The consistent tangent stiffness $\mathbf{K}_i = \partial\mathbf{R}_i/\partial\mathbf{d}_i$ is assembled through the same automatic-differentiation infrastructure used by the PINN: PyTorch's \texttt{autograd} differentiates the mapped constitutive operator $\widehat{\mathcal{P}}_i$ with respect to the deformation gradient, and the resulting material tangent modulus $\mathbb{C}_i = \partial\widehat{\mathcal{P}}_i/\partial\mathbf{F}$ is contracted with shape-function gradients at each quadrature point in the standard fashion \citep{simo_computational_1998,de_souza_neto_computational_2011}. For history-dependent constitutive laws (e.g., the smooth return mapping of Appendix~\ref{sec:appendix_constitutive}), the autograd tape records the full algorithmic path through the return-mapping corrector, so the consistent algorithmic tangent is obtained exactly without manual derivation of the elasto-plastic modulus.
+
+The reference domain $\widehat{\Omega}_i \subset [-r_i, r_i]^3$ is discretized by a structured hexahedral grid with Freudenthal six-tetrahedron decomposition, yielding $(n_{\mathrm{cells}}+1)^3$ nodes and $6\,n_{\mathrm{cells}}^3$ P1 tetrahedra per chart. This structured mesh is generated once per chart from the support radius $r_i$ alone, with no surface-conforming mesh generation step---the geometry is encoded entirely through the chart map $\varphi_i$ and its Jacobian $\mathbf{J}_i$, which enter the integrands of \eqref{eq:fem_weak_form}. Nodes whose reference-domain images fall outside the physical body (detected by the frozen SDF) may be masked or left unconstrained, depending on the application. The mesh generation cost is therefore $O(n_{\mathrm{cells}}^3)$ per chart and is independent of the geometric complexity of $\partial\Omega$; all geometric information enters through the frozen decoder and SDF evaluations at quadrature points.
 
 \subsubsection{Schwarz coupling for the FEM solver}
 
-Inter-chart coupling follows the same multiplicative Schwarz logic as the PINN (Section~\ref{sec:schwarz_pinn}), with one structural simplification: each chart-local FEM problem is solved \emph{exactly} (to Newton tolerance) rather than approximately, making the iteration a classical multiplicative Schwarz method rather than its PINN-relaxed variant. At Schwarz sweep~$k$, the solver visits charts by color groups from the overlap adjacency graph. For each active chart~$i$:
+Inter-chart coupling follows the same multiplicative Schwarz logic as the PINN (Section~\ref{sec:schwarz_pinn}), with one structural simplification: each chart-local FEM problem is solved \emph{exactly} (to Newton tolerance) rather than approximately, so the iteration is a classical multiplicative Schwarz method \citep{quarteroni1999domain} rather than its PINN-relaxed variant. This distinction is significant for problems with history-dependent constitutive laws, where each local solve must reach equilibrium before internal variables are updated; approximate gradient-descent solutions cannot guarantee this and would corrupt the stored plastic state.
+
+At Schwarz sweep~$k$, the solver visits charts by color groups from the overlap adjacency graph. For each active chart~$i$:
 \begin{enumerate}
 \item Schwarz interface nodes $\boldsymbol{\zeta}_a \in \widehat{\Gamma}_{ij}$ receive Dirichlet values from the current solution on neighboring chart~$j$:
 \begin{equation}
@@ -995,9 +1004,14 @@ d_{i,a} \;\leftarrow\; \widehat{u}_j^h\!\left(\psi_{ij}(\boldsymbol{\zeta}_a);\,
 \end{equation}
 where $\psi_{ij}$ is the chart transition map and $\mathcal{I}_{ij}$ denotes the index set of chart-$i$ boundary nodes that lie within chart~$j$'s support.
 \item Physical boundary conditions (Dirichlet or Neumann) are imposed on nodes $\boldsymbol{\zeta}_a \in \widehat{\Gamma}_{i,\partial\Omega}$ via the mapped boundary operators \eqref{eq:mapped_dirichlet}--\eqref{eq:mapped_neumann}.
-\item The chart-local system \eqref{eq:fem_weak_form} is assembled and solved for $\mathbf{d}_i^{(k+1)}$.
+\item The chart-local residual \eqref{eq:fem_residual} is assembled and solved by Newton--Raphson for $\mathbf{d}_i^{(k+1)}$.
 \end{enumerate}
 For problems with history-dependent constitutive laws (e.g., the elastoplastic forward BVP of Example~3), internal variables---accumulated plastic strain, back-stress tensors---are stored at each quadrature point within each chart and updated locally during the Newton iteration. Only displacement traces are exchanged across chart boundaries; internal-variable fields remain private to each chart. This locality is a direct consequence of the multiplicative decomposition $\mathbf{F}=\mathbf{F}^e\mathbf{F}^p$: the plastic state is determined by the local deformation history, and Schwarz coupling need enforce only displacement continuity at interfaces for the global equilibrium problem to be well-posed.
+
+\begin{remark}[Tangent computation and operator modularity]
+\label{rem:tangent_modularity}
+The autograd-based tangent assembly deserves emphasis because it decouples the solver infrastructure from the constitutive law. In a conventional finite-element code, each new material model requires a hand-derived consistent tangent modulus; errors in this derivation are a well-known source of convergence failures \citep{simo_computational_1998}. Here, the chart-local residual $\mathbf{R}_i(\mathbf{d}_i)$ is assembled as a standard PyTorch computation graph, and the tangent $\mathbf{K}_i = \partial\mathbf{R}_i/\partial\mathbf{d}_i$ is obtained by reverse-mode differentiation through the entire constitutive path---including, for plasticity, the smooth return-mapping corrector. Adding a new constitutive law therefore requires only a forward evaluation of the stress; the consistent tangent follows automatically. This is the same automatic-differentiation principle exploited in differentiable simulation \citep{hu_difftaichi_2020}, applied here within the atlas-based Schwarz framework.
+\end{remark}
 
 \begin{algorithm}[htbp]
 \caption{Chart-local P1 FEM solver with multiplicative Schwarz coupling}
@@ -1038,24 +1052,25 @@ For problems with history-dependent constitutive laws (e.g., the elastoplastic f
 \end{algorithm}
 
 \subsubsection{PINN versus FEM: complementary chart-local discretizations}
+\label{sec:pinn_vs_fem}
 
-Table~\ref{tab:pinn_vs_fem} compares the two chart-local solver families on the same atlas. The comparison is not intended to declare a winner---each strategy has structural advantages that the other lacks---but to demonstrate that the atlas framework does not privilege one discretization over another.
+Table~\ref{tab:pinn_vs_fem} compares the two chart-local solver families on the same atlas. The comparison is not intended to declare a winner---each strategy has structural advantages that the other lacks---but to demonstrate that the atlas framework does not privilege one discretization over another. We frame the comparison in terms of three axes that are relevant to the practitioner: (i)~the nature of the local solve, (ii)~the convergence guarantee, and (iii)~the suitability for history-dependent problems.
 
 \begin{table}[htbp]
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{Structural comparison of the two chart-local solver families on a fixed atlas. Both solvers share the same decoder maps, overlap graph, Schwarz transmission logic, and partition-of-unity blending.}
+\caption{Structural comparison of the two chart-local solver families on a fixed atlas. Both solvers share the same decoder maps $\varphi_i$, overlap graph $G_{\mathcal{A}}$, Schwarz transmission logic, and partition-of-unity blending \eqref{eq:schwarz_global_field}.}
 \label{tab:pinn_vs_fem}
 \begin{tabular}{p{3.5cm}p{5.2cm}p{5.2cm}}
 \toprule
 & \textbf{Chart-local PINN} (Alg.~\ref{alg:atlas_sapinn_training}) & \textbf{Chart-local FEM} (Alg.~\ref{alg:atlas_fem_schwarz}) \\
 \midrule
 Trial function & Neural network $\widehat{u}_i(\boldsymbol{\zeta};\theta_i)$ & P1 expansion $\sum_a N_a\,d_{i,a}$ \\
-Local solve & Approximate (gradient descent) & Exact (Newton to tolerance) \\
+Local solve & Approximate (gradient descent) & Exact (Newton--Raphson to tolerance) \\
 Mesh generation & None (meshfree collocation) & Structured Freudenthal tets on $[-r_i,r_i]^3$ \\
 Convergence guarantee & Empirical & $O(h^2)$ for P1 on smooth solutions \\
-Nonlinear operators & Natural (autograd residual) & Requires tangent assembly per Newton step \\
+Nonlinear operators & Natural (pointwise autograd residual) & Requires tangent assembly per Newton step \\
 Schwarz coupling & Penalty-based on sampled overlaps & Dirichlet trace injection at interface nodes \\
 History-dependent laws & Not yet demonstrated & Demonstrated (Example~3, $J_2$ plasticity) \\
 Gradient w.r.t.\ parameters & Direct (backpropagation) & Implicit function theorem \\
@@ -1063,9 +1078,14 @@ Gradient w.r.t.\ parameters & Direct (backpropagation) & Implicit function theor
 \end{tabular}
 \end{table}
 
-The PINN solver avoids reference-domain mesh generation and stiffness-matrix assembly, and it extends naturally to nonlinear operators because the PDE residual is evaluated pointwise through autograd. These are genuine advantages when the constitutive law is complex or when the user wishes to explore different PDE operators on the same geometry without regenerating element connectivity. The FEM solver, by contrast, provides a mesh-refinement convergence guarantee ($O(h^2)$ for P1 elements on sufficiently smooth solutions) that the PINN does not, and each chart-local subproblem is solved to machine-precision Newton tolerance rather than driven by stochastic gradient descent. For incremental problems with history-dependent internal variables---where each load step must equilibrate before advancing to the next---the exactness of the Newton solve is essential, because approximate gradient-descent updates cannot guarantee equilibrium at every step and would corrupt the stored plastic state.
+\paragraph{Meshfree neural solver.}
+The PINN solver avoids reference-domain mesh generation and stiffness-matrix assembly entirely, and it extends naturally to nonlinear operators because the PDE residual is evaluated pointwise through autograd. These are genuine advantages when the constitutive law is complex or when the user wishes to explore different PDE operators on the same geometry without regenerating element connectivity. However, the local solve is approximate (driven by stochastic gradient descent rather than Newton iteration), and no mesh-refinement convergence guarantee is available.
 
-The broader methodological point is that the atlas construction pipeline (SDF learning, chart seeding, decoder training, quality gating) and the Schwarz coupling logic (overlap graph, color groups, interface transmission) are \emph{shared infrastructure} that both solvers consume without modification. Once the atlas passes its quality gates, either Algorithm~\ref{alg:atlas_sapinn_training} or Algorithm~\ref{alg:atlas_fem_schwarz} may be applied, and new chart-local discretization families---spectral elements, isogeometric patches, or neural operators---could be introduced by supplying only a local trial-function class and the corresponding assembly or evaluation routine. The benchmarks that follow exercise both branches: Examples~1--2 use the PINN and FEM on the Poisson operator, Example~3 uses the FEM for forward elastoplasticity, and Examples~4--5 use both the FEM (forward solve) and autograd (inverse sensitivity) for constitutive identification.
+\paragraph{Chart-local Galerkin solver.}
+The FEM solver provides a classical mesh-refinement convergence guarantee ($O(h^2)$ for P1 elements on sufficiently smooth solutions) and solves each chart-local subproblem to machine-precision Newton tolerance. For incremental problems with history-dependent internal variables---where each load step must equilibrate before advancing to the next---the exactness of the Newton solve is essential, because approximate gradient-descent updates cannot guarantee equilibrium at every step and would corrupt the stored plastic state. The trade-off is that each Newton step requires tangent stiffness assembly, which in the current dense implementation scales as $O(n_i^2)$ in memory and $O(n_i^3)$ in solve time, where $n_i$ is the chart-local DOF count. Sparse or iterative solvers would alleviate this cost for finer chart-local meshes.
+
+\paragraph{Shared infrastructure and extensibility.}
+The broader methodological point is that the atlas construction pipeline (SDF learning, chart seeding, decoder training, quality gating) and the Schwarz coupling logic (overlap graph, color groups, interface transmission) are \emph{shared infrastructure} that both solvers consume without modification. Once the atlas passes its quality gates, either Algorithm~\ref{alg:atlas_sapinn_training} or Algorithm~\ref{alg:atlas_fem_schwarz} may be applied, and new chart-local discretization families---spectral elements, isogeometric patches, or neural operators---could be introduced by supplying only a local trial-function class and the corresponding assembly or evaluation routine. This modularity is a direct consequence of the separation between geometry (encoded in the atlas) and physics (encoded in the chart-local solver), and it is the primary architectural contribution of the present work. The benchmarks that follow exercise both branches: Examples~1--2 use the PINN and FEM on the Poisson operator, Example~3 uses the FEM for forward elastoplasticity, and Examples~4--5 use the FEM (forward solve) with autograd-based inverse sensitivity for constitutive identification.
 
 \section{Implementation}
 \label{sec:implementation}
@@ -1453,7 +1473,7 @@ This example solves a genuine forward boundary-value problem for finite-strain $
 
 \subsubsection{Problem definition}
 
-The torus geometry ($R=1.0$, $r=0.35$) is covered by eight azimuthal charts with $\Delta\phi=\pi/4$ half-width, as in the Neo-Hookean identification benchmark. The material is the same compressible $J_2$ elastoplastic model described in Section~\ref{sec:example4_ep}: elastic moduli $E=200$, $\nu=0.3$ ($\mu=76.92$, $K=166.67$), yield stress $\tau_y=0.5$, and kinematic hardening modulus $H_{\mathrm{kin}}=20$, with the smooth softplus return mapping \eqref{eq:smooth_return} at $\varepsilon=0.01$.
+The torus geometry ($R=1.0$, $r=0.35$) is covered by eight azimuthal charts with $\Delta\phi=\pi/4$ half-width, as in the Neo-Hookean identification benchmark. The material is governed by the compressible $J_2$ elastoplastic model with kinematic hardening detailed in Appendix~\ref{sec:appendix_constitutive}: elastic moduli $E=200$, $\nu=0.3$ ($\mu=76.92$, $K=166.67$), yield stress $\tau_y=0.5$, and kinematic hardening modulus $H_{\mathrm{kin}}=20$, with the smooth softplus return mapping \eqref{eq:smooth_return} at $\varepsilon_s=0.01$.
 
 Cyclic opposite displacements are prescribed on two cross-sections of the torus to squeeze the central hole:
 \begin{equation}
@@ -1685,40 +1705,17 @@ The torus benchmark establishes three points relevant to the paper's thesis. Fir
 
 This example extends the torus inverse benchmark from elastic to \emph{history-dependent elastoplastic} constitutive parameter estimation. While Example~4 recovers constant elastic moduli $(\mu,K)$ from a single prescribed deformation, Example~5 introduces a two-stage problem in which the yield stress $\tau_y$ and kinematic hardening modulus $H_{\mathrm{kin}}$ are recovered from incremental loading histories that include cyclic plastic deformation. The key methodological contribution is a \emph{smooth return mapping} that replaces the non-differentiable yield-surface check with a softplus regularisation, enabling end-to-end gradient-based optimization through the full elastoplastic load-stepping solver. The forward solver uses the same chart-local P1 finite-element infrastructure validated in Example~3 (Section~\ref{sec:example3_bvp}), operating in a single reference chart of the torus atlas; this demonstrates that the Piola-mapped operator framework extends naturally from forward equilibrium to gradient-based inverse identification.
 
-\subsubsection{Constitutive model and smooth return mapping}
-The material is governed by finite-strain $J_2$ elastoplasticity with kinematic hardening following the multiplicative framework of \citet{de_souza_neto_computational_2011}. The deformation gradient admits the multiplicative decomposition
-\begin{equation}
-\mathbf{F} = \mathbf{F}^e \mathbf{F}^p,
-\label{eq:ep_multiplicative}
-\end{equation}
-where $\mathbf{F}^e$ and $\mathbf{F}^p$ denote the elastic and plastic parts, respectively. Working in logarithmic strain space, the elastic left Cauchy--Green tensor $\mathbf{B}^e = \mathbf{F}^e (\mathbf{F}^e)^T$ defines the elastic logarithmic strain $\boldsymbol{\varepsilon}^e = \tfrac{1}{2}\ln \mathbf{B}^e$, from which the Kirchhoff stress is
-\begin{equation}
-\boldsymbol{\tau} = 2\mu\,\mathrm{dev}(\boldsymbol{\varepsilon}^e) + K\,\mathrm{tr}(\boldsymbol{\varepsilon}^e)\,\mathbf{I}.
-\end{equation}
-The von Mises yield function with kinematic hardening is
-\begin{equation}
-\Phi(\boldsymbol{\tau},\boldsymbol{\beta}) = \sqrt{\tfrac{3}{2}}\,\left\|\mathrm{dev}(\boldsymbol{\tau}) - \boldsymbol{\beta}\right\| - \tau_y,
-\label{eq:von_mises_yield}
-\end{equation}
-where $\boldsymbol{\beta}$ is the deviatoric back-stress tensor that tracks the center of the yield surface, and $\tau_y$ is the yield stress radius. The back-stress evolves according to the Prager linear kinematic hardening rule: $\boldsymbol{\beta}_{n+1} = \boldsymbol{\beta}_n + \tfrac{2}{3}H_{\mathrm{kin}}\,\Delta\gamma\,\mathbf{N}$, where $\Delta\gamma$ is the plastic multiplier and $\mathbf{N}$ is the flow direction.
+\subsubsection{Constitutive model and solver setup}
+The material is governed by finite-strain $J_2$ elastoplasticity with kinematic hardening in the multiplicative framework of \citet{simo_computational_1998}. The constitutive equations---multiplicative decomposition $\mathbf{F}=\mathbf{F}^e\mathbf{F}^p$ \eqref{eq:ep_multiplicative}, logarithmic-strain Kirchhoff stress \eqref{eq:kirchhoff_stress}, von Mises yield function with back-stress \eqref{eq:von_mises_yield}, and the smooth softplus return mapping \eqref{eq:smooth_return}---are detailed in Appendix~\ref{sec:appendix_constitutive}. The smooth return mapping replaces the non-differentiable yield-surface check with a $C^\infty$ softplus regularization, enabling end-to-end gradient-based optimization through the full elastoplastic load-stepping solver. At sharpness $\varepsilon_s=0.001\,\tau_y$ the smooth response is visually indistinguishable from the classical radial return (Figure~\ref{fig:ep_constitutive}a). A comparison with central finite differences confirms that the autograd gradient through the smooth return mapping is correct (both methods recover $\tau_y$ to within $0.25\%$) while providing a $2.9\times$ wall-clock speedup. With the classical hard-max return mapping, autograd gradients are zero in the plastic regime and the optimizer stalls.
 
-The classical radial return algorithm \citep{simo_computational_1998} uses a conditional branch: if $\Phi > 0$ (yield), compute a plastic correction; otherwise, accept the elastic trial state. This non-differentiable branching prevents gradient flow through the yield surface. We replace it with a smooth approximation from the differentiable simulation literature \citep{hu_difftaichi_2020,bark_differentiable_2025}: the plastic correction magnitude is set to
-\begin{equation}
-\Delta\gamma_s = \mathrm{softplus}(\Phi/\varepsilon_s)\cdot\varepsilon_s,
-\qquad
-\mathrm{softplus}(x) = \ln(1+e^x),
-\label{eq:smooth_return}
-\end{equation}
-which provides a $C^\infty$ approximation to $\max(\Phi,0)$. The sharpness parameter $\varepsilon_s$ controls the transition width and is annealed from $\varepsilon_{s,\mathrm{start}}=0.1\,\tau_y$ to $\varepsilon_{s,\mathrm{end}}=0.001\,\tau_y$ via a cosine schedule. At $\varepsilon_s=0.001$, the softplus curve is visually indistinguishable from the sharp yield point (Figure~\ref{fig:ep_constitutive}a). A comparison with central finite differences confirms that the autograd gradient through the smooth return mapping is correct (both methods recover $\tau_y$ to within $0.25\%$) while providing a $2.9\times$ wall-clock speedup. With the classical hard-max return mapping ($\Delta\gamma_s = \max(\Phi,0)$), autograd gradients are zero in the plastic regime and the optimizer stalls.
-
-The forward solver is a P1 tetrahedral finite-element method on a structured hexahedral grid with Freudenthal six-tet decomposition ($4^3 = 64$ hexahedra, 384~elements, 125~nodes), operating on a single torus chart sector ($R=1.0$, $r=0.35$, azimuthal half-width $\Delta\phi=\pi/4$). In chart-local reference coordinates $\boldsymbol{\zeta}\in[-1,1]^3$, the boundary conditions are:
+The forward solver is a chart-local P1 FEM (Algorithm~\ref{alg:atlas_fem_schwarz}) on a structured hexahedral grid with Freudenthal six-tet decomposition ($4^3 = 64$ hexahedra, 384~elements, 125~nodes), operating on a single torus chart sector ($R=1.0$, $r=0.35$, azimuthal half-width $\Delta\phi=\pi/4$). In chart-local reference coordinates $\boldsymbol{\zeta}\in[-1,1]^3$, the boundary conditions are:
 \begin{equation}
 \mathbf{u}\big|_{\zeta_1=-1}=\mathbf{0} \quad\text{(clamped)},
 \qquad
 u_1\big|_{\zeta_1=+1}=\varepsilon_{\mathrm{app}}\cdot 2r \quad\text{(prescribed extension)},
 \label{eq:ep_bc}
 \end{equation}
-where $r$ is the chart support radius and $\varepsilon_{\mathrm{app}}$ is the applied nominal strain, incremented over the loading history. All other boundary faces are traction-free. At each load step, Newton--Raphson iteration solves the global FEM residual $\mathbf{R}(\mathbf{u};\theta):=\mathbf{f}_{\mathrm{int}}(\mathbf{u};\theta)-\mathbf{f}_{\mathrm{ext}}=\mathbf{0}$ with an autograd-computed consistent tangent through the smooth return mapping. Gradients with respect to material parameters $\theta=(\tau_y, H_{\mathrm{kin}})$ are obtained via the implicit function theorem.
+where $r$ is the chart support radius and $\varepsilon_{\mathrm{app}}$ is the applied nominal strain, incremented over the loading history. All other boundary faces are traction-free. At each load step, Newton--Raphson iteration solves the chart-local residual \eqref{eq:fem_residual} with an autograd-computed consistent tangent through the smooth return mapping (Remark~\ref{rem:tangent_modularity}). Gradients with respect to material parameters $\theta=(\tau_y, H_{\mathrm{kin}})$ are obtained via the implicit function theorem.
 
 \subsubsection{Two-stage inverse identification}
 
@@ -2174,6 +2171,43 @@ g_{\mathrm{rmse}}
 \label{eq:impl_gate_rmse}
 \end{align}
 Failed gates trigger iterative refinement of chart seeds, support radii, decoder states, and mask parameters.
+
+\section{Elastoplastic constitutive model and smooth return mapping}
+\label{sec:appendix_constitutive}
+
+This appendix collects the elastoplastic constitutive equations used by Examples~3 and~5. The material is governed by finite-strain $J_2$ elastoplasticity with kinematic hardening, following the multiplicative framework of \citet{simo_computational_1998} and \citet{de_souza_neto_computational_2011}.
+
+\paragraph{Kinematics.}
+The deformation gradient admits the multiplicative decomposition
+\begin{equation}
+\mathbf{F} = \mathbf{F}^e \mathbf{F}^p,
+\label{eq:ep_multiplicative}
+\end{equation}
+where $\mathbf{F}^e$ and $\mathbf{F}^p$ denote the elastic and plastic parts, respectively. The elastic left Cauchy--Green tensor $\mathbf{B}^e = \mathbf{F}^e (\mathbf{F}^e)^T$ defines the elastic logarithmic strain $\boldsymbol{\varepsilon}^e = \tfrac{1}{2}\ln \mathbf{B}^e$, from which the Kirchhoff stress is
+\begin{equation}
+\boldsymbol{\tau} = 2\mu\,\mathrm{dev}(\boldsymbol{\varepsilon}^e) + K\,\mathrm{tr}(\boldsymbol{\varepsilon}^e)\,\mathbf{I}.
+\label{eq:kirchhoff_stress}
+\end{equation}
+
+\paragraph{Yield function and flow rule.}
+The von Mises yield function with kinematic hardening is
+\begin{equation}
+\Phi(\boldsymbol{\tau},\boldsymbol{\beta}) = \sqrt{\tfrac{3}{2}}\,\left\|\mathrm{dev}(\boldsymbol{\tau}) - \boldsymbol{\beta}\right\| - \tau_y,
+\label{eq:von_mises_yield}
+\end{equation}
+where $\boldsymbol{\beta}$ is the deviatoric back-stress tensor that tracks the center of the yield surface, and $\tau_y$ is the yield stress. The back-stress evolves according to the Prager linear kinematic hardening rule: $\boldsymbol{\beta}_{n+1} = \boldsymbol{\beta}_n + \tfrac{2}{3}H_{\mathrm{kin}}\,\Delta\gamma\,\mathbf{N}$, where $\Delta\gamma$ is the plastic multiplier and $\mathbf{N} = \mathrm{dev}(\boldsymbol{\tau}^{\mathrm{trial}} - \boldsymbol{\beta}_n)/\|\mathrm{dev}(\boldsymbol{\tau}^{\mathrm{trial}} - \boldsymbol{\beta}_n)\|$ is the flow direction.
+
+\paragraph{Smooth return mapping.}
+The classical radial return algorithm \citep{simo_computational_1998} uses a conditional branch: if $\Phi > 0$ (yield), compute a plastic correction; otherwise, accept the elastic trial state. This non-differentiable branching prevents gradient flow through the yield surface in a reverse-mode automatic-differentiation setting. We replace it with a smooth approximation: the plastic correction magnitude is set to
+\begin{equation}
+\Delta\gamma_s = \mathrm{softplus}(\Phi/\varepsilon_s)\cdot\varepsilon_s,
+\qquad
+\mathrm{softplus}(x) = \ln(1+e^x),
+\label{eq:smooth_return}
+\end{equation}
+which provides a $C^\infty$ approximation to $\max(\Phi,0)$ \citep{hu_difftaichi_2020,bark_differentiable_2025}. The sharpness parameter $\varepsilon_s$ controls the transition width and is annealed from $\varepsilon_{s,\mathrm{start}}=0.1\,\tau_y$ to $\varepsilon_{s,\mathrm{end}}=0.001\,\tau_y$ via a cosine schedule. At $\varepsilon_s=0.001$, the softplus curve is visually indistinguishable from the sharp classical yield point (Figure~\ref{fig:ep_constitutive}a). With the classical hard-max return mapping ($\Delta\gamma_s = \max(\Phi,0)$), autograd gradients are zero in the plastic regime and the optimizer stalls.
+
+The smooth return mapping is the key ingredient that enables both the forward Newton--Raphson solver (Example~3) and the inverse parameter identification (Example~5) to operate through the same constitutive code path: the autograd tape records the full algorithmic path through the return-mapping corrector, so the consistent algorithmic tangent for the forward solve and the parameter sensitivities for the inverse solve are both obtained automatically.
 
 \section{Solver stabilization details}
 \label{sec:appendix_stabilization}
