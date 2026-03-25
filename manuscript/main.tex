@@ -1,5 +1,5 @@
 \documentclass[sort&compress]{svjour3} % onecolumn (standard format)
-\usepackage[letterpaper,margin=3cm]{geometry}
+% geometry package not loaded: svjour3 defines its own page layout
 \smartqed % flush right qed marks, e.g. at end of proof
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
@@ -13,7 +13,7 @@
 \usepackage{soul}
 \usepackage{eucal}
 \usepackage{enumerate}
-% geometry package removed: svjour3 defines its own page layout
+% (geometry package not loaded; see line 2)
 \usepackage[title]{appendix}
 \usepackage{array}
 \usepackage{calligra}
@@ -43,7 +43,7 @@ hyperindex=true
 \usepackage{epstopdf}
 \usepackage{booktabs}
 \usepackage{lineno}
-%\linenumbers  % uncomment for review submission
+\linenumbers  % line numbers for review submission
 % mathpazo removed: replaced by newtxtext,newtxmath above
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric}
@@ -109,7 +109,7 @@ hyperindex=true
 
 \newcommand{\freeEnergy}{\Psi}
 \newcommand{\interEnergy}{U}
-\newcommand{\entropy}{\eta}
+% \newcommand{\entropy}{\eta}  % removed: $\eta$ is used for material/inverse parameters (Table 1), not thermodynamic entropy
 \newcommand{\specHeat}{c}
 \newcommand{\thermStress}{\beta}
 \newcommand{\gruneisen}{\Gamma}
@@ -209,7 +209,7 @@ Neural implicit representations \citep{park2019deepsdf,mescheder2019occupancy} r
 \subsection{Contributions}
 The paper makes four contributions:
 \begin{enumerate}[leftmargin=*]
-\item \textbf{Neural volumetric atlas as discretization-agnostic geometric substrate.} Overlapping volumetric charts, equipped with learned decoder maps and quality-assured through geometric gate metrics, define both the domain representation and the Schwarz overlap structure. The same frozen atlas supports multiple local solver families without re-parametrization (Examples~1--2).
+\item \textbf{Neural volumetric atlas as discretization-agnostic geometric substrate.} Overlapping volumetric charts, equipped with learned decoder maps and quality-assured through geometric gate metrics, define both the domain representation and the Schwarz overlap structure. The same frozen atlas supports multiple local solver families without re-parametrization (Examples~1--3).
 \item \textbf{Dual PINN/FEM validation on a complex-geometry benchmark.} On a twelve-chart rabbit Poisson problem, a compact PINN achieves relative $L^2$ error $2.21\times10^{-2}$, while a P1 tetrahedral FEM on the same atlas recovers the expected $O(h^2)$ convergence rate across five refinement levels and reaches $1.79\times10^{-2}$ at the finest resolution. This head-to-head result confirms that the mapped operator, Schwarz coupling, and partition-of-unity blending introduce no order-of-accuracy penalty, and that the atlas is a reusable geometric scaffold rather than a PINN-specific training convenience (Example~2).
 \item \textbf{Forward nonlinear equilibrium with history-dependent plasticity.} An eight-chart Schwarz forward BVP solves $J_2$ elastoplasticity with kinematic hardening under cyclic loading on the torus, demonstrating that the atlas infrastructure supports genuine nonlinear equilibrium solves where the displacement field is unknown and must be determined from the balance of momentum (Example~3). Constitutive identification on the same domain recovers Neo-Hookean parameters with machine-precision inter-chart consensus ($\mu$ std $=1.47\times10^{-13}$), and an elastoplastic extension identifies yield stress and hardening modulus from cyclic data (Examples~4--5).
 \item \textbf{Automatic inter-chart consistency through Schwarz coupling.} The multiplicative Schwarz iteration maintains interface displacement jumps at $O(10^{-7})$ throughout history-dependent cyclic loading, and per-chart material parameters converge to machine-precision consensus in the inverse setting, demonstrating that the coupling enforces global consistency without additional constraints.
@@ -354,9 +354,9 @@ Group & Symbol & Role in the method \\
 & $\omega_i$ & partition-of-unity weight used in the global blend \\
 \midrule
 \multirow{3}{*}{\shortstack[l]{Vectors and\\boundary data}}
-& $\mathbf{n},\,\mathbf{n}_i,\,\widehat{\mathbf{n}}_i$ & outward unit normal (physical and reference) \\
+& $\mathbf{n},\,\widehat{\mathbf{n}}_i$ & outward unit normal on a physical or reference boundary \\
 & $\mathbf{t}_N,\,\mathbf{t}^{\mathrm{obs}}$ & prescribed Neumann traction and observed traction \\
-& $\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i$ & orthonormal local frame at chart seed $s_i$ \\
+& $\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i$ & orthonormal TNB frame at chart seed $s_i$ (distinct from boundary normal) \\
 \midrule
 \shortstack[l]{Shared solver\\ quantities}
 & $\eta,\lambda_*$ & $\eta$ denotes global material or inverse parameters; $\lambda_*$ denotes loss weights shared across charts \\
@@ -1352,7 +1352,7 @@ The compact PINN run attains relative $L^2$ error $2.21\times 10^{-2}$, absolute
 
 A cumulative reinforcement study (Table~\ref{tab:rabbit_reinforcement_progression} in Appendix~\ref{sec:appendix_rabbit_details}) shows that the rabbit result is not a one-run anecdote. Successive additions---direct-coordinate evaluation, manufactured-solution anchoring, plateau detection, stronger overlap coupling, and PCGrad---improve the dense-MLP relative $L^2$ from $3.70\%$ to $2.53\%$; CompactChartNet then reaches $2.21\%$.
 
-Table~\ref{tab:rabbit_fem_convergence} reports the FEM $h$-refinement study from $n_{\mathrm{cells}}=8$ to $56$. The relative $L^2$ error drops from $5.47\times 10^{-1}$ to $1.79\times 10^{-2}$, with rates approaching the theoretical $O(h^2)$ behavior of mapped P1 elements. The FEM curve (Figure~\ref{fig:rabbit_poisson_fem_refinement}) approaches the compact PINN reference at $n_{\mathrm{cells}}=48$ and crosses below it at $n_{\mathrm{cells}}=56$.
+Table~\ref{tab:rabbit_fem_convergence} reports the FEM $h$-refinement study from $n_{\mathrm{cells}}=8$ to $56$. The relative $L^2$ error drops from $5.47\times 10^{-1}$ to $1.79\times 10^{-2}$, with rates consistent with the theoretical $O(h^2)$ behavior of mapped P1 elements (reaching $2.10$ at the finest level). The FEM curve (Figure~\ref{fig:rabbit_poisson_fem_refinement}) approaches the compact PINN reference at $n_{\mathrm{cells}}=48$ and crosses below it at $n_{\mathrm{cells}}=56$.
 
 \begin{table}[htbp]
 \centering
@@ -1395,7 +1395,7 @@ Table~\ref{tab:rabbit_solver_comparison} clarifies the tradeoff along several ax
 
 The Schwarz behavior is qualitatively different. The FEM branch converges in five sweeps because each chart solves a sparse linear system by direct factorization, while inter-chart Schwarz boundary data require Newton inversion of the nonlinear decoder map $\varphi_j^{-1}$. These inversions are precomputed once per resolution level and cached, since they depend only on the atlas geometry and not on the evolving solution. The PINN branch instead evaluates its field directly in the rigid local coordinates, avoiding decoder inversion entirely, but at the expense of a longer gradient-based Schwarz history ($61$ sweeps) and ${\sim}200$ local optimizer steps per chart per sweep.
 
-A revealing comparison metric is the total number of neural-network forward passes through the shared decoder and mask networks. The FEM solver queries these networks only during the one-time geometric precomputation---Newton-based map inversions at artificial boundary nodes and mask-logit evaluations for partition-of-unity weights---amounting to approximately $23$ million forward passes at $n=48$, performed once and cached. The SA-PINN evaluates its chart-local field networks and their autograd derivatives at every training step across all Schwarz sweeps: with $61$ sweeps, ${\sim}200$ local steps per chart, $8$ active charts, and ${\sim}2{,}000$ collocation points per step, the total reaches approximately $195$ million neural-network evaluations, roughly $8.5\times$ the FEM count. This disparity quantifies the fundamental cost difference: the PINN pays for approximation power through iterative training, while the FEM amortizes geometry queries into a one-time precomputation and pays instead through mesh refinement.
+A revealing comparison metric is the total number of neural-network forward passes through the shared decoder and mask networks. The FEM solver queries these networks only during the one-time geometric precomputation---Newton-based map inversions at artificial boundary nodes and mask-logit evaluations for partition-of-unity weights---amounting to approximately $23$ million forward passes at $n=48$, performed once and cached. The SA-PINN evaluates its chart-local field networks and their autograd derivatives at every training step across all Schwarz sweeps: with $61$ sweeps, ${\sim}200$ local steps per chart, $12$ active charts, and ${\sim}2{,}000$ collocation points per step, the total reaches approximately $195$ million neural-network evaluations, roughly $8.5\times$ the FEM count. This disparity quantifies the fundamental cost difference: the PINN pays for approximation power through iterative training, while the FEM amortizes geometry queries into a one-time precomputation and pays instead through mesh refinement.
 
 Most importantly, the FEM convergence study in Table~\ref{tab:rabbit_fem_convergence} serves as an independent validation of the atlas-based coordinate pullback. The observed $O(h^2)$ rates---approaching the theoretical expectation for P1 elements---confirm that the mapped diffusion tensor $\mathbf{A}_i = j_i \mathbf{J}_i^{-1}\mathbf{J}_i^{-T}$, the Jacobian-weighted load vector, and the Schwarz boundary exchange introduce no spurious accuracy degradation. This is a statement about the geometric infrastructure, not about either solver: the atlas is mathematically faithful as a coordinate substrate. The rabbit benchmark therefore supports a sharper conclusion than before: the atlas is discretization-agnostic, and the FEM convergence independently certifies the correctness of the mapped-operator formulation.
 
@@ -1451,16 +1451,6 @@ Figure~\ref{fig:rabbit_poisson_fem_surface} repeats the same surface-rendering p
 % Bunny example moved to Appendix~\ref{sec:appendix_bunny}.
 
 
-% Example 3 source traceability (comment only; not visible in the compiled PDF).
-% Paths below are relative to the PINN_coordinate_chart_3Dgeometry/ project root.
-% Code:
-%   - src/run_torus_inverse_neohookean_atlas.py
-%     Main torus atlas-based synthetic inverse benchmark used in the manuscript.
-% Data / run artifacts:
-%   - runs/torus_inverse_mps/
-%     Canonical archived torus inverse run used for the best reported identification metrics.
-%   - runs/torus_inverse_mps_dense_v4/
-%     Archived torus inverse figure run used for the manuscript field/convergence visualizations.
 % ======================================================================
 % EXAMPLE 3: Forward elastoplastic BVP on the torus (Schwarz FEM)
 % Code location: experiments/torus_elastoplastic/run_forward_bvp_schwarz.py
@@ -1564,9 +1554,9 @@ The forward BVP benchmark demonstrates that the atlas-based Schwarz infrastructu
 %   - The torus geometry, prescribed kinematics, and synthetic traction observations are generated analytically inside the code.
 %   - There is therefore no external raw-data directory; the run directories contain the generated observations,
 %     learned parameters, metric logs, and VTU exports.
-% Code location (global optimizer):  manuscript_experiments/example3_torus_inverse_original/
+% Code location (global optimizer):  manuscript_experiments/example3_torus_inverse_original/  (dir name predates example renumbering)
 % Code location (Schwarz dual):      manuscript_experiments/example4_torus_inverse_schwarz_dual/
-% Figure scripts: manuscript/scripts_figures/example3_torus_inverse_original.py
+% Figure scripts: manuscript/scripts_figures/example3_torus_inverse_original.py  (dir name predates example renumbering)
 %                 manuscript/scripts_figures/example4_torus_inverse_schwarz_dual.py
 \subsection{Example 4: torus inverse Neo-Hookean identification}
 \label{sec:example4}
@@ -1794,7 +1784,7 @@ Taken together, the five main-text examples support a staged numerical argument.
 \centering
 \scriptsize
 \setlength{\tabcolsep}{2.2pt}
-\caption{Main-text results organized by argumentative role. Each example supports a distinct part of the paper's claim.}
+\caption{Main-text results organized by argumentative role. Each example supports a distinct part of the paper's claim. Runtimes are not directly comparable across examples: Examples~1--2 use Apple MPS (\texttt{float32}); Examples~3--5 use CPU (\texttt{float64}). See Appendix~\ref{sec:appendix_impl_details} for backend details.}
 \label{tab:core_summary}
 \begin{tabular}{>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{1.6cm}>{\raggedright\arraybackslash}p{2.35cm}>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{1.0cm}}
 \toprule
@@ -1809,7 +1799,7 @@ Torus elastoplastic\newline(single chart) & \shortstack[l]{history-dependent\\id
 \end{tabular}
 \end{table}
 
-The cross-example lesson is that the atlas and Schwarz infrastructure function as a reusable geometric substrate rather than a method tied to one discretization or one class of PDEs. Analytic or learned maps keep the solver in simple reference domains, while local volumetric charts avoid forcing one global parametrization onto geometries that do not admit one cleanly. The rabbit benchmark validates this claim for forward Poisson problems from two independent directions: the atlas-FEM branch recovers the expected $O(h^2)$ convergence with rates approaching $2.10$ at the finest level, while the compact PINN reaches comparable accuracy with roughly $1.31\times10^{5}$ trainable weights and ${\sim}195$M neural-network evaluations versus ${\sim}23$M for the FEM's one-time geometric precomputation. The torus forward BVP extends the framework from scalar diffusion to nonlinear solid mechanics: the same eight-chart atlas and Schwarz coupling that support Poisson diffusion also support a genuine Newton--Raphson equilibrium solve with incremental $J_2$ elastoplasticity, cyclic loading, and kinematic hardening, with interface displacement jumps remaining at $O(10^{-7})$ throughout. The torus inverse benchmark extends the validation further in a topologically distinct direction: because the solid torus is not simply connected, no single reference-ball map can cover it, making the multi-chart atlas a topological requirement rather than an algorithmic choice. On this multiply-connected domain, the Schwarz variant demonstrates that per-chart material parameters converge to consensus across all eight charts, with $\mu$ inter-chart standard deviation reaching machine precision ($1.47\times10^{-13}$) in displacement mode. This distributed identification capability---where each chart independently estimates material constants and Schwarz coupling enforces global consistency---is an emergent property of the atlas framework that has no direct analogue in single-domain inverse solvers. The elastoplastic inverse extension further demonstrates that the chart-local FEM infrastructure is not limited to hyperelastic constitutive laws: the smooth return mapping, autograd-computed consistent tangent, and implicit-function-theorem sensitivity transfer all operate in the same reference-chart coordinates, confirming the atlas as an operator-agnostic geometric substrate.
+The cross-example lesson is that the atlas and Schwarz infrastructure function as a reusable geometric substrate rather than a method tied to one discretization or one class of PDEs. Analytic or learned maps keep the solver in simple reference domains, while local volumetric charts avoid forcing one global parametrization onto geometries that do not admit one cleanly. The rabbit benchmark validates this claim for forward Poisson problems from two independent directions: the atlas-FEM branch recovers the expected $O(h^2)$ convergence with rates from $1.45$ to $2.10$ across refinement levels, while the compact PINN reaches comparable accuracy with roughly $1.31\times10^{5}$ trainable weights and ${\sim}195$M neural-network evaluations versus ${\sim}23$M for the FEM's one-time geometric precomputation. The torus forward BVP extends the framework from scalar diffusion to nonlinear solid mechanics: the same eight-chart atlas and Schwarz coupling that support Poisson diffusion also support a genuine Newton--Raphson equilibrium solve with incremental $J_2$ elastoplasticity, cyclic loading, and kinematic hardening, with interface displacement jumps remaining at $O(10^{-7})$ throughout. The torus inverse benchmark extends the validation further in a topologically distinct direction: because the solid torus is not simply connected, no single reference-ball map can cover it, making the multi-chart atlas a topological requirement rather than an algorithmic choice. On this multiply-connected domain, the Schwarz variant demonstrates that per-chart material parameters converge to consensus across all eight charts, with $\mu$ inter-chart standard deviation reaching machine precision ($1.47\times10^{-13}$) in displacement mode. This distributed identification capability---where each chart independently estimates material constants and Schwarz coupling enforces global consistency---is an emergent property of the atlas framework that has no direct analogue in single-domain inverse solvers. The elastoplastic inverse extension further demonstrates that the chart-local FEM infrastructure is not limited to hyperelastic constitutive laws: the smooth return mapping, autograd-computed consistent tangent, and implicit-function-theorem sensitivity transfer all operate in the same reference-chart coordinates, confirming the atlas as an operator-agnostic geometric substrate.
 
 
 
@@ -1820,7 +1810,7 @@ The cross-example lesson is that the atlas and Schwarz infrastructure function a
 The examples in Section~\ref{sec:benchmark_formulations} establish a regime-specific contribution. The benchmarks show that the atlas workflow is effective when geometry acquisition or volumetric meshing is the dominant obstacle in the simulation pipeline. Broader comparisons with mature mesh-based workflows on well-meshed domains remain future work.
 
 \subsection{Method-level comparison with alternative workflows}
-The FEM baseline transforms the positioning of the atlas formulation from qualitative to quantitative. In conventional finite-element workflows a difficult three-dimensional body is first turned into a volumetric mesh and then coupled to mature local basis functions and linear or nonlinear solvers \citep{de_souza_neto_computational_2011}. The present atlas-based approach replaces the global volumetric meshing step with overlapping chart maps and level-set geometry, and the rabbit FEM baseline now shows concretely that classical FEM can operate \emph{within} this atlas framework with full theoretical convergence: $O(h^2)$ rates approaching $2.10$ at the finest level. This makes the atlas a general-purpose geometric substrate rather than merely a PINN training convenience.
+The FEM baseline transforms the positioning of the atlas formulation from qualitative to quantitative. In conventional finite-element workflows a difficult three-dimensional body is first turned into a volumetric mesh and then coupled to mature local basis functions and linear or nonlinear solvers \citep{de_souza_neto_computational_2011}. The present atlas-based approach replaces the global volumetric meshing step with overlapping chart maps and level-set geometry, and the rabbit FEM baseline now shows concretely that classical FEM can operate \emph{within} this atlas framework with full theoretical convergence: $O(h^2)$ rates consistent with theoretical expectations (from $1.45$ to $2.10$ across refinement levels). This makes the atlas a general-purpose geometric substrate rather than merely a PINN training convenience.
 
 Three specific findings from the rabbit head-to-head merit discussion. First, at matched accuracy the two methods are broadly competitive in wall-clock time ($2{,}939$\,s for FEM at $n=48$ versus $3{,}659$\,s for the compact PINN), indicating that the atlas-plus-Schwarz infrastructure, not the local discretization, is the dominant cost driver. Second, the FEM requires roughly $8.5\times$ fewer neural-network evaluations than the PINN (${\sim}23$M cached versus ${\sim}195$M iterative), because the decoder networks are queried only during one-time geometric precomputation rather than at every training step. Third, the FEM provides a mesh-refinement convergence guarantee that the PINN does not, while the PINN avoids reference-domain mesh generation, stiffness-matrix assembly, and decoder inversion, and extends more naturally to nonlinear operators where matrix reassembly would be required at every Newton step.
 
@@ -2257,7 +2247,7 @@ CompactChartNet & all W1--W5 features active & \textbf{2.207\%} & 6.783\% & 3659
 \end{tabular}
 \end{table}
 
-% Figure scripts: manuscript/scripts_figures/example3_bunny_sdf.py
+% Figure scripts: manuscript/scripts_figures/example3_bunny_sdf.py  (dir name predates example renumbering)
 \section{Stanford Bunny volumetric neural SDF benchmark}
 \label{sec:appendix_bunny}
 
@@ -2342,11 +2332,11 @@ No pretrain & 0 & 31.53\% & 22.04\% & 1 & $2.15\times 10^{-1}$ & 849\,s \\
 
 \section*{Acknowledgments}
 The author is supported by the Dynamic Materials and Interactions Program from the Air Force Office of Scientific Research, USA, under grant contract FA9550-22-1-0310, and by the United States Army Research Office under grant contract W911NF-24-1-0011.
-The views and conclusions contained in this document are those of the authors and should not be interpreted as representing the official policies, either expressed or implied, of the sponsors, including the Army Research Laboratory or the U.S. Government.
+The views and conclusions contained in this document are those of the author and should not be interpreted as representing the official policies, either expressed or implied, of the sponsors, including the Army Research Laboratory or the U.S. Government.
 The U.S. Government is authorized to reproduce and distribute reprints for Government purposes, notwithstanding any copyright notation herein.
 
 \section*{Declaration of competing interest}
-The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+The author declares no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
 
 \section*{Data availability}
 An anonymized artifact package containing scripts, canonical run registries, metric tables, and verification manifests is
