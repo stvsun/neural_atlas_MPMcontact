@@ -53,8 +53,8 @@ def forcing_f_np(x: np.ndarray) -> np.ndarray:
     return 3.0 * pi**2 * manufactured_u_np(x)
 
 
-def test_identity_map_convergence():
-    """Test O(h²) convergence on [-r, r]³ with identity map and no SDF filtering."""
+def run_identity_map_convergence() -> bool:
+    """Run O(h²) convergence check on [-r, r]³ with identity map and no SDF filtering."""
     print("=" * 60)
     print("Test: Identity-map Poisson convergence")
     print("=" * 60)
@@ -145,8 +145,13 @@ def test_identity_map_convergence():
     return True
 
 
-def test_mesh_generation():
-    """Test basic mesh generation without SDF."""
+def test_identity_map_convergence():
+    """Test O(h²) convergence on [-r, r]³ with identity map and no SDF filtering."""
+    assert run_identity_map_convergence()
+
+
+def run_mesh_generation() -> bool:
+    """Run basic mesh generation checks without SDF."""
     print("\n" + "=" * 60)
     print("Test: Mesh generation (no SDF)")
     print("=" * 60)
@@ -205,8 +210,13 @@ def test_mesh_generation():
     return ok
 
 
-def test_interpolation():
-    """Test that FEM interpolation recovers the solution at node points."""
+def test_mesh_generation():
+    """Test basic mesh generation without SDF."""
+    assert run_mesh_generation()
+
+
+def run_interpolation() -> bool:
+    """Run interpolation check to verify recovery at node points."""
     print("\n" + "=" * 60)
     print("Test: Interpolation accuracy")
     print("=" * 60)
@@ -254,11 +264,16 @@ def test_interpolation():
         return False
 
 
+def test_interpolation():
+    """Test that FEM interpolation recovers the solution at node points."""
+    assert run_interpolation()
+
+
 if __name__ == "__main__":
     results = []
-    results.append(test_mesh_generation())
-    results.append(test_interpolation())
-    results.append(test_identity_map_convergence())
+    results.append(run_mesh_generation())
+    results.append(run_interpolation())
+    results.append(run_identity_map_convergence())
 
     print("\n" + "=" * 60)
     if all(results):
