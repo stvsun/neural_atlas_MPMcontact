@@ -161,6 +161,7 @@ hyperindex=true
 \algtext*{EndIndent}
 
 \newtheorem{assumption}{Assumption}
+%\newtheorem{remark}{Remark}
 \newcommand*{\affaddr}[1]{#1}
 \newcommand*{\affmark}[1][*]{\textsuperscript{#1}}
 
@@ -186,187 +187,48 @@ hyperindex=true
 \maketitle
 
 \begin{abstract}
-When three-dimensional bodies contain thin features, non-trivial topology, or surfaces imported from scanning data, volumetric meshing itself becomes a dominant engineering bottleneck. This paper replaces the meshing step with a learned geometric representation: overlapping volumetric coordinate charts, each equipped with a neural decoder map and its Jacobian, are trained directly from point-cloud or level-set data to form a differentiable atlas of the domain. Governing equations are then pulled back to chart-local reference coordinates via the Piola identity, and chart-local solutions are coupled through multiplicative Schwarz iterations on the overlap graph. Because the atlas encodes geometry independently of the downstream discretization, one frozen coordinate substrate can host fundamentally different solvers---a meshfree physics-informed neural network or a classical finite-element method---without re-meshing or re-parametrization. Benchmarks of escalating complexity, spanning Poisson verification, complex-geometry forward solves on scan-imported shapes, nonlinear elastoplastic equilibrium under cyclic loading, and inverse constitutive identification, confirm that the learned atlas preserves theoretical convergence rates and enables both forward and inverse analyses on geometries that would otherwise require dedicated volumetric meshing for each new solver or physics model.
+When three-dimensional bodies contain thin features, non-trivial topology, or scan-derived surfaces, volumetric meshing can become the dominant bottleneck in simulation workflows. We replace this step with a learned geometric representation: overlapping volumetric coordinate charts, each equipped with a neural decoder and Jacobian, trained from point-cloud or level-set data to form a differentiable atlas.
+Governing equations are pulled back to chart-local reference coordinates via the Piola identity, and local solutions are coupled through multiplicative Schwarz iterations on the overlap graph. Because the atlas is constructed independently of the downstream discretization, one frozen geometric substrate can support fundamentally different solvers (for example, a meshfree physics-informed neural network and a conventional finite-element method) without re-meshing or re-parametrization. Benchmark and verification studies show that the learned atlas preserves expected finite-element convergence behavior and enables both forward and inverse analyses on geometries that would otherwise require solver-specific volumetric meshing.
 \end{abstract}
 
 \keywords{coordinate charts, Schwarz method, physics-informed neural networks, meshfree methods, complex geometry, elastoplasticity}
 
 \section{Introduction} \label{sec:introduction}
-The conventional computational-mechanics pipeline proceeds from a CAD model or surface description through volumetric meshing to a PDE solver \citep{de_souza_neto_computational_2011}. When the body is geometrically complex---containing thin features, strongly curved interiors, non-trivial topology, or surfaces imported from scanning data---meshing itself becomes a substantial engineering task \citep{quey_large-scale_2011}. This paper asks whether the geometric representation can be designed so that it simultaneously defines the computational domain, supplies the change-of-variables formulas needed by the PDE operator, and organizes inter-subdomain coupling, thereby absorbing the meshing step into the geometry stage.
-
-The proposed answer is a \emph{geometry-first atlas}: an overlapping collection of volumetric coordinate charts, each equipped with a decoder map $\varphi_i:\widehat{\Omega}_i\to\Omega_i$ and its Jacobian $\mathbf{J}_i$, constructed as a purely geometric object before any PDE is posed. By ``geometry-first'' we mean that an atlas produced by this pipeline serves as the computational substrate for any local solver---neural or classical---without re-meshing or re-parametrization. Governing equations are pulled back to chart-local reference coordinates via the Piola identity, and chart-local solutions are coupled through multiplicative Schwarz alternating iterations with partition-of-unity blending.
+The conventional computational-mechanics pipeline proceeds from a CAD model or surface description through volumetric meshing to a PDE solver \citep{de_souza_neto_computational_2011,simo_computational_1998,zienkiewicz_finite_2000}. When the spatial domain is geometrically complex---containing thin features, strongly curved interiors, non-trivial topology, or surfaces imported from scanning data---meshing itself becomes a substantial engineering task \citep{quey_large-scale_2011}. 
+This paper introduces an alternative approach that uses neural networks to represent complex geometries, including domains that are not homeomorphic to a sphere.
+We refer to this representation as a neural atlas. It is designed to define the computational domain, provide the change-of-variables formulas required by the PDE operator, and organize inter-subdomain coupling within one geometric construction.
+A neural atlas is an overlapping collection of volumetric coordinate charts parameterized by neural networks. Each chart is equipped with a decoder map $\varphi_i:\widehat{\Omega}_i\to\Omega_i$ and its Jacobian $\mathbf{J}_i$, and is constructed as a geometric object before any PDE is posed. By ``geometry-first'', we mean that an atlas generated by this pipeline serves as the computational substrate for local solvers---neural or classical---without re-meshing or re-parametrization. Governing equations are then pulled back to chart-local reference coordinates via the Piola identity, and chart-local solutions are coupled through multiplicative Schwarz iterations with partition-of-unity blending.
 
 \subsection{Relation to prior work}
 The Piola-mapped operators used in this work are standard in isogeometric analysis \citep{hughes2005isogeometric,cottrell2009isogeometric} and mapped finite elements \citep{ciarlet2002finite}. In the multi-patch IGA setting, NURBS patches with explicit parametrizations are coupled through mortar or penalty methods on conforming interfaces \citep{brivadis2015isogeometric}. Nitsche-type coupling \citep{apostolatos2014nitsche} and Schwarz-type overlapping methods \citep{dittmann2019isogeometric} have also been developed for multi-patch IGA on complex geometries.
-The present contribution is not the mapped operator itself, but the geometric substrate on which it is defined: neural volumetric charts replace NURBS patches, the atlas is learned from point-cloud or level-set data rather than derived from CAD, and the overlapping chart structure supplies the Schwarz decomposition automatically.
+Accordingly, our contribution is not the Piola mapping itself, but the geometric substrate on which mapped operators are defined. We replace CAD-derived NURBS patches with neural volumetric charts learned directly from point-cloud or level-set data. Chart overlap is an intrinsic part of the representation, so the Schwarz decomposition is induced directly by the atlas construction.
 
-Relative to overlapping Schwarz and domain-decomposition methods \citep{quarteroni1999domain,toselli2005domain}, the present framework borrows the coupling logic but changes the source of the subdomains: the atlas defines both the geometry and the decomposition simultaneously, rather than partitioning an already-discretized domain. Relative to decomposition-based neural solvers such as XPINNs and FBPINNs \citep{jagtap2020xpinns,shukla2021parallel,moseley2021fbpinns}, which partition a pre-defined domain to improve training, here the partition \emph{is} the geometric representation.
+Relative to overlapping Schwarz and domain-decomposition methods \citep{quarteroni1999domain,toselli2005domain}, the present framework borrows the coupling logic but changes the source of the subdomains: the atlas defines both the geometry and the decomposition simultaneously, rather than partitioning an already-discretized domain. Relative to decomposition-based neural solvers such as XPINNs and FBPINNs \citep{jagtap2020xpinns,shukla2021parallel,moseley2021fbpinns}, which partition a pre-defined domain to improve training, here the partition emerges from the charts that form the atlas.
 
 In the neural operator literature, DeepONet \citep{lu2021deeponet} and the Fourier Neural Operator \citep{li2021fno} learn solution maps across parameterized PDE families but require training data from an existing solver and do not supply coordinate chart structure. Physics-informed neural operators (PINO) \citep{li2024pino} reduce the data requirement by incorporating PDE residuals during training but still operate on a fixed spatial grid. The present atlas approach is complementary: it provides the geometric infrastructure on which either data-driven or physics-informed solvers can operate.
 
-In data-driven computational mechanics, \citet{kirchdoerfer2016data} proposed a model-free approach that bypasses constitutive equations entirely, while neural-network constitutive models \citep{vlassis2021sobolev,fuhg2024review} learn material response from data while respecting thermodynamic constraints. The inverse identification benchmarks in the present work (Examples~4--5) use parametric constitutive laws rather than learned energy functionals, but the chart-local FEM infrastructure could accommodate neural constitutive models in the same reference-coordinate framework.
+In data-driven computational mechanics, \citet{kirchdoerfer2016data} proposed a model-free approach that bypasses constitutive equations entirely, while kernel-based constitutive learning has also been developed by \citet{kanno2021kernel}. Physics-constrained local convexity data-driven modeling for anisotropic nonlinear elastic solids was developed by \citet{he2020physics} where local Euclidean space is constructed to replace classical constitutive updates. Neural-network constitutive models \citep{vlassis2021sobolev,fuhg2024review} learn material response from data while enforcing thermodynamic constraints. \citet{bahmani2022manifold} introduced manifold embedding in a data-driven mechanics setting, showing how low-dimensional geometric structure can regularize constitutive data and improve robustness. In \citet{xiao2022geometric}, geometric priors for multi-resolution yielding manifolds are combined with local closest-point projection to handle nearly non-smooth plasticity. In \citet{jian2024prediction}, geometric learning is integrated with discrete dislocation dynamics data to predict the yield surface of single-crystal copper. This viewpoint is conceptually aligned with our use of geometric structure as a first-class computational object. The inverse identification benchmarks in the present work (Examples~4--5) use parametric constitutive laws rather than learned energy functionals, but the chart-local FEM infrastructure could accommodate neural constitutive models in the same reference-coordinate framework.
 
-Neural implicit representations \citep{park2019deepsdf,mescheder2019occupancy} reconstruct surfaces from data but do not by themselves furnish solver-ready volumetric atlases with chart Jacobians, overlap structure, and transition operators for mapped PDE evaluation. Geometry-aware positional encodings based on Laplace-Beltrami eigenfunctions ($\Delta$-PINNs, \citealt{sahli2024deltapinns}) improve PINN training on complex shapes but still require a background mesh to compute the eigenfunctions and operators, whereas the present atlas provides both the coordinate system and the PDE operator pullback in a single geometric object.
+Neural implicit representations \citep{park2019deepsdf,mescheder2019occupancy} reconstruct surfaces from data but do not by themselves furnish solver-ready volumetric atlases with chart Jacobians, overlap structure, and transition operators for mapped PDE evaluation. The idea of using neural networks to parametrize coordinate charts is aligned with the deep geometric prior of \citet{williams2019deep}, which learns chart-like neural surface parameterizations for reconstruction. Our contribution is to introduce mapped differential operators on these learned charts and to leverage their overlap-induced decomposition in a multiplicative Schwarz solver. Geometry-aware positional encodings based on Laplace-Beltrami eigenfunctions ($\Delta$-PINNs, \citealt{sahli2024deltapinns}) improve PINN training on complex shapes but still require a background mesh to compute the eigenfunctions and operators, whereas the present atlas provides both the coordinate system and the PDE operator pullback in a single geometric object. 
 
-\subsection{Contributions}
-The paper makes four contributions:
+\subsection{Key Contributions}
+The paper makes the following contributions:
 \begin{enumerate}[leftmargin=*]
-\item \textbf{Neural volumetric atlas as discretization-agnostic geometric substrate.} Overlapping volumetric charts, equipped with learned decoder maps and quality-assured through geometric gate metrics, define both the domain representation and the Schwarz overlap structure. The same atlas pipeline supports multiple local solver families without re-parametrization; the chart count is a tunable parameter analogous to mesh resolution (Examples~1--3).
-\item \textbf{Dual PINN/FEM validation on a complex-geometry benchmark.} On a twelve-chart rabbit Poisson problem, a compact PINN achieves relative $L^2$ error $2.21\times10^{-2}$, while a P1 tetrahedral FEM on an eight-chart atlas built by the same pipeline recovers the expected $O(h^2)$ convergence rate across five refinement levels and reaches $1.79\times10^{-2}$ at the finest resolution. This head-to-head result confirms that the mapped operator, Schwarz coupling, and partition-of-unity blending introduce no order-of-accuracy penalty, and that the atlas is a reusable geometric scaffold rather than a PINN-specific training convenience (Example~2).
-\item \textbf{Forward nonlinear equilibrium with history-dependent plasticity.} An eight-chart Schwarz forward BVP solves $J_2$ elastoplasticity with kinematic hardening under cyclic loading on the torus, showing that the atlas infrastructure supports nonlinear equilibrium solves where the displacement field is unknown and must be determined from the balance of momentum (Example~3). Constitutive identification on the same domain recovers Neo-Hookean parameters with machine-precision inter-chart consensus ($\mu$ std $=1.47\times10^{-13}$), and an elastoplastic extension identifies yield stress and hardening modulus from cyclic data (Examples~4--5).
-\item \textbf{Automatic inter-chart consistency through Schwarz coupling.} The multiplicative Schwarz iteration maintains interface displacement jumps at $O(10^{-7})$ throughout history-dependent cyclic loading, and per-chart material parameters converge to machine-precision consensus in the inverse setting, confirming that the coupling enforces global consistency without additional constraints.
+\item \textbf{Neural chart-based geometric decomposition.} Overlapping volumetric charts, equipped with learned decoder maps and quality-assured through geometric gate metrics, define \textbf{both} the domain representation and the Schwarz overlap structure. This same atlas pipeline supports multiple local solver families without re-parametrization. The chart count is a tunable parameter analogous to the number of subdomains in a domain decompsoition method. (Examples~1--3).
+\item \textbf{Inter-chart consistency through Schwarz coupling.} The multiplicative Schwarz iteration maintains interface displacement jumps at $O(10^{-7})$ throughout history-dependent cyclic loading, and per-chart material parameters converge to machine-precision consensus in the inverse setting, confirming that the coupling enforces global consistency without additional constraints.
+\item \textbf{Validations on PDE solvers applied on complex geometries.} On a twelve-chart rabbit Poisson problem, a compact PINN achieves relative $L^2$ error $2.21\times10^{-2}$, while a P1 tetrahedral FEM on an eight-chart atlas built by the same pipeline recovers the expected $O(h^2)$ convergence rate across five refinement levels. This result confirms that the mapped operator, Schwarz coupling, and partition-of-unity blending introduce no order-of-accuracy penalty. Meanwhile, the resultant atlas is a reusable geometric scaffold that can be incorporated in different PDE solvers (Example~2). An eight-chart Schwarz forward BVP solves $J_2$ elastoplasticity with kinematic hardening under cyclic loading on the torus, showing that the atlas infrastructure supports nonlinear equilibrium solves where the displacement field is unknown and must be determined from the balance of momentum (Example~3). Constitutive identification on the same domain recovers Neo-Hookean parameters with machine-precision inter-chart consensus ($\mu$ std $=1.47\times10^{-13}$), and an elastoplastic extension identifies yield stress and hardening modulus from cyclic data (Examples~4--5). These problems show that the proposed method is capable of solving inverse and forward problems in bodies with complex details and not homomorphic to sphere. 
 \end{enumerate}
 
-The paper is organized as follows. Section~\ref{sec:methodology} introduces the volumetric atlas, the mapped PDE operator, and the Schwarz solver on a fixed atlas. Section~\ref{sec:implementation} summarizes the geometry pipeline and quality gates. Section~\ref{sec:benchmark_formulations} presents numerical evidence, and Section~\ref{sec:discussion} discusses the relation to isogeometric analysis, current limitations, and future directions.
+The paper is organized as follows. Section~\ref{sec:methodology} introduces the volumetric atlas and mapped PDE operator. Section~\ref{sec:solver_method} presents the fixed-atlas solvers, including the Schwarz PINN and chart-local FEM realizations. Section~\ref{sec:implementation} summarizes the geometry pipeline and quality gates. Section~\ref{sec:benchmark_formulations} presents numerical evidence, and Section~\ref{sec:discussion} discusses the relation to isogeometric analysis, current limitations, and future directions.
 
-\section{Methodology}
+\section{Geometry and Operator Mapping}
 \label{sec:methodology}
 
-Before giving the derivations, we fix the notation used in this section. We use $x$ for a point in the physical body, $\boldsymbol{\zeta}$ for a chart-local reference coordinate on one atlas patch, and $\boldsymbol{\xi}$ for the global reference-ball coordinate used only in the special simply connected examples. This two-level notation is enough for the methodology while avoiding the earlier conflict in which one symbol was asked to represent both a local chart coordinate and a global reference coordinate.
+ We first define the notation used in this section. We use $\boldsymbol{x}$ for a point in the physical body, $\boldsymbol{\zeta}$ for a chart-local reference coordinate on one atlas patch, and $\boldsymbol{\xi}$ for the global reference-ball coordinate used only in the special simply connected examples. This two-level notation is enough for the methodology while avoiding the earlier conflict in which one symbol was asked to represent both a local chart coordinate and a global reference coordinate.
 
 \subsection{Geometric setting: manifold, coordinate charts, and atlas}
 \label{sec:atlas_geometry}
-Let $\Omega \subset \mathbb{R}^3$ be a bounded body with sufficiently regular boundary $\partial\Omega$. From a computational standpoint, the closure $\overline{\Omega}$ may be viewed as a compact three-dimensional manifold with boundary embedded in the ambient Euclidean space. We use this language only to formalize one practical point: when a single low-distortion volumetric parametrization is unavailable, the same body may still be described by several compatible local volumetric coordinates. The implementation therefore works with a finite computational atlas of bounded patches in $\mathbb{R}^3$, and the manifold viewpoint provides the minimal structure needed to treat those patches as one geometric object.
-
-\subsubsection{Coordinate charts and local coordinates}
-A coordinate chart is a pair $(\widehat{\Omega}_i,\varphi_i)$ consisting of a reference patch $\widehat{\Omega}_i\subset\mathbb{R}^3$ and a smooth map from that local coordinate domain into the physical body. In the present work the charts are volumetric rather than surface-valued, because the downstream solver must sample interior collocation points, evaluate volumetric PDE residuals, and communicate information through overlapping subregions. The basic chart family is written as
-\begin{equation}
-\mathcal{A}=\{(\widehat{\Omega}_i,\varphi_i)\}_{i=1}^{M},
-\qquad
-\widehat{\Omega}_i \subset \mathbb{R}^3,
-\qquad
-\varphi_i:\widehat{\Omega}_i \rightarrow \mathbb{R}^3,
-\label{eq:atlas_def}
-\end{equation}
-with physical patches
-\begin{equation}
-\Omega_i := \varphi_i(\widehat{\Omega}_i),
-\qquad
-\overline{\Omega}\subset \bigcup_{i=1}^{M}\overline{\Omega}_i.
-\label{eq:atlas_cover}
-\end{equation}
-The Jacobian matrix of chart $i$ is denoted by
-\begin{equation}
-\mathbf{J}_i(\boldsymbol{\zeta}) := D_{\boldsymbol{\zeta}} \varphi_i(\boldsymbol{\zeta})\in\mathbb{R}^{3\times 3},
-\qquad
-j_i(\boldsymbol{\zeta}):=\det \mathbf{J}_i(\boldsymbol{\zeta}).
-\label{eq:atlas_jac}
-\end{equation}
-For the mapped PDE derivations below, each chart is assumed locally nondegenerate:
-\begin{equation}
-j_i(\boldsymbol{\zeta})\ge j_{\min}>0
-\qquad \text{for all sampled }\boldsymbol{\zeta}\in \widehat{\Omega}_i.
-\label{eq:atlas_nondegenerate}
-\end{equation}
-This condition guarantees a locally invertible change of variables. It does \emph{not} by itself imply global injectivity. Whenever we refer to a chart inverse
-\begin{equation}
-\pi_i := \varphi_i^{-1}:\Omega_i\rightarrow \widehat{\Omega}_i,
-\label{eq:atlas_inverse}
-\end{equation}
-we mean the inverse on a patch where the chart is assumed or verified to be injective. In the implementation, positive Jacobian determinant is enforced or monitored at sampled points, while global injectivity is treated as a trained geometric property rather than a theorem following automatically from \eqref{eq:atlas_nondegenerate}.
-
-The rabbit atlas used later in the paper makes this local-coordinate idea concrete. Each chart is anchored at a seed point $s_i$ with an orthonormal local frame $\{\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i\}$, and a physical sample $x$ is first expressed in rigid local coordinates by
-\begin{equation}
-\boldsymbol{\zeta}^{\mathrm{rig}}_i(x)
-:=
-\left(
-(x-s_i)\cdot \mathbf{t}_{1i},
-\,
-(x-s_i)\cdot \mathbf{t}_{2i},
-\,
-(x-s_i)\cdot \mathbf{n}_i
-\right).
-\label{eq:atlas_rigid_local_coords}
-\end{equation}
-This is the coordinate transform used in the atlas-training stage and in the rabbit Schwarz solver before the learned decoder adds a bounded residual correction to the rigid frame map. The chart is therefore a local refinement of a simple Euclidean coordinate system, not an unconstrained parametrization trained from scratch.
-
-\subsubsection{Atlas, overlaps, and transition maps}
-An atlas is a finite collection of such charts whose physical images cover the body and overlap in a controlled way. In this manuscript the overlap is essential, because it is what later allows neighboring local PDE solves to exchange information without first building a global volumetric mesh. On overlaps we define
-\begin{equation}
-\Omega_{ij}:=\Omega_i\cap \Omega_j,
-\qquad
-\widehat{\Omega}_{ij}:=\pi_i(\Omega_{ij})\subset \widehat{\Omega}_i,
-\label{eq:atlas_overlap}
-\end{equation}
-and the transition map
-\begin{equation}
-\psi_{ij}:=\pi_j\circ \varphi_i:\widehat{\Omega}_{ij}\rightarrow \widehat{\Omega}_j,
-\qquad
-\varphi_i(\boldsymbol{\zeta})=\varphi_j(\psi_{ij}(\boldsymbol{\zeta})).
-\label{eq:atlas_transition}
-\end{equation}
-The transition map $\psi_{ij}$ identifies the same physical point through two neighboring coordinate systems. It is therefore the object that makes overlap consistency meaningful: if $x\in\Omega_{ij}$ and $x=\varphi_i(\boldsymbol{\zeta})$, then $\psi_{ij}(\boldsymbol{\zeta})$ is the coordinate in chart $j$ representing that same $x$. This local compatibility is the geometric counterpart of the chart-to-chart transmission used later by the alternating Schwarz solver.
-
-The overlaps also define the atlas adjacency graph
-\begin{equation}
-G_{\mathcal{A}}=(V_{\mathcal{A}},E_{\mathcal{A}}),
-\qquad
-V_{\mathcal{A}}=\{1,\dots,M\},
-\qquad
-E_{\mathcal{A}}=\{(i,j):\, i\neq j,\ \Omega_{ij}\neq \emptyset\}.
-\label{eq:atlas_overlap_graph}
-\end{equation}
-This graph is more than bookkeeping. It is the same neighborhood structure later used by the Schwarz sweep and by the graph-coloring that identifies non-overlapping chart groups for limited parallel updates.
-
-When a single global field is needed for post-processing, we use partition-of-unity weights $\{\omega_i\}_{i=1}^{M}$ satisfying
-\begin{equation}
-\omega_i:\Omega\rightarrow [0,1],
-\qquad
-\mathrm{supp}(\omega_i)\subset \Omega_i,
-\qquad
-\sum_{i=1}^{M}\omega_i(x)=1.
-\label{eq:atlas_pou}
-\end{equation}
-For any chart-local quantity $\widehat{g}_i$, the blended global field is
-\begin{equation}
-g_h(x)=\sum_{i=1}^{M}\omega_i(x)\,\widehat{g}_i(\pi_i(x)).
-\label{eq:atlas_blend}
-\end{equation}
-The atlas therefore serves two roles at once. Geometrically it represents the body by local volumetric parametrizations; algorithmically it provides the overlap graph and the coordinate transformations needed for local residual evaluation and inter-chart communication. In the rabbit implementation, a candidate atlas is accepted only after coverage, overlap-consistency, boundary-fit, and foldover diagnostics pass their prescribed gates, so the local chart structure used by the solver is already screened as a geometric object before PDE training begins.
-
-\begin{table}[htbp]
-\centering
-\footnotesize
-\caption{Notation used in Section~\ref{sec:methodology}. Physical-space variables, chart-local reference variables, and global reference-ball variables are separated explicitly so that the reader can track which coordinate system is active at each step of the derivation.}
-\label{tab:notation}
-\begin{tabular}{p{2.35cm}p{3.15cm}p{7.05cm}}
-\toprule
-Group & Symbol & Role in the method \\
-\midrule
-\multirow{4}{*}{Physical space}
-& $\Omega$, $\partial\Omega$ & physical body and its boundary \\
-& $x$ & physical-space point used in the governing PDE \\
-& $\Omega_i$, $\Omega_{ij}$ & chart image and chart-overlap region in physical space \\
-& $u(x),\,u_h(x)$ & physical state field and the blended global field used for reporting \\
-\midrule
-\multirow{4}{*}{\shortstack[l]{Chart-local\\ reference}}
-& $\widehat{\Omega}_i$ & reference patch attached to chart $i$ \\
-& $\boldsymbol{\zeta}$ & local coordinate used to evaluate one chart-local network \\
-& $\widehat{\Omega}_{ij}$ & overlap region written in the coordinates of chart $i$ \\
-& $\widehat{u}_i(\boldsymbol{\zeta})$ & chart-local state field defined on $\widehat{\Omega}_i$ \\
-\midrule
-\multirow{2}{*}{\shortstack[l]{Global\\ reference ball}}
-& $B^3=\{\boldsymbol{\xi}\in\mathbb{R}^3:\|\boldsymbol{\xi}\|<1\}$ & unit ball used only by the special global-map examples \\
-& $\Psi_\theta(\boldsymbol{\xi})$ & learned or analytic global map from the reference ball to the physical domain \\
-\midrule
-\multirow{4}{*}{Map operators}
-& $\varphi_i,\pi_i$ & chart map and its local inverse \\
-& $\psi_{ij}=\pi_j\circ\varphi_i$ & transition map from chart-$i$ coordinates to chart-$j$ coordinates on an overlap \\
-& $\mathbf{J}_i=D_{\boldsymbol{\zeta}}\varphi_i,\; j_i=\det\mathbf{J}_i$ & Jacobian matrix and Jacobian determinant of chart $i$ \\
-& $\omega_i$ & partition-of-unity weight used in the global blend \\
-\midrule
-\multirow{3}{*}{\shortstack[l]{Vectors and\\boundary data}}
-& $\mathbf{n},\,\widehat{\mathbf{n}}_i$ & outward unit normal on a physical or reference boundary \\
-& $\mathbf{t}_N,\,\mathbf{t}^{\mathrm{obs}}$ & prescribed Neumann traction and observed traction \\
-& $\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i$ & orthonormal TNB frame at chart seed $s_i$ (distinct from boundary normal) \\
-\midrule
-\shortstack[l]{Shared solver\\ quantities}
-& $\eta,\lambda_*$ & $\eta$ denotes global material or inverse parameters; $\lambda_*$ denotes loss weights shared across charts \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Figure~\ref{fig:atlas_slice} gives a schematic planar slice through this volumetric atlas. The paired arrows represent the chart maps $\varphi_i$ and their local inverses $\pi_i$, illustrating the bidirectional correspondence between reference coordinates and physical space. The drawing is intentionally geometric rather than algorithmic: it emphasizes that the local reference patches, their physical images, and their overlaps together define the computational body representation used by the later PDE solve.
+Let $\Omega \subset \mathbb{R}^3$ be a bounded body with sufficiently regular boundary $\partial\Omega$. From a computational standpoint, the closure $\overline{\Omega}$ may be viewed as a compact three-dimensional manifold with boundary embedded in the ambient Euclidean space \citep{lee2012introduction}. While a single low-distortion volumetric parametrization is not always sufficient to represent such a body, it may still be described by several compatible local volumetric coordinates, known as coordinate charts. The implementation therefore works with a finite computational atlas of bounded patches in $\mathbb{R}^3$.  This manifold viewpoint provides the minimal structure needed to treat these overlapping patches as a single geometric object (see Fig. \ref{fig:atlas_slice}).
 
 \begin{figure}[htbp]
 \centering
@@ -448,124 +310,181 @@ Figure~\ref{fig:atlas_slice} gives a schematic planar slice through this volumet
 \label{fig:atlas_slice}
 \end{figure}
 
+\subsubsection{Coordinate charts and local coordinates}
+A coordinate chart is, in general, a pair $(U_i,\varphi_i)$ where $U_i\subset\mathbb{R}^n$ is an open coordinate domain and $\varphi_i:U_i\to\mathcal{M}$ is a smooth map into an $n$-dimensional manifold (or manifold with boundary) \citep{lee2012introduction}. For 3D domains, we set $n=3$, such that each coordinate chart is volumetric. As such, the downstream solver must sample interior collocation points, evaluate volumetric PDE residuals, and communicate information through overlapping subregions. The basic chart family is written as
+\begin{equation}
+\mathcal{A}=\{(\widehat{\Omega}_i,\varphi_i)\}_{i=1}^{M},
+\qquad
+\widehat{\Omega}_i \subset \mathbb{R}^3,
+\qquad
+\varphi_i:\widehat{\Omega}_i \rightarrow \mathbb{R}^3,
+\label{eq:atlas_def}
+\end{equation}
+with physical patches
+\begin{equation}
+\Omega_i := \varphi_i(\widehat{\Omega}_i),
+\qquad
+\overline{\Omega}\subset \bigcup_{i=1}^{M}\overline{\Omega}_i.
+\label{eq:atlas_cover}
+\end{equation}
+where $M\in\mathbb{N}$ denotes the total number of charts in the atlas. Assuming that the 3D body is sufficiently smooth, the Jacobian of chart $i$ exists and can be denoted by
+\begin{equation}
+\mathbf{J}_i(\boldsymbol{\zeta}) := D_{\boldsymbol{\zeta}} \varphi_i(\boldsymbol{\zeta})\in\mathbb{R}^{3\times 3},
+\qquad
+j_i(\boldsymbol{\zeta}):=\det \mathbf{J}_i(\boldsymbol{\zeta}).
+\label{eq:atlas_jac}
+\end{equation}
+For the mapped PDE derivations below, each chart is \textbf{assumed} to be locally nondegenerate:
+\begin{equation}
+j_i(\boldsymbol{\zeta})\ge j_{\min}>0
+\qquad \text{for all sampled }\boldsymbol{\zeta}\in \widehat{\Omega}_i.
+\label{eq:atlas_nondegenerate}
+\end{equation}
+This condition guarantees a locally invertible change of variables. It does \emph{not} by itself imply global injectivity. Whenever we refer to a chart inverse
+\begin{equation}
+\pi_i := \varphi_i^{-1}:\Omega_i\rightarrow \widehat{\Omega}_i,
+\label{eq:atlas_inverse}
+\end{equation}
+we mean the inverse on a patch where the chart is assumed or verified to be injective. In the implementation, positive Jacobian determinant is enforced or monitored at sampled points, while global injectivity is treated as a training objective rather than an established geometric property from \eqref{eq:atlas_nondegenerate}.
+Each chart is anchored at a seed point $\tensor s_i$ with an orthonormal local frame $\{\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i\}$, and a physical sample $\tensor x$ is first expressed in rigid local coordinates by
+\begin{equation}
+\boldsymbol{\zeta}^{\mathrm{rig}}_i(\tensor x)
+:=
+\left(
+(\tensor x-\tensor s_i)\cdot \mathbf{t}_{1i},
+\,
+(\tensor x-\tensor s_i)\cdot \mathbf{t}_{2i},
+\,
+(\tensor x-\tensor s_i)\cdot \mathbf{n}_i
+\right).
+\label{eq:atlas_rigid_local_coords}
+\end{equation}
+This is the coordinate transform used in the atlas-training stage and in the Schwarz solver before the learned decoder adds a bounded residual correction to the rigid frame map. As such, each chart is equipped with a different mapping to a Euclidean coordinate system pre-trained before the solver is applied for the boundary value problem. Unless PINN is used as the local solver, there is no additional training needed to solve the boundary value problem. 
+
+\subsubsection{Atlas, overlaps, and transition maps}
+The atlas serves two roles here. Geometrically it represents the body by local volumetric parametrizations.  Algorithmically, it provides the overlap graph and the coordinate transformations needed for local residual evaluation and inter-chart communication. 
+An atlas is a collection of such charts whose physical images must cover the body, while overlapping is allowed. The overlapping nature of coordinate chart is leveraged such that it enables neighboring local PDE solves to exchange information \textbf{without} building a global volumetric mesh. 
+On overlaps we define
+\begin{equation}
+\Omega_{ij}:=\Omega_i\cap \Omega_j,
+\qquad
+\widehat{\Omega}_{ij}:=\pi_i(\Omega_{ij})\subset \widehat{\Omega}_i,
+\label{eq:atlas_overlap}
+\end{equation}
+and the corresponding transition map
+\begin{equation}
+\psi_{ij}:=\pi_j\circ \varphi_i:\widehat{\Omega}_{ij}\rightarrow \widehat{\Omega}_j,
+\qquad
+\varphi_i(\boldsymbol{\zeta})=\varphi_j(\psi_{ij}(\boldsymbol{\zeta})).
+\label{eq:atlas_transition}
+\end{equation}
+The transition map $\psi_{ij}$ identifies the same physical point through two neighboring coordinate systems. It is therefore the object that makes overlap consistency meaningful: if $x\in\Omega_{ij}$ and $x=\varphi_i(\boldsymbol{\zeta})$, then $\psi_{ij}(\boldsymbol{\zeta})$ is the coordinate in chart $j$ representing that same $x$. This local compatibility is the geometric counterpart of the chart-to-chart transmission used later by the alternating Schwarz solver.
+The overlaps also define the atlas adjacency graph,
+\begin{equation}
+G_{\mathcal{A}}=(V_{\mathcal{A}},E_{\mathcal{A}}),
+\qquad
+V_{\mathcal{A}}=\{1,\dots,M\},
+\qquad
+E_{\mathcal{A}}=\{(i,j):\, i\neq j,\ \Omega_{ij}\neq \emptyset\}.
+\label{eq:atlas_overlap_graph}
+\end{equation}
+Here, $G_{\mathcal{A}}$ is the atlas overlap graph, $V_{\mathcal{A}}$ is the set of chart indices (graph vertices), and $E_{\mathcal{A}}$ is the set of edges connecting chart pairs with non-empty overlap.
+This graph is not merely a bookkeeping device; it defines the neighborhood structure used later in the Schwarz sweep and in the graph-coloring step that identifies non-overlapping chart groups for parallel updates.
+
+Figure~\ref{fig:atlas_slice} gives a schematic planar slice through this volumetric atlas. The paired arrows represent the chart maps $\varphi_i$ and their local inverses $\pi_i$, illustrating the bidirectional correspondence between reference coordinates and physical space. 
+Table~\ref{tab:notation} summarizes the notation used throughout the remainder of the paper.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Notation used in Section~\ref{sec:methodology}. Physical-space variables, chart-local reference variables, and global reference-ball variables are separated explicitly so that the reader can track which coordinate system is active at each step of the derivation.}
+\label{tab:notation}
+\begin{tabular}{p{2.35cm}p{3.15cm}p{7.05cm}}
+\toprule
+Group & Symbol & Role in the method \\
+\midrule
+\multirow{4}{*}{Physical space}
+& $\Omega$, $\partial\Omega$ & physical body and its boundary \\
+& $x$ & physical-space point used in the governing PDE \\
+& $\Omega_i$, $\Omega_{ij}$ & chart image and chart-overlap region in physical space \\
+& $u(x),\,u_h(x)$ & physical state field and the blended global field used for reporting \\
+\midrule
+\multirow{4}{*}{\shortstack[l]{Chart-local\\ reference}}
+& $\widehat{\Omega}_i$ & reference patch attached to chart $i$ \\
+& $\boldsymbol{\zeta}$ & local coordinate used to evaluate one chart-local network \\
+& $\widehat{\Omega}_{ij}$ & overlap region written in the coordinates of chart $i$ \\
+& $\widehat{u}_i(\boldsymbol{\zeta})$ & chart-local state field defined on $\widehat{\Omega}_i$ \\
+\midrule
+\multirow{2}{*}{\shortstack[l]{Global\\ reference ball}}
+& $B^3=\{\boldsymbol{\xi}\in\mathbb{R}^3:\|\boldsymbol{\xi}\|<1\}$ & unit ball used only by the special global-map examples \\
+& $\Psi_\theta(\boldsymbol{\xi})$ & learned or analytic global map from the reference ball to the physical domain \\
+\midrule
+\multirow{4}{*}{Map operators}
+& $\varphi_i,\pi_i$ & chart map and its local inverse \\
+& $\psi_{ij}=\pi_j\circ\varphi_i$ & transition map from chart-$i$ coordinates to chart-$j$ coordinates on an overlap \\
+& $\mathbf{J}_i=D_{\boldsymbol{\zeta}}\varphi_i,\; j_i=\det\mathbf{J}_i$ & Jacobian matrix and Jacobian determinant of chart $i$ \\
+& $\omega_i$ & partition-of-unity weight used in the global blend \\
+\midrule
+\multirow{3}{*}{\shortstack[l]{Vectors and\\boundary data}}
+& $\mathbf{n},\,\widehat{\mathbf{n}}_i$ & outward unit normal on a physical or reference boundary \\
+& $\mathbf{t}_N,\,\mathbf{t}^{\mathrm{obs}}$ & prescribed Neumann traction and observed traction \\
+& $\mathbf{t}_{1i},\mathbf{t}_{2i},\mathbf{n}_i$ & orthonormal TNB frame at chart seed $s_i$ (distinct from boundary normal) \\
+\midrule
+\shortstack[l]{Shared solver\\ quantities}
+& $\eta,\lambda_*$ & $\eta$ denotes global material or inverse parameters; $\lambda_*$ denotes loss weights shared across charts \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{remark}[Post-processing]
+When a single global field is needed for post-processing, we use partition-of-unity weights $\{\omega_i\}_{i=1}^{M}$ satisfying
+\begin{equation}
+\omega_i:\Omega\rightarrow [0,1],
+\qquad
+\mathrm{supp}(\omega_i)\subset \Omega_i,
+\qquad
+\sum_{i=1}^{M}\omega_i(x)=1.
+\label{eq:atlas_pou}
+\end{equation}
+For any chart-local quantity $\widehat{g}_i$, the blended global field is
+\begin{equation}
+g_h(x)=\sum_{i=1}^{M}\omega_i(x)\,\widehat{g}_i(\pi_i(x)).
+\label{eq:atlas_blend}
+\end{equation}
+\end{remark}
+
 \subsection{Mapped PDE operator on a volumetric chart}
 \label{sec:mapped_operator}
-Let $u:\Omega\rightarrow\mathbb{R}^{q}$ be the physical state. For vector-valued fields we collect component gradients row-wise, so
+Let $\tensor u:\Omega\rightarrow\mathbb{R}^{q}$ be the physical state.
 \[
-\nabla_x u(x)\in \mathbb{R}^{q\times 3}.
+\nabla_x \tensor u(\tensor x)\in \mathbb{R}^{q}\otimes\mathbb{R}^{3},
+\qquad
+(\nabla_x \tensor u)_{\alpha i}=\frac{\partial u_\alpha}{\partial x_i}.
 \]
+Here, $q$ denotes the number of components of the state field (e.g., $q=1$ for a scalar field and $q=3$ for 3D displacement).
 We write the physical PDE in divergence form as
 \begin{equation}
-\nabla_x\cdot \mathcal{G}\!\left(x,u(x),\nabla_x u(x);\eta\right)
-+ \mathcal{S}\!\left(x,u(x),\nabla_x u(x);\eta\right)=0
+\nabla_x\cdot \mathcal{G}\!\left(\tensor x,\tensor u(\tensor x),\nabla_x \tensor u(\tensor x);\tensor\eta\right)
++ \mathcal{S}\!\left(\tensor x,\tensor u(\tensor x),\nabla_x \tensor u(\tensor x);\tensor\eta\right)=0
 \qquad \text{in }\Omega,
 \label{eq:abstract_pde}
 \end{equation}
-where the divergence acts row-wise and
+where the divergence acts on the spatial index and
 \[
-\mathcal{G}(x,u,\nabla u;\eta)\in \mathbb{R}^{q\times 3},
+\mathcal{G}(\tensor x,\tensor u,\nabla \tensor u;\tensor\eta)\in \mathbb{R}^{q}\otimes\mathbb{R}^{3},
 \qquad
-\mathcal{S}(x,u,\nabla u;\eta)\in \mathbb{R}^{q}.
+\mathcal{S}(\tensor x,\tensor u,\nabla \tensor u;\tensor\eta)\in \mathbb{R}^{q}.
 \]
+Here, $\tensor\eta$ denotes the vector of model/material parameters (it may reduce to a scalar in special cases).
 Physical boundary conditions are written as
 \begin{equation}
-u=u_D \quad \text{on }\Gamma_D,
+\tensor u=\tensor u_D \quad \text{on }\Gamma_D,
 \qquad
-\mathcal{G}(x,u,\nabla_x u;\eta)\,\mathbf{n} = \mathbf{t}_N
+\mathcal{G}(\tensor x,\tensor u,\nabla_x \tensor u;\tensor\eta)\,\mathbf{n} = \mathbf{t}_N
 \quad \text{on }\Gamma_N,
 \label{eq:abstract_bc}
 \end{equation}
 with outward unit normal $\mathbf{n}$.
-
-On chart $i$, let $\boldsymbol{\zeta}\in\widehat{\Omega}_i$ denote the local reference coordinate and define the pulled-back state by
-\begin{equation}
-\widehat{u}_i(\boldsymbol{\zeta}):=u(\varphi_i(\boldsymbol{\zeta})).
-\label{eq:pullback_state}
-\end{equation}
-Because gradients are stored row-wise, the chain rule takes the form
-\begin{equation}
-\nabla_x u(\varphi_i(\boldsymbol{\zeta}))
-=
-\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})\,\mathbf{J}_i(\boldsymbol{\zeta})^{-1}.
-\label{eq:grad_pullback}
-\end{equation}
-The physical flux is first evaluated on the chart and then converted to a reference-space flux by the row-wise Piola transform:
-\begin{align}
-\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)
-&:=
-\mathcal{G}\!\left(\varphi_i(\boldsymbol{\zeta}),\widehat{u}_i(\boldsymbol{\zeta}),\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1};\eta\right),
-\label{eq:pullback_flux}\\
-\widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\eta)
-&:=
-j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)\,\mathbf{J}_i(\boldsymbol{\zeta})^{-T}.
-\label{eq:piola_flux}
-\end{align}
-The pulled-back source term is
-\begin{equation}
-\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\eta)
-:=
-\mathcal{S}\!\left(\varphi_i(\boldsymbol{\zeta}),\widehat{u}_i(\boldsymbol{\zeta}),\nabla_{\boldsymbol{\zeta}} \widehat{u}_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1};\eta\right).
-\label{eq:pullback_source}
-\end{equation}
-We reserve the notation $\widehat{\mathcal{P}}_i$ for the Piola-transformed flux entering the reference-space divergence and $\widehat{\mathcal{S}}_i$ for the pulled-back source term, so the flux and source roles remain distinct throughout the derivation.
-With these definitions, the Piola identity $\nabla_x\cdot\mathcal{G} = j_i^{-1}\,\nabla_{\boldsymbol{\zeta}}\cdot(j_i\,\mathcal{G}\,\mathbf{J}_i^{-T}) = j_i^{-1}\,\nabla_{\boldsymbol{\zeta}}\cdot\widehat{\mathcal{P}}_i$ applied to \eqref{eq:abstract_pde} and multiplied through by $j_i$ yields the mapped residual on the reference chart:
-\begin{equation}
-\widehat{\mathcal{R}}_i(\boldsymbol{\zeta};\eta)
-:=
-\nabla_{\boldsymbol{\zeta}}\cdot \widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\eta)
-+
-j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\eta),
-\qquad \boldsymbol{\zeta}\in \widehat{\Omega}_i.
-\label{eq:mapped_residual}
-\end{equation}
-
-For the Dirichlet boundary we use
-\begin{equation}
-\widehat{\mathcal{B}}_{i,D}(\boldsymbol{\zeta}):=\widehat{u}_i(\boldsymbol{\zeta})-u_D(\varphi_i(\boldsymbol{\zeta})),
-\qquad \boldsymbol{\zeta}\in \widehat{\Gamma}_{i,D}:=\pi_i(\Gamma_D\cap \Omega_i).
-\label{eq:mapped_dirichlet}
-\end{equation}
-For Neumann or traction conditions, if $\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})$ is a reference outward normal on the relevant portion of $\partial\widehat{\Omega}_i$, the physical normal is
-\begin{equation}
-\mathbf{n}_i(\varphi_i(\boldsymbol{\zeta}))
-=
-\frac{\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})}
-{\|\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})\|},
-\label{eq:mapped_normal}
-\end{equation}
-and the pulled-back Neumann residual is
-\begin{equation}
-\widehat{\mathcal{B}}_{i,N}(\boldsymbol{\zeta};\eta)
-:=
-\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\eta)\,\mathbf{n}_i(\varphi_i(\boldsymbol{\zeta})) - \mathbf{t}_N(\varphi_i(\boldsymbol{\zeta})),
-\label{eq:mapped_neumann}
-\end{equation}
-where $\widehat{\mathcal{G}}_i$ is the physical flux from \eqref{eq:pullback_flux} and $\mathbf{n}_i$ is the physical normal from \eqref{eq:mapped_normal}, both evaluated at the chart-mapped point $\varphi_i(\boldsymbol{\zeta})$.
-
-Table~\ref{tab:operator_map} summarizes the correspondence between physical-space operators and their chart-local counterparts.
-
-\begin{table}[htbp]
-\centering
-\caption{Operator pullback summary. Each physical-space quantity on the left is expressed in chart-local reference coordinates on the right via the decoder map $\varphi_i$ and its Jacobian $\mathbf{J}_i$.}
-\label{tab:operator_map}
-\smallskip
-\small
-\begin{tabular}{lll}
-\toprule
-Physical operator & Reference-chart form & Eq. \\
-\midrule
-State field $u(x)$ & $\widehat{u}_i(\boldsymbol{\zeta}) = u(\varphi_i(\boldsymbol{\zeta}))$ & \eqref{eq:pullback_state} \\
-Gradient $\nabla_x u$ & $\nabla_{\boldsymbol{\zeta}}\widehat{u}_i\,\mathbf{J}_i^{-1}$ & \eqref{eq:grad_pullback} \\
-Flux $\mathcal{G}(x,u,\nabla u)$ & $\widehat{\mathcal{G}}_i = \mathcal{G}(\varphi_i,\widehat{u}_i,\nabla_{\boldsymbol{\zeta}}\widehat{u}_i \mathbf{J}_i^{-1})$ & \eqref{eq:pullback_flux} \\
-Piola flux $\widehat{\mathcal{P}}_i$ & $j_i\,\widehat{\mathcal{G}}_i\,\mathbf{J}_i^{-T}$ & \eqref{eq:piola_flux} \\
-Source $\mathcal{S}(x,u,\nabla u)$ & $\widehat{\mathcal{S}}_i = \mathcal{S}(\varphi_i,\widehat{u}_i,\nabla_{\boldsymbol{\zeta}}\widehat{u}_i \mathbf{J}_i^{-1})$ & \eqref{eq:pullback_source} \\
-PDE residual & $\widehat{\mathcal{R}}_i = \nabla_{\boldsymbol{\zeta}}\cdot\widehat{\mathcal{P}}_i + j_i\,\widehat{\mathcal{S}}_i$ & \eqref{eq:mapped_residual} \\
-Outward normal $\mathbf{n}$ & $\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i / \|\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i\|$ & \eqref{eq:mapped_normal} \\
-Dirichlet BC & $\widehat{u}_i(\boldsymbol{\zeta}) - u_D(\varphi_i(\boldsymbol{\zeta}))$ & \eqref{eq:mapped_dirichlet} \\
-Neumann BC & $\widehat{\mathcal{G}}_i\,\mathbf{n}_i - \mathbf{t}_N$ & \eqref{eq:mapped_neumann} \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 \begin{figure}[htbp]
 \centering
@@ -681,24 +600,122 @@ Neumann BC & $\widehat{\mathcal{G}}_i\,\mathbf{n}_i - \mathbf{t}_N$ & \eqref{eq:
 \label{fig:mapped_operator_schematic}
 \end{figure}
 
-\emph{Remark: global maps for simply connected domains.}
+On chart $i$, let $\boldsymbol{\zeta}\in\widehat{\Omega}_i$ denote the local reference coordinate and define the pulled-back state by
+\begin{equation}
+\widehat{\tensor u}_i(\boldsymbol{\zeta}):=\tensor u(\varphi_i(\boldsymbol{\zeta})).
+\label{eq:pullback_state}
+\end{equation}
+The chain rule takes the form
+\begin{equation}
+\nabla_x \tensor u(\varphi_i(\boldsymbol{\zeta}))
+=
+\nabla_{\boldsymbol{\zeta}} \widehat{\tensor u}_i(\boldsymbol{\zeta})\,\mathbf{J}_i(\boldsymbol{\zeta})^{-1}.
+\label{eq:grad_pullback}
+\end{equation}
+The physical flux is first evaluated on the chart and then converted to a reference-space flux by the Piola transform (acting on the spatial index):
+\begin{align}
+\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\tensor\eta)
+&:=
+\mathcal{G}\!\left(\varphi_i(\boldsymbol{\zeta}),\widehat{\tensor u}_i(\boldsymbol{\zeta}),\nabla_{\boldsymbol{\zeta}} \widehat{\tensor u}_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1};\tensor\eta\right),
+\label{eq:pullback_flux}\\
+\widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\tensor\eta)
+&:=
+j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\tensor\eta)\,\mathbf{J}_i(\boldsymbol{\zeta})^{-T}.
+\label{eq:piola_flux}
+\end{align}
+The pulled-back source term is
+\begin{equation}
+\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\tensor\eta)
+:=
+\mathcal{S}\!\left(\varphi_i(\boldsymbol{\zeta}),\widehat{\tensor u}_i(\boldsymbol{\zeta}),\nabla_{\boldsymbol{\zeta}} \widehat{\tensor u}_i(\boldsymbol{\zeta})\mathbf{J}_i(\boldsymbol{\zeta})^{-1};\tensor\eta\right).
+\label{eq:pullback_source}
+\end{equation}
+We reserve the notation $\widehat{\mathcal{P}}_i$ for the Piola-transformed flux entering the reference-space divergence and $\widehat{\mathcal{S}}_i$ for the pulled-back source term, so the flux and source roles remain distinct throughout the derivation.
+With these definitions, the Piola identity $\nabla_x\cdot\mathcal{G} = j_i^{-1}\,\nabla_{\boldsymbol{\zeta}}\cdot(j_i\,\mathcal{G}\,\mathbf{J}_i^{-T}) = j_i^{-1}\,\nabla_{\boldsymbol{\zeta}}\cdot\widehat{\mathcal{P}}_i$ applied to \eqref{eq:abstract_pde} and multiplied through by $j_i$ yields the mapped residual on the reference chart:
+\begin{equation}
+\widehat{\mathcal{R}}_i(\boldsymbol{\zeta};\tensor\eta)
+:=
+\nabla_{\boldsymbol{\zeta}}\cdot \widehat{\mathcal{P}}_i(\boldsymbol{\zeta};\tensor\eta)
++
+j_i(\boldsymbol{\zeta})\,\widehat{\mathcal{S}}_i(\boldsymbol{\zeta};\tensor\eta),
+\qquad \boldsymbol{\zeta}\in \widehat{\Omega}_i.
+\label{eq:mapped_residual}
+\end{equation}
+
+For the Dirichlet boundary we use
+\begin{equation}
+\widehat{\mathcal{B}}_{i,D}(\boldsymbol{\zeta}):=\widehat{\tensor u}_i(\boldsymbol{\zeta})-\tensor u_D(\varphi_i(\boldsymbol{\zeta})),
+\qquad \boldsymbol{\zeta}\in \widehat{\Gamma}_{i,D}:=\pi_i(\Gamma_D\cap \Omega_i).
+\label{eq:mapped_dirichlet}
+\end{equation}
+For Neumann or traction conditions, if $\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})$ is a reference outward normal on the relevant portion of $\partial\widehat{\Omega}_i$, the physical normal is
+\begin{equation}
+\mathbf{n}_i(\varphi_i(\boldsymbol{\zeta}))
+=
+\frac{\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})}
+{\|\mathbf{J}_i(\boldsymbol{\zeta})^{-T}\widehat{\mathbf{n}}_i(\boldsymbol{\zeta})\|},
+\label{eq:mapped_normal}
+\end{equation}
+and the pulled-back Neumann residual is
+\begin{equation}
+\widehat{\mathcal{B}}_{i,N}(\boldsymbol{\zeta};\tensor\eta)
+:=
+\widehat{\mathcal{G}}_i(\boldsymbol{\zeta};\tensor\eta)\,\mathbf{n}_i(\varphi_i(\boldsymbol{\zeta})) - \mathbf{t}_N(\varphi_i(\boldsymbol{\zeta})),
+\label{eq:mapped_neumann}
+\end{equation}
+where $\widehat{\mathcal{G}}_i$ is the physical flux from \eqref{eq:pullback_flux} and $\mathbf{n}_i$ is the physical normal from \eqref{eq:mapped_normal}, both evaluated at the chart-mapped point $\varphi_i(\boldsymbol{\zeta})$. Table~\ref{tab:operator_map} summarizes the correspondence between physical-space operators and their chart-local counterparts.
+
+\begin{table}[htbp]
+\centering
+\caption{Operator pullback summary. Each physical-space quantity on the left is expressed in chart-local reference coordinates on the right via the decoder map $\varphi_i$ and its Jacobian $\mathbf{J}_i$.}
+\label{tab:operator_map}
+\smallskip
+\small
+\begin{tabular}{lll}
+\toprule
+Physical operator & Reference-chart form & Eq. \\
+\midrule
+State field $u(x)$ & $\widehat{u}_i(\boldsymbol{\zeta}) = u(\varphi_i(\boldsymbol{\zeta}))$ & \eqref{eq:pullback_state} \\
+Gradient $\nabla_x u$ & $\nabla_{\boldsymbol{\zeta}}\widehat{u}_i\,\mathbf{J}_i^{-1}$ & \eqref{eq:grad_pullback} \\
+Flux $\mathcal{G}(x,u,\nabla u)$ & $\widehat{\mathcal{G}}_i = \mathcal{G}(\varphi_i,\widehat{u}_i,\nabla_{\boldsymbol{\zeta}}\widehat{u}_i \mathbf{J}_i^{-1})$ & \eqref{eq:pullback_flux} \\
+Piola flux $\widehat{\mathcal{P}}_i$ & $j_i\,\widehat{\mathcal{G}}_i\,\mathbf{J}_i^{-T}$ & \eqref{eq:piola_flux} \\
+Source $\mathcal{S}(x,u,\nabla u)$ & $\widehat{\mathcal{S}}_i = \mathcal{S}(\varphi_i,\widehat{u}_i,\nabla_{\boldsymbol{\zeta}}\widehat{u}_i \mathbf{J}_i^{-1})$ & \eqref{eq:pullback_source} \\
+PDE residual & $\widehat{\mathcal{R}}_i = \nabla_{\boldsymbol{\zeta}}\cdot\widehat{\mathcal{P}}_i + j_i\,\widehat{\mathcal{S}}_i$ & \eqref{eq:mapped_residual} \\
+Outward normal $\mathbf{n}$ & $\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i / \|\mathbf{J}_i^{-T}\widehat{\mathbf{n}}_i\|$ & \eqref{eq:mapped_normal} \\
+Dirichlet BC & $\widehat{u}_i(\boldsymbol{\zeta}) - u_D(\varphi_i(\boldsymbol{\zeta}))$ & \eqref{eq:mapped_dirichlet} \\
+Neumann BC & $\widehat{\mathcal{G}}_i\,\mathbf{n}_i - \mathbf{t}_N$ & \eqref{eq:mapped_neumann} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+
+\begin{remark}[Global maps for simply connected domains]
 In the special case where a single low-distortion volumetric parametrization $\Psi_\theta:B^3\to\Omega$ is feasible, the atlas reduces to one chart. The ellipsoid verification (Example~1) uses this special case with an analytic map; the rabbit and torus benchmarks do not. Details of the learned global-map training objective and algorithm are given in Appendix~\ref{sec:appendix_global_map}.
+\end{remark}
 
-\subsection{Schwarz alternating PINN on a fixed atlas}
+\section{Solvers on a fixed atlas}
+\label{sec:solver_method}
+This section explains how a fixed neural atlas and the corresponding mapped operators defined in Section \ref{sec:methodology} is used to solve PDEs while bypassing the meshing procedure that renders the geometry. 
+We choose physics-informed neural network (see Section \ref{sec:schwarz_pinn}), and finite element method (see Section \ref{sec:schwarz_fem}) to demonstrate how the neural altas can be used to solve PDE in a domain decomposed manner. In principle, the extension of the neural altas framework to other PDE solver, such as smoothen particle hydrodynamics (SPH) or material point method may also be feasible but is out of the scope of this study. 
+
+\subsection{Schwarz alternating physics-informed neural network on a fixed atlas}
 \label{sec:schwarz_pinn}
-Once a fixed atlas has been constructed, it also determines the natural domain decomposition for the solver. Each chart supplies one local problem, each overlap $\Omega_{ij}$ supplies an artificial interface, and each transition map $\psi_{ij}$ tells us how to compare neighboring chart fields in compatible coordinates \citep{quarteroni1999domain}. For coordinate-chart PINNs this pairing is particularly natural: local residual minimization already takes place on simple reference patches, while the atlas overlap graph $G_{\mathcal A}$ records exactly which neighbors must exchange temporary traces. Relative to a monolithic global PINN, this localizes approximation, conditioning, and sampling; relative to classical Schwarz, each local subproblem is minimized only approximately by gradient-based updates rather than solved exactly.
+After the atlas is obtained, its coordinate charts can be used to decompose the spatial domain for the PDE solver. In this setting, each chart becomes a local subproblem, each overlap $\Omega_{ij}$ acts as an artificial interface, and each transition map $\psi_{ij}$ provides a consistent way to compare neighboring chart fields \citep{quarteroni1999domain}. For coordinate-chart PINNs, this setting enables us to formulate residual minimization in reference coordinates for each coordinate chart. The overlap graph $G_{\mathcal A}$ identifies which neighboring charts must exchange traces. Compared with a single global PINN, this structure improves locality in approximation, conditioning, and sampling. 
 
-Let
+Let the state network on chart $i$ be
 \begin{equation}
 \widehat{u}_i(\cdot;\theta_i):\widehat{\Omega}_i\rightarrow \mathbb{R}^{q}
 \label{eq:local_network}
 \end{equation}
-be the state network on chart $i$, and define the local physical representation
+where $\theta_i$ denotes the trainable parameters of the chart-$i$ network. 
+The local physical representation reads,
 \begin{equation}
-u_i(x;\theta_i):=\widehat{u}_i(\pi_i(x);\theta_i),
+u_i(\tensor x;\theta_i):=\widehat{u}_i(\pi_i(\tensor x);\theta_i),
 \qquad x\in\Omega_i.
 \label{eq:local_physical_field}
 \end{equation}
+
 For overlaps, the artificial Schwarz boundary of chart $i$ is
 \begin{equation}
 \Gamma_i:=\partial\Omega_i\setminus \partial\Omega,
@@ -710,8 +727,9 @@ For overlaps, the artificial Schwarz boundary of chart $i$ is
 \end{equation}
 In reference coordinates, the corresponding sets are $\widehat{\Gamma}_{ij}:=\pi_i(\Gamma_{ij})\subset\widehat{\Omega}_i$ and $\widehat{\Gamma}_{i,\partial\Omega}:=\pi_i(\partial\Omega\cap\partial\Omega_i)$, which are the domains on which interface and physical-boundary penalties are sampled in the loss below. The sets $\Gamma_{ij}$ play the same conceptual role as Schwarz interfaces in classical overlapping domain decomposition: they are not physical boundaries of the PDE, but the internal regions where chart-local solutions must agree strongly enough to define a coherent global field. In the chart setting the same overlap also provides the transition map $\psi_{ij}$ needed to compare chart-local predictions in compatible coordinates. In the rabbit implementation, interface samples are drawn from points whose stored atlas membership includes both charts, and the rigid local coordinates \eqref{eq:atlas_rigid_local_coords} are evaluated in both neighboring frames before the chart-to-chart penalties are formed.
 
-In the continuous Schwarz method one would impose Dirichlet, Neumann, or Robin data on these artificial interfaces and solve each local problem to completion before moving to the next subdomain. The released rabbit solver uses a PINN-compatible relaxation of this idea. Neighbor networks are frozen while chart $i$ is updated, and compatibility is enforced by sampled penalties on the overlap rather than by exact boundary imposition. Writing $\theta_j^{(k,\mathrm{fr})}$ for the frozen neighbor state available during sweep $k$, the interface-value term is
-\emph{sampled from the neighboring local field $u_j$ itself, not from the global blended field $u_h$}. This point is important for reproducibility: Schwarz transmission in the released solver is chart-to-chart, with the global blend reserved for diagnostics and post-processing after a sweep has been proposed.
+In Schwarz alternating method \citep{lions1988schwarz}, one would impose Dirichlet, Neumann, or Robin data on these artificial interfaces and solve each local problem to completion before moving to the next subdomain. In the Schwarz PINN model, 
+ neighbor networks are frozen while chart $i$ is updated, and compatibility is enforced by sampled penalties on the overlap rather than by exact boundary imposition. Writing $\theta_j^{(k,\mathrm{fr})}$ for the frozen neighbor state available during sweep $k$, the interface-value term is
+sampled directly from the neighboring local field $u_j$, not from the globally blended field $u_h$. This distinction is important for reproducibility: in the released solver, Schwarz transmission is chart-to-chart, while the global blend is used only for diagnostics and post-processing after a proposed sweep.
 \begin{equation}
 \mathcal{J}_{i,\mathrm{iv}}^{(k)}
 =
@@ -726,7 +744,7 @@ In the continuous Schwarz method one would impose Dirichlet, Neumann, or Robin d
 \right].
 \label{eq:schwarz_iv_loss}
 \end{equation}
-For scalar Poisson problems the default configuration also penalizes projected normal-flux mismatch. Let $\mathbf{n}_{ij}(\boldsymbol{\zeta})$ denote the outward unit normal of $\partial\Omega_i$ at the physical point $\varphi_i(\boldsymbol{\zeta})$, restricted to the interface $\Gamma_{ij}$. Define
+To ensure continuity, one may also penalizes projected normal-flux mismatch. Let $\mathbf{n}_{ij}(\boldsymbol{\zeta})$ denote the outward unit normal of $\partial\Omega_i$ at the physical point $\varphi_i(\boldsymbol{\zeta})$, restricted to the interface $\Gamma_{ij}$. Define
 \begin{equation}
 q_i(\boldsymbol{\zeta};\theta_i)
 :=
@@ -749,7 +767,7 @@ q_j\!\left(\psi_{ij}(\boldsymbol{\zeta});\theta_j^{(k,\mathrm{fr})}\right)
 \right].
 \label{eq:schwarz_if_loss}
 \end{equation}
-The released solver also exposes a Robin-style variant,
+For completeness, one may also expose a Robin-style variant,i.e.,
 \begin{equation}
 \mathcal{J}_{i,\mathrm{rb}}^{(k)}
 =
@@ -771,8 +789,8 @@ q_j\!\left(\psi_{ij}(\boldsymbol{\zeta});\theta_j^{(k,\mathrm{fr})}\right)
 \right],
 \label{eq:schwarz_robin_loss}
 \end{equation}
-but the rabbit benchmark uses the penalty form \eqref{eq:schwarz_iv_loss}--\eqref{eq:schwarz_if_loss} rather than the Robin option. In volumetric-atlas mode the code can further add an overlap-interior value penalty on sampled points from $\widehat{\Omega}_{ij}$; despite the legacy variable name \texttt{overlap\_h1}, the current implementation penalizes value mismatch over the sampled overlap volume rather than the full $H^1$ seminorm.
-
+This option is nevertheless not execised in our numerical experiments. 
+%In volumetric-atlas mode, the code can further add an overlap-interior value penalty on sampled points from $\widehat{\Omega}_{ij}$; despite the legacy variable name \texttt{overlap\_h1}, the current implementation penalizes value mismatch over the sampled overlap volume rather than the full $H^1$ seminorm.
 At Schwarz sweep $k$, the local chart objective is therefore
 \begin{align}
 \mathcal{J}_i^{(k)}(\theta_i;\eta)
@@ -802,7 +820,7 @@ One sweep of the atlas solver can be written abstractly as
 \Theta^{(k)}:=(\theta_1^{(k)},\dots,\theta_M^{(k)}),
 \label{eq:schwarz_sweep}
 \end{equation}
-where $\mathfrak{S}$ denotes one multiplicative Schwarz pass over the chart set. In the rabbit solver this sweep is multiplicative at the level of overlapping neighbors: later charts in the sweep see the most recent accepted states of earlier charts, while non-overlapping charts may be grouped into the same graph color and updated concurrently on compatible accelerator backends without violating the frozen-neighbor assumption on overlap pairs. This is why the released implementation is best described as a multiplicative Schwarz method with limited within-color parallelism, not as a fully additive update.
+where $\mathfrak{S}$ denotes one multiplicative Schwarz pass over the chart set. In the PINN solver, multiplicativity is enforced on every overlapping pair: charts updated later in the sweep use the most recently accepted states of previously updated neighbors. Charts that do not overlap are assigned to the same graph color and can be updated concurrently on available accelerator backends without violating the frozen-neighbor assumption. The resulting algorithm is therefore a multiplicative Schwarz scheme with restricted within-color parallelism, rather than a fully additive update.
 The color groups used in Algorithm~\ref{alg:atlas_sapinn_training} are derived from a graph-coloring of the chart-overlap adjacency matrix: two charts may share a color only if they do not overlap, which makes within-color updates independent for the purposes of the frozen-neighbor Schwarz step.
 
 After an accepted sweep, the global blended field is
@@ -810,6 +828,7 @@ After an accepted sweep, the global blended field is
 u_h^{(k)}(x)=\sum_{i=1}^{M}\omega_i(x)\,u_i(x;\theta_i^{(k)}).
 \label{eq:schwarz_global_field}
 \end{equation}
+where $M$ is the total number of charts in the atlas.
 
 \begin{figure}[htbp]
 \centering
@@ -961,7 +980,7 @@ u_h^{(k)}(x)=\sum_{i=1}^{M}\omega_i(x)\,u_i(x;\theta_i^{(k)}).
 \end{algorithmic}
 \end{algorithm}
 
-Algorithm~\ref{alg:atlas_sapinn_training} records the core training loop behind the fixed-atlas rabbit Poisson benchmark. The accepted state is decided at the sweep level rather than chart by chart, and any parallelism is restricted to non-overlapping color groups, so the released solver still behaves as a multiplicative Schwarz method on every true overlap pair.
+Algorithm~\ref{alg:atlas_sapinn_training} records the core training loop. The key point is that acceptance is evaluated at the sweep level, not chart by chart. As such, a candidate sweep is formed first, then accepted or rejected using global diagnostics. Consequently, later chart updates within the same sweep are interpreted in the context of the current provisional state, and the solver commits a new iterate only after the sweep-level decision is made. Parallel updates are permitted only within non-overlapping graph-color groups; no two charts in the same color share an overlap interface. This coloring preserves independent within-color updates while retaining multiplicative information transfer across true overlap pairs through the sweep ordering.
 
 \subsection{Chart-local finite-element solver on a fixed atlas}
 \label{sec:schwarz_fem}
@@ -1053,16 +1072,17 @@ The autograd-based tangent assembly deserves emphasis because it decouples the s
 \end{algorithmic}
 \end{algorithm}
 
-\subsubsection{PINN versus FEM: complementary chart-local discretizations}
+\subsubsection{Comparisiond of PINN and FEM algorithms}
 \label{sec:pinn_vs_fem}
 
-Table~\ref{tab:pinn_vs_fem} compares the two chart-local solver families on atlases built by the same pipeline. The comparison is not intended to declare a winner---each strategy has structural advantages that the other lacks---but to demonstrate that the atlas framework does not privilege one discretization over another. We frame the comparison in terms of three axes that are relevant to the practitioner: (i)~the nature of the local solve, (ii)~the convergence guarantee, and (iii)~the suitability for history-dependent problems.
+Table~\ref{tab:pinn_vs_fem} compares the two chart-local solver families on atlases built by the same pipeline. A important key is that that the atlas construction pipeline (SDF learning, chart seeding, decoder training, quality gating) and the Schwarz coupling logic (overlap graph, color groups, interface transmission) are \emph{shared infrastructure} that both solvers consume without modification. 
+Once the atlas passes its quality gates, either Algorithm~\ref{alg:atlas_sapinn_training} or Algorithm~\ref{alg:atlas_fem_schwarz} may be applied, and new chart-local discretization families---spectral elements, isogeometric patches, or neural operators---could be introduced by supplying only a local trial-function class and the corresponding assembly or evaluation routine. This modularity is a direct consequence of the separation between geometry (encoded in the atlas) and physics (encoded in the chart-local solver), and it is the primary architectural contribution of the present work.
 
 \begin{table}[htbp]
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{Structural comparison of the two chart-local solver families on the atlas pipeline. Both solvers share the same decoder architecture, overlap graph structure $G_{\mathcal{A}}$, Schwarz transmission logic, and partition-of-unity blending \eqref{eq:schwarz_global_field}; the chart count is a user parameter.}
+\caption{Comparisons between the two chart-local solver families on the atlas pipeline. Both solvers share the same decoder architecture, overlap graph structure $G_{\mathcal{A}}$, Schwarz transmission logic, and partition-of-unity blending \eqref{eq:schwarz_global_field}; the chart count is a user parameter.}
 \label{tab:pinn_vs_fem}
 \begin{tabular}{p{3.5cm}p{5.2cm}p{5.2cm}}
 \toprule
@@ -1072,27 +1092,27 @@ Trial function & Neural network $\widehat{u}_i(\boldsymbol{\zeta};\theta_i)$ & P
 Local solve & Approximate (gradient descent) & Exact (Newton--Raphson to tolerance) \\
 Mesh generation & None (meshfree collocation) & Structured Freudenthal tets on $[-r_i,r_i]^3$ \\
 Convergence guarantee & Empirical & $O(h^2)$ for P1 on smooth solutions \\
-Nonlinear operators & Natural (pointwise autograd residual) & Requires tangent assembly per Newton step \\
+Nonlinear operators & Pointwise autograd residual & Requires tangent assembly per Newton step \\
 Schwarz coupling & Penalty-based on sampled overlaps & Dirichlet trace injection at interface nodes \\
-History-dependent laws & Not yet demonstrated & Demonstrated (Example~3, $J_2$ plasticity) \\
+%History-dependent laws & Not yet demonstrated & Demonstrated (Example~3, $J_2$ plasticity) \\
 Gradient w.r.t.\ parameters & Direct (backpropagation) & Implicit function theorem \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Meshfree neural solver.}
-The PINN solver avoids reference-domain mesh generation and stiffness-matrix assembly entirely, and it extends naturally to nonlinear operators because the PDE residual is evaluated pointwise through autograd. These are practical advantages when the constitutive law is complex or when the user wishes to explore different PDE operators on the same geometry without regenerating element connectivity. However, the local solve is approximate (driven by stochastic gradient descent rather than Newton iteration), and no mesh-refinement convergence guarantee is available.
+%\paragraph{Meshfree neural solver.}
+%The PINN solver avoids reference-domain mesh generation and stiffness-matrix assembly entirely, and it extends naturally to nonlinear operators because the PDE residual is evaluated pointwise through autograd. These are practical advantages when the constitutive law is complex or when the user wishes to explore different PDE operators on the same geometry without regenerating element connectivity. However, the local solve is approximate (driven by stochastic gradient descent rather than Newton iteration), and no mesh-refinement convergence guarantee is available.
 
-\paragraph{Chart-local Galerkin solver.}
-The FEM solver provides a classical mesh-refinement convergence guarantee ($O(h^2)$ for P1 elements on sufficiently smooth solutions) and solves each chart-local subproblem to machine-precision Newton tolerance. For incremental problems with history-dependent internal variables---where each load step must equilibrate before advancing to the next---the exactness of the Newton solve is essential, because approximate gradient-descent updates cannot guarantee equilibrium at every step and would corrupt the stored plastic state. The trade-off is that each Newton step requires tangent stiffness assembly, which in the current dense implementation scales as $O(n_i^2)$ in memory and $O(n_i^3)$ in solve time, where $n_i$ is the chart-local DOF count. Sparse or iterative solvers would alleviate this cost for finer chart-local meshes.
+%\paragraph{Chart-local Galerkin solver.}
+%The FEM solver provides a classical mesh-refinement convergence guarantee ($O(h^2)$ for P1 elements on sufficiently smooth solutions) and solves each chart-local subproblem to machine-precision Newton tolerance. For incremental problems with history-dependent internal variables---where each load step must equilibrate before advancing to the next---the exactness of the Newton solve is essential, because approximate gradient-descent updates cannot guarantee equilibrium at every step and would corrupt the stored plastic state. The trade-off is that each Newton step requires tangent stiffness assembly, which in the current dense implementation scales as $O(n_i^2)$ in memory and $O(n_i^3)$ in solve time, where $n_i$ is the chart-local DOF count. Sparse or iterative solvers would alleviate this cost for finer chart-local meshes.
 
-\paragraph{Shared infrastructure and extensibility.}
-The central point is that the atlas construction pipeline (SDF learning, chart seeding, decoder training, quality gating) and the Schwarz coupling logic (overlap graph, color groups, interface transmission) are \emph{shared infrastructure} that both solvers consume without modification. Once the atlas passes its quality gates, either Algorithm~\ref{alg:atlas_sapinn_training} or Algorithm~\ref{alg:atlas_fem_schwarz} may be applied, and new chart-local discretization families---spectral elements, isogeometric patches, or neural operators---could be introduced by supplying only a local trial-function class and the corresponding assembly or evaluation routine. This modularity is a direct consequence of the separation between geometry (encoded in the atlas) and physics (encoded in the chart-local solver), and it is the primary architectural contribution of the present work. The benchmarks that follow exercise both branches: Examples~1--2 use the PINN and FEM on the Poisson operator, Example~3 uses the FEM for forward elastoplasticity, and Examples~4--5 use the FEM (forward solve) with autograd-based inverse sensitivity for constitutive identification.
+%\paragraph{Shared infrastructure and extensibility.}
+
 
 \section{Implementation}
 \label{sec:implementation}
 
-This section summarizes the key implementation principles that connect the methodology of Section~\ref{sec:methodology} to the benchmark results. Full architectural specifications, training losses, pipeline equations, and stabilization details are provided in Appendix~\ref{sec:appendix_architectures}--\ref{sec:appendix_stabilization}.
+This section summarizes the key implementation principles that connect the geometry-and-operator formulation (Section~\ref{sec:methodology}) and fixed-atlas solvers (Section~\ref{sec:solver_method}) to the benchmark results. Full architectural specifications, training losses, pipeline equations, and stabilization details are provided in Appendix~\ref{sec:appendix_architectures}--\ref{sec:appendix_stabilization}.
 
 \subsection{Separation of geometry and PDE solving}
 

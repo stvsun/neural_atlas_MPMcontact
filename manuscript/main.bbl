@@ -1,4 +1,4 @@
-\begin{thebibliography}{29}
+\begin{thebibliography}{33}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -10,6 +10,20 @@
 Eduardo~A de~Souza~Neto, Djordje Peric, and David~RJ Owen.
 \newblock \emph{Computational methods for plasticity: theory and applications}.
 \newblock John Wiley \& Sons, 2011.
+
+\bibitem[Simo and Hughes(1998)]{simo_computational_1998}
+J.C. Simo and T.J.R. Hughes.
+\newblock \emph{Computational {Inelasticity}}, volume~7 of
+  \emph{Interdisciplinary {Applied} {Mathematics}}.
+\newblock Springer-Verlag, New York, 1998.
+\newblock ISBN 0-387-97520-9.
+\newblock \doi{10.1007/b98904}.
+\newblock URL \url{http://link.springer.com/10.1007/b98904}.
+
+\bibitem[Zienkiewicz and Taylor(2000)]{zienkiewicz_finite_2000}
+O.C. Zienkiewicz and R.L. Taylor.
+\newblock The {Finite} {Element} {Method} {Volume} 2: {Solid} {Mechanics}.
+\newblock 2:\penalty0 476, 2000.
 
 \bibitem[Quey et~al.(2011)Quey, Dawson, and Barbe]{quey_large-scale_2011}
 R.~Quey, P.~R. Dawson, and F.~Barbe.
@@ -146,6 +160,19 @@ Jan~N. Fuhg, Nikolaos Bouklas, and Reese~E. Jones.
   (2):\penalty0 1--41, 2024.
 \newblock \doi{10.1007/s11831-023-10009-y}.
 
+\bibitem[Bahmani and Sun(2022)]{bahmani2022manifold}
+Bahador Bahmani and WaiChing Sun.
+\newblock Manifold embedding data-driven mechanics.
+\newblock \emph{Journal of the Mechanics and Physics of Solids}, 166:\penalty0
+  104927, 2022.
+
+\bibitem[Xiao and Sun(2022)]{xiao2022geometric}
+Mian Xiao and WaiChing Sun.
+\newblock Geometric prior of multi-resolution yielding manifolds and the local
+  closest point projection for nearly non-smooth plasticity.
+\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
+  400:\penalty0 115469, 2022.
+
 \bibitem[Park et~al.(2019)Park, Florence, Straub, Newcombe, and
   Lovegrove]{park2019deepsdf}
 Jeong~Joon Park, Peter Florence, Julian Straub, Richard Newcombe, and Steven
@@ -163,6 +190,14 @@ Lars Mescheder, Michael Oechsle, Michael Niemeyer, Sebastian Nowozin, and
 \newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
   and Pattern Recognition}, pages 4460--4470, 2019.
 
+\bibitem[Williams et~al.(2019)Williams, Schneider, Silva, Zorin, Bruna, and
+  Panozzo]{williams2019deep}
+Francis Williams, Teseo Schneider, Claudio Silva, Denis Zorin, Joan Bruna, and
+  Daniele Panozzo.
+\newblock Deep geometric prior for surface reconstruction.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, 2019.
+
 \bibitem[Sahli~Costabal et~al.(2024)Sahli~Costabal, Navarro, and
   Kammann]{sahli2024deltapinns}
 Francisco Sahli~Costabal, Simone Navarro, and Claudio Kammann.
@@ -171,15 +206,6 @@ Francisco Sahli~Costabal, Simone Navarro, and Claudio Kammann.
 \newblock \emph{Computer Methods in Applied Mechanics and Engineering},
   422:\penalty0 116961, 2024.
 \newblock \doi{10.1016/j.cma.2024.116761}.
-
-\bibitem[Simo and Hughes(1998)]{simo_computational_1998}
-J.C. Simo and T.J.R. Hughes.
-\newblock \emph{Computational {Inelasticity}}, volume~7 of
-  \emph{Interdisciplinary {Applied} {Mathematics}}.
-\newblock Springer-Verlag, New York, 1998.
-\newblock ISBN 0-387-97520-9.
-\newblock \doi{10.1007/b98904}.
-\newblock URL \url{http://link.springer.com/10.1007/b98904}.
 
 \bibitem[Hu et~al.(2020)Hu, Anderson, Li, Sun, Carr, Ragan-Kelley, and
   Durand]{hu_difftaichi_2020}

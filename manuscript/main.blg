@@ -3,44 +3,51 @@ Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
 The top-level auxiliary file: main.aux
 The style file: unsrtnat.bst
 Database file #1: main.bib
-You've used 29 entries,
+Warning--I didn't find a database entry for "kanno2021kernel"
+Warning--I didn't find a database entry for "he2020physics"
+Warning--I didn't find a database entry for "jian2024prediction"
+Warning--I didn't find a database entry for "lee2012introduction"
+Warning--I didn't find a database entry for "lions1988schwarz"
+Warning--empty journal in zienkiewicz_finite_2000
+You've used 33 entries,
             2481 wiz_defined-function locations,
-            734 strings with 10700 characters,
-and the built_in function-call counts, 12288 in all, are:
-= -- 984
-> -- 775
-< -- 11
-+ -- 288
-- -- 230
-* -- 1053
-:= -- 2020
-add.period$ -- 101
-call.type$ -- 29
-change.case$ -- 53
-chr.to.int$ -- 29
-cite$ -- 29
-duplicate$ -- 580
-empty$ -- 1050
-format.name$ -- 271
-if$ -- 2559
+            758 strings with 11410 characters,
+and the built_in function-call counts, 13782 in all, are:
+= -- 1100
+> -- 859
+< -- 14
++ -- 320
+- -- 254
+* -- 1164
+:= -- 2260
+add.period$ -- 113
+call.type$ -- 33
+change.case$ -- 61
+chr.to.int$ -- 33
+cite$ -- 34
+duplicate$ -- 659
+empty$ -- 1193
+format.name$ -- 305
+if$ -- 2877
 int.to.chr$ -- 1
-int.to.str$ -- 30
-missing$ -- 35
-newline$ -- 166
-num.names$ -- 87
-pop$ -- 229
+int.to.str$ -- 34
+missing$ -- 39
+newline$ -- 186
+num.names$ -- 99
+pop$ -- 265
 preamble$ -- 1
-purify$ -- 29
+purify$ -- 33
 quote$ -- 0
-skip$ -- 328
+skip$ -- 374
 stack$ -- 0
-substring$ -- 540
-swap$ -- 86
+substring$ -- 593
+swap$ -- 94
 text.length$ -- 4
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 185
-warning$ -- 0
-while$ -- 96
+type$ -- 213
+warning$ -- 1
+while$ -- 107
 width$ -- 0
-write$ -- 409
+write$ -- 459
+(There were 6 warnings)

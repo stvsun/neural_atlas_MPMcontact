@@ -1,14 +1,15 @@
 \BOOKMARK [1][-]{section.1}{Introduction}{}% 1
-\BOOKMARK [1][-]{section.2}{Methodology}{}% 2
-\BOOKMARK [1][-]{section.3}{Implementation}{}% 3
-\BOOKMARK [1][-]{section.4}{Benchmark problems and numerical results}{}% 4
-\BOOKMARK [1][-]{section.5}{Discussion}{}% 5
-\BOOKMARK [1][-]{section.6}{Conclusions}{}% 6
-\BOOKMARK [1][-]{appendix.A}{Implementation transparency and hardware backends}{}% 7
-\BOOKMARK [1][-]{appendix.B}{Neural network architecture specifications}{}% 8
-\BOOKMARK [1][-]{appendix.C}{Global map training for simply connected domains}{}% 9
-\BOOKMARK [1][-]{appendix.D}{Geometry pipeline equations}{}% 10
-\BOOKMARK [1][-]{appendix.E}{Elastoplastic constitutive model and smooth return mapping}{}% 11
-\BOOKMARK [1][-]{appendix.F}{Solver stabilization details}{}% 12
-\BOOKMARK [1][-]{appendix.G}{Rabbit Poisson benchmark: supplementary tables}{}% 13
-\BOOKMARK [1][-]{appendix.H}{Stanford Bunny volumetric neural SDF benchmark}{}% 14
+\BOOKMARK [1][-]{section.2}{Geometry and Operator Mapping}{}% 2
+\BOOKMARK [1][-]{section.3}{Solvers on a fixed atlas}{}% 3
+\BOOKMARK [1][-]{section.4}{Implementation}{}% 4
+\BOOKMARK [1][-]{section.5}{Benchmark problems and numerical results}{}% 5
+\BOOKMARK [1][-]{section.6}{Discussion}{}% 6
+\BOOKMARK [1][-]{section.7}{Conclusions}{}% 7
+\BOOKMARK [1][-]{appendix.A}{Implementation transparency and hardware backends}{}% 8
+\BOOKMARK [1][-]{appendix.B}{Neural network architecture specifications}{}% 9
+\BOOKMARK [1][-]{appendix.C}{Global map training for simply connected domains}{}% 10
+\BOOKMARK [1][-]{appendix.D}{Geometry pipeline equations}{}% 11
+\BOOKMARK [1][-]{appendix.E}{Elastoplastic constitutive model and smooth return mapping}{}% 12
+\BOOKMARK [1][-]{appendix.F}{Solver stabilization details}{}% 13
+\BOOKMARK [1][-]{appendix.G}{Rabbit Poisson benchmark: supplementary tables}{}% 14
+\BOOKMARK [1][-]{appendix.H}{Stanford Bunny volumetric neural SDF benchmark}{}% 15
