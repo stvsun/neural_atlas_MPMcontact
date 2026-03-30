@@ -8,7 +8,7 @@
 \BOOKMARK [1][-]{appendix.A}{Implementation transparency and hardware backends}{}% 8
 \BOOKMARK [1][-]{appendix.B}{Neural network architecture specifications}{}% 9
 \BOOKMARK [1][-]{appendix.C}{Global map training for simply connected domains}{}% 10
-\BOOKMARK [1][-]{appendix.D}{Geometry pipeline equations}{}% 11
+\BOOKMARK [1][-]{appendix.D}{Atlas training losses}{}% 11
 \BOOKMARK [1][-]{appendix.E}{Elastoplastic constitutive model and smooth return mapping}{}% 12
 \BOOKMARK [1][-]{appendix.F}{Solver stabilization details}{}% 13
 \BOOKMARK [1][-]{appendix.G}{Rabbit Poisson benchmark: supplementary tables}{}% 14

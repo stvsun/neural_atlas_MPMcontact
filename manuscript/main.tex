@@ -1112,23 +1112,133 @@ Gradient w.r.t.\ parameters & Direct (backpropagation) & Implicit function theor
 \section{Implementation}
 \label{sec:implementation}
 
-This section summarizes the key implementation principles that connect the geometry-and-operator formulation (Section~\ref{sec:methodology}) and fixed-atlas solvers (Section~\ref{sec:solver_method}) to the benchmark results. Full architectural specifications, training losses, pipeline equations, and stabilization details are provided in Appendix~\ref{sec:appendix_architectures}--\ref{sec:appendix_stabilization}.
+This section details the four-stage geometry pipeline that produces a frozen atlas, the quality gates that certify the atlas before any PDE solver is invoked, and the chart-local solver architectures used in the benchmarks. Architectural specifications and training-loss expansions are collected in Appendix~\ref{sec:appendix_architectures}--\ref{sec:appendix_pipeline}; solver stabilization heuristics are given in Appendix~\ref{sec:appendix_stabilization}.
 
 \subsection{Separation of geometry and PDE solving}
 
 All neural networks are implemented in PyTorch \citep{paszke2019pytorch} with automatic differentiation for both PDE residuals and chart Jacobians. The central implementation principle is the \emph{separation of geometry from PDE solving}: the atlas---including its SDF, volumetric charts, decoder maps, mask weights, and overlap structure---is constructed and frozen before any field solver is trained. This separation makes the numerical evidence interpretable: if a benchmark fails after the geometry gate has passed, the failure is attributable to the PDE solver or coupling logic rather than to a moving geometry target.
 
 \subsection{Atlas construction pipeline}
+\label{sec:impl_pipeline}
 
-The geometry stage follows a four-step pipeline, each producing a mathematical object required by the downstream solver:
-\begin{enumerate}
-\item \textbf{Volumetric signed-distance modeling.} A neural SDF $s_\vartheta:\mathbb{R}^3\to\mathbb{R}$ is trained from surface samples with oriented normals, providing inside/outside classification and volumetric chart seeding without a tetrahedral mesh. The training loss combines surface fit, normal alignment, Eikonal regularization, and sign supervision (Appendix~\ref{sec:appendix_pipeline}, Eqs.~\eqref{eq:impl_sdf_loss}--\eqref{eq:impl_sdf_sign}).
-\item \textbf{Seed placement and local frames.} The domain is covered by $M$ overlapping ball charts with seeds $\{c_i\}$, orthonormal frames $\mathbf{Q}_i$, and support radii $\{r_i\}$. Seeds are accepted only where $s_\vartheta(c_i)<0$.
-\item \textbf{Decoder and mask training.} Each chart map $\varphi_i$ is realized as a rigid affine frame plus a learned residual (Eq.~\eqref{eq:impl_decoder_map}), paired with a mask network producing validity logits and partition-of-unity weights. The atlas loss combines reconstruction, domain containment, mask classification, overlap consistency, Jacobian positivity, and coverage terms (Appendix~\ref{sec:appendix_pipeline}, Eqs.~\eqref{eq:impl_atlas_total}--\eqref{eq:impl_atlas_cov}).
-\item \textbf{Quality gates.} The atlas is accepted only if coverage, overlap consistency, foldover ratio, and boundary RMSE lie within prescribed bands (Appendix~\ref{sec:appendix_pipeline}, Eqs.~\eqref{eq:impl_gate_metrics}--\eqref{eq:impl_gate_rmse}). Failed gates trigger iterative refinement of seeds, radii, and network parameters.
-\end{enumerate}
+The geometry stage follows a four-step pipeline, each producing a mathematical object required by the downstream solver. The pipeline is designed so that every stage can be verified independently: the SDF defines the domain, the seeds and frames initialize the charts, the decoders and masks refine them, and the quality gates accept or reject the result before any PDE solver is invoked.
 
-Each local chart uses a ball-shaped reference domain $\widehat{\Omega}_i\subset\mathbb{R}^3$, providing an isotropic reference metric that stabilizes sampling and Jacobian conditioning. Bijectivity is not guaranteed by construction; it is monitored a~posteriori through the determinant barrier and foldover gates.
+\subsubsection{Stage 1: Volumetric signed-distance modeling}
+\label{sec:impl_sdf}
+
+The first stage replaces a watertight volumetric mesh with a neural signed distance function $s_\vartheta:\mathbb{R}^3\to\mathbb{R}$ trained from surface samples with oriented normals. The learned level set defines the computational domain and its boundary:
+\begin{equation}
+s_{\vartheta}:\mathbb{R}^3\rightarrow \mathbb{R},
+\qquad
+\Omega \approx \{x\in\mathbb{R}^3:s_{\vartheta}(x)<0\},
+\qquad
+\partial\Omega \approx \{x\in\mathbb{R}^3:s_{\vartheta}(x)=0\}.
+\label{eq:impl_sdf_levelset}
+\end{equation}
+The SDF serves two roles that a surface mesh alone cannot provide: (i)~it furnishes a continuous inside/outside classifier for chart-seed acceptance and domain-containment losses, and (ii)~its gradient field yields approximate surface normals for chart-frame initialization, both without the combinatorial complexity of watertight mesh repair. The training loss combines four objectives---surface fit, normal alignment, Eikonal regularization $(\|\nabla s_\vartheta\|-1)^2$, and sign supervision via offset probes---whose explicit forms are given in Appendix~\ref{sec:appendix_pipeline} (Eqs.~\eqref{eq:impl_sdf_loss}--\eqref{eq:impl_sdf_sign}).
+
+\subsubsection{Stage 2: Seed placement and local frames}
+\label{sec:impl_seeds}
+
+The domain is covered by $M$ overlapping ball charts, each anchored at a seed $c_i$ with an orthonormal frame $\mathbf{Q}_i=[\mathbf{t}_{1,i}\;\mathbf{t}_{2,i}\;\mathbf{n}_i]$ and support radius $r_i$. Seeds are accepted only where $s_\vartheta(c_i)<0$. The choice of ball-shaped reference domains $\widehat{\Omega}_i\subset\mathbb{R}^3$ provides an isotropic reference metric that avoids directional bias in collocation sampling and stabilizes Jacobian conditioning.
+
+Each physical point $x$ is expressed in chart-local coordinates via the rigid frame projection defined in~\eqref{eq:atlas_rigid_local_coords}. A point belongs to chart $i$ when it satisfies the distance-based membership criterion
+\begin{equation}
+d_i(x)=\|x-c_i\|_2,
+\qquad
+\chi_i(x)=\mathbf{1}\!\left\{
+d_i(x)\le (1+\alpha)\min_{j} d_j(x)
+\right\},
+\label{eq:impl_membership}
+\end{equation}
+where $\alpha>0$ controls the overlap fraction: larger $\alpha$ increases the communication bandwidth of the Schwarz iteration at the cost of additional per-chart evaluations, while smaller $\alpha$ reduces overlap but may leave gaps in the partition of unity. Bijectivity is not guaranteed by construction; it is monitored a~posteriori through the determinant barrier and foldover gates described below.
+
+\subsubsection{Stage 3: Decoder and mask training}
+\label{sec:impl_decoder}
+
+The abstract chart map $\varphi_i$ introduced in Section~\ref{sec:methodology} is realized as a rigid affine frame augmented by a learned residual:
+\begin{align}
+\Phi_i(\boldsymbol{\zeta})
+=&\;
+c_i
++
+\zeta_1 \mathbf{t}_{1,i}
++
+\zeta_2 \mathbf{t}_{2,i}
++
+\zeta_3 \mathbf{n}_i
++
+a_i r_i\,\mathcal{N}_i(\boldsymbol{\zeta}/r_i),
+\label{eq:impl_decoder_map}
+\end{align}
+where $\mathcal{N}_i$ is a tanh MLP and $a_i=0.20\,\tanh(\texttt{raw\_scale})$ is a learned residual amplitude. This design is central to the atlas construction: at initialization the residual vanishes, so each chart starts as a rigid ball with $\det\mathbf{J}_i>0$ everywhere. Training then deforms the chart to conform to the local geometry, while the bounded amplitude $a_i r_i$ prevents the residual from overwhelming the affine frame and introducing foldover. The decoder is paired with a mask network $M_i$ that produces validity logits and, through them, both a hard membership probability and smooth partition-of-unity weights:
+\begin{align}
+\ell_i(\boldsymbol{\zeta})
+=&\;
+M_i(\boldsymbol{\zeta}/r_i),
+\qquad
+p_i(x)=\sigma\!\big(\ell_i(\boldsymbol{\zeta}_i(x))\big),
+\qquad
+\omega_i(x)=\frac{\exp(\ell_i(\boldsymbol{\zeta}_i(x)))}{\sum_j \exp(\ell_j(\boldsymbol{\zeta}_j(x)))}.
+\label{eq:impl_mask_weights}
+\end{align}
+The sigmoid output $p_i$ serves as a differentiable chart-membership classifier for collocation-point assignment, while the softmax weights $\omega_i$ provide the smooth blending coefficients needed by the Schwarz coupling and the global partition of unity.
+
+The decoder and mask networks are trained jointly with a composite atlas loss
+\begin{equation}
+\mathcal{L}_{\mathrm{atlas}}
+=
+\lambda_{\mathrm{rec/dom}}\mathcal{L}_{\mathrm{rec/dom}}
++
+\lambda_{\mathrm{mask}}\mathcal{L}_{\mathrm{mask}}
++
+\lambda_{\mathrm{ov}}\mathcal{L}_{\mathrm{ov}}
++
+\lambda_{\mathrm{jac}}\mathcal{L}_{\mathrm{jac}}
++
+\lambda_{\mathrm{cov}}\mathcal{L}_{\mathrm{cov}},
+\label{eq:impl_atlas_total}
+\end{equation}
+whose five terms penalize reconstruction error ($\mathcal{L}_{\mathrm{rec}}$) or domain-containment violation ($\mathcal{L}_{\mathrm{dom}}$), mask misclassification ($\mathcal{L}_{\mathrm{mask}}$), overlap inconsistency between neighboring charts ($\mathcal{L}_{\mathrm{ov}}$), non-positive Jacobian determinants ($\mathcal{L}_{\mathrm{jac}}$), and insufficient coverage ($\mathcal{L}_{\mathrm{cov}}$), respectively. The surface-based term $\mathcal{L}_{\mathrm{rec}}$ is used when point-cloud data are available; the volumetric variant $\mathcal{L}_{\mathrm{dom}}$ extends the decoder into the interior using the SDF as a containment oracle. Explicit functional forms for each component are given in Appendix~\ref{sec:appendix_pipeline} (Eqs.~\eqref{eq:impl_atlas_recon}--\eqref{eq:impl_atlas_cov}).
+
+\subsubsection{Stage 4: Quality gates}
+\label{sec:impl_gates}
+
+The frozen-atlas philosophy requires a binary accept/reject decision before any PDE solver is invoked, rather than soft regularization that could leave residual geometric defects for the solver to absorb. The atlas is accepted only if the following metrics lie within prescribed bands:
+\begin{align}
+g_{\mathrm{cov}}
+=&\;
+\mathbb{P}_{x\sim X}
+\left[
+\max_i p_i(x)>\tau_{\mathrm{cov}}
+\right],
+\qquad
+g_{\mathrm{ov}}
+=
+\mathbb{E}_{x\in X_{\mathrm{ov}}}
+\left[
+\|\Phi_i(\boldsymbol{\zeta}_i(x))-\Phi_j(\boldsymbol{\zeta}_j(x))\|_2
+\right],
+\nonumber\\
+g_{\mathrm{fold}}
+=&\;
+\frac{1}{N_J}
+\sum_{i,\boldsymbol{\zeta}}
+\mathbf{1}_{\{\det D\Phi_i(\boldsymbol{\zeta})\le 0\}},
+\label{eq:impl_gate_metrics}\\
+g_{\mathrm{rmse}}
+=&\;
+\left(
+\mathbb{E}_{x\sim X}
+\left[
+\left\|
+\sum_{i=1}^{M}\omega_i(x)\Phi_i(\boldsymbol{\zeta}_i(x))-x
+\right\|_2^2
+\right]
+\right)^{1/2}.
+\label{eq:impl_gate_rmse}
+\end{align}
+Here $g_{\mathrm{cov}}$ measures the fraction of domain points covered by at least one chart, $g_{\mathrm{ov}}$ quantifies the mean pairwise transition-map discrepancy in overlap regions, $g_{\mathrm{fold}}$ records the fraction of Jacobian-evaluation points with non-positive determinant, and $g_{\mathrm{rmse}}$ gives the partition-of-unity-weighted reconstruction accuracy. Failed gates trigger iterative refinement of chart seeds, support radii, decoder states, and mask parameters.
 
 \subsubsection{Atlas quality diagnostics}
 \label{sec:atlas_diagnostics}
@@ -1964,20 +2074,13 @@ where $\mathcal{L}_{\mathrm{bij}}$ penalizes small or negative Jacobian determin
 
 Algorithm~\ref{alg:global_map_training} records the training pattern used by the special global-map pipeline. The ellipsoid verification case (Example~1) uses the same mapped-PDE machinery, but its global map is analytic rather than learned.
 
-\section{Geometry pipeline equations}
+\section{Atlas training losses}
 \label{sec:appendix_pipeline}
 
-\paragraph{Stage 1: SDF training loss.}
-For imported geometry with observed surface samples $X_{\partial}=\{(x_k,\mathbf{n}_k)\}_{k=1}^{N}$ and oriented normals, the neural SDF $s_\vartheta$ satisfies
-\begin{equation}
-s_{\vartheta}:\mathbb{R}^3\rightarrow \mathbb{R},
-\qquad
-\Omega \approx \{x\in\mathbb{R}^3:s_{\vartheta}(x)<0\},
-\qquad
-\partial\Omega \approx \{x\in\mathbb{R}^3:s_{\vartheta}(x)=0\},
-\label{eq:impl_sdf_levelset}
-\end{equation}
-and is trained with the loss
+This appendix provides the explicit training-loss expansions referenced in the atlas construction pipeline (Section~\ref{sec:impl_pipeline}).
+
+\paragraph{SDF training loss.}
+For imported geometry with observed surface samples $X_{\partial}=\{(x_k,\mathbf{n}_k)\}_{k=1}^{N}$ and oriented normals, the neural SDF $s_\vartheta$ is trained with the loss
 \begin{align}
 \mathcal{L}_{\mathrm{SDF}}
 =&\;
@@ -2023,69 +2126,8 @@ with sign supervision
 \end{align}
 The sign-anchor term is the most delicate on thin-featured geometry (e.g., the Stanford Bunny ears), where a single offset $\delta$ that works in the bulk may cross the surface in narrow regions.
 
-\paragraph{Stage 2: atlas seed placement.}
-Chart-local coordinates are initialized by
-\begin{equation}
-\boldsymbol{\zeta}_i(x)
-=
-\begin{bmatrix}
-(x-c_i)\cdot \mathbf{t}_{1,i}\\
-(x-c_i)\cdot \mathbf{t}_{2,i}\\
-(x-c_i)\cdot \mathbf{n}_i
-\end{bmatrix},
-\label{eq:impl_local_coords}
-\end{equation}
-and the coarse overlap membership is
-\begin{equation}
-d_i(x)=\|x-c_i\|_2,
-\qquad
-\chi_i(x)=\mathbf{1}\!\left\{
-d_i(x)\le (1+\alpha)\min_{j} d_j(x)
-\right\},
-\label{eq:impl_membership}
-\end{equation}
-where $\alpha$ is tuned to match the target overlap fraction.
-
-\paragraph{Stage 3: decoder and mask training.}
-The abstract chart map $\varphi_i$ is realized as
-\begin{align}
-\Phi_i(\boldsymbol{\zeta})
-=&\;
-c_i
-+
-\zeta_1 \mathbf{t}_{1,i}
-+
-\zeta_2 \mathbf{t}_{2,i}
-+
-\zeta_3 \mathbf{n}_i
-+
-a_i r_i\,\mathcal{N}_i(\boldsymbol{\zeta}/r_i),
-\label{eq:impl_decoder_map}\\
-\ell_i(\boldsymbol{\zeta})
-=&\;
-M_i(\boldsymbol{\zeta}/r_i),
-\qquad
-p_i(x)=\sigma\!\big(\ell_i(\boldsymbol{\zeta}_i(x))\big),
-\qquad
-\omega_i(x)=\frac{\exp(\ell_i(\boldsymbol{\zeta}_i(x)))}{\sum_j \exp(\ell_j(\boldsymbol{\zeta}_j(x)))},
-\label{eq:impl_mask_weights}
-\end{align}
-where $\mathcal{N}_i$ and $M_i$ are the decoder and mask networks and $a_i$ is a learned residual amplitude. The atlas training loss is
-\begin{equation}
-\mathcal{L}_{\mathrm{atlas}}
-=
-\lambda_{\mathrm{rec/dom}}\mathcal{L}_{\mathrm{rec/dom}}
-+
-\lambda_{\mathrm{mask}}\mathcal{L}_{\mathrm{mask}}
-+
-\lambda_{\mathrm{ov}}\mathcal{L}_{\mathrm{ov}}
-+
-\lambda_{\mathrm{jac}}\mathcal{L}_{\mathrm{jac}}
-+
-\lambda_{\mathrm{cov}}\mathcal{L}_{\mathrm{cov}},
-\label{eq:impl_atlas_total}
-\end{equation}
-with component terms
+\paragraph{Atlas loss component terms.}
+The composite atlas loss $\mathcal{L}_{\mathrm{atlas}}$ defined in~\eqref{eq:impl_atlas_total} consists of the following components:
 \begin{align}
 \mathcal{L}_{\mathrm{rec}}
 =&
@@ -2143,43 +2185,6 @@ with component terms
 \label{eq:impl_atlas_cov}
 \end{align}
 Here $X_i^{+}$/$X_i^{-}$ are samples inside/outside chart $i$, $X_{ij}$ are shared overlap points, and $\tau_{\mathrm{sdf}}$ is the tolerated signed-distance margin. Surface-based fitting uses $\mathcal{L}_{\mathrm{rec}}$, while the volumetric Bunny continuation uses $\mathcal{L}_{\mathrm{dom}}$.
-
-\paragraph{Stage 4: quality gates.}
-The atlas is accepted only if the following metrics lie within prescribed bands:
-\begin{align}
-g_{\mathrm{cov}}
-=&\;
-\mathbb{P}_{x\sim X}
-\left[
-\max_i p_i(x)>\tau_{\mathrm{cov}}
-\right],
-\qquad
-g_{\mathrm{ov}}
-=
-\mathbb{E}_{x\in X_{\mathrm{ov}}}
-\left[
-\|\Phi_i(\boldsymbol{\zeta}_i(x))-\Phi_j(\boldsymbol{\zeta}_j(x))\|_2
-\right],
-\nonumber\\
-g_{\mathrm{fold}}
-=&\;
-\frac{1}{N_J}
-\sum_{i,\boldsymbol{\zeta}}
-\mathbf{1}_{\{\det D\Phi_i(\boldsymbol{\zeta})\le 0\}},
-\label{eq:impl_gate_metrics}\\
-g_{\mathrm{rmse}}
-=&\;
-\left(
-\mathbb{E}_{x\sim X}
-\left[
-\left\|
-\sum_{i=1}^{M}\omega_i(x)\Phi_i(\boldsymbol{\zeta}_i(x))-x
-\right\|_2^2
-\right]
-\right)^{1/2}.
-\label{eq:impl_gate_rmse}
-\end{align}
-Failed gates trigger iterative refinement of chart seeds, support radii, decoder states, and mask parameters.
 
 \section{Elastoplastic constitutive model and smooth return mapping}
 \label{sec:appendix_constitutive}
@@ -2270,7 +2275,7 @@ CompactChartNet & all W1--W5 features active & \textbf{2.207\%} & 6.783\% & 3659
 \section{Stanford Bunny volumetric neural SDF benchmark}
 \label{sec:appendix_bunny}
 
-The Stanford Bunny benchmark tests whether the atlas pipeline can start from imported PLY data. Its input is an oriented surface sample set $X_{\partial}=\{(x_k,\mathbf{n}_k)\}_{k=1}^{N_s}$ obtained from the watertight mesh \texttt{bun\_zipper.ply}. The goal is to learn a volumetric scalar field whose zero level set captures the Bunny surface and whose sign defines a usable interior for atlas construction---i.e., the benchmark instantiation of Stage~1 in Appendix~\ref{sec:appendix_pipeline}.
+The Stanford Bunny benchmark tests whether the atlas pipeline can start from imported PLY data. Its input is an oriented surface sample set $X_{\partial}=\{(x_k,\mathbf{n}_k)\}_{k=1}^{N_s}$ obtained from the watertight mesh \texttt{bun\_zipper.ply}. The goal is to learn a volumetric scalar field whose zero level set captures the Bunny surface and whose sign defines a usable interior for atlas construction---i.e., the benchmark instantiation of Stage~1 of the atlas construction pipeline (Section~\ref{sec:impl_sdf}).
 
 Let $y=(x-c)/s$ denote the normalized coordinate, where $c$ is the bounding-box center and $s$ the global length scale. The learned volumetric model $s_\theta:\mathbb{R}^3\to\mathbb{R}$ defines the reconstructed body as
 \begin{equation}
