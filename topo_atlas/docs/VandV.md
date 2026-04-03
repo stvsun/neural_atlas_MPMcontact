@@ -241,7 +241,19 @@ topology certification, atlas construction, and BVP solve.
 | 4 | V&V-4.1: Mode-I K_I validation | Validation | PASS (3/3 tests) |
 | 4 | V&V-4.1 topology: crack detection | Validation | PASS (3/3 tests) |
 | 4 | V&V-4.2: No-crack false positive | Validation | PASS (2/2 tests) |
-| 5 | V&V-5.1: GUDHI overhead budget | Verification | PENDING (Phase 5) |
-| 5 | V&V-5.2: Full pipeline smoke test | Validation | PASS (5/5 tests) |
+| 5 | V&V-5.1: GUDHI overhead budget | Verification | PASS (3/3 tests, 1.1% overhead) |
+| 5 | V&V-5.2: Full pipeline smoke test | Validation | PASS (9/9 tests) |
 
-**Total: 71 passed, 1 xpassed (as of 2026-04-03)**
+**Total: 78 passed, 1 xpassed (as of 2026-04-03)**
+
+### Performance Profile (V&V-5.1)
+
+| Grid Resolution | GUDHI per call | Scaling |
+|----------------|---------------|---------|
+| 16^3 | ~57 ms | baseline |
+| 32^3 | ~377 ms | 6.6x |
+
+Recommended configuration for production:
+- Monitor grid: 16^3 (57ms per call)
+- Monitor frequency: every 50 load steps
+- Projected overhead in 250-step FEM simulation: **1.1%** (well under 5% budget)

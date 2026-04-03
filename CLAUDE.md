@@ -93,9 +93,21 @@ python atlas/charts/train_atlas.py
 - `monitor.py`: tracks persistence diagrams across load steps, detects topology changes.
 - `chart_spawn.py`: converts topology events into chart pair spawn requests.
 
+## V&V Status
+
+All 5 phases pass verification and validation (78 tests, 1 xpassed):
+- Phase 1-3: Persistent homology pipeline, certification, dynamic monitoring
+- Phase 4: Fracture benchmarks (Mode-I K_I extraction, crack topology detection)
+- Phase 5: GUDHI overhead 1.1% on 16^3 grid with monitoring every 50 steps
+
+Run full suite: `pytest tests/ topo_atlas/tests/ -v`
+See `topo_atlas/docs/VandV.md` for per-phase exercise details.
+
 ## Gotchas
 
 - **MPS (Apple Silicon)** requires float32 instead of float64. Use `resolve_dtype("auto", device)`.
 - **Large binary files in `runs/`** — do not try to read `.pt` checkpoint files directly.
 - **Checkpoint compatibility**: renaming modules (e.g., `core.train_sdf_rabbit.SDFNet` -> `atlas.sdf.train_sdf.SDFNet`) breaks `torch.load` on old checkpoints.
 - **Older `manuscript_experiments/`** directory still contains the original FEM runner — canonical FEM code is in `solvers/fem/`.
+- **GUDHI overhead**: Use 16^3 grid (not 32^3) for topology monitoring in production. Monitor every 50+ steps, not every step.
+- **Edge cracks vs topology**: A partial edge crack does not create an H1 loop — it only changes H0 (connected components) when the crack fully severs the domain.
