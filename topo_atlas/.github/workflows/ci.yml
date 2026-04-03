@@ -1,0 +1,112 @@
+name: topology-atlas-ci
+
+on:
+  push:
+    branches: [main, develop, "feature/**"]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # -------------------------------------------------------------------
+  # Job 1: Level 1 & 3 tests — no GUDHI, fast, runs on every push
+  # -------------------------------------------------------------------
+  unit-tests:
+    name: Unit + LS-category tests (no GUDHI)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install base dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy pytest pytest-cov
+
+      - name: Install topo_atlas package (editable)
+        run: |
+          cd topo_atlas
+          pip install -e . --no-deps 2>/dev/null || true
+          # Fallback: add to PYTHONPATH if no setup.py yet
+          echo "PYTHONPATH=$PYTHONPATH:$(pwd)" >> $GITHUB_ENV
+
+      - name: Run unit tests (Level 1 and Level 3 certification, no GUDHI)
+        run: |
+          cd topo_atlas
+          pytest tests/test_topo_pipeline.py -v \
+            -k "TestFiltration or TestLSCategory" \
+            --tb=short \
+            --cov=atlas/topo \
+            --cov-report=term-missing
+
+  # -------------------------------------------------------------------
+  # Job 2: Persistence + verification tests — requires GUDHI
+  # -------------------------------------------------------------------
+  gudhi-tests:
+    name: Persistence + Verification tests (GUDHI)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies including GUDHI
+        run: |
+          pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy pytest pytest-cov gudhi
+
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)/topo_atlas" >> $GITHUB_ENV
+
+      - name: Run persistence + verification tests
+        run: |
+          cd topo_atlas
+          pytest tests/test_topo_pipeline.py -v \
+            -k "TestPersistence or TestVerification or TestMonitor" \
+            --tb=short \
+            -x
+
+  # -------------------------------------------------------------------
+  # Job 3: Benchmark regression (runs on main branch only)
+  # -------------------------------------------------------------------
+  benchmark-regression:
+    name: Paper benchmark regression
+    runs-on: ubuntu-latest
+    needs: gudhi-tests
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install all dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy pytest gudhi
+
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)/topo_atlas" >> $GITHUB_ENV
+
+      - name: Run paper regression tests (xfail allowed)
+        run: |
+          cd topo_atlas
+          pytest tests/test_topo_pipeline.py::TestPaperBenchmarks -v --tb=short
