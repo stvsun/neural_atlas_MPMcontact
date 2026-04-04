@@ -10,6 +10,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 
+from concurrent.futures import ThreadPoolExecutor
+
 from common.geometry import local_coords, invert_decoder
 from common.models import ChartDecoder, MaskNet
 from solvers.fem.chart_vector_fem import ChartVectorFEMSolver
@@ -39,15 +41,18 @@ class SchwarzVectorFEMSolver:
         decoders: List[Optional[ChartDecoder]] = None,
         decoder_kwargs_list: List[dict] = None,
         neighbors: List[List[int]] = None,
+        parallel: bool = False,
+        n_workers: int = 4,
     ):
         self.chart_solvers = chart_solvers
         self.n_charts = len(chart_solvers)
         self.seeds = seeds
         self.decoders = decoders or [None] * self.n_charts
         self.decoder_kwargs_list = decoder_kwargs_list or [{}] * self.n_charts
+        self.parallel = parallel
+        self.n_workers = n_workers
 
         if neighbors is None:
-            # Default: all charts are neighbors
             neighbors = [[j for j in range(self.n_charts) if j != i]
                          for i in range(self.n_charts)]
         self.neighbors = neighbors
@@ -94,57 +99,65 @@ class SchwarzVectorFEMSolver:
         device = self.chart_solvers[0].device
         dtype = self.chart_solvers[0].dtype
 
+        def _solve_chart(i):
+            """Solve a single chart — can run in a thread."""
+            solver = self.chart_solvers[i]
+            if solver.n_nodes == 0:
+                return i, None, 0.0
+
+            nodes_phys = solver.nodes_phys
+            n_nodes = solver.n_nodes
+
+            nodes_phys_np = nodes_phys.detach().cpu().numpy()
+            u_bc_phys, phys_mask = phys_bc_fn(nodes_phys_np)
+
+            bc_mask_i = torch.tensor(phys_mask, dtype=torch.bool, device=device)
+            u_bc_i = torch.tensor(u_bc_phys, dtype=dtype, device=device)
+
+            art_mask = solver.boundary_mask & ~bc_mask_i
+            if art_mask.any() and schwarz_iter > 0:
+                art_u = self._interpolate_from_neighbors(i, nodes_phys, art_mask)
+                if art_u is not None:
+                    u_bc_i[art_mask] = art_u
+                    bc_mask_i = bc_mask_i | art_mask
+
+            if f_ext_fn is not None:
+                f_ext_i = torch.tensor(f_ext_fn(nodes_phys_np), dtype=dtype, device=device)
+            else:
+                f_ext_i = torch.zeros(n_nodes, 3, dtype=dtype, device=device)
+
+            u_old = self.u_charts[i]
+            u_new = solver.solve_nonlinear(
+                stress_fn, tangent_fn, f_ext_i, u_bc_i, bc_mask_i,
+                u_init=u_old,
+                max_iter=newton_max_iter, tol=newton_tol,
+            )
+
+            change = 0.0
+            if u_old is not None:
+                change = (u_new - u_old).norm().item() / max(u_new.norm().item(), 1e-12)
+
+            return i, u_new, change
+
         for schwarz_iter in range(max_schwarz_iters):
             max_change = 0.0
 
-            for i in range(self.n_charts):
-                solver = self.chart_solvers[i]
-                if solver.n_nodes == 0:
-                    continue
-
-                nodes_ref = solver.nodes  # (N, 3) in chart coords
-                nodes_phys = solver.nodes_phys  # (N, 3) in physical coords
-                n_nodes = solver.n_nodes
-
-                # Physical boundary conditions
-                nodes_phys_np = nodes_phys.detach().cpu().numpy()
-                u_bc_phys, phys_mask = phys_bc_fn(nodes_phys_np)
-
-                # Convert to torch
-                bc_mask = torch.tensor(phys_mask, dtype=torch.bool, device=device)
-                u_bc = torch.tensor(u_bc_phys, dtype=dtype, device=device)
-
-                # Artificial boundary: get displacement from neighbor charts
-                art_mask = solver.boundary_mask & ~bc_mask
-                if art_mask.any() and schwarz_iter > 0:
-                    art_u = self._interpolate_from_neighbors(i, nodes_phys, art_mask)
-                    if art_u is not None:
-                        u_bc[art_mask] = art_u
-                        bc_mask = bc_mask | art_mask
-
-                # External forces
-                if f_ext_fn is not None:
-                    f_ext = torch.tensor(
-                        f_ext_fn(nodes_phys_np), dtype=dtype, device=device,
-                    )
-                else:
-                    f_ext = torch.zeros(n_nodes, 3, dtype=dtype, device=device)
-
-                # Solve this chart
-                u_old = self.u_charts[i]
-                u_new = solver.solve_nonlinear(
-                    stress_fn, tangent_fn, f_ext, u_bc, bc_mask,
-                    u_init=u_old,
-                    max_iter=newton_max_iter, tol=newton_tol,
-                )
-
-                # Track convergence
-                if u_old is not None:
-                    change = (u_new - u_old).norm().item()
-                    scale = max(u_new.norm().item(), 1e-12)
-                    max_change = max(max_change, change / scale)
-
-                self.u_charts[i] = u_new
+            if self.parallel and self.n_charts > 1:
+                # Parallel: solve all charts concurrently
+                with ThreadPoolExecutor(max_workers=min(self.n_workers, self.n_charts)) as ex:
+                    futures = [ex.submit(_solve_chart, i) for i in range(self.n_charts)]
+                    for f in futures:
+                        idx, u_new, change = f.result()
+                        if u_new is not None:
+                            self.u_charts[idx] = u_new
+                            max_change = max(max_change, change)
+            else:
+                # Serial: solve charts sequentially
+                for i in range(self.n_charts):
+                    idx, u_new, change = _solve_chart(i)
+                    if u_new is not None:
+                        self.u_charts[idx] = u_new
+                        max_change = max(max_change, change)
 
             if schwarz_iter > 0 and max_change < tol:
                 print(f"  [Schwarz] converged at iter {schwarz_iter+1}: "
