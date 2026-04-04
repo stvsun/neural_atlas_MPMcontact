@@ -272,6 +272,7 @@ topology certification, atlas construction, and BVP solve.
 | 2 | V&V-2.2: M_min enforcement | Verification | PASS |
 | 3 | V&V-3.1: Zero events on fixed domain | Verification | PASS |
 | 3 | V&V-3.2: Topology change detection | Verification | PASS |
+| 3 | V&V-3.3: Live chart spawning integration | Verification | PASS (8/8 tests) |
 | 4 | V&V-4.1: Mode-I K_I validation | Validation | PASS (3/3 tests) |
 | 4 | V&V-4.1 topology: crack detection | Validation | PASS (3/3 tests) |
 | 4 | V&V-4.2: No-crack false positive | Validation | PASS (2/2 tests) |
@@ -279,7 +280,7 @@ topology certification, atlas construction, and BVP solve.
 | 5 | V&V-5.1: GUDHI overhead budget | Verification | PASS (3/3 tests, 1.1% overhead) |
 | 5 | V&V-5.2: Full pipeline smoke test | Validation | PASS (9/9 tests) |
 
-**Total: 90 passed, 1 xpassed (as of 2026-04-03)**
+**Total: 98 passed, 1 xpassed (as of 2026-04-03)**
 
 ### Performance Profile (V&V-5.1)
 

@@ -56,6 +56,17 @@ class ChartDecoder(torch.nn.Module):
         return base + res
 
 
+    def warm_start_from(self, parent: "ChartDecoder") -> None:
+        """Copy weights from a parent decoder for transfer learning.
+
+        The new decoder inherits the parent's learned coordinate mapping,
+        providing a good initialization for chart spawning near topology
+        changes (cracks, voids).
+        """
+        self.net.load_state_dict(parent.net.state_dict())
+        self.raw_scale.data = parent.raw_scale.data.clone()
+
+
 class MaskNet(torch.nn.Module):
     def __init__(self, width: int = 48, depth: int = 3):
         super().__init__()

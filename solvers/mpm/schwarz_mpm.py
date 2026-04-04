@@ -112,6 +112,29 @@ class SchwarzMPMSolver:
         self.time = 0.0
         self.step_count = 0
 
+        # Topology monitoring hooks (set externally for Phase 3)
+        self._sdf_grid_fn = None      # callable() -> (N,N,N) grid
+        self._chart_spawner = None    # ChartSpawner instance
+        self._bbox_min = None         # (3,) domain lower bound
+        self._bbox_max = None         # (3,) domain upper bound
+
+    def setup_topology_monitoring(self, sdf_grid_fn, chart_spawner, bbox_min, bbox_max):
+        """Configure live topology monitoring for dynamic chart spawning.
+
+        Parameters
+        ----------
+        sdf_grid_fn : callable
+            No-argument function returning (N,N,N) SDF grid at current state.
+        chart_spawner : ChartSpawner
+            Spawner that converts TopologyEvents to SpawnedChartPairs.
+        bbox_min, bbox_max : array-like (3,)
+            Domain bounding box for feature localization.
+        """
+        self._sdf_grid_fn = sdf_grid_fn
+        self._chart_spawner = chart_spawner
+        self._bbox_min = np.asarray(bbox_min, dtype=np.float64)
+        self._bbox_max = np.asarray(bbox_max, dtype=np.float64)
+
     def _build_neighbors(self, membership) -> List[List[int]]:
         membership = np.array(membership, dtype=bool)
         neighbors = []
@@ -419,11 +442,129 @@ class SchwarzMPMSolver:
         return history
 
     def _check_topology(self, monitor, load_step: int) -> list:
-        """Check for topology changes using the monitor.
+        """Check for topology changes and spawn new charts if needed.
 
-        This is a placeholder for Phase 3 integration. Currently returns
-        events but does not spawn new charts.
+        Evaluates the SDF on a grid, runs the TopologyMonitor, and for
+        each detected event, spawns new chart pairs via ChartSpawner.
+
+        Parameters
+        ----------
+        monitor : TopologyMonitor
+            Active topology monitor.
+        load_step : int
+            Current simulation step.
+
+        Returns
+        -------
+        events : list of TopologyEvent
         """
-        # Would need SDF grid values at current deformation state
-        # For now, return empty — full implementation in Phase 3
-        return []
+        if self._sdf_grid_fn is None:
+            return []
+
+        from atlas.topo.filtration import clip_to_interior
+
+        grid_vals = self._sdf_grid_fn()
+        grid_clipped = clip_to_interior(grid_vals)
+        events = monitor.update(grid_clipped, load_step=load_step)
+
+        if events and self._chart_spawner is not None:
+            existing_seeds = self.seeds_t.cpu().numpy()
+            existing_frames = np.stack([
+                np.stack([self.t1_t[i].cpu().numpy(),
+                          self.t2_t[i].cpu().numpy(),
+                          self.nvec_t[i].cpu().numpy()])
+                for i in range(self.n_charts)
+            ])
+
+            for event in events:
+                pair = self._chart_spawner.spawn_from_event(
+                    event, existing_seeds, existing_frames,
+                    grid_clipped, self._bbox_min, self._bbox_max,
+                )
+                self.add_charts([pair])
+
+        return events
+
+    def add_charts(self, pairs) -> int:
+        """Add spawned chart pairs to the MPM solver.
+
+        Creates new ChartMPMSolver instances with warm-started decoders
+        and empty particle clouds for each side of each SpawnedChartPair.
+
+        Parameters
+        ----------
+        pairs : list of SpawnedChartPair
+            From ChartSpawner.spawn_from_event().
+
+        Returns
+        -------
+        n_added : int
+            Number of new charts added.
+        """
+        n_added = 0
+        for pair in pairs:
+            for side in ("plus", "minus"):
+                seed = getattr(pair, f"seed_{side}")
+                frame = getattr(pair, f"frame_{side}")
+
+                seed_t = torch.tensor(seed, device=self.device, dtype=self.dtype)
+                t1_t = torch.tensor(frame[0], device=self.device, dtype=self.dtype)
+                t2_t = torch.tensor(frame[1], device=self.device, dtype=self.dtype)
+                n_t = torch.tensor(frame[2], device=self.device, dtype=self.dtype)
+                r_t = torch.tensor(pair.radius, device=self.device, dtype=self.dtype)
+
+                # Warm-start decoder from parent
+                parent_dec = self.decoders[pair.parent_chart]
+                new_dec = type(parent_dec)(
+                    width=parent_dec.net.out.in_features,
+                    depth=len(parent_dec.net.hidden),
+                ).to(device=self.device, dtype=self.dtype)
+                new_dec.warm_start_from(parent_dec)
+
+                parent_mask = self.masks[pair.parent_chart]
+                new_mask = type(parent_mask)(
+                    width=parent_mask.net.out.in_features,
+                    depth=len(parent_mask.net.hidden),
+                ).to(device=self.device, dtype=self.dtype)
+
+                self.decoders.append(new_dec)
+                self.masks.append(new_mask)
+                self.seeds_t = torch.cat([self.seeds_t, seed_t.unsqueeze(0)])
+                self.t1_t = torch.cat([self.t1_t, t1_t.unsqueeze(0)])
+                self.t2_t = torch.cat([self.t2_t, t2_t.unsqueeze(0)])
+                self.nvec_t = torch.cat([self.nvec_t, n_t.unsqueeze(0)])
+                self.support_r_t = torch.cat([self.support_r_t, r_t.unsqueeze(0)])
+
+                extent = float(r_t.item()) * 1.5
+                new_solver = ChartMPMSolver(
+                    n_cells=self.solvers[0].grid.n_cells if self.solvers else 16,
+                    extent=extent,
+                    constitutive=self.constitutive,
+                    bc_type="fixed",
+                    device=self.device,
+                    dtype=self.dtype,
+                )
+                self.solvers.append(new_solver)
+                self.particles.append(None)  # empty cloud, filled by transfer
+                n_added += 1
+
+        self.n_charts += n_added
+
+        # Rebuild neighbor graph
+        self.neighbors = []
+        for i in range(self.n_charts):
+            nbrs = []
+            si = self.seeds_t[i]
+            ri = self.support_r_t[i].item()
+            for j in range(self.n_charts):
+                if i == j:
+                    continue
+                dist = torch.linalg.norm(si - self.seeds_t[j]).item()
+                if dist < 2.0 * (ri + self.support_r_t[j].item()):
+                    nbrs.append(j)
+            self.neighbors.append(nbrs)
+
+        membership_fake = np.zeros((1, self.n_charts), dtype=np.float32)
+        self.color_groups = choose_color_groups(None, self.n_charts, membership_fake)
+
+        return n_added

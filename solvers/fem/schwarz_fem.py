@@ -440,6 +440,119 @@ class SchwarzFEMSolver:
 
         return {int(idx): float(val) for idx, val in zip(solver_i.art_bc_nodes, u_blend)}
 
+    def add_charts(
+        self,
+        pairs,
+        sdf_oracle=None,
+        n_cells: Optional[int] = None,
+        sdf_threshold: float = -0.005,
+    ) -> int:
+        """Add spawned chart pairs to the solver (Phase 3 dynamic spawning).
+
+        Creates new ChartDecoder (warm-started from parent) and MaskNet
+        for each side of each SpawnedChartPair, builds FEM solvers,
+        rebuilds the neighbor graph and color groups.
+
+        Parameters
+        ----------
+        pairs : list of SpawnedChartPair
+            Chart pairs from ChartSpawner.spawn_from_event().
+        sdf_oracle : object, optional
+            SDF oracle for mesh filtering in new charts.
+        n_cells : int, optional
+            Grid resolution for new charts. Defaults to first chart's n_cells.
+        sdf_threshold : float
+            SDF filtering threshold.
+
+        Returns
+        -------
+        n_added : int
+            Number of new charts added (2 per pair).
+        """
+        if n_cells is None:
+            n_cells = self.fem_solvers[0].n_cells if self.fem_solvers else 16
+
+        n_added = 0
+        for pair in pairs:
+            for side in ("plus", "minus"):
+                seed = getattr(pair, f"seed_{side}")
+                frame = getattr(pair, f"frame_{side}")
+
+                seed_t = torch.tensor(seed, device=self.device, dtype=self.dtype)
+                t1_t = torch.tensor(frame[0], device=self.device, dtype=self.dtype)
+                t2_t = torch.tensor(frame[1], device=self.device, dtype=self.dtype)
+                n_t = torch.tensor(frame[2], device=self.device, dtype=self.dtype)
+                r_t = torch.tensor(pair.radius, device=self.device, dtype=self.dtype)
+
+                # Create warm-started decoder from parent
+                parent_dec = self.decoders[pair.parent_chart]
+                new_dec = ChartDecoder(
+                    width=parent_dec.net.out.in_features,
+                    depth=len(parent_dec.net.hidden),
+                ).to(device=self.device, dtype=self.dtype)
+                new_dec.warm_start_from(parent_dec)
+
+                # Create fresh mask
+                parent_mask = self.masks[pair.parent_chart]
+                new_mask = MaskNet(
+                    width=parent_mask.net.out.in_features,
+                    depth=len(parent_mask.net.hidden),
+                ).to(device=self.device, dtype=self.dtype)
+
+                self.decoders.append(new_dec)
+                self.masks.append(new_mask)
+
+                # Extend parameter tensors
+                self.seeds_t = torch.cat([self.seeds_t, seed_t.unsqueeze(0)])
+                self.t1_t = torch.cat([self.t1_t, t1_t.unsqueeze(0)])
+                self.t2_t = torch.cat([self.t2_t, t2_t.unsqueeze(0)])
+                self.nvec_t = torch.cat([self.nvec_t, n_t.unsqueeze(0)])
+                self.support_r_t = torch.cat([self.support_r_t, r_t.unsqueeze(0)])
+
+                # Build FEM solver for new chart
+                new_solver = ChartFEMSolver(
+                    chart_id=self.n_charts + n_added,
+                    decoder=new_dec,
+                    seed=seed_t, t1=t1_t, t2=t2_t, n_vec=n_t,
+                    support_r=r_t,
+                    n_cells=n_cells,
+                    sdf_oracle=sdf_oracle,
+                    sdf_threshold=sdf_threshold,
+                    device=self.device,
+                    dtype=self.dtype,
+                )
+                new_solver.compute_diffusion_tensors()
+                self.fem_solvers.append(new_solver)
+                n_added += 1
+
+        self.n_charts += n_added
+
+        # Rebuild neighbor graph from scratch
+        # Use simple distance-based overlap: charts overlap if seeds are within 2*max(radii)
+        self.neighbors = []
+        for i in range(self.n_charts):
+            nbrs = []
+            si = self.seeds_t[i]
+            ri = self.support_r_t[i].item()
+            for j in range(self.n_charts):
+                if i == j:
+                    continue
+                sj = self.seeds_t[j]
+                rj = self.support_r_t[j].item()
+                dist = torch.linalg.norm(si - sj).item()
+                if dist < 2.0 * (ri + rj):
+                    nbrs.append(j)
+            self.neighbors.append(nbrs)
+
+        # Re-color
+        membership_fake = np.zeros((1, self.n_charts), dtype=np.float32)
+        self.color_groups = choose_color_groups(None, self.n_charts, membership_fake)
+
+        # Invalidate BC cache
+        self._bc_cache = None
+
+        return n_added
+
     @classmethod
     def from_checkpoints(
         cls,
