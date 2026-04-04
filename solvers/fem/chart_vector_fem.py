@@ -127,14 +127,14 @@ class ChartVectorFEMSolver:
 
         # Regular grid nodes
         lin = torch.linspace(-r, r, npa, device=self.device, dtype=self.dtype)
-        gx, gy, gz = torch.meshgrid(lin, lin, lin, indexing="ij")
+        gx, gy, gz = torch.meshgrid(lin, lin, lin, )
         all_nodes = torch.stack([gx.reshape(-1), gy.reshape(-1), gz.reshape(-1)], dim=1)
 
         # Build hex cell indices
         ix = torch.arange(nc, device=self.device)
         iy = torch.arange(nc, device=self.device)
         iz = torch.arange(nc, device=self.device)
-        gix, giy, giz = torch.meshgrid(ix, iy, iz, indexing="ij")
+        gix, giy, giz = torch.meshgrid(ix, iy, iz, )
         hex_i = gix.reshape(-1)
         hex_j = giy.reshape(-1)
         hex_k = giz.reshape(-1)

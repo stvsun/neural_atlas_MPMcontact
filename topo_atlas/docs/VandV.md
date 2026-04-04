@@ -280,7 +280,13 @@ topology certification, atlas construction, and BVP solve.
 | 5 | V&V-5.1: GUDHI overhead budget | Verification | PASS (3/3 tests, 1.1% overhead) |
 | 5 | V&V-5.2: Full pipeline smoke test | Validation | PASS (9/9 tests) |
 
-**Total: 98 passed, 1 xpassed (as of 2026-04-03)**
+| CP | V&V-S1: Linear elastic stress/tangent | Verification | PASS (5/5 tests) |
+| CP | V&V-S2: Cracked plate FEM solve | Verification | PASS (1 pass, 1 skip) |
+| CP | V&V-S3: Crack driver growth/no-growth | Verification | PASS (3/3 tests) |
+| CP | V&V-S4: Topology-monitored crack growth | Verification | PASS (2/2 tests) |
+| CP | V&V-S5: End-to-end propagation curve | Verification | PASS (3/3 tests) |
+
+**Total: 112 passed, 1 skipped, 1 xpassed (as of 2026-04-03)**
 
 ### Performance Profile (V&V-5.1)
 
