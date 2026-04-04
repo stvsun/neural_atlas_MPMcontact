@@ -229,24 +229,21 @@ class SchwarzVectorFEMSolver:
             if not in_mesh.any():
                 continue
 
-            # Nearest-node interpolation from chart j's solution
-            xi_j_np = xi_j.detach().cpu().numpy()
-            u_j = self.u_charts[j].detach().cpu().numpy()
-            nodes_j_np = solver_j.nodes.detach().cpu().numpy()
-
-            # Vectorized nearest-node lookup
+            # Barycentric tet interpolation from chart j's solution
             in_idx = torch.where(in_mesh)[0]
-            for k in in_idx:
-                k_int = k.item()
-                dists = np.sum((nodes_j_np - xi_j_np[k_int])**2, axis=1)
-                nearest = np.argmin(dists)
-                u_interp = torch.tensor(u_j[nearest], dtype=result.dtype)
+            if len(in_idx) == 0:
+                continue
 
-                # Distance-based weighting: closer to chart j center = higher weight
+            # Use evaluate_at for proper P1 interpolation
+            xi_j_in = xi_j[in_idx]
+            u_interp = solver_j.evaluate_at(xi_j_in, self.u_charts[j])  # (K, 3)
+
+            for ki, k in enumerate(in_idx):
+                k_int = k.item()
                 d_center = torch.linalg.norm(xi_j[k_int]).item()
                 w = max(1.0 - d_center / r_j, 0.01)
 
-                result[k_int] += w * u_interp
+                result[k_int] += w * u_interp[ki]
                 weight[k_int] += w
 
         # Normalize by total weight

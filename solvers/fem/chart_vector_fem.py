@@ -716,6 +716,92 @@ class ChartVectorFEMSolver:
 
         return stress_fn, tangent_fn
 
+    # ------------------------------------------------------------------
+    # Interpolation (barycentric in tet elements)
+    # ------------------------------------------------------------------
+    def evaluate_at(
+        self,
+        xi_query: "torch.Tensor",
+        u: "torch.Tensor",
+    ) -> "torch.Tensor":
+        """Interpolate vector displacement at arbitrary reference coordinates.
+
+        Uses structured grid lookup (O(1) per point) + barycentric
+        interpolation within the containing tet element. Falls back to
+        nearest-node for points outside the mesh.
+
+        Parameters
+        ----------
+        xi_query : torch.Tensor (N, 3)
+            Query points in chart reference coordinates.
+        u : torch.Tensor (n_nodes, 3)
+            Nodal displacement vector to interpolate.
+
+        Returns
+        -------
+        u_interp : torch.Tensor (N, 3)
+            Interpolated displacement at query points.
+        """
+        import numpy as _np
+
+        xi_q = xi_query.detach().cpu().numpy()
+        u_np = u.detach().cpu().numpy()
+        nodes_np = self.nodes.detach().cpu().numpy()
+        elements_np = self.elements.detach().cpu().numpy()
+
+        n_query = len(xi_q)
+        result = _np.full((n_query, 3), _np.nan)
+
+        if self.n_nodes == 0 or self.n_elements == 0:
+            return torch.zeros(n_query, 3, device=u.device, dtype=u.dtype)
+
+        r = self.r
+        h = self.h
+        nc = self.n_cells
+
+        # Find containing hex cell for each query point
+        grid_idx = _np.floor((xi_q + r) / h).astype(_np.int64)
+        grid_idx = _np.clip(grid_idx, 0, nc - 1)
+        hex_idx = grid_idx[:, 0] * nc * nc + grid_idx[:, 1] * nc + grid_idx[:, 2]
+
+        # Each hex has 6 tets (Freudenthal). Try each tet via barycentric coords.
+        n_hex = nc ** 3
+        for q in range(n_query):
+            if _np.any(_np.isnan(result[q])):
+                hi = hex_idx[q]
+                # Tet indices for this hex: 6*hi .. 6*hi+5
+                for t_offset in range(6):
+                    tet_idx = 6 * hi + t_offset
+                    if tet_idx >= self.n_elements:
+                        continue
+                    nids = elements_np[tet_idx]  # (4,)
+                    xe = nodes_np[nids]  # (4, 3)
+
+                    # Barycentric coordinates
+                    T = (xe[1:] - xe[0]).T  # (3, 3)
+                    try:
+                        lam_123 = _np.linalg.solve(T, xi_q[q] - xe[0])
+                    except _np.linalg.LinAlgError:
+                        continue
+                    lam_0 = 1.0 - lam_123.sum()
+                    lam = _np.array([lam_0, lam_123[0], lam_123[1], lam_123[2]])
+
+                    # Check containment
+                    if _np.all(lam >= -1e-8):
+                        u_nodes = u_np[nids]  # (4, 3)
+                        result[q] = lam @ u_nodes  # (3,)
+                        break
+
+        # Fallback: nearest node for unfound points
+        nan_mask = _np.isnan(result[:, 0])
+        if _np.any(nan_mask):
+            from scipy.spatial import cKDTree
+            tree = cKDTree(nodes_np)
+            _, nearest = tree.query(xi_q[nan_mask])
+            result[nan_mask] = u_np[nearest]
+
+        return torch.tensor(result, device=u.device, dtype=u.dtype)
+
 
 # ======================================================================
 # Self-test
