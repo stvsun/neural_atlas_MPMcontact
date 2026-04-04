@@ -5,10 +5,15 @@ mappings. They provide exact Jacobians, avoiding training entirely.
 
 Each decoder maps reference coordinates xi in [-1,1]^3 to physical
 coordinates x in R^3 via a known closed-form transformation.
+
+Includes CrackTipDecoder which absorbs the 1/sqrt(r) stress singularity
+into the coordinate mapping via radial squaring (r_phys ~ xi^2).
 """
 
 import math
+from typing import Optional
 
+import numpy as np
 import torch
 
 
@@ -154,3 +159,230 @@ class CylinderDecoder(torch.nn.Module):
         z = self.z_center + xi[:, 1] * self.L_half
 
         return torch.stack([r * torch.cos(theta), r * torch.sin(theta), z], dim=1)
+
+
+class CrackTipDecoder(torch.nn.Module):
+    """Maps [-1,1]^3 to a crack-tip region with radial coordinate squaring.
+
+    Absorbs the 1/sqrt(r) stress singularity into the coordinate mapping
+    so that standard P1 elements capture it naturally without enrichment.
+
+    Coordinate layout:
+        xi_0: along crack front tangent (tangent1 direction)
+        xi_1: along crack face in-plane (tangent2 direction)
+        xi_2: radial from crack tip (mapped via power law)
+
+    Radial mapping:
+        r_phys = radius * ((xi_2 + 1) / 2) ^ power
+
+    With power=2 (default):
+        - Physical spacing concentrates near the tip (dr/dxi -> 0 at xi=-1)
+        - sqrt(r_phys) = sqrt(radius) * (xi_2+1)/2, which is LINEAR in xi
+        - Williams displacement u ~ sqrt(r) becomes smooth in xi-space
+        - P1 elements capture the singularity without h-refinement
+
+    Works with all benchmark geometries — constructed from crack tip
+    position + crack frame (normal, tangent1, tangent2) + support radius.
+
+    Parameters
+    ----------
+    center : array-like (3,)
+        Crack tip position in physical space.
+    normal : array-like (3,)
+        Crack opening direction (unit normal to crack plane).
+    tangent1 : array-like (3,)
+        In-plane direction along crack front.
+    tangent2 : array-like (3,)
+        In-plane direction perpendicular to crack front.
+    radius : float
+        Support radius of the chart.
+    power : float
+        Radial squaring exponent (default 2.0 for sqrt(r) singularity).
+        Use power=3 for r^(1/3) singularities, etc.
+    in_plane_scale : float
+        Scale factor for in-plane (tangent) directions. Default = radius.
+    """
+
+    def __init__(
+        self,
+        center=(0, 0, 0),
+        normal=(1, 0, 0),
+        tangent1=(0, 1, 0),
+        tangent2=(0, 0, 1),
+        radius: float = 0.5,
+        power: float = 2.0,
+        in_plane_scale: Optional[float] = None,
+    ):
+        super().__init__()
+        self.center_np = np.asarray(center, dtype=np.float64)
+        self.normal_np = np.asarray(normal, dtype=np.float64)
+        self.normal_np = self.normal_np / np.linalg.norm(self.normal_np)
+        self.tangent1_np = np.asarray(tangent1, dtype=np.float64)
+        self.tangent1_np = self.tangent1_np / np.linalg.norm(self.tangent1_np)
+        self.tangent2_np = np.asarray(tangent2, dtype=np.float64)
+        self.tangent2_np = self.tangent2_np / np.linalg.norm(self.tangent2_np)
+        self.radius = radius
+        self.power = power
+        self.in_plane_scale = in_plane_scale if in_plane_scale is not None else radius
+
+        # Store as buffers for torch compatibility
+        self.register_buffer('_center', torch.tensor(self.center_np, dtype=torch.float64))
+        self.register_buffer('_normal', torch.tensor(self.normal_np, dtype=torch.float64))
+        self.register_buffer('_tangent1', torch.tensor(self.tangent1_np, dtype=torch.float64))
+        self.register_buffer('_tangent2', torch.tensor(self.tangent2_np, dtype=torch.float64))
+
+    def forward(self, xi, **kwargs):
+        """Map reference coordinates to physical crack-tip region.
+
+        Parameters
+        ----------
+        xi : torch.Tensor (N, 3)
+            Reference coordinates in [-1, 1]^3.
+
+        Returns
+        -------
+        x : torch.Tensor (N, 3)
+            Physical coordinates.
+        """
+        # In-plane: linear mapping
+        d_t1 = xi[:, 0] * self.in_plane_scale  # along tangent1
+        d_t2 = xi[:, 1] * self.in_plane_scale  # along tangent2
+
+        # Radial: power-law mapping (concentrates mesh near tip)
+        # xi_2 in [-1, 1] -> t in [0, 1] -> r in [0, radius]
+        # Floor at t=0.01 prevents singular Jacobian at the crack tip
+        t = (xi[:, 2] + 1.0) / 2.0  # [0, 1]
+        t = torch.clamp(t, min=0.01)
+        r_phys = self.radius * t ** self.power  # [~0, radius]
+
+        # Physical position: center + in-plane + radial*normal
+        x = (self._center.unsqueeze(0)
+             + d_t1.unsqueeze(1) * self._tangent1.unsqueeze(0)
+             + d_t2.unsqueeze(1) * self._tangent2.unsqueeze(0)
+             + r_phys.unsqueeze(1) * self._normal.unsqueeze(0))
+
+        return x
+
+    def inverse(self, x_phys):
+        """Closed-form inverse: physical -> reference coordinates.
+
+        Parameters
+        ----------
+        x_phys : torch.Tensor (N, 3)
+
+        Returns
+        -------
+        xi : torch.Tensor (N, 3)
+        """
+        dx = x_phys - self._center.unsqueeze(0)
+
+        # Project onto frame basis
+        d_t1 = torch.sum(dx * self._tangent1.unsqueeze(0), dim=1)
+        d_t2 = torch.sum(dx * self._tangent2.unsqueeze(0), dim=1)
+        d_n = torch.sum(dx * self._normal.unsqueeze(0), dim=1)
+
+        xi0 = d_t1 / self.in_plane_scale
+        xi1 = d_t2 / self.in_plane_scale
+
+        # Invert radial: r = radius * t^power => t = (r/radius)^(1/power)
+        r_phys = torch.clamp(d_n, min=0.0)
+        t = torch.clamp((r_phys / self.radius) ** (1.0 / self.power), max=1.0)
+        xi2 = 2.0 * t - 1.0
+
+        return torch.stack([xi0, xi1, xi2], dim=1)
+
+    def jacobian(self, xi, **kwargs):
+        """Explicit analytical Jacobian dx/dxi.
+
+        Returns
+        -------
+        J : torch.Tensor (N, 3, 3)
+            J[n, i, j] = dx_i / dxi_j at point n.
+        """
+        N = xi.shape[0]
+        J = torch.zeros(N, 3, 3, device=xi.device, dtype=xi.dtype)
+
+        t1 = self._tangent1  # (3,)
+        t2 = self._tangent2  # (3,)
+        n = self._normal     # (3,)
+
+        # dx/dxi_0 = in_plane_scale * tangent1
+        J[:, :, 0] = self.in_plane_scale * t1.unsqueeze(0)
+
+        # dx/dxi_1 = in_plane_scale * tangent2
+        J[:, :, 1] = self.in_plane_scale * t2.unsqueeze(0)
+
+        # dx/dxi_2 = dr/dxi_2 * normal
+        # r = radius * ((xi_2+1)/2)^power
+        # dr/dxi_2 = radius * power * ((xi_2+1)/2)^(power-1) * (1/2)
+        t_val = (xi[:, 2] + 1.0) / 2.0  # [0, 1]
+        t_val = torch.clamp(t_val, min=0.01)  # floor prevents singular Jacobian at tip
+        dr_dxi2 = self.radius * self.power * t_val ** (self.power - 1) / 2.0
+
+        J[:, :, 2] = dr_dxi2.unsqueeze(1) * n.unsqueeze(0)
+
+        return J
+
+    @classmethod
+    def from_spawned_pair(cls, pair, side="plus", power=2.0):
+        """Construct from a SpawnedChartPair produced by ChartSpawner.
+
+        Parameters
+        ----------
+        pair : SpawnedChartPair
+            From atlas.topo.chart_spawn.
+        side : str
+            "plus" or "minus" — which side of the crack.
+        power : float
+            Radial squaring exponent.
+
+        Returns
+        -------
+        decoder : CrackTipDecoder
+        """
+        seed = getattr(pair, f"seed_{side}")
+        frame = getattr(pair, f"frame_{side}")
+
+        return cls(
+            center=seed,
+            normal=frame[2],      # row 2 = normal
+            tangent1=frame[0],    # row 0 = tangent1
+            tangent2=frame[1],    # row 1 = tangent2
+            radius=pair.radius,
+            power=power,
+        )
+
+    @classmethod
+    def from_crack_tip(cls, tip_position, crack_direction, opening_direction,
+                       radius=0.5, power=2.0):
+        """Construct from crack tip geometry (convenience for all benchmarks).
+
+        Parameters
+        ----------
+        tip_position : array-like (3,)
+            Physical location of the crack tip.
+        crack_direction : array-like (3,)
+            Direction the crack propagates (tangent to crack line).
+        opening_direction : array-like (3,)
+            Normal to crack plane (opening direction).
+        radius : float
+            Support radius.
+        power : float
+            Radial squaring exponent.
+        """
+        cd = np.asarray(crack_direction, dtype=np.float64)
+        od = np.asarray(opening_direction, dtype=np.float64)
+        cd = cd / np.linalg.norm(cd)
+        od = od / np.linalg.norm(od)
+        # Third axis via cross product
+        t2 = np.cross(od, cd)
+        t2 = t2 / np.linalg.norm(t2)
+
+        return cls(
+            center=tip_position,
+            normal=od,
+            tangent1=cd,
+            tangent2=t2,
+            radius=radius,
+            power=power,
+        )
