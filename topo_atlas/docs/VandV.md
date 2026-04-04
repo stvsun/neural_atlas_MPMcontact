@@ -192,6 +192,40 @@ domain under large (but sub-yield) elastic deformation.
 
 ---
 
+### V&V-4.3: Biaxial Tension Test (Nine Circles Challenge Problem 2)
+
+**Goal:** Validate topology-aware atlas against the biaxial tension benchmark
+from Kamarei, Zeng, Dolbow & Lopez-Pamies (2026), CMAME 448, 118449.
+
+**Reference:** Circular plate (R=5mm, L=0.25mm) under equi-biaxial tension.
+Soda-lime glass: E=70GPa, nu=0.22, sigma_bs=27MPa, G_c=10 N/m.
+Exact solution: S = E*delta/((1-nu)*R) until fracture at sigma_bs.
+
+**Protocol:**
+1. Verify circular plate SDF correctness (5 geometry tests).
+2. Verify exact stress-strain solution matches Table 2 material constants.
+3. Verify topology: intact plate has beta_0=1, cracked plate has beta_0>=2.
+4. Verify TopologyMonitor detects crack nucleation as an H0 event.
+
+**Pass criteria:**
+- Intact plate: single connected component (beta_0=1).
+- Cracked plate: domain splits into 2+ components (beta_0>=2).
+- TopologyMonitor fires at least one H0 event at crack nucleation step.
+- Exact stress-strain matches sigma_bs=27MPa at fracture.
+
+**Data repositories:**
+- https://databank.illinois.edu/datasets/IDB-6684845
+- https://research.repository.duke.edu/record/401
+
+**Test location:** `tests/test_biaxial_tension.py`
+
+**Command:**
+```bash
+pytest tests/test_biaxial_tension.py -v
+```
+
+---
+
 ## Phase 5 — Integration, Optimization, Dissemination
 
 ### V&V-5.1: GUDHI Overhead Budget
@@ -241,10 +275,11 @@ topology certification, atlas construction, and BVP solve.
 | 4 | V&V-4.1: Mode-I K_I validation | Validation | PASS (3/3 tests) |
 | 4 | V&V-4.1 topology: crack detection | Validation | PASS (3/3 tests) |
 | 4 | V&V-4.2: No-crack false positive | Validation | PASS (2/2 tests) |
+| 4 | V&V-4.3: Biaxial tension (Kamarei 2026) | Validation | PASS (12/12 tests) |
 | 5 | V&V-5.1: GUDHI overhead budget | Verification | PASS (3/3 tests, 1.1% overhead) |
 | 5 | V&V-5.2: Full pipeline smoke test | Validation | PASS (9/9 tests) |
 
-**Total: 78 passed, 1 xpassed (as of 2026-04-03)**
+**Total: 90 passed, 1 xpassed (as of 2026-04-03)**
 
 ### Performance Profile (V&V-5.1)
 
