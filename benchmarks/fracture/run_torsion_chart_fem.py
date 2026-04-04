@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from solvers.fem.chart_vector_fem import ChartVectorFEMSolver
 from solvers.fem.schwarz_vector_fem import SchwarzVectorFEMSolver
 from solvers.fem.linear_elastic import make_linear_elastic
+from solvers.fem.analytic_decoders import TubeSectorDecoder
 from solvers.fracture_criteria import (
     drucker_prager_F, cauchy_from_first_piola, derived_shear_strength,
 )
@@ -73,45 +74,32 @@ print(f"  sigma_ss (DP) = {sigma_ss:.2f} MPa")
 print(f"  Charts: {n_charts}, n_cells={n_cells}")
 print()
 
-# Create chart solvers — each chart is a cube mapped to a tube sector
+# Create chart solvers with analytical TubeSectorDecoder
 chart_solvers = []
+chart_decoders = []
 chart_angles = [0, math.pi/2, math.pi, 3*math.pi/2]  # center angles
 chart_seeds = []
+theta_span = math.pi / 1.5  # 120 degrees per chart (30-deg overlap)
 
 for ci, theta_c in enumerate(chart_angles):
+    decoder = TubeSectorDecoder(
+        theta_center=theta_c,
+        theta_span=theta_span,
+        r_mid=r_mid,
+        t_half=t_wall / 2,  # exact wall thickness
+        z_center=L / 2,
+        L_half=L / 2,
+    ).double()
+
     solver = ChartVectorFEMSolver(
         n_cells=n_cells, support_r=chart_r,
-        chart_decoder=None,
+        chart_decoder=decoder,
+        decoder_kwargs={},  # TubeSectorDecoder ignores kwargs
         device="cpu", dtype=torch.float64,
     )
 
-    # Map chart reference coords (xi in [-1,1]^3) to tube sector
-    # xi_0 -> theta (circumferential), xi_1 -> z (axial), xi_2 -> r (radial)
-    nodes = solver.nodes.clone()
-    theta_span = math.pi / 1.5  # 120 degrees per chart
-    theta = theta_c + nodes[:, 0] * theta_span / 2
-    z = nodes[:, 1] * L / 2 + L / 2  # [0, L]
-    r = r_mid + nodes[:, 2] * t_wall * 1.5  # radial extent (with margin)
-
-    # Convert to Cartesian
-    x_phys = r * torch.cos(theta)
-    y_phys = r * torch.sin(theta)
-    z_phys = z
-
-    solver.nodes_phys = torch.stack([x_phys, y_phys, z_phys], dim=1)
-    # Keep reference coords for the solve
-    solver.nodes = nodes
-
-    # Recompute boundary mask on physical coords
-    tol_h = solver.h * 0.1
-    on_boundary = (
-        (torch.abs(nodes[:, 0]) > chart_r - tol_h) |  # theta faces
-        (torch.abs(nodes[:, 1]) > chart_r - tol_h) |  # z faces
-        (torch.abs(nodes[:, 2]) > chart_r - tol_h)    # r faces
-    )
-    solver.boundary_mask = on_boundary
-
     chart_solvers.append(solver)
+    chart_decoders.append(decoder)
     chart_seeds.append([r_mid * math.cos(theta_c), r_mid * math.sin(theta_c), L/2])
 
 seeds_t = torch.tensor(chart_seeds, dtype=torch.float64)
