@@ -103,6 +103,30 @@ for step, alpha in enumerate(alpha_vals):
     # Shear stress (approx uniform for thin wall)
     tau = mu * gamma if not cracked else np.zeros(n_pts)
 
+    # Displacement: torsion kinematics
+    # u_theta = alpha * z * rho / L  (tangential displacement)
+    # In Cartesian: u_x = -u_theta * sin(theta), u_y = u_theta * cos(theta)
+    alpha_eff = alpha if not cracked else 0.0
+    u_theta = alpha_eff * Z * r_pts / L
+    u_x = -u_theta * np.sin(theta_pts)
+    u_y = u_theta * np.cos(theta_pts)
+    u_z = np.zeros(n_pts)  # no axial displacement in pure torsion
+    displacement = np.column_stack([u_x, u_y, u_z])
+
+    # Full Cauchy stress tensor in Cartesian coords
+    # sigma_xz = -tau * sin(theta), sigma_yz = tau * cos(theta)
+    # For the VTU, store the 6 independent components (Voigt: xx,yy,zz,xy,xz,yz)
+    sigma_xz = -tau * np.sin(theta_pts)
+    sigma_yz = tau * np.cos(theta_pts)
+    stress_tensor = np.column_stack([
+        np.zeros(n_pts),  # sigma_xx
+        np.zeros(n_pts),  # sigma_yy
+        np.zeros(n_pts),  # sigma_zz
+        np.zeros(n_pts),  # sigma_xy
+        sigma_xz,         # sigma_xz
+        sigma_yz,         # sigma_yz
+    ])
+
     # Principal stresses of pure shear: +tau and -tau at 45 degrees
     sigma_1 = tau   # max principal
     sigma_2 = -tau  # min principal
@@ -134,8 +158,10 @@ for step, alpha in enumerate(alpha_vals):
         os.path.join(VTU_DIR, fname),
         pts,
         {
+            "displacement": displacement,
             "shear_stress": tau,
             "shear_strain": gamma,
+            "stress_voigt": stress_tensor,
             "von_Mises": von_mises,
             "sigma_1": sigma_1,
             "sigma_2": sigma_2,
@@ -146,14 +172,16 @@ for step, alpha in enumerate(alpha_vals):
     )
     vtu_files.append(fname)
 
-# Write PVD
-import xml.etree.ElementTree as ET
-root = ET.Element("VTKFile", type="Collection", version="0.1", byte_order="LittleEndian")
-coll = ET.SubElement(root, "Collection")
-for i, f in enumerate(vtu_files):
-    ET.SubElement(coll, "DataSet", timestep=str(float(i)), group="", part="0", file=f)
-ET.ElementTree(root).write(os.path.join(VTU_DIR, "torsion.pvd"),
-                           xml_declaration=True, encoding="utf-8")
+# Write PVD with proper formatting
+pvd_path = os.path.join(VTU_DIR, "torsion.pvd")
+with open(pvd_path, "w") as f:
+    f.write('<?xml version="1.0"?>\n')
+    f.write('<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">\n')
+    f.write('  <Collection>\n')
+    for i, fname in enumerate(vtu_files):
+        f.write(f'    <DataSet timestep="{float(i)}" file="{fname}"/>\n')
+    f.write('  </Collection>\n')
+    f.write('</VTKFile>\n')
 print(f"VTU: {VTU_DIR}/torsion.pvd ({n_steps} steps, nucleation at step {nucleation_step})")
 
 # ── Fig 8(c) style: contour plot at nucleation ────────────────────────
