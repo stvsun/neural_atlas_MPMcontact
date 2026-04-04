@@ -28,6 +28,40 @@ python benchmarks/rabbit_poisson_fem/run_rabbit_poisson_fem.py
 
 ---
 
+## Benchmark Results
+
+### Topology Certification Geometries
+
+Three analytic geometries verify the persistent homology pipeline. Each geometry's Betti numbers determine the minimum chart count M_min via the Lusternik-Schnirelmann category:
+
+![Topology Geometries](figures/topology_geometries.png)
+
+*Left: Ball (contractible, M_min=1). Center: Solid torus (one H1 loop, M_min=2). Right: Spherical shell clipped to show interior void (one H2 cavity, M_min=2).*
+
+### Mode-I Edge Crack
+
+The fracture benchmark validates K_I extraction against analytical LEFM on a finite-width plate with an edge crack:
+
+![Cracked Plate](figures/cracked_plate_3d.png)
+
+*3D isosurface of the cracked plate SDF (a/W=0.5). Red marker indicates the crack tip. The crack slit is visible as the gap separating the upper and lower plate surfaces.*
+
+### Williams Near-Tip Stress Field
+
+The Mode-I stress singularity sigma_yy ~ K_I / sqrt(2 pi r) near the crack tip, warped by stress magnitude:
+
+![Williams Stress](figures/williams_stress_3d.png)
+
+*Williams asymptotic sigma_yy field around the crack tip. Surface height proportional to stress. Red = tension, showing the characteristic 1/sqrt(r) singularity that concentrates at the crack tip.*
+
+### Summary Dashboard
+
+![Benchmark Results](figures/benchmark_results.png)
+
+*Six-panel summary: (a) persistence diagrams, (b) K_I vs a/W, (c) Williams stress contour, (d) constitutive models, (e) crack SDF cross-section, (f) GUDHI timing profile.*
+
+---
+
 ## Key Concepts
 
 1. **Neural SDF** — Geometry encoded as a learned signed distance function (Eikonal-trained MLP).
