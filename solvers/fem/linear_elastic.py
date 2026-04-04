@@ -1,15 +1,14 @@
 """Linear elastic material for ChartVectorFEMSolver.
 
-Provides stress_fn and tangent_fn callables that implement St. Venant-
-Kirchhoff (linear elastic) constitutive response for use with
-ChartVectorFEMSolver.solve_nonlinear().
+Provides two formulations:
 
-For small strains, this is equivalent to Hooke's law:
-    sigma = lambda * tr(eps) * I + 2 * mu * eps
-where eps = (F^T F - I) / 2 is the Green-Lagrange strain.
+1. make_linear_elastic(): St. Venant-Kirchhoff with Green-Lagrange strain
+   E = (F^T F - I)/2. Exact for small strain but produces spurious normal
+   stresses under rotation (torsion, bending) due to the quadratic term.
 
-The first Piola-Kirchhoff stress is:
-    P = F * S,  S = lambda * tr(E) * I + 2 * mu * E
+2. make_linear_elastic_small_strain(): True Hooke's law with infinitesimal
+   strain eps = sym(grad u) = (F + F^T)/2 - I. No geometric nonlinearity
+   artifacts. Use for benchmarks involving rotation (torsion, bending).
 """
 
 import torch
@@ -99,5 +98,65 @@ def make_linear_elastic(E: float, nu: float, device="cpu", dtype=torch.float64):
                         dPdF[:, row, col] = val
 
         return dPdF
+
+    return stress_fn, tangent_fn
+
+
+def make_linear_elastic_small_strain(E: float, nu: float, device="cpu", dtype=torch.float64):
+    """True small-strain linear elastic: sigma = lambda tr(eps) I + 2 mu eps.
+
+    Uses infinitesimal strain eps = (F + F^T)/2 - I instead of Green-Lagrange
+    E = (F^T F - I)/2. This avoids the quadratic term F^T F that creates
+    spurious normal stresses under rotation (torsion, bending).
+
+    The first Piola-Kirchhoff stress P = sigma (identical for small strain).
+    The tangent dP/dF is the constant 4th-order elasticity tensor.
+
+    Parameters
+    ----------
+    E : float
+        Young's modulus.
+    nu : float
+        Poisson's ratio.
+
+    Returns
+    -------
+    stress_fn, tangent_fn : callables compatible with ChartVectorFEMSolver.
+    """
+    mu = E / (2.0 * (1.0 + nu))
+    lam = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
+
+    I3 = torch.eye(3, device=device, dtype=dtype)
+
+    # Precompute constant tangent (does not depend on F)
+    C_const = torch.zeros(9, 9, device=device, dtype=dtype)
+    for i in range(3):
+        for J in range(3):
+            row = 3 * i + J
+            for k in range(3):
+                for L in range(3):
+                    col = 3 * k + L
+                    val = 0.0
+                    # dsigma_{iJ} / dF_{kL} = lam * d_{iJ}*d_{kL} + mu*(d_{ik}*d_{JL} + d_{iL}*d_{Jk})
+                    if i == J and k == L:
+                        val += lam
+                    if i == k and J == L:
+                        val += mu
+                    if i == L and J == k:
+                        val += mu
+                    C_const[row, col] = val
+
+    def stress_fn(F):
+        """P = sigma = lam * tr(eps) * I + 2 * mu * eps, where eps = sym(F-I)."""
+        # eps = (F + F^T)/2 - I  (infinitesimal strain, NO quadratic term)
+        eps = 0.5 * (F + F.transpose(1, 2)) - I3.unsqueeze(0)
+        tr_eps = eps[:, 0, 0] + eps[:, 1, 1] + eps[:, 2, 2]
+        sigma = lam * tr_eps.view(-1, 1, 1) * I3.unsqueeze(0) + 2.0 * mu * eps
+        return sigma  # P = sigma for small strain
+
+    def tangent_fn(F):
+        """Constant tangent: C_{iJkL} = lam*d_{iJ}*d_{kL} + mu*(d_{ik}*d_{JL} + d_{iL}*d_{Jk})."""
+        M = F.shape[0]
+        return C_const.unsqueeze(0).expand(M, -1, -1).clone()
 
     return stress_fn, tangent_fn
