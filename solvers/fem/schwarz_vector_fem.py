@@ -174,18 +174,19 @@ class SchwarzVectorFEMSolver:
     ) -> Optional[torch.Tensor]:
         """Interpolate displacement at chart i's artificial boundary from neighbors.
 
-        For each art BC node in chart i, find the nearest neighbor chart
-        that has a solution, project the node into that chart's reference
-        coordinates, and evaluate the displacement via linear interpolation.
+        For each art BC node in chart i, project into each neighbor chart's
+        reference coordinates (using decoder.inverse() for analytical decoders,
+        or invert_decoder() for neural decoders), then interpolate from the
+        neighbor's solution via nearest-node lookup.
         """
         art_indices = torch.where(art_mask)[0]
         if len(art_indices) == 0:
             return None
 
         art_nodes_phys = nodes_phys[art_indices]  # (N_art, 3)
-        result = torch.zeros(len(art_indices), 3,
-                             device=nodes_phys.device, dtype=nodes_phys.dtype)
-        valid = torch.zeros(len(art_indices), dtype=torch.bool)
+        n_art = len(art_indices)
+        result = torch.zeros(n_art, 3, device=nodes_phys.device, dtype=nodes_phys.dtype)
+        weight = torch.zeros(n_art, device=nodes_phys.device, dtype=nodes_phys.dtype)
 
         for j in self.neighbors[chart_i]:
             if self.u_charts[j] is None:
@@ -196,18 +197,24 @@ class SchwarzVectorFEMSolver:
                 continue
 
             # Project art nodes into chart j's reference coords
-            if self.decoders[j] is not None:
+            decoder_j = self.decoders[j]
+            if decoder_j is not None and hasattr(decoder_j, 'inverse'):
+                # Analytical decoder with closed-form inverse
+                with torch.no_grad():
+                    xi_j = decoder_j.inverse(art_nodes_phys)
+            elif decoder_j is not None:
+                # Neural decoder — use Newton inversion
                 kw = self.decoder_kwargs_list[j]
                 with torch.enable_grad():
                     xi_j = invert_decoder(
-                        self.decoders[j], art_nodes_phys,
+                        decoder_j, art_nodes_phys,
                         kw["seed"], kw["t1"], kw["t2"], kw["n"], kw["chart_scale"],
                         max_iter=10, tol=1e-6,
                     )
             else:
                 xi_j = art_nodes_phys  # identity mapping
 
-            # Check which nodes fall inside chart j's mesh domain
+            # Check which nodes fall inside chart j's reference domain [-r, r]^3
             r_j = solver_j.r
             in_mesh = torch.all(torch.abs(xi_j) <= r_j, dim=1)
 
@@ -219,16 +226,25 @@ class SchwarzVectorFEMSolver:
             u_j = self.u_charts[j].detach().cpu().numpy()
             nodes_j_np = solver_j.nodes.detach().cpu().numpy()
 
-            for k_idx in range(len(art_indices)):
-                if valid[k_idx] or not in_mesh[k_idx]:
-                    continue
-                # Find nearest node in chart j
-                dists = np.linalg.norm(nodes_j_np - xi_j_np[k_idx], axis=1)
+            # Vectorized nearest-node lookup
+            in_idx = torch.where(in_mesh)[0]
+            for k in in_idx:
+                k_int = k.item()
+                dists = np.sum((nodes_j_np - xi_j_np[k_int])**2, axis=1)
                 nearest = np.argmin(dists)
-                result[k_idx] = torch.tensor(u_j[nearest], dtype=result.dtype)
-                valid[k_idx] = True
+                u_interp = torch.tensor(u_j[nearest], dtype=result.dtype)
 
-        if valid.any():
+                # Distance-based weighting: closer to chart j center = higher weight
+                d_center = torch.linalg.norm(xi_j[k_int]).item()
+                w = max(1.0 - d_center / r_j, 0.01)
+
+                result[k_int] += w * u_interp
+                weight[k_int] += w
+
+        # Normalize by total weight
+        has_data = weight > 0
+        if has_data.any():
+            result[has_data] /= weight[has_data].unsqueeze(1)
             return result
         return None
 

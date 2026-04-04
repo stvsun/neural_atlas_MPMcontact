@@ -183,16 +183,17 @@ for step, alpha in enumerate(alpha_steps):
     schwarz = SchwarzVectorFEMSolver(
         chart_solvers=chart_solvers,
         seeds=seeds_t,
+        decoders=chart_decoders,
         neighbors=neighbors,
         parallel=True,
         n_workers=4,
     )
 
-    # Solve
+    # Solve with more Schwarz iterations for proper coupling
     u_charts = schwarz.solve(
         stress_fn, tangent_fn, phys_bc_fn,
-        max_schwarz_iters=5,
-        tol=1e-4,
+        max_schwarz_iters=15,
+        tol=1e-3,
         newton_max_iter=10,
         newton_tol=1e-8,
     )

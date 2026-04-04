@@ -80,6 +80,27 @@ class TubeSectorDecoder(torch.nn.Module):
 
         return torch.stack([x, y, z], dim=1)
 
+    def inverse(self, x_phys):
+        """Closed-form inverse: physical (x,y,z) -> reference (xi0,xi1,xi2).
+
+        Parameters
+        ----------
+        x_phys : torch.Tensor (N, 3)
+
+        Returns
+        -------
+        xi : torch.Tensor (N, 3)
+        """
+        x, y, z = x_phys[:, 0], x_phys[:, 1], x_phys[:, 2]
+        r = torch.sqrt(x**2 + y**2)
+        theta = torch.atan2(y, x)
+
+        xi0 = (theta - self.theta_center) / (self.theta_span / 2)
+        xi1 = (z - self.z_center) / self.L_half
+        xi2 = (r - self.r_mid) / self.t_half
+
+        return torch.stack([xi0, xi1, xi2], dim=1)
+
 
 class BoxDecoder(torch.nn.Module):
     """Maps [-1,1]^3 to an axis-aligned box [x0,x1] x [y0,y1] x [z0,z1].
