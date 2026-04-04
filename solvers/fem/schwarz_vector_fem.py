@@ -70,6 +70,7 @@ class SchwarzVectorFEMSolver:
         tol: float = 1e-6,
         newton_max_iter: int = 20,
         newton_tol: float = 1e-8,
+        relaxation: float = 0.5,
     ) -> List[torch.Tensor]:
         """Run multiplicative Schwarz iteration for vector elasticity.
 
@@ -149,14 +150,21 @@ class SchwarzVectorFEMSolver:
                     for f in futures:
                         idx, u_new, change = f.result()
                         if u_new is not None:
-                            self.u_charts[idx] = u_new
+                            # Under-relaxation: u = omega*u_new + (1-omega)*u_old
+                            if self.u_charts[idx] is not None and schwarz_iter > 0:
+                                self.u_charts[idx] = relaxation * u_new + (1 - relaxation) * self.u_charts[idx]
+                            else:
+                                self.u_charts[idx] = u_new
                             max_change = max(max_change, change)
             else:
                 # Serial: solve charts sequentially
                 for i in range(self.n_charts):
                     idx, u_new, change = _solve_chart(i)
                     if u_new is not None:
-                        self.u_charts[idx] = u_new
+                        if self.u_charts[idx] is not None and schwarz_iter > 0:
+                            self.u_charts[idx] = relaxation * u_new + (1 - relaxation) * self.u_charts[idx]
+                        else:
+                            self.u_charts[idx] = u_new
                         max_change = max(max_change, change)
 
             if schwarz_iter > 0 and max_change < tol:

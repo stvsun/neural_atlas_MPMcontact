@@ -63,9 +63,15 @@ t_wall = R_outer - r_inner
 # Charts are centered at 0, 90, 180, 270 degrees with 120-deg coverage
 # This gives ~30-degree overlap between adjacent charts
 
-n_charts = 4
-n_cells = 8  # per chart
+n_cells = 12  # per chart
 chart_r = 1.0  # chart reference domain radius
+
+# Use 4 charts around the circumference, each covering full axial length
+# More charts = finer circumferential resolution, but each has full z-coverage
+# so both tube ends are captured by every chart
+n_circ = 4
+n_axial = 1  # single axial layer (full length) — avoids z-coupling issues
+n_charts = n_circ * n_axial
 
 print("=== Torsion Test: Multi-Chart Parallel FEM ===")
 print(f"  Tube: L={L}, r={r_inner}, R={R_outer}, t={t_wall:.2f} mm")
@@ -75,39 +81,41 @@ print(f"  Charts: {n_charts}, n_cells={n_cells}")
 print()
 
 # Create chart solvers with analytical TubeSectorDecoder
+# 8 charts: 4 circumferential x 2 axial, each covering a smaller region
 chart_solvers = []
 chart_decoders = []
-chart_angles = [0, math.pi/2, math.pi, 3*math.pi/2]  # center angles
 chart_seeds = []
-theta_span = math.pi / 1.5  # 120 degrees per chart (30-deg overlap)
+theta_span = math.pi / 1.5  # 120 degrees per chart (30-deg overlap between neighbors)
 
-for ci, theta_c in enumerate(chart_angles):
+theta_centers = [i * math.pi / 2 for i in range(n_circ)]  # 0, 90, 180, 270
+
+for ti, theta_c in enumerate(theta_centers):
     decoder = TubeSectorDecoder(
         theta_center=theta_c,
         theta_span=theta_span,
         r_mid=r_mid,
         t_half=t_wall / 2,  # exact wall thickness
         z_center=L / 2,
-        L_half=L / 2,
+        L_half=L / 2,  # full axial length
     ).double()
 
     solver = ChartVectorFEMSolver(
         n_cells=n_cells, support_r=chart_r,
         chart_decoder=decoder,
-        decoder_kwargs={},  # TubeSectorDecoder ignores kwargs
+        decoder_kwargs={},
         device="cpu", dtype=torch.float64,
     )
 
     chart_solvers.append(solver)
     chart_decoders.append(decoder)
-    chart_seeds.append([r_mid * math.cos(theta_c), r_mid * math.sin(theta_c), L/2])
+    chart_seeds.append([r_mid * math.cos(theta_c), r_mid * math.sin(theta_c), L / 2])
 
 seeds_t = torch.tensor(chart_seeds, dtype=torch.float64)
 
-# Neighbor graph: each chart overlaps with its two neighbors (circular)
+# Neighbor graph: circular (each chart neighbors its two adjacent sectors)
 neighbors = [
-    [(ci + 1) % n_charts, (ci - 1) % n_charts]
-    for ci in range(n_charts)
+    [(ti + 1) % n_charts, (ti - 1) % n_charts]
+    for ti in range(n_charts)
 ]
 
 total_nodes = sum(s.n_nodes for s in chart_solvers)
@@ -189,13 +197,14 @@ for step, alpha in enumerate(alpha_steps):
         n_workers=4,
     )
 
-    # Solve with more Schwarz iterations for proper coupling
+    # Solve with under-relaxation for stable Schwarz convergence
     u_charts = schwarz.solve(
         stress_fn, tangent_fn, phys_bc_fn,
-        max_schwarz_iters=15,
+        max_schwarz_iters=20,
         tol=1e-3,
         newton_max_iter=10,
         newton_tol=1e-8,
+        relaxation=0.3,  # damped to prevent oscillation
     )
 
     dt_solve = time.time() - t0
