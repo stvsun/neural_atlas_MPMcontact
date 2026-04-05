@@ -1,7 +1,10 @@
 """K_I extraction from FEM displacement fields near crack tips.
 
-Bridges the FEM solver displacement solution with the Williams asymptotic
-expansion fitting from benchmarks/fracture/lefm_reference.py to extract
+Supports two methods:
+  - 'displacement': Williams asymptotic expansion fitting (legacy)
+  - 'j_integral': Domain J-integral method (recommended, more robust on coarse meshes)
+
+Bridges the FEM solver displacement solution with analytical LEFM to extract
 stress intensity factors K_I (and K_II) from a chart-based FEM solution.
 """
 
@@ -119,6 +122,8 @@ def extract_K_from_charts(
     plane_strain: bool = True,
     r_min: Optional[float] = None,
     r_max: Optional[float] = None,
+    method: str = "displacement",
+    stress_fn=None,
 ) -> float:
     """Extract K_I from multi-chart FEM solution by pooling all charts.
 
@@ -130,11 +135,26 @@ def extract_K_from_charts(
     E, nu : float
     plane_strain : bool
     r_min, r_max : float or None
+    method : str
+        'displacement' (legacy Williams fitting) or 'j_integral' (domain integral).
+    stress_fn : callable, optional
+        Required when method='j_integral'. Maps F -> P (1st Piola-Kirchhoff stress).
 
     Returns
     -------
     K_I : float
     """
+    if method == "j_integral":
+        from solvers.fem.j_integral import extract_K_via_J_integral
+        if stress_fn is None:
+            raise ValueError("stress_fn is required for method='j_integral'")
+        return extract_K_via_J_integral(
+            chart_solvers, u_charts,
+            crack_tip, crack_direction, opening_direction,
+            stress_fn, E, nu, plane_strain,
+            r_inner=r_min, r_outer=r_max,
+            n_contours=3,
+        )
     all_r = []
     all_theta = []
     all_u_opening = []

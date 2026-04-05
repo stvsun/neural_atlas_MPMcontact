@@ -41,6 +41,10 @@ class RobinSchwarzSolver:
     robin_delta : float
         Robin parameter. Larger = more weight on displacement matching.
         Optimal is problem-dependent; delta ~ E/h is a good starting point.
+    relaxation : float
+        Under-relaxation factor for interface flux update (0 < omega <= 1).
+        omega=1.0 = no relaxation (original). omega=0.3-0.5 recommended
+        for problems with oscillatory convergence (e.g., fracture).
     parallel : bool
     n_workers : int
     """
@@ -52,6 +56,7 @@ class RobinSchwarzSolver:
         decoders: List = None,
         neighbors: List[List[int]] = None,
         robin_delta: float = 1.0,
+        relaxation: float = 1.0,
         parallel: bool = True,
         n_workers: int = 4,
     ):
@@ -60,6 +65,7 @@ class RobinSchwarzSolver:
         self.seeds = seeds
         self.decoders = decoders or [None] * self.n_charts
         self.robin_delta = robin_delta
+        self.relaxation = relaxation
         self.parallel = parallel
         self.n_workers = n_workers
 
@@ -233,10 +239,15 @@ class RobinSchwarzSolver:
 
             u_neighbor_avg = u_neighbor_sum / n_nbr
 
-            # Du's update at boundary nodes
-            lam_new = (u_self + u_neighbor_avg) / 2
+            # Du's update at boundary nodes, with under-relaxation
+            omega = self.relaxation
+            lam_old = self._lambda[i][bnd_indices]
+            lam_update = (u_self + u_neighbor_avg) / 2
+            lam_new = omega * lam_update + (1 - omega) * lam_old
+
             g_old = self._g[i][bnd_indices]
-            g_new = g_old + delta * (u_neighbor_avg - u_self) / 2
+            g_update = g_old + delta * (u_neighbor_avg - u_self) / 2
+            g_new = omega * g_update + (1 - omega) * g_old
 
             self._lambda[i][bnd_indices] = lam_new.detach()
             self._g[i][bnd_indices] = g_new.detach()
