@@ -22,6 +22,7 @@
 | 8 | DENNs SDF enrichment | 875 | 640 | New module, validated |
 | 9 | Fix C3/C6 full Dirichlet | 875 | 655 | Ref coords + all_mask |
 | 10 | Williams convergence adj | 875 | 665 | CrackTip order ~1.5 is correct |
+| 11 | DENNs training (Williams) | 875 | 665 | MLP learns Williams field, RPROP converges |
 
 ## Reference Papers
 1. **DENNs** (Zhao & Shao, CMAME 446, 2025): SDF-enriched NNs for in-chart discontinuity
