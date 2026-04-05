@@ -115,8 +115,40 @@ The C8.6 scoring issue is fundamentally about the **Dirichlet approximation of R
 
 ---
 
-## Iteration 3: (next session)
+## Iteration 3: 2026-04-05
 
-### PLANNED REASON
-- Implement proper weak Robin BC: add delta*M_boundary to stiffness, delta*lambda+g to RHS
-- OR: Use Multiplicative Schwarz (which works via Dirichlet BCs, not Robin) — this may be faster to implement and is already validated for C3 (torsion)
+### REASON
+- Robin DD Dirichlet approximation attenuates 99.93% of displacement at interface
+- Multiplicative Schwarz (SchwarzVectorFEMSolver) uses proper Dirichlet BCs, validated for C3
+
+### ACT
+- [x] Added `inverse()` and `jacobian()` to BoxDecoder in `analytic_decoders.py`
+- [x] Switched C8 from RobinSchwarzSolver to SchwarzVectorFEMSolver
+- [x] Tuned: CrackTipDecoder radius=5.0, n_cells=14, relaxation=0.5, tol=1e-2, 25 iters
+- [x] Ran full scoring: no regressions on C1-C7,C9
+
+### RESULT
+- **C8.6: K_I = 34.16 vs K_Ic = 27.12 (26.0% error)** — earns **15/20 pts** (was 10/20)
+- **C8 total: 90 -> 95/100**
+- **Stage 1: 870 -> 875/900 (97.2%)**
+- Schwarz converges monotonically: 1.0 -> 0.62 -> 0.30 -> 0.13 -> ... -> 0.009 in 13 iters
+- BoxDecoder.inverse() was the missing piece — enables Schwarz inter-chart interpolation
+
+### KEY INSIGHT
+The Multiplicative Schwarz with Dirichlet BC transfer works far better than Robin DD
+for this problem. K_I improved from -11.05 (Robin) to 34.16 (Schwarz), a qualitative
+improvement from unphysical to 26% of analytical. Remaining error is likely mesh resolution.
+
+### SKILL UPDATE (v1.2)
+- Strategy ranking: Multiplicative Schwarz confirmed as best DD for fracture
+- BoxDecoder.inverse() added — was blocking Schwarz for all box-chart problems
+- Next: Further mesh refinement or P2 on crack tip chart to push error below 10%
+
+---
+
+## Iteration 4: (next)
+
+### PLANNED
+- Try P2 elements on crack tip chart with Schwarz (should improve near-tip resolution)
+- Or increase n_cells further (18-20) with P1
+- Target: K_I error < 10% → 20/20 pts → C8=100/100 → Stage 1=880/900
