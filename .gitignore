@@ -18,6 +18,13 @@ downloads/
 
 # Generated visualization / postprocessing files
 *.png
+# Exception: publication figures for README / docs
+!figures/challenge_*_von_mises_pub.png
+!figures/challenge_*_multiview.png
+!figures/topology_geometries.png
+!figures/cracked_plate_3d.png
+!figures/williams_stress_3d.png
+!figures/benchmark_results.png
 *.svg
 *.vtu
 *.vtp

@@ -345,57 +345,158 @@ $$\mathbf{u}_i^{k+1} = \omega\, \mathbf{u}_i^{\text{new}} + (1 - \omega)\, \math
 
 ---
 
-## 9. CrackTipDecoder: Singularity-Absorbing Chart
+## 9. CrackTipDecoder: Singularity-Absorbing Coordinate Chart
 
-### 9.1 Motivation
+### 9.1 The Near-Tip Singularity Problem
 
-The Williams Mode-I stress field has a $1/\sqrt{r}$ singularity at the crack tip. Standard P1 elements converge as $O(h^{1/2})$ for singular problems — impractically slow. The CrackTipDecoder absorbs the singularity into the coordinate mapping so that P1 (or P2) elements converge at their optimal rate.
+The Williams (1957) Mode-I asymptotic solution for stress and displacement near a crack tip has characteristic singularities:
 
-### 9.2 Coordinate Mapping
+$$\sigma_{ij} \sim \frac{K_I}{\sqrt{2\pi r}}\, f_{ij}(\theta), \qquad u_i \sim \frac{K_I}{2\mu}\sqrt{\frac{r}{2\pi}}\, g_i(\theta, \kappa),$$
 
-The decoder maps reference coordinates $\boldsymbol{\xi} \in [-1,1]^3$ to a crack-tip region:
+where $r$ is the distance from the crack tip, $\theta$ is the polar angle, $K_I$ is the Mode-I stress intensity factor, and $\kappa = 3 - 4\nu$ (plane strain).
 
-**In-plane** (linear):
-$$d_{t_1} = \xi_0 \cdot s, \qquad d_{t_2} = \xi_1 \cdot s,$$
+Standard finite elements on uniform meshes converge slowly for singular problems. The convergence rate for P1 elements on a quasi-uniform mesh around a $r^{-1/2}$ stress singularity is only $O(h^{1/2})$ in the energy norm — compared to the optimal $O(h)$ for smooth solutions. Achieving 1% accuracy would require $\sim 10^4$ elements near the tip, which is impractical for multi-chart domain decomposition.
 
-where $s$ is the in-plane scale (default: radius).
+**Three classical approaches to this problem:**
 
-**Radial** (power law):
-$$t = \text{clamp}\!\left(\frac{\xi_2 + 1}{2},\; 0.01,\; 1\right), \qquad r_{\text{phys}} = R \cdot t^p,$$
+| Approach | Mechanism | Drawback |
+|----------|-----------|----------|
+| h-refinement (mesh grading) | Geometrically graded mesh toward tip | Requires mesh generation expertise |
+| p-refinement (spectral) | Higher polynomial order | Pollution from singularity |
+| XFEM (enrichment) | Add $\sqrt{r}\,g(\theta)$ to basis | Extra DOFs, blending issues |
 
-where $R$ is the support radius and $p$ is the power (default $p = 2$).
+The CrackTipDecoder provides a **fourth approach**: absorb the singularity into the coordinate mapping, making the solution smooth in the reference domain. Standard P1/P2 elements then converge at their optimal rate without any enrichment.
 
-**Physical position:**
-$$\mathbf{x} = \mathbf{c} + d_{t_1}\,\mathbf{t}_1 + d_{t_2}\,\mathbf{t}_2 + r_{\text{phys}}\,\mathbf{n},$$
+### 9.2 Crack Frame Definition
 
-where $(\mathbf{t}_1, \mathbf{t}_2, \mathbf{n})$ is the crack frame and $\mathbf{c}$ is the tip position.
+The crack-tip region is described by an orthonormal frame $(\mathbf{t}_1, \mathbf{t}_2, \mathbf{n})$ centered at the tip $\mathbf{c}$:
 
-### 9.3 Singularity Absorption
+- $\mathbf{t}_1$: crack propagation direction (tangent to crack front)
+- $\mathbf{t}_2$: in-crack-plane direction perpendicular to propagation
+- $\mathbf{n}$: crack opening direction (normal to crack plane)
 
-With $p = 2$:
+**Construction from physical crack geometry** (`from_crack_tip`):
 
-$$r_{\text{phys}} = R\left(\frac{\xi_2+1}{2}\right)^2, \qquad \sqrt{r_{\text{phys}}} = \sqrt{R}\,\frac{\xi_2+1}{2} \;\;(\text{linear in } \xi_2).$$
+Given the crack direction $\hat{\mathbf{d}}$ and opening direction $\hat{\mathbf{o}}$:
 
-The Williams displacement $\mathbf{u} \sim K_I \sqrt{r}$ becomes **linear** in $\xi_2$, which P1 elements capture exactly.
+$$\mathbf{t}_1 = \frac{\hat{\mathbf{d}}}{\|\hat{\mathbf{d}}\|}, \qquad \mathbf{n} = \frac{\hat{\mathbf{o}}}{\|\hat{\mathbf{o}}\|}, \qquad \mathbf{t}_2 = \mathbf{n} \times \mathbf{t}_1.$$
 
-### 9.4 Jacobian
+The right-hand rule ensures a consistent orientation across all benchmark geometries.
 
-The Jacobian has a block-diagonal structure:
+**Construction from TopologyEvent** (`from_spawned_pair`):
 
-$$\mathbf{J} = \begin{bmatrix} s\,\mathbf{t}_1 & s\,\mathbf{t}_2 & \frac{\mathrm{d}r}{\mathrm{d}\xi_2}\,\mathbf{n} \end{bmatrix}, \qquad \frac{\mathrm{d}r}{\mathrm{d}\xi_2} = \frac{R\, p\, t^{p-1}}{2}.$$
+When the ChartSpawner creates a `SpawnedChartPair` from a topology event, the frame is stored as a $3\times 3$ matrix with rows $[\mathbf{t}_1, \mathbf{t}_2, \mathbf{n}]$. The CrackTipDecoder reads this directly:
 
-At the crack tip ($\xi_2 = -1$, $t = 0.01$): $\mathrm{d}r/\mathrm{d}\xi_2 \to 0$, concentrating the mesh.
+$$\text{center} = \mathbf{s}_{\pm}, \qquad \text{normal} = \text{frame}[2,:], \qquad \text{tangent}_1 = \text{frame}[0,:], \qquad \text{tangent}_2 = \text{frame}[1,:].$$
 
-### 9.5 Comparison with XFEM
+### 9.3 Coordinate Mapping
 
-| Aspect | XFEM | CrackTipDecoder |
-|--------|------|-----------------|
-| Enrichment | Basis function augmentation | Coordinate mapping |
-| Extra DOFs | Yes | No |
-| Element formulation | Modified | Standard P1/P2 |
-| Singularity capture | Explicit $\sqrt{r}$ functions | Absorbed in coordinates ($r \sim \xi^2$) |
-| Coupling to bulk | Blending elements | Schwarz DD boundary exchange |
-| Dynamic spawning | Not standard | Automatic via TopologyMonitor |
+The decoder maps reference coordinates $\boldsymbol{\xi} \in [-1,1]^3$ to physical space in three components:
+
+**In-plane mapping** (linear, along crack face):
+
+$$d_1 = s \cdot \xi_0, \qquad d_2 = s \cdot \xi_1,$$
+
+where $s$ is the in-plane scale (default $s = R$, the support radius). These produce a uniform grid on the crack face.
+
+**Radial mapping** (power law, perpendicular to crack face):
+
+$$t = \text{clamp}\!\left(\frac{\xi_2 + 1}{2},\;\; t_{\min},\;\; 1\right), \qquad r_{\text{phys}} = R \cdot t^p,$$
+
+where $R$ is the support radius, $p$ is the power exponent (default $p = 2$), and $t_{\min} = 0.01$ prevents the singular Jacobian at the exact tip.
+
+**Composite physical position:**
+
+$$\varphi(\boldsymbol{\xi}) = \mathbf{c} + d_1\,\mathbf{t}_1 + d_2\,\mathbf{t}_2 + r_{\text{phys}}\,\mathbf{n}.$$
+
+**Closed-form inverse** (physical $\to$ reference):
+
+$$\xi_0 = \frac{\langle\mathbf{x} - \mathbf{c},\, \mathbf{t}_1\rangle}{s}, \qquad \xi_1 = \frac{\langle\mathbf{x} - \mathbf{c},\, \mathbf{t}_2\rangle}{s}, \qquad \xi_2 = 2\left(\frac{r}{R}\right)^{1/p} - 1,$$
+
+where $r = \max(\langle\mathbf{x} - \mathbf{c},\, \mathbf{n}\rangle,\, 0)$.
+
+### 9.4 Singularity Absorption Mechanism
+
+The key insight: with $p = 2$, the radial mapping converts the square-root singularity into a polynomial:
+
+$$r_{\text{phys}} = R\left(\frac{\xi_2+1}{2}\right)^2 \implies \sqrt{r_{\text{phys}}} = \sqrt{R}\,\frac{\xi_2+1}{2}.$$
+
+The Williams displacement field in physical space is
+
+$$u_y(r, \theta) = \frac{K_I}{2\mu}\sqrt{\frac{r}{2\pi}}\,S(\theta) \sim K_I\, \sqrt{r},$$
+
+which under the mapping becomes
+
+$$u_y(\xi_2, \theta) = \frac{K_I}{2\mu}\sqrt{\frac{R}{2\pi}}\,\frac{\xi_2+1}{2}\,S(\theta) \sim K_I\, \xi_2.$$
+
+This is **linear in $\xi_2$** — exactly representable by P1 elements with zero interpolation error.
+
+**Convergence rates in reference space:**
+
+| Physical singularity | Exponent $p$ | Reference-space regularity | P1 rate | P2 rate |
+|---------------------|:---:|---|:---:|:---:|
+| $r^{1/2}$ (Mode I) | 2 | $C^\infty$ (linear in $\xi$) | $O(h)$ | $O(h^2)$ |
+| $r^{1/3}$ (wedge) | 3 | $C^\infty$ (linear in $\xi$) | $O(h)$ | $O(h^2)$ |
+| $r^{1/n}$ (general) | $n$ | $C^\infty$ (linear in $\xi$) | $O(h)$ | $O(h^2)$ |
+
+The general principle: for a physical field with singularity $r^\alpha$, choosing $p = 1/\alpha$ makes the field linear in reference coordinates.
+
+### 9.5 Jacobian and Mesh Concentration
+
+The decoder Jacobian has a block-diagonal structure reflecting the decoupled in-plane and radial components:
+
+$$\mathbf{J} = \frac{\partial \mathbf{x}}{\partial \boldsymbol{\xi}} = \begin{bmatrix} s\,\mathbf{t}_1 & s\,\mathbf{t}_2 & \dfrac{\mathrm{d}r}{\mathrm{d}\xi_2}\,\mathbf{n} \end{bmatrix} \in \mathbb{R}^{3\times 3},$$
+
+where the radial derivative is
+
+$$\frac{\mathrm{d}r}{\mathrm{d}\xi_2} = \frac{R\, p}{2}\left(\frac{\xi_2+1}{2}\right)^{p-1}.$$
+
+**Key properties:**
+
+1. **Determinant:**
+$$\det \mathbf{J} = s^2 \cdot \frac{\mathrm{d}r}{\mathrm{d}\xi_2} = \frac{s^2\, R\, p}{2}\left(\frac{\xi_2+1}{2}\right)^{p-1}.$$
+At the tip ($\xi_2 \to -1$): $\det \mathbf{J} \to 0$, meaning the physical volume element shrinks — the mesh concentrates automatically near the tip.
+
+2. **Condition number:** The Jacobian is exactly diagonal in the crack frame, so the condition number is $\kappa(\mathbf{J}) = s / (\mathrm{d}r/\mathrm{d}\xi_2)$. At $\xi_2 = -1$: $\kappa \to \infty$ (singular), but the $t_{\min} = 0.01$ clamp bounds it at $\kappa \leq s \cdot 2 / (R\, p\, t_{\min}^{p-1})$.
+
+3. **Physical mesh spacing:** The spacing between adjacent nodes in the radial direction is
+$$\Delta r = R \cdot p\, t^{p-1} \cdot \Delta\xi / 2.$$
+With $p = 2$, $n_{\text{cells}} = 8$, $\Delta\xi = 2/8 = 0.25$: the innermost ring has $\Delta r = R \cdot 2 \cdot 0.01 \cdot 0.125 = 0.0025\,R$, while the outermost has $\Delta r = R \cdot 2 \cdot 1.0 \cdot 0.125 = 0.25\,R$ — a 100:1 grading ratio achieved automatically.
+
+### 9.6 Inverse Mapping and Barycentric Interpolation
+
+The closed-form inverse enables efficient inter-chart interpolation in the Robin DD solver. When chart $j$ needs the displacement from chart $i$ at a boundary point $\mathbf{x}$:
+
+1. Compute $\boldsymbol{\xi} = \varphi_i^{-1}(\mathbf{x})$ via the closed-form inverse (Section 9.3).
+2. Find the containing tet in chart $i$'s reference mesh.
+3. Compute barycentric coordinates and interpolate: $\mathbf{u}(\mathbf{x}) = \sum_a N_a(\boldsymbol{\xi})\, \mathbf{u}_a$.
+
+The closed-form inverse avoids Newton iteration, making the interpolation both fast and robust even near the singular tip.
+
+### 9.7 Integration with Chart Spawning
+
+When the TopologyMonitor detects a new $H_1$ feature (crack), the ChartSpawner:
+1. Localizes the feature center $\mathbf{c}$ and normal $\mathbf{n}$ from the SDF gradient.
+2. Creates a `SpawnedChartPair` with seeds at $\mathbf{c} \pm (r/2)\,\mathbf{n}$.
+3. The CrackTipDecoder is constructed via `from_spawned_pair()`, reading the frame directly.
+4. The persistence lifetime drives the chart's $n_{\text{cells}}$ (Section 12.7).
+
+This automatic pipeline — topology detection $\to$ feature localization $\to$ singularity-absorbing chart — is unique to this framework and has no analog in XFEM or phase-field methods.
+
+### 9.8 Comparison with Alternative Enrichment Strategies
+
+| Aspect | XFEM | Phase-Field ($\ell$) | CrackTipDecoder |
+|--------|------|---------------------|-----------------|
+| **Enrichment type** | Basis augmentation $\sqrt{r}\,g(\theta)$ | Regularization ($\ell > 0$) | Coordinate mapping ($r \sim \xi^p$) |
+| **Extra DOFs** | Yes (4 per enriched node) | No (but needs fine $\ell$-mesh) | No |
+| **Element formulation** | Modified (PU blending) | Standard | Standard P1/P2 |
+| **Singularity resolved?** | Yes (exactly) | No (smeared over $\ell$) | Yes (absorbed) |
+| **Coupling to bulk** | Blending elements | Continuous field | Schwarz DD boundary exchange |
+| **Dynamic spawning** | Not standard | Not needed (diffuse) | Automatic via TopologyMonitor |
+| **Multi-physics** | Complex enrichment design | Generic | Generic (any constitutive model) |
+| **Implementation** | ~1000 lines of special code | ~100 lines (penalty term) | ~200 lines (decoder class) |
+
+**Key advantage of the CrackTipDecoder**: it achieves singularity resolution without modifying the element formulation, tangent assembly, or solution procedure. The same `ChartVectorFEMSolver` code works for bulk charts (BoxDecoder) and crack-tip charts (CrackTipDecoder) — only the coordinate mapping differs.
 
 ---
 
