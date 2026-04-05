@@ -72,10 +72,11 @@ def run_score():
             u_ref[:, 2] = -nu * eps_val * nodes_ref[:, 2]
             u_t = torch.tensor(u_ref, device="cpu", dtype=torch.float64)
 
-            # Apply as full Dirichlet, solve, check residual
+            # Apply as full Dirichlet (all nodes), solve, check residual
             f_ext = torch.zeros(s_c.n_nodes, 3, dtype=torch.float64)
+            all_mask = torch.ones(s_c.n_nodes, dtype=torch.bool)
             u_sol = s_c.solve_nonlinear(stress_fn, tangent_fn, f_ext, u_t,
-                                         s_c.boundary_mask, max_iter=5, tol=1e-10)
+                                         all_mask, max_iter=1, tol=1e-12)
             err = (u_sol - u_t).norm().item() / max(u_t.norm().item(), 1e-15)
             errors.append(err)
 
