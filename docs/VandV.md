@@ -1,7 +1,5 @@
 # Verification & Validation Exercises by Phase
 
-> **Note:** The canonical version of this document is at [docs/VandV.md](../../docs/VandV.md).
-
 Companion to [PLAN.md](PLAN.md). Each phase after Phase 0 defines one or two
 concrete V&V exercises. A phase is complete only when every exercise passes.
 

@@ -1,7 +1,5 @@
 # Nine Circles of Elastic Brittle Fracture
 
-> **Note:** The canonical version of this document is at [docs/nine_circles.md](../docs/nine_circles.md).
-
 Implementation and validation of the neural atlas chart-based FEM against all nine challenge problems from **Kamarei, Zeng, Dolbow & Lopez-Pamies (2026)**, *CMAME* 448, 118449.
 
 **Reference:** "Nine circles of elastic brittle fracture: A series of challenge problems to assess fracture models"
