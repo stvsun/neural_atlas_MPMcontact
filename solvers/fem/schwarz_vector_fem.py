@@ -186,6 +186,12 @@ class SchwarzVectorFEMSolver:
         reference coordinates (using decoder.inverse() for analytical decoders,
         or invert_decoder() for neural decoders), then interpolate from the
         neighbor's solution via nearest-node lookup.
+
+        Crack-face discontinuity handling:
+        If a crack SDF is available, nodes on opposite sides of the crack face
+        are identified and their interpolation is restricted to same-side
+        neighbors only. This prevents averaging across the displacement
+        discontinuity (Heaviside-like enrichment effect).
         """
         art_indices = torch.where(art_mask)[0]
         if len(art_indices) == 0:
@@ -228,6 +234,23 @@ class SchwarzVectorFEMSolver:
 
             if not in_mesh.any():
                 continue
+
+            # Crack-face discontinuity check: if the SDF oracle indicates
+            # that chart i and chart j nodes are on opposite sides of a crack
+            # surface, skip interpolation to preserve the displacement jump.
+            # This implements a Heaviside-like enrichment effect without
+            # explicit enrichment functions.
+            crack_sdf_oracle = getattr(self, 'crack_sdf_oracle', None)
+            if crack_sdf_oracle is not None:
+                with torch.no_grad():
+                    sdf_art = crack_sdf_oracle.sdf(art_nodes_phys)
+                    # Get SDF at chart j's center for side determination
+                    sdf_j_center = crack_sdf_oracle.sdf(
+                        self.seeds[j:j+1].to(art_nodes_phys.dtype)
+                    )
+                    # Skip nodes on opposite side of the crack from chart j
+                    same_side = (sdf_art * sdf_j_center.squeeze()) >= 0
+                    in_mesh = in_mesh & same_side
 
             # Barycentric tet interpolation from chart j's solution
             in_idx = torch.where(in_mesh)[0]

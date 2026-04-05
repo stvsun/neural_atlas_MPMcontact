@@ -126,7 +126,7 @@ def run_score():
             neighbors=[[1,2],[0,2],[0,1]], parallel=False,
         )
         u_charts8 = schwarz.solve(stress_fn8, tangent_fn8, bc_fn8,
-                                   max_schwarz_iters=25, tol=1e-2, relaxation=0.5)
+                                   max_schwarz_iters=30, tol=5e-3, relaxation=0.7)
 
         ok = all(u is not None for u in u_charts8)
         checks.append({"id": "C8.5", "name": f"Chart FEM on DCB bar ({sum(s.n_nodes for s in solvers8)} nodes)",
