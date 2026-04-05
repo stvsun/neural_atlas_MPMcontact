@@ -73,11 +73,11 @@ def run_score():
     except Exception as e:
         checks.append({"id": "C8.4", "name": "K_Ic", "pass": False, "pts": 0, "max": 10, "error": str(e)})
 
-    # C8.5: Chart FEM solve on DCB bar
+    # C8.5: Chart FEM solve on DCB bar (Multiplicative Schwarz — proper Dirichlet transfer)
     try:
         import torch
         from solvers.fem.chart_vector_fem import ChartVectorFEMSolver
-        from solvers.fem.robin_schwarz import RobinSchwarzSolver
+        from solvers.fem.schwarz_vector_fem import SchwarzVectorFEMSolver
         from solvers.fem.linear_elastic import make_linear_elastic_small_strain
         from solvers.fem.analytic_decoders import BoxDecoder, CrackTipDecoder
         from solvers.fem.k_extraction import extract_K_from_charts
@@ -97,7 +97,7 @@ def run_score():
                                     device="cpu", dtype=torch.float64)
         tip_x = -W_half + A
         crack_dec = CrackTipDecoder.from_crack_tip([tip_x, 0, 0], [1,0,0], [0,1,0], radius=5.0).double()
-        s_c = ChartVectorFEMSolver(n_cells=12, support_r=1.0, chart_decoder=crack_dec,
+        s_c = ChartVectorFEMSolver(n_cells=14, support_r=1.0, chart_decoder=crack_dec,
                                     decoder_kwargs={}, sdf_oracle=sdf, sdf_threshold=-0.01,
                                     device="cpu", dtype=torch.float64)
 
@@ -121,10 +121,12 @@ def run_score():
             m[bot_pin] = True; u[bot_pin, 1] = -delta
             return u, m
 
-        robin = RobinSchwarzSolver(chart_solvers=solvers8, seeds=seeds8, decoders=decoders8,
-                                    neighbors=[[1,2],[0,2],[0,1]], robin_delta=E*0.5,
-                                    relaxation=0.4, parallel=True)
-        u_charts8 = robin.solve(stress_fn8, tangent_fn8, bc_fn8, max_iters=25, tol=1e-1)
+        schwarz = SchwarzVectorFEMSolver(
+            chart_solvers=solvers8, seeds=seeds8, decoders=decoders8,
+            neighbors=[[1,2],[0,2],[0,1]], parallel=False,
+        )
+        u_charts8 = schwarz.solve(stress_fn8, tangent_fn8, bc_fn8,
+                                   max_schwarz_iters=25, tol=1e-2, relaxation=0.5)
 
         ok = all(u is not None for u in u_charts8)
         checks.append({"id": "C8.5", "name": f"Chart FEM on DCB bar ({sum(s.n_nodes for s in solvers8)} nodes)",

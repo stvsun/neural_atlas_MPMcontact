@@ -128,6 +128,22 @@ class BoxDecoder(torch.nn.Module):
     def forward(self, xi, **kwargs):
         return self.center.unsqueeze(0) + xi * self.half_extents.unsqueeze(0)
 
+    def inverse(self, x, **kwargs):
+        """Map physical x -> reference xi: xi = (x - center) / half_extents."""
+        c = self.center.to(x.device, x.dtype).unsqueeze(0)
+        he = self.half_extents.to(x.device, x.dtype).unsqueeze(0)
+        return (x - c) / he
+
+    def jacobian(self, xi, **kwargs):
+        """Constant Jacobian: diag(half_extents)."""
+        n = xi.shape[0]
+        J = torch.zeros(n, 3, 3, device=xi.device, dtype=xi.dtype)
+        he = self.half_extents.to(xi.device, xi.dtype)
+        J[:, 0, 0] = he[0]
+        J[:, 1, 1] = he[1]
+        J[:, 2, 2] = he[2]
+        return J
+
 
 class CylinderDecoder(torch.nn.Module):
     """Maps [-1,1]^3 to a solid cylinder sector.
