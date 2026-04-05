@@ -201,3 +201,45 @@ improvement from unphysical to 26% of analytical. Remaining error is likely mesh
 ### NEXT PRIORITY
 Fix G1 patch test to work with non-affine decoders (apply in reference space).
 This will unlock 10 pts per challenge for C3, C4, C5, C6, C8 = 50 pts total Stage 2 gain.
+
+## Reflexion Trial 1: 2026-04-05 17:28
+
+### Actor Plan
+Trial 1 action (see journal)
+
+### Evaluator Scores
+| Stage | Before | After | Delta |
+|-------|--------|-------|-------|
+| S1 | 97.2% | 97.2% | +0.0% |
+| S2 | 98.5% | 98.5% | +0.0% |
+| S3 | 59.6% | 59.6% | +0.0% |
+
+### Self-Reflection
+**Trial 1 outcome: no change**
+
+Scores: S1=97.2%, S2=98.5%, S3=59.6%
+
+Delta: S1=+0.0%, S2=+0.0%, S3=+0.0%
+
+*(Fill in: I attempted X because Y. Result was Z. This succeeded/failed because [...]. Next trial I should [...])*
+
+## Reflexion Trial 1: 2026-04-05 17:32
+
+### Actor Plan
+Trial 1 action (see journal)
+
+### Evaluator Scores
+| Stage | Before | After | Delta |
+|-------|--------|-------|-------|
+| S1 | 97.2% | 97.2% | +0.0% |
+| S2 | 98.5% | 98.5% | +0.0% |
+| S3 | 59.6% | 59.6% | +0.0% |
+
+### Self-Reflection
+**Trial 1 outcome: no change**
+
+Scores: S1=97.2%, S2=98.5%, S3=59.6%
+
+Delta: S1=+0.0%, S2=+0.0%, S3=+0.0%
+
+*(Fill in: I attempted X because Y. Result was Z. This succeeded/failed because [...]. Next trial I should [...])*

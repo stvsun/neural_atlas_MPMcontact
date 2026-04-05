@@ -143,10 +143,21 @@ def run_score():
     # --- X9: K_I accuracy vs XFEM (10 pts) ---
     try:
         from solvers.fem.k_extraction import extract_K_from_fem
-        K_I_extracted = extract_K_from_fem(
-            solver, u_sol, crack_tip, crack_dir, opening_dir,
-            E, nu, plane_strain=True,
-        )
+        from solvers.fem.j_integral import extract_K_via_J_integral
+        # Try J-integral first (more robust), fallback to displacement correlation
+        K_I_extracted = float('nan')
+        try:
+            K_I_extracted = extract_K_via_J_integral(
+                [solver], [u_sol], crack_tip, crack_dir, opening_dir,
+                stress_fn, E, nu, plane_strain=True,
+            )
+        except Exception:
+            pass
+        if math.isnan(K_I_extracted) or K_I_extracted <= 0:
+            K_I_extracted = extract_K_from_fem(
+                solver, u_sol, crack_tip, crack_dir, opening_dir,
+                E, nu, plane_strain=True,
+            )
         res = test_ki_accuracy_vs_xfem(K_I_extracted, K_Ic)
         for c in res["checks"]:
             c["id"] = c.get("id", "X9")
