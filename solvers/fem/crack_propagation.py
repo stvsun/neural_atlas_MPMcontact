@@ -119,7 +119,41 @@ def propagate_crack(
                 'n_steps': step + 1,
             }
 
-        # Advance crack
+        # Compute propagation angle via max hoop stress criterion
+        # (Erdogan & Sih 1963). For pure Mode I, theta_c = 0 (straight).
+        # For mixed-mode, crack kinks toward max tangential stress.
+        from solvers.fracture_criteria import max_hoop_stress_angle
+        K_II = 0.0  # TODO: extract K_II via interaction integral
+        theta_c = max_hoop_stress_angle(K_I, K_II)
+
+        # Rotate crack_direction by theta_c around out-of-plane axis
+        # (enables curved crack paths when K_II != 0)
+        if abs(theta_c) > 1e-10:
+            out_of_plane = np.cross(crack_direction, opening_direction)
+            out_of_plane = out_of_plane / np.linalg.norm(out_of_plane)
+            cos_t = math.cos(theta_c)
+            sin_t = math.sin(theta_c)
+            # Rodrigues rotation formula
+            crack_direction = (cos_t * crack_direction
+                               + sin_t * np.cross(out_of_plane, crack_direction)
+                               + (1 - cos_t) * np.dot(out_of_plane, crack_direction) * out_of_plane)
+            crack_direction = crack_direction / np.linalg.norm(crack_direction)
+            # Update opening direction to stay perpendicular
+            opening_direction = np.cross(out_of_plane, crack_direction)
+            opening_direction = opening_direction / np.linalg.norm(opening_direction)
+
+            if verbose:
+                print(f"  [Propagation] kink angle theta_c={math.degrees(theta_c):.1f} deg")
+
+        # Check for potential crack branching (Ramulu & Kobayashi 1985):
+        # branching occurs when K_I exceeds ~1.5 * K_Ic in dynamic fracture.
+        # For quasi-static, flag when K_I >> K_Ic as a branching warning.
+        branch_ratio = abs(K_I) / K_Ic if K_Ic > 0 else 0
+        if branch_ratio > 2.0 and verbose:
+            print(f"  [Propagation] WARNING: K_I/K_Ic={branch_ratio:.1f} — "
+                  f"potential branching instability")
+
+        # Advance crack along (possibly rotated) direction
         a += da
         a_history.append(a)
 
