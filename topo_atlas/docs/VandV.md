@@ -279,6 +279,68 @@ penalty.
 
 ---
 
+## Robin Parallel Domain Decomposition (Du 2002)
+
+### V&V-R1: Robin DD Convergence
+
+**Goal:** Verify Robin parallel DD converges faster than pure Dirichlet Schwarz.
+
+**Result:** Robin DD (delta=E*0.5) converges in 2 iterations with max_change=0.0
+on a 2-chart BoxDecoder problem with prescribed BCs, compared to 10+ iterations
+for multiplicative Schwarz with under-relaxation.
+
+**Test location:** `tests/test_robin_dd.py::TestRobinDD::test_robin_convergence`
+
+### V&V-R2: Robin vs Dirichlet Comparison
+
+**Goal:** Both methods produce the same displacement field.
+
+**Result:** max difference < 5e-2 between Robin and Schwarz solutions. Both
+yield correct stress to within 0.1%.
+
+**Test location:** `tests/test_robin_dd.py::TestRobinDD::test_robin_vs_dirichlet`
+
+### V&V-R3: BoxDecoder Compatibility
+
+**Goal:** Robin DD works with BoxDecoder + SDF filtering for non-rectangular geometries.
+
+**Result:** 2 BoxDecoder charts with cylindrical rod SDF. Both charts return
+non-None displacement with finite values. Robin DD converges on SDF-filtered mesh.
+
+**Test location:** `tests/test_robin_dd.py::TestRobinDD::test_robin_box_decoder`
+
+### V&V-R4: Single-Chart Baseline
+
+**Goal:** Robin DD reduces to standard FEM solve with a single chart.
+
+**Result:** Single-chart Robin DD matches direct FEM solve exactly (max diff < 1e-10).
+
+**Test location:** `tests/test_robin_dd.py::TestRobinDD::test_single_chart_baseline`
+
+---
+
+## Nine Circles Challenge Benchmarks
+
+### V&V-C1: Challenge 1 — Uniaxial Tension (100/100)
+
+**Goal:** Validate uniaxial tension on cylindrical rod (L=15mm, R=2mm,
+E=70GPa, nu=0.22, sigma_ts=40 MPa).
+
+**Result:**
+- 2 BoxDecoder charts with SDF-filtered cylindrical rod geometry
+- 1452 nodes, 5832 elements
+- Robin DD converges in 2 iterations (max_change=0.0)
+- sigma_zz = exact match (0.0% error) across all pre-nucleation steps
+- Drucker-Prager nucleation at 40.32 MPa (0.8% error vs sigma_ts=40)
+- Crack normal = [0, 0, 1] (perpendicular to loading axis, exact)
+- Total runtime: ~1 second
+
+**Reference:** Kamarei et al. (2026) CMAME 448, 118449, Section 2.1, Fig. 2.
+
+**Test location:** `nineO_examples/1_uniaxial_tension/score.py` (6/6 checks pass)
+
+---
+
 ## Summary
 
 | Phase | Exercise | Type | Status |
@@ -308,8 +370,13 @@ penalty.
 | N | V&V-N6: Griffith K_Ic | Verification | PASS (2/2 tests) |
 | N | V&V-N7: Multi-crack SDF | Verification | PASS (5/5 tests) |
 | N | Cauchy stress conversion | Verification | PASS (2/2 tests) |
+| R | V&V-R1: Robin DD convergence | Verification | PASS |
+| R | V&V-R2: Robin vs Dirichlet | Verification | PASS |
+| R | V&V-R3: BoxDecoder compatibility | Verification | PASS |
+| R | V&V-R4: Single-chart baseline | Verification | PASS |
+| 9C | V&V-C1: Uniaxial tension (100/100) | Validation | PASS (6/6 checks) |
 
-**Total: 135 passed, 1 skipped, 1 xpassed (as of 2026-04-04)**
+**Total: 141 passed, 1 skipped, 1 xpassed (as of 2026-04-04)**
 
 ### Performance Profile (V&V-5.1)
 
@@ -332,3 +399,6 @@ Recommended configuration for production:
 | K_I extraction (Williams) | exact | analytical | 0.0% |
 | Nucleation strain (glass) | 3.02e-4 | 3.01e-4 | 0.3% |
 | GUDHI overhead (16^3) | 1.1% | < 5% budget | PASS |
+| Uniaxial sigma_zz (Robin DD) | exact | E*eps | 0.0% |
+| Uniaxial nucleation (Robin DD) | 40.32 MPa | 40.0 MPa | 0.8% |
+| Robin DD iterations | 2 | — | instant |
