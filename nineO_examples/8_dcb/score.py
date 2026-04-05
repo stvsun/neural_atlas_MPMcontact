@@ -151,9 +151,22 @@ def run_score():
         checks.append({"id": "C8.6", "name": "FEM K_I vs beam theory", "pass": False, "pts": 0,
                         "max": 20, "error": str(e)})
 
-    # C8.7: Stable crack growth (requires propagation driver)
-    checks.append({"id": "C8.7", "name": "Stable crack growth", "pass": False, "pts": 0, "max": 10,
-                    "note": "Requires crack propagation driver"})
+    # C8.7: Stable crack growth — force decreases with crack extension
+    try:
+        from solvers.fem.crack_propagation import dcb_propagation
+        prop = dcb_propagation(E=E, nu=nu, Gc=Gc, L=L, H=H, B=B,
+                                a_initial=A, da=2.0, delta_factor=1.5,
+                                max_steps=8, verbose=False)
+        # Check force decreases (stable): F_crit ~ 1/a, so F should decrease
+        F_arr = prop['force']
+        stable = all(F_arr[i] >= F_arr[i+1] for i in range(len(F_arr)-1))
+        ok = stable and len(F_arr) > 2
+        checks.append({"id": "C8.7", "name": f"Stable growth ({len(F_arr)} steps, F_dec={stable})",
+                        "pass": ok, "pts": 10 if ok else 0, "max": 10})
+        total += 10 if ok else 0
+    except Exception as e:
+        checks.append({"id": "C8.7", "name": "Stable crack growth", "pass": False, "pts": 0,
+                        "max": 10, "error": str(e)})
 
     score = total
     status = "PASS" if score >= 80 else ("PARTIAL" if score > 0 else "NOT_IMPLEMENTED")
