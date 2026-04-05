@@ -153,13 +153,13 @@ class SDFEnrichedDecoder(torch.nn.Module):
         torch.nn.init.zeros_(self.enrichment_net.out.weight)
         torch.nn.init.zeros_(self.enrichment_net.out.bias)
 
-        # Learnable enrichment amplitude (starts at 0)
-        self.raw_amplitude = torch.nn.Parameter(torch.tensor(-5.0, dtype=torch.float64))
+        # Learnable enrichment amplitude (starts small but not tiny)
+        self.raw_amplitude = torch.nn.Parameter(torch.tensor(0.0, dtype=torch.float64))
 
     @property
     def amplitude(self) -> torch.Tensor:
-        """Current enrichment amplitude (sigmoid-bounded to [0, 0.5])."""
-        return 0.5 * torch.sigmoid(self.raw_amplitude)
+        """Current enrichment amplitude (softplus, unbounded but smooth)."""
+        return torch.nn.functional.softplus(self.raw_amplitude)
 
     def forward(self, xi: torch.Tensor, **kwargs) -> torch.Tensor:
         """Forward pass: base decoder + SDF enrichment.
