@@ -376,12 +376,53 @@ class ChartVectorFEMSolver:
         return self.compute_F_phys(u) if physical else self.compute_F_ref(u)
 
     # ------------------------------------------------------------------
+    # F-bar method for volumetric locking prevention
+    # ------------------------------------------------------------------
+    def compute_F_bar(self, u: torch.Tensor, physical: Optional[bool] = None) -> torch.Tensor:
+        """F-bar method: smooth the volumetric part of F over node patches.
+
+        For near-incompressible materials (nu -> 0.5), standard P1 tets over-
+        constrain the volumetric response. The F-bar method (de Souza Neto 1996)
+        replaces element F with F_bar = (J_bar/J)^{1/3} * F where J_bar is
+        volume-weighted average of det(F) over the node patch.
+
+        Returns
+        -------
+        F_bar : torch.Tensor, shape (M, 3, 3)
+        """
+        F = self.compute_F(u, physical)           # (M, 3, 3)
+        J = torch.det(F)                           # (M,)
+        J = torch.clamp(J, min=1e-8)
+
+        elements = self.elements                    # (M, 4) long
+        vol = self.vol                              # (M,)
+
+        # Volume-weighted J averaging over node patches
+        J_node_sum = torch.zeros(self.n_nodes, device=self.device, dtype=self.dtype)
+        vol_node_sum = torch.zeros(self.n_nodes, device=self.device, dtype=self.dtype)
+
+        vJ = vol * J  # (M,)
+        for a in range(4):
+            J_node_sum.scatter_add_(0, elements[:, a], vJ)
+            vol_node_sum.scatter_add_(0, elements[:, a], vol)
+
+        J_bar_node = J_node_sum / vol_node_sum.clamp(min=1e-15)  # (N,)
+
+        # Element J_bar = mean of its 4 nodal J_bar values
+        J_bar = torch.mean(J_bar_node[elements].float(), dim=1).to(self.dtype)  # (M,)
+
+        # Scale: F_bar = (J_bar / J)^{1/3} * F
+        scale = (J_bar / J).pow(1.0 / 3.0)       # (M,)
+        return F * scale.unsqueeze(-1).unsqueeze(-1)
+
+    # ------------------------------------------------------------------
     # Internal force vector
     # ------------------------------------------------------------------
     def internal_forces(
         self,
         u: torch.Tensor,
         stress_fn: Callable[[torch.Tensor], torch.Tensor],
+        use_fbar: bool = False,
     ) -> torch.Tensor:
         """Compute internal force vector from current displacement.
 
@@ -397,7 +438,7 @@ class ChartVectorFEMSolver:
         f_int : torch.Tensor, shape (N, 3)
             Internal force vector (assembled).
         """
-        F = self.compute_F(u)  # (M, 3, 3)
+        F = self.compute_F_bar(u) if use_fbar else self.compute_F(u)  # (M, 3, 3)
         P = stress_fn(F)       # (M, 3, 3)
 
         # Element force contribution: f_e[a, i] = vol_e * sum_j P[e, i, j] * dNdx[e, a, j]
@@ -420,6 +461,7 @@ class ChartVectorFEMSolver:
         self,
         u: torch.Tensor,
         tangent_fn: Callable[[torch.Tensor], torch.Tensor],
+        use_fbar: bool = False,
     ) -> torch.Tensor:
         """Compute assembled tangent stiffness matrix (dense).
 
@@ -436,7 +478,7 @@ class ChartVectorFEMSolver:
         K : torch.Tensor, shape (3N, 3N)
             Global tangent stiffness matrix (dense).
         """
-        F = self.compute_F(u)  # (M, 3, 3)
+        F = self.compute_F_bar(u) if use_fbar else self.compute_F(u)  # (M, 3, 3)
         C = tangent_fn(F)      # (M, 9, 9)
 
         n_dof = 3 * self.n_nodes
@@ -493,6 +535,7 @@ class ChartVectorFEMSolver:
         u_init: Optional[torch.Tensor] = None,
         max_iter: int = 20,
         tol: float = 1e-8,
+        use_fbar: bool = False,
     ) -> torch.Tensor:
         """Newton-Raphson iteration for nonlinear equilibrium R(u) = f_int - f_ext = 0.
 
@@ -514,6 +557,8 @@ class ChartVectorFEMSolver:
             Maximum Newton iterations.
         tol : float
             Convergence tolerance on residual norm.
+        use_fbar : bool
+            Use F-bar volumetric averaging for near-incompressible materials.
 
         Returns
         -------
@@ -533,7 +578,7 @@ class ChartVectorFEMSolver:
         free_dof = ~bc_mask_dof
 
         def residual_vector(u_cur: torch.Tensor) -> torch.Tensor:
-            f_int = self.internal_forces(u_cur, stress_fn)
+            f_int = self.internal_forces(u_cur, stress_fn, use_fbar=use_fbar)
             R_cur = (f_int - f_ext).reshape(-1)
             R_cur[bc_mask_dof] = 0.0
             return R_cur
@@ -552,7 +597,7 @@ class ChartVectorFEMSolver:
                 break
 
             # Tangent stiffness
-            K = self.tangent_stiffness(u, tangent_fn)  # (3N, 3N)
+            K = self.tangent_stiffness(u, tangent_fn, use_fbar=use_fbar)  # (3N, 3N)
 
             # Apply Dirichlet BCs to tangent system: K[bc,:] = I[bc,:], R[bc] = 0
             K[bc_mask_dof, :] = 0.0

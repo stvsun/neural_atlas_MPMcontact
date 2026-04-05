@@ -5,7 +5,7 @@ Geometry: Circular disk D=10mm, variable thickness 1.0-1.7mm
 Loading: Vertical pull (hydrostatic tension at center)
 Material: PU elastomer (mu=0.52MPa, Lambda=85.77MPa)
 Charts: 1 BoxDecoder bulk + 1 CrackTipDecoder at center
-Note: Uses linear elastic as approximation (full solution needs Neo-Hookean + mixed u-p)
+Material model: Neo-Hookean hyperelastic (compressible formulation)
 """
 import os, sys, time
 import numpy as np
@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from solvers.fem.chart_vector_fem import ChartVectorFEMSolver
 from solvers.fem.robin_schwarz import RobinSchwarzSolver
-from solvers.fem.linear_elastic import make_linear_elastic_small_strain
 from solvers.fem.analytic_decoders import BoxDecoder, CrackTipDecoder
 from solvers.fracture_criteria import drucker_prager_F
 
@@ -25,7 +24,7 @@ os.makedirs(OUT_VTU, exist_ok=True)
 
 
 def run():
-    # PU elastomer (approximate as linear elastic for small strain)
+    # PU elastomer — Neo-Hookean hyperelastic
     mu = 0.52; lam = 85.77
     E = mu * (3*lam + 2*mu) / (lam + mu)  # ~1.56 MPa
     nu = lam / (2*(lam + mu))  # ~0.4997
@@ -75,9 +74,10 @@ def run():
     total_nodes = sum(s.n_nodes for s in solvers)
     print(f"  Charts: 2 (1 Box + 1 CrackTip), {total_nodes} nodes")
     print(f"  E={E:.2f} MPa, nu={nu:.4f}")
-    print(f"  NOTE: Using linear elastic (full solution needs Neo-Hookean + mixed u-p)")
-
-    stress_fn, tangent_fn = make_linear_elastic_small_strain(E, nu)
+    # Neo-Hookean hyperelastic model (finite-strain capable)
+    K_bulk = lam + 2*mu/3  # bulk modulus
+    stress_fn, tangent_fn = solvers[0].make_neo_hookean(mu, K_bulk)
+    print(f"  Neo-Hookean: mu={mu}, K={K_bulk:.3f} MPa")
 
     # ── Loading: vertical pull ──
     n_steps = 15; delta_max = 0.1  # mm
