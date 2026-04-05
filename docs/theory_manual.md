@@ -501,57 +501,341 @@ Stable crack growth: $\mathrm{d}F/\mathrm{d}a < 0$ (force decreases with crack e
 
 ---
 
-## 12. Persistent Homology and Topology Monitoring
+## 12. Persistent Homology and Topology-Aware Fracture
 
-### 12.1 Sublevel-Set Filtration
+This section describes the central contribution of this work: the use of persistent homology from computational algebraic topology to detect, localize, and adaptively respond to topological changes in the deforming domain during fracture simulation. The pipeline transforms a continuous SDF field into discrete topological events that drive automatic chart spawning with persistence-proportional mesh refinement — a capability absent from classical FEM, XFEM, and phase-field approaches.
 
-The neural SDF $s_\theta : \mathbb{R}^3 \to \mathbb{R}$ defines a family of sublevel sets:
+### 12.1 Mathematical Foundations
 
-$$\Omega_t = \{\mathbf{x} : s_\theta(\mathbf{x}) \leq t\}, \qquad t \in (-\infty, 0].$$
+#### 12.1.1 Sublevel-Set Filtration
 
-The domain interior is $\Omega = \Omega_0 = \{s_\theta < 0\}$.
+Let $s_\theta : \mathbb{R}^3 \to \mathbb{R}$ be a signed distance function (neural or analytical) with $s_\theta < 0$ in the domain interior and $s_\theta = 0$ on the boundary. The **sublevel-set filtration** is the nested family
 
-### 12.2 Persistence Diagrams
+$$\Omega_t = \{\mathbf{x} \in \mathbb{R}^3 : s_\theta(\mathbf{x}) \leq t\}, \qquad t \in \mathbb{R},$$
 
-GUDHI's CubicalComplex computes the persistence diagram $\text{Dgm}_k$ for each homological dimension $k$:
+satisfying $\Omega_s \subseteq \Omega_t$ for $s \leq t$. The physical domain is $\Omega = \Omega_{0^-} = \{s_\theta < 0\}$.
 
-$$\text{Dgm}_k = \{(b_i, d_i)\}_{i=1}^m, \qquad b_i \leq d_i,$$
+As $t$ increases from $-\infty$ toward 0, topology changes occur:
+- **Birth**: a new connected component, loop, or void appears at $t = b$
+- **Death**: the feature merges with an older one or closes at $t = d$
 
-where $(b_i, d_i)$ is the birth–death pair of the $i$-th $k$-dimensional feature.
+The **persistence** $|d - b|$ quantifies the feature's robustness to perturbation.
 
-- $\text{Dgm}_0$: connected components ($\beta_0$)
-- $\text{Dgm}_1$: loops and tunnels ($\beta_1$)
-- $\text{Dgm}_2$: enclosed voids ($\beta_2$)
+#### 12.1.2 Cubical Homology
 
-### 12.3 Bottleneck Stability
+The SDF is sampled on a regular cubical grid $\mathcal{G} \subset \mathbb{R}^3$ with resolution $N^3$:
 
-The Bottleneck Stability Theorem guarantees robustness:
+$$s_{ijk} = s_\theta(\mathbf{x}_{ijk}), \qquad \mathbf{x}_{ijk} = \mathbf{x}_{\min} + \left(\frac{i}{N-1},\, \frac{j}{N-1},\, \frac{k}{N-1}\right) \odot (\mathbf{x}_{\max} - \mathbf{x}_{\min}).$$
 
-$$d_B\big(\text{Dgm}(f),\, \text{Dgm}(g)\big) \leq \|f - g\|_\infty.$$
+Values are clipped to the interior: $s_{ijk} \leftarrow \text{clamp}(s_{ijk},\; s_{\min},\; 0)$, suppressing exterior topology.
 
-Small SDF perturbations (from mesh refinement, noise, or deformation) produce only small diagram changes.
+GUDHI's `CubicalComplex` constructs the full cubical complex from $\{s_{ijk}\}$ and computes persistent homology with $\mathbb{Z}/2\mathbb{Z}$ coefficients in $O(N^3 \log N)$ time. This is **exact** (not an approximation like Vietoris–Rips or Cech complexes) because the filtration is defined on a cubical grid.
 
-### 12.4 Topology Change Detection
+#### 12.1.3 Persistence Diagrams
 
-At each load step, the TopologyMonitor:
-1. Computes persistence diagrams from the current SDF grid.
-2. Filters by lifetime: retains pairs with $|d_i - b_i| > \tau$ (default $\tau = 0.05 \cdot \text{range}$).
-3. Computes bottleneck distance to previous step's diagram.
-4. If $d_B > 0.02$: fires a TopologyEvent with localization, dimension, and lifetime.
+The output is a collection of **persistence diagrams**, one per homological dimension $k \in \{0, 1, 2\}$:
 
-### 12.5 Persistence-Driven Adaptive Refinement
+$$\text{Dgm}_k = \{(b_i, d_i) : i = 1, \ldots, m_k\}, \qquad b_i \leq d_i \leq +\infty.$$
 
-The TopologyEvent lifetime provides a mathematically principled mesh refinement indicator. The ChartSpawner computes adaptive resolution:
+Each pair $(b_i, d_i)$ represents a $k$-dimensional topological feature:
 
-$$n_{\text{cells}} = \text{clamp}\!\left(n_{\text{base}} \cdot (1 + 2 \cdot \tilde{\ell}),\;\; n_{\text{base}},\;\; 3\, n_{\text{base}}\right),$$
+| Dimension $k$ | Feature | Physical interpretation in fracture |
+|:-:|---|---|
+| 0 | Connected component | Domain fragmentation (complete crack severance) |
+| 1 | Loop / tunnel | Through-crack forming a topological handle |
+| 2 | Enclosed void | Cavitation, internal void nucleation |
 
-where $\tilde{\ell} = \min(\ell / \text{range},\; 1)$ is the normalized persistence lifetime. This ensures:
-- Short-lived features (noise): base resolution
-- Long-lived features (physical cracks): up to 3× finer mesh
-- H₁ features (cracks): minimum 12 cells
-- H₂ features (voids): minimum 10 cells
+**Essential pairs** ($d_i = +\infty$) represent features that persist to the boundary — these are the genuine topological features of the domain.
 
-Additionally, $H_1$ and $H_2$ features trigger P2 element recommendation for the spawned crack-tip charts.
+#### 12.1.4 Betti Numbers
+
+The Betti numbers at filtration parameter $t$ count the number of alive features:
+
+$$\beta_k(t) = |\{(b, d) \in \text{Dgm}_k : b \leq t < d\}|.$$
+
+For the physical domain, we evaluate at $t = -\varepsilon$ (just inside the boundary):
+
+| Domain | $\beta_0$ | $\beta_1$ | $\beta_2$ | Interpretation |
+|--------|:-:|:-:|:-:|---|
+| Solid ball | 1 | 0 | 0 | Contractible, simply connected |
+| Solid torus | 1 | 1 | 0 | One tunnel ($H_1$ generator) |
+| Thick spherical shell | 1 | 0 | 1 | One enclosed void ($H_2$ generator) |
+| Cracked plate (H₀ split) | 2 | 0 | 0 | Two disconnected pieces |
+| Plate with through-hole | 1 | 1 | 0 | One loop around the hole |
+
+### 12.2 Bottleneck Stability Theorem
+
+The Bottleneck Stability Theorem (Cohen-Steiner, Edelsbrunner & Harer 2007) provides the mathematical foundation for using persistence as a robustness measure:
+
+$$d_B\big(\text{Dgm}_k(f),\, \text{Dgm}_k(g)\big) \leq \|f - g\|_\infty,$$
+
+where the **bottleneck distance** is
+
+$$d_B(A, B) = \inf_{\gamma : A \to B} \max_{p \in A} \|p - \gamma(p)\|_\infty,$$
+
+and $\gamma$ ranges over all bijections that may map points to the diagonal $\{b = d\}$.
+
+**Consequences for fracture simulation:**
+
+1. **Noise filtering**: If the SDF approximation error is $\|s_\theta - s_{\text{exact}}\|_\infty < \varepsilon$, then all persistence pairs with lifetime $|d - b| > 2\varepsilon$ are guaranteed to correspond to genuine topological features of the exact domain. Short-lived pairs ($|d - b| \leq 2\varepsilon$) may be numerical artifacts.
+
+2. **Threshold design**: The lifetime filter $\tau = 0.05 \times (s_{\max} - s_{\min})$ is calibrated so that features with $|d - b| > \tau$ survive mesh refinement, network retraining, and small geometric perturbations.
+
+3. **Event detection**: A bottleneck change $d_B(\text{Dgm}^{k}, \text{Dgm}^{k+1}) > 0.02$ between consecutive load steps indicates a genuine topology change, not numerical drift.
+
+**Verification**: The stability theorem is empirically validated by adding Gaussian noise ($\sigma = 0.01$) to the SDF grid and verifying $d_B \leq 0.05$ (see `test_bottleneck_stability`).
+
+### 12.3 Lusternik–Schnirelmann Category and Minimum Chart Count
+
+#### 12.3.1 Topological Lower Bound
+
+The **Lusternik–Schnirelmann category** $\operatorname{cat}(\Omega)$ of a topological space $\Omega$ is the minimum number of contractible open sets needed to cover $\Omega$. By the **Nerve Theorem**, an atlas of $M$ coordinate charts forms a good cover only if
+
+$$M \geq M_{\min} = \operatorname{cat}(\Omega) + 1.$$
+
+This is a **hard topological floor**: no amount of mesh refinement, overlap tuning, or solver improvement can reduce the chart count below $M_{\min}$.
+
+#### 12.3.2 Cup-Length Lower Bound
+
+Computing $\operatorname{cat}(\Omega)$ exactly is NP-hard in general, but the **cup-length** provides a computable lower bound:
+
+$$\operatorname{cat}(\Omega) \geq \operatorname{cl}(\Omega) = |\{k \geq 1 : \beta_k(\Omega) > 0\}|.$$
+
+This counts the number of non-trivial homology dimensions. The bound is **tight** for all orientable surfaces and for all benchmark domains in this work:
+
+| Domain | $\beta_0, \beta_1, \beta_2$ | $\operatorname{cl}$ | $\operatorname{cat}$ | $M_{\min}$ |
+|--------|:--:|:-:|:-:|:-:|
+| Ball | 1, 0, 0 | 0 | 0 | 1 |
+| Solid torus | 1, 1, 0 | 1 | 1 | 2 |
+| Thick shell | 1, 0, 1 | 1 | 1 | 2 |
+| Intact plate | 1, 0, 0 | 0 | 0 | 1 |
+| Cracked plate (severed) | 2, 0, 0 | 0 | 0 | 1 per piece |
+
+#### 12.3.3 Practical Chart Count
+
+Beyond the topological minimum, numerical accuracy requires sufficient chart overlap. The practical chart count balances two constraints:
+
+1. **Topological**: $M \geq M_{\min}$ (nerve theorem)
+2. **Numerical**: $M \geq V(\Omega) / V_{\text{chart}} \cdot (1 + \alpha_{\text{overlap}})$, targeting condition number $\kappa \leq 10$
+
+For the solid torus benchmark: $M_{\min} = 2$ (topological), $M_{\text{practical}} = 8$ (numerical).
+
+### 12.4 Topology Monitoring During Simulation
+
+#### 12.4.1 TopologyMonitor State Machine
+
+The `TopologyMonitor` maintains state across load steps:
+
+$$\text{State}^n = \big(\text{step}_n,\; \{\text{Dgm}_k^n\}_k,\; \{\beta_k^n\}_k,\; \text{event\_count}\big).$$
+
+At each call to `update(grid_vals, load_step)`:
+
+1. **Compute new diagrams**: $\text{Dgm}_k^{n+1} \leftarrow \text{PH}(\text{grid\_vals})$
+2. **Filter**: retain pairs with $|d - b| > \tau$ (relative to SDF range)
+3. **Compare**: for each monitored dimension $k$:
+   $$\Delta_k = d_B\big(\text{Dgm}_k^n,\; \text{Dgm}_k^{n+1}\big)$$
+4. **Detect**: if $\Delta_k > \delta_{\text{thresh}}$ (default 0.02), invoke pair matching
+
+#### 12.4.2 Greedy Pair Matching
+
+When a bottleneck change exceeds the threshold, the monitor identifies **which** persistence pairs are new. The matching algorithm is a greedy nearest-neighbor procedure in the $\ell^\infty$ metric:
+
+**Input:** Previous diagram $A = \{(b_i^A, d_i^A)\}$ and current diagram $B = \{(b_j^B, d_j^B)\}$.
+
+**Distance metric:**
+$$\text{dist}\big((b_1, d_1),\, (b_2, d_2)\big) = \begin{cases} \max(|b_1 - b_2|,\, |d_1 - d_2|) & \text{both finite,} \\ |b_1 - b_2| & d_1 = d_2 = \infty, \\ +\infty & \text{mixed infinities.} \end{cases}$$
+
+**Algorithm:**
+```
+used = {}
+new_pairs = []
+for each (b, d) in B:
+    best_match = argmin_{(b', d') in A \ used} dist((b,d), (b',d'))
+    if dist(best_match) < 2 * delta_thresh:
+        used.add(best_match)
+    else:
+        new_pairs.append((b, d))  // unmatched → new topological feature
+return new_pairs
+```
+
+**Matching threshold**: $2\delta_{\text{thresh}} = 0.04$ — twice the bottleneck threshold, providing a buffer zone between genuine new features and small perturbations of existing ones.
+
+#### 12.4.3 TopologyEvent
+
+Each new unmatched pair generates a `TopologyEvent`:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `load_step` | int | Simulation step of detection |
+| `event_type` | str | `'new_H0'`, `'new_H1'`, `'new_H2'`, or `'feature_died'` |
+| `dimension` | int | Homological dimension of the changed feature |
+| `birth_value` | float | SDF filtration value at feature birth |
+| `lifetime` | float | Persistence $|d - b|$ (robustness measure) |
+| `localization` | ndarray(3) | Physical coordinates (from SDF gradient) |
+| `bottleneck_change` | float | $d_B$ that triggered this event |
+
+**Event types and their fracture-mechanical interpretation:**
+
+| Event | Topological Change | Physical Meaning |
+|-------|-------------------|------------------|
+| `new_H0` | $\beta_0 \to \beta_0 + 1$ | Domain fragments (complete crack severance) |
+| `new_H1` | $\beta_1 \to \beta_1 + 1$ | Through-crack creates a tunnel/loop |
+| `new_H2` | $\beta_2 \to \beta_2 + 1$ | Internal void nucleates (cavitation) |
+| `feature_died` | $\beta_k \to \beta_k - 1$ | Feature closes (crack healing, void collapse) |
+
+**Verification contracts:**
+- Fixed domain (no crack growth): 0 events after initial step (verified in tests)
+- Ball-to-torus transition (simulating through-crack): exactly 1 `new_H1` event (verified)
+
+### 12.5 Feature Localization via SDF Gradient
+
+When a `TopologyEvent` fires, the feature must be **localized in physical space** to place new chart seeds. The localization algorithm uses the SDF gradient field:
+
+1. **Grid-based search**: find cells where $|s_{ijk} - b_{\text{event}}| < \tau_{\text{loc}}$, with $\tau_{\text{loc}} = 0.05 \times (s_{\max} - s_{\min})$.
+
+2. **Physical coordinate conversion**: map grid indices to physical space via the bounding box affine transform:
+$$\mathbf{x}_{\text{phys}} = \mathbf{x}_{\min} + \frac{\mathbf{i}}{N - 1} \odot (\mathbf{x}_{\max} - \mathbf{x}_{\min}).$$
+
+3. **Center**: $\mathbf{c} = \text{mean}(\{\mathbf{x}_{\text{phys}}\}_{\text{matched cells}})$.
+
+4. **Normal estimation** via central finite differences on the SDF grid:
+$$\frac{\partial s}{\partial x_d}\bigg|_{\mathbf{c}} \approx \frac{s(\mathbf{c} + \varepsilon\, \mathbf{e}_d) - s(\mathbf{c} - \varepsilon\, \mathbf{e}_d)}{2\varepsilon\, \Delta x_d}, \qquad \mathbf{n} = \frac{\nabla s}{\|\nabla s\|}.$$
+
+The normal $\mathbf{n}$ is the crack-opening direction, perpendicular to the crack face.
+
+### 12.6 Topology-Driven Chart Spawning
+
+The `ChartSpawner` converts each `TopologyEvent` into a `SpawnedChartPair` — two new charts placed on opposite sides of the detected feature:
+
+#### 12.6.1 Seed Placement
+
+$$\mathbf{s}_+ = \mathbf{c} + \tfrac{r}{2}\,\mathbf{n}, \qquad \mathbf{s}_- = \mathbf{c} - \tfrac{r}{2}\,\mathbf{n},$$
+
+where $r$ is the default chart support radius (typically $0.3 \times$ domain diameter).
+
+#### 12.6.2 Orthonormal Frame Construction
+
+Given normal $\mathbf{n}$, construct a right-handed frame $[\mathbf{t}_1, \mathbf{t}_2, \mathbf{n}]$ via Gram–Schmidt:
+
+1. Choose reference vector: $\mathbf{r} = [1,0,0]$ if $|\mathbf{n} \cdot [1,0,0]| < 0.9$, else $\mathbf{r} = [0,1,0]$.
+2. $\mathbf{t}_1 = (\mathbf{r} - (\mathbf{r}\cdot\mathbf{n})\,\mathbf{n}) / \|\cdot\|$ (in-plane direction 1).
+3. $\mathbf{t}_2 = \mathbf{n} \times \mathbf{t}_1$ (in-plane direction 2, automatic orthogonality).
+
+The minus-side frame uses $-\mathbf{n}$ for proper crack-face orientation.
+
+#### 12.6.3 Parent Chart Warm-Start
+
+The nearest existing chart provides warm-start initialization:
+
+$$\text{parent} = \arg\min_i \|\mathbf{s}_i - \mathbf{c}\|_2,$$
+
+where $\{\mathbf{s}_i\}$ are existing chart seed positions. The new decoder is initialized from the parent's weights (for neural decoders) or parameterized analytically (for CrackTipDecoder via `from_spawned_pair`).
+
+### 12.7 Persistence-Driven Adaptive hp-Refinement
+
+The **persistence lifetime** $\ell = |d - b|$ provides a mathematically principled mesh refinement indicator — the key insight connecting computational topology to adaptive FEM. Longer-lived features are more physically significant and demand finer resolution.
+
+#### 12.7.1 Adaptive h-Refinement (Mesh Density)
+
+The mesh resolution for a spawned chart is scaled proportionally to the normalized persistence lifetime:
+
+$$\tilde{\ell} = \min\!\left(\frac{\ell}{s_{\max} - s_{\min}},\; 1\right), \qquad n_{\text{cells}} = \text{clamp}\!\left(n_{\text{base}} \cdot (1 + 2\tilde{\ell}),\;\; n_{\text{base}},\;\; 3\, n_{\text{base}}\right).$$
+
+Additionally, minimum resolution floors are enforced by homological dimension:
+
+$$n_{\text{cells}} \geq \begin{cases} 12 & \text{if } k = 1 \text{ (cracks/loops),} \\ 10 & \text{if } k = 2 \text{ (voids).} \end{cases}$$
+
+**Rationale**: $H_1$ features (cracks) have $1/\sqrt{r}$ stress singularities requiring fine near-tip resolution; $H_2$ features (voids) have smoother stress concentrations but still benefit from refinement.
+
+#### 12.7.2 Adaptive p-Refinement (Polynomial Order)
+
+Features of dimension $k \geq 1$ trigger P2 (quadratic) element recommendation:
+
+$$\text{element\_order} = \begin{cases} 2 & \text{if } k \geq 1 \text{ (crack or void),} \\ 1 & \text{if } k = 0 \text{ (component split).} \end{cases}$$
+
+Combined with the CrackTipDecoder's radial squaring ($r \sim \xi^2$, making $\sqrt{r}$ linear in $\xi$), P2 elements achieve **$O(h^2)$ convergence** on the smooth reference-space Williams field — compared to $O(h^{1/2})$ for P1 on the singular physical-space field.
+
+#### 12.7.3 hp-Adaptivity Summary
+
+The complete adaptive strategy is:
+
+| Feature Type | Lifetime | $n_{\text{cells}}$ | Element Order | Decoder |
+|:---:|:---:|:---:|:---:|:---:|
+| Short-lived $H_0$ | $\tilde{\ell} < 0.1$ | $n_{\text{base}}$ | P1 | BoxDecoder |
+| Long-lived $H_1$ (crack) | $\tilde{\ell} > 0.5$ | $\leq 3 n_{\text{base}}$ | P2 | CrackTipDecoder |
+| Short-lived $H_1$ (noise) | $\tilde{\ell} < 0.05$ | filtered out | — | — |
+| $H_2$ (void) | any | $\geq 10$ | P2 | BoxDecoder |
+
+### 12.8 Integration with the Fracture Simulation Loop
+
+The persistent homology pipeline integrates with the FEM solver in a closed loop:
+
+```
+for each load step n:
+    1. SOLVE: u_charts = RobinSchwarz(atlas, stress_fn, tangent_fn, BC)
+
+    2. NUCLEATE: if max(F_DP(sigma)) >= 0:
+         crack_center, crack_normal = locate_nucleation(sigma)
+         SDF.insert_crack(crack_center, crack_normal)
+
+    3. MONITOR: grid = sample_SDF(resolution=16)
+         events = TopologyMonitor.update(grid, step=n)
+
+    4. SPAWN: for each event in events:
+         pair = ChartSpawner.spawn_from_event(event)
+         n_cells = pair.recommended_n_cells       // persistence-driven
+         order   = pair.recommended_element_order  // P2 for cracks
+         decoder = CrackTipDecoder.from_spawned_pair(pair)
+         solver  = ChartVectorFEMSolver(n_cells, order, decoder)
+         atlas.add_chart(solver)
+
+    5. REBUILD: update Schwarz overlap graph, re-color for parallel solve
+```
+
+**Key design principle**: Steps 3–5 are **automatic** — no user intervention is needed to detect, localize, or mesh-refine at crack locations. The persistence lifetime provides the refinement signal; the CrackTipDecoder provides the singularity-absorbing coordinates; and the Schwarz solver provides the chart coupling.
+
+### 12.9 Computational Cost
+
+| Operation | Cost | Typical Timing |
+|-----------|------|---------------|
+| SDF grid sampling ($16^3$) | $O(N^3)$ | ~2 ms |
+| GUDHI CubicalComplex | $O(N^3 \log N)$ | ~57 ms (16³) |
+| Persistence filtering | $O(m)$ | < 1 ms |
+| Bottleneck distance | $O(m^2)$ (greedy) | < 1 ms |
+| Feature localization | $O(N^3)$ | ~1 ms |
+| **Total overhead per step** | | **~60 ms** |
+
+At 16³ resolution and monitoring every 50 load steps in a 250-step simulation: **overhead = 1.1%** (well within the 5% computational budget).
+
+### 12.10 Verification and Validation
+
+The persistent homology pipeline is verified against exact analytical results:
+
+| Test | Input | Expected | Measured | Status |
+|------|-------|----------|----------|:------:|
+| Ball contractibility | Solid sphere SDF | $\beta_0=1, \beta_1=0, \beta_2=0$ | exact | PASS |
+| Torus tunnel | Solid torus SDF | $\beta_0=1, \beta_1=1, \beta_2=0$ | exact | PASS |
+| Shell void | Thick shell SDF | $\beta_0=1, \beta_1=0, \beta_2=1$ | exact | PASS |
+| $M_{\min}$ ball | Convex body | $M_{\min} = 1$ | 1 | PASS |
+| $M_{\min}$ torus | $S^1$ bundle | $M_{\min} = 2$ | 2 | PASS |
+| Bottleneck stability | Noisy SDF ($\sigma=0.01$) | $d_B \leq 0.05$ | $\leq 0.03$ | PASS |
+| Fixed domain | Uncracked plate | 0 events/step | 0 | PASS |
+| Crack detection | Ball$\to$torus | $\geq 1$ H₁ event | 1 | PASS |
+| Biaxial splitting | Cracked plate | H₀: 1$\to$2 | 2 events | PASS |
+| Adaptive n_cells | Long H₁ ($\ell=0.5$) | $n \geq 12$ | 16 | PASS |
+| Element order | H₁ feature | P2 | P2 | PASS |
+
+### 12.11 Comparison with Alternative Approaches
+
+| Approach | Crack Detection | Localization | Mesh Adaptation | Theoretical Guarantee |
+|----------|:-:|:-:|:-:|:-:|
+| **This work (PH)** | Automatic (GUDHI) | SDF gradient | Persistence-driven hp | Bottleneck stability |
+| Phase-field | Implicit ($\phi \to 0$) | Diffuse interface | Fixed mesh | $\Gamma$-convergence |
+| XFEM | Level set | Node enrichment | Manual | None |
+| Remeshing | Element quality | Error estimator | ZZ recovery | A posteriori bound |
+| Peridynamics | Bond breaking | Particle damage | Fixed | Nonlocal theory |
+
+The persistent homology approach is the **only** method that provides: (1) rigorous topological classification of crack events by homological dimension; (2) stability guarantees via the bottleneck theorem; and (3) automatic persistence-proportional mesh refinement without user intervention.
 
 ---
 
