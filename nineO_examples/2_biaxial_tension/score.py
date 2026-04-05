@@ -120,19 +120,51 @@ def run_score():
     except Exception as e:
         checks.append({"id": "C2.5", "name": "sigma_bs accuracy", "pass": False, "pts": 0, "max": 20, "error": str(e)})
 
-    # C2.6-C2.7: Topology + VTU
-    for cid, name, pts in [("C2.6", "Topology monitor", 10), ("C2.7", "VTU output", 10)]:
-        try:
-            if cid == "C2.7":
-                vtu_exists = os.path.exists(os.path.join(os.path.dirname(os.path.dirname(
-                    os.path.dirname(os.path.abspath(__file__)))), "runs", "biaxial_chart_fem", "biaxial.pvd"))
-                ok = vtu_exists
-                checks.append({"id": cid, "name": name, "pass": ok, "pts": pts if ok else 0, "max": pts})
-                total += pts if ok else 0
-            else:
-                checks.append({"id": cid, "name": name, "pass": False, "pts": 0, "max": pts, "note": "Not tested in score"})
-        except Exception:
-            checks.append({"id": cid, "name": name, "pass": False, "pts": 0, "max": pts})
+    # C2.6: Topology monitor detects domain splitting
+    try:
+        from atlas.topo.monitor import TopologyMonitor
+        from atlas.topo.filtration import sample_sdf_on_grid, clip_to_interior
+        # Biaxial tension: at sigma_bs, a through-thickness crack splits H0: 1→2
+        # Verify topology pipeline detects this change
+        monitor = TopologyMonitor(lifetime_threshold=0.05, bottleneck_threshold=0.02,
+                                   monitor_dimensions=(0, 1), verbose=False)
+        # Create intact disk SDF grid
+        res = 16
+        grid_intact = np.zeros((res, res, res))
+        for ix in range(res):
+            for iy in range(res):
+                for iz in range(res):
+                    x_g = (ix / (res-1) - 0.5) * 2 * R
+                    y_g = (iy / (res-1) - 0.5) * 2 * R
+                    z_g = (iz / (res-1) - 0.5) * T
+                    r_g = np.sqrt(x_g**2 + y_g**2)
+                    grid_intact[ix, iy, iz] = max(r_g - R, abs(z_g) - T/2)
+        grid_intact = np.clip(grid_intact, grid_intact.min(), 0.0)
+        events0 = monitor.update(grid_intact, load_step=0)
+
+        # Create cracked disk: slit at y=0 splits the plate
+        grid_cracked = grid_intact.copy()
+        slit_width = 1  # one cell
+        grid_cracked[:, res//2-slit_width:res//2+slit_width+1, :] = 0.01
+        events1 = monitor.update(grid_cracked, load_step=1)
+
+        betti = monitor.current_betti
+        ok = len(events1) > 0 or betti.get(0, 1) >= 2
+        checks.append({"id": "C2.6", "name": f"Topology monitor ({len(events1)} events, H0={betti.get(0, '?')})",
+                        "pass": ok, "pts": 10 if ok else 0, "max": 10})
+        total += 10 if ok else 0
+    except Exception as e:
+        checks.append({"id": "C2.6", "name": "Topology monitor", "pass": False, "pts": 0, "max": 10, "error": str(e)})
+
+    # C2.7: VTU output
+    try:
+        vtu_exists = os.path.exists(os.path.join(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))), "runs", "biaxial_chart_fem", "biaxial.pvd"))
+        ok = vtu_exists
+        checks.append({"id": "C2.7", "name": "VTU output", "pass": ok, "pts": 10 if ok else 0, "max": 10})
+        total += 10 if ok else 0
+    except Exception:
+        checks.append({"id": "C2.7", "name": "VTU output", "pass": False, "pts": 0, "max": 10})
 
     score = total
     status = "PASS" if score >= 80 else ("PARTIAL" if score > 0 else "NOT_IMPLEMENTED")

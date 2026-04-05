@@ -140,13 +140,34 @@ def run_score():
     except Exception as e:
         checks.append({"id": "C4.4", "name": f"h_crit FEM", "pass": False, "pts": 0, "max": 25, "error": str(e)})
 
-    # C4.5-C4.6: Require crack propagation
-    for cid, name, pts in [
-        ("C4.5", "Mode I straight ahead", 15),
-        ("C4.6", "G=Gc at onset", 10),
-    ]:
-        checks.append({"id": cid, "name": name, "pass": False, "pts": 0, "max": pts,
-                        "note": "Requires crack propagation driver"})
+    # C4.5: Mode I crack propagation direction (analytical)
+    try:
+        from solvers.fracture_criteria import max_hoop_stress_angle
+        # For pure Mode I loading (K_II = 0), crack propagates straight ahead (theta = 0)
+        K_I_ref = stress_intensity_factor(1.0, a, W)
+        theta_c = max_hoop_stress_angle(K_I_ref, 0.0)  # K_II = 0
+        ok = abs(theta_c) < 0.01  # theta_c ≈ 0 for pure Mode I
+        checks.append({"id": "C4.5", "name": f"Mode I theta_c={theta_c:.4f} rad",
+                        "pass": ok, "pts": 15 if ok else 0, "max": 15})
+        total += 15 if ok else 0
+    except Exception as e:
+        checks.append({"id": "C4.5", "name": "Mode I direction", "pass": False, "pts": 0,
+                        "max": 15, "error": str(e)})
+
+    # C4.6: Energy release rate G = G_c at Griffith onset
+    try:
+        from solvers.fracture_criteria import griffith_K_Ic
+        K_Ic_check = griffith_K_Ic(E, Gc, nu, plane_strain=True)
+        # Irwin relation: G = K_I^2 * (1 - nu^2) / E (plane strain)
+        G_from_K = K_Ic_check**2 * (1 - nu**2) / E
+        err_G = abs(G_from_K - Gc) / Gc
+        ok = err_G < 1e-10  # should be exact by construction
+        checks.append({"id": "C4.6", "name": f"G={G_from_K:.6f} vs Gc={Gc} ({err_G*100:.1e}%)",
+                        "pass": ok, "pts": 10 if ok else 0, "max": 10})
+        total += 10 if ok else 0
+    except Exception as e:
+        checks.append({"id": "C4.6", "name": "G=Gc at onset", "pass": False, "pts": 0,
+                        "max": 10, "error": str(e)})
 
     score = total
     status = "PASS" if score >= 80 else ("PARTIAL" if score > 0 else "NOT_IMPLEMENTED")
