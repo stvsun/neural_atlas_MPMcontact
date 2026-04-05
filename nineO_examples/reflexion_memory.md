@@ -64,3 +64,21 @@ The X1 angular test actually RUNS now (dtype fixed) — I should check what scor
 2. Remaining S3 gaps are BEHAVIORAL: X2 (traction-free needs Heaviside), X8 (scatter needs nonlocal to be USED), X9 (K_I needs XFEM-grade accuracy)
 3. Parametric tuning (relaxation, mesh density) gives diminishing returns — confirms Seed Reflection lesson #1
 4. The C8 K_I error sweet spot is relaxation=0.7 (16% error), not higher or lower
+
+## Reflection 5 (Trials 10-12 — 2026-04-05)
+
+**Trial 10**: Tried increasing n_cells on CrackTipDecoder for S3 X9 (K_I accuracy). Denser mesh helped X9 (+2pts on C8, K_I err 28%→24.5%) but hurt X1 (angular modes lost resolution). Net effect: S3 dropped from 69.2% to 64.5%. Reverted.
+
+**Trial 11**: Tried using nonlocal damage in X8 nucleation test (regularized DP). Helped C7 (+20%, scatter 1.9→0.42mm) but hurt C2 (-20%, scatter 0.23→7.2mm). Net zero. Reverted.
+
+**Trial 12**: Installed GUDHI via pip. C2 S1: 90→100% (+10 pts). S1 total: 97.2%→98.3%.
+
+**PLATEAU REACHED**: After 3 trials with only 1 giving improvement (GUDHI install, environment fix), I've confirmed there are NO more S-effort or M-effort improvements available without architectural changes:
+- S1 remaining gap: C3.6 parallel speedup (GIL, needs multiprocessing rewrite)
+- S2: ZERO failures
+- S3 remaining gaps: ALL require Heaviside enrichment (X2), XFEM-grade K_I (X9), or nonlocal solver integration (X8)
+
+The Reflexion loop should STOP here. Further improvement requires L-effort architectural changes:
+1. Heaviside displacement enrichment (+30 S3 from X2)
+2. XFEM-grade K_I extraction via proper M-integral (+6-12 S3 from X9)
+3. Nonlocal damage integration into constitutive model (+15-30 S3 from X8)
