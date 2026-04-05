@@ -54,6 +54,8 @@ class SpawnedChartPair:
     parent_chart   : index of the existing chart whose decoder is warm-started
     edge_type      : 'crack' or 'interface'
     activation_step: load step at which this pair becomes active
+    recommended_n_cells : persistence-driven mesh resolution for spawned charts
+    recommended_element_order : 1 for P1 (linear), 2 for P2 (quadratic)
     """
     seed_plus: np.ndarray
     seed_minus: np.ndarray
@@ -63,6 +65,8 @@ class SpawnedChartPair:
     parent_chart: int
     edge_type: str = "crack"
     activation_step: int = 0
+    recommended_n_cells: int = 8
+    recommended_element_order: int = 1
 
 
 class ChartSpawner:
@@ -85,10 +89,12 @@ class ChartSpawner:
         default_radius: float = 0.3,
         sdf_net=None,
         verbose: bool = True,
+        base_n_cells: int = 8,
     ) -> None:
         self.default_radius = default_radius
         self.sdf_net = sdf_net
         self.verbose = verbose
+        self.base_n_cells = base_n_cells
         self._spawn_log: List[SpawnedChartPair] = []
 
     def spawn_from_event(
@@ -131,6 +137,29 @@ class ChartSpawner:
         dists = np.linalg.norm(existing_seeds - center[None, :], axis=-1)
         parent_chart = int(np.argmin(dists))
 
+        # Step 5: Persistence-driven adaptive resolution
+        # Longer-lived topological features get finer meshes.
+        sdf_range = float(grid_vals.max() - grid_vals.min())
+        normalized_lifetime = event.lifetime / max(sdf_range, 1e-10)
+
+        # Scale n_cells with persistence: [base, 3*base]
+        adaptive_n_cells = int(
+            self.base_n_cells * (1.0 + 2.0 * min(normalized_lifetime, 1.0))
+        )
+        adaptive_n_cells = max(
+            self.base_n_cells, min(adaptive_n_cells, 3 * self.base_n_cells)
+        )
+
+        # H1 features (cracks/loops) need at least 12 cells;
+        # H2 features (voids/cavitation) need at least 10.
+        if event.dimension == 1:
+            adaptive_n_cells = max(adaptive_n_cells, 12)
+        elif event.dimension == 2:
+            adaptive_n_cells = max(adaptive_n_cells, 10)
+
+        # Recommend P2 for crack-tip charts (H1 or higher)
+        recommended_order = 2 if event.dimension >= 1 else 1
+
         pair = SpawnedChartPair(
             seed_plus=seed_plus,
             seed_minus=seed_minus,
@@ -140,13 +169,16 @@ class ChartSpawner:
             parent_chart=parent_chart,
             edge_type="crack",
             activation_step=event.load_step,
+            recommended_n_cells=adaptive_n_cells,
+            recommended_element_order=recommended_order,
         )
         self._spawn_log.append(pair)
 
         if self.verbose:
             print(
                 f"[ChartSpawner] spawning pair at step={event.load_step} "
-                f"center={center}  normal={normal}  parent_chart={parent_chart}"
+                f"center={center}  normal={normal}  parent_chart={parent_chart}  "
+                f"n_cells={adaptive_n_cells}  order=P{recommended_order}"
             )
 
         return pair

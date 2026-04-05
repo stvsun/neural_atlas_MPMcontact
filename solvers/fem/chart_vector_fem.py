@@ -78,6 +78,7 @@ class ChartVectorFEMSolver:
         mesh_extent: float = 1.0,
         device: str = "cpu",
         dtype: torch.dtype = torch.float64,
+        element_order: int = 1,
     ):
         self.n_cells = n_cells
         self.support_r = support_r
@@ -88,6 +89,7 @@ class ChartVectorFEMSolver:
         self.mesh_extent = mesh_extent
         self.device = torch.device(device) if isinstance(device, str) else device
         self.dtype = dtype
+        self.element_order = element_order
 
         self.r = support_r * mesh_extent
         self.h = 2.0 * self.r / n_cells
@@ -193,13 +195,70 @@ class ChartVectorFEMSolver:
         # Classify boundary nodes
         self._classify_boundary()
 
+        # Expand to P2 if requested (adds edge midpoint nodes)
+        if self.element_order == 2:
+            self._expand_to_p2()
+
         # Pre-compute shape function gradients and volumes
         self._precompute_element_quantities()
 
+        order_str = f"P{self.element_order}" if self.element_order > 1 else ""
         print(
             f"  [ChartVectorFEM] mesh: {self.n_nodes} nodes, {self.n_elements} tets, "
             f"{int(self.boundary_mask.sum())} boundary nodes"
+            + (f" [{order_str}, {self.nodes_per_element} nodes/tet]" if order_str else "")
         )
+
+    @property
+    def nodes_per_element(self) -> int:
+        """Number of nodes per element: 4 for P1, 10 for P2."""
+        return 10 if self.element_order == 2 else 4
+
+    def _expand_to_p2(self) -> None:
+        """Expand P1 mesh to P2 by adding shared edge midpoint nodes.
+
+        After this call:
+          - self.elements has shape (M, 10) instead of (M, 4)
+          - self.nodes / nodes_phys grow by the number of unique edges
+          - self.n_nodes is updated
+          - boundary_mask is expanded (midpoints on boundary faces are marked)
+        """
+        from solvers.fem.p2_tet import build_p2_connectivity, compute_midpoint_positions
+
+        el_np = self.elements.cpu().numpy()
+        n_p1 = self.n_nodes
+
+        elements_p2, n_p2 = build_p2_connectivity(el_np, n_p1)
+
+        # Compute midpoint positions in reference space
+        nodes_ref_np = self.nodes.cpu().numpy()
+        nodes_ref_p2 = compute_midpoint_positions(nodes_ref_np, elements_p2, n_p1, n_p2)
+
+        self.nodes = torch.tensor(nodes_ref_p2, device=self.device, dtype=self.dtype)
+        self.elements = torch.tensor(elements_p2, device=self.device, dtype=torch.long)
+        self.n_nodes = n_p2
+
+        # Map new midpoint nodes through chart decoder (if present)
+        if self.chart_decoder is not None:
+            with torch.no_grad():
+                self.nodes_phys = self.chart_decoder(
+                    self.nodes, **self.decoder_kwargs
+                ).detach()
+        else:
+            self.nodes_phys = self.nodes.clone()
+
+        # Expand boundary mask: midpoints on boundary edges are boundary nodes
+        old_bm = self.boundary_mask
+        self.boundary_mask = torch.zeros(n_p2, device=self.device, dtype=torch.bool)
+        self.boundary_mask[:n_p1] = old_bm
+        # Mark edge midpoints as boundary if both endpoints are boundary
+        from solvers.fem.p2_tet import EDGE_PAIRS
+        for e in range(self.n_elements):
+            verts = elements_p2[e, :4]
+            for k, (a, b) in enumerate(EDGE_PAIRS):
+                mid_idx = elements_p2[e, 4 + k]
+                if old_bm[verts[a]] and old_bm[verts[b]]:
+                    self.boundary_mask[mid_idx] = True
 
     def _classify_boundary(self) -> None:
         """Identify boundary nodes.
@@ -272,7 +331,9 @@ class ChartVectorFEMSolver:
             vol = torch.abs(detB) / 6.0
             return B, detB, invB, dN, vol
 
-        xe_ref = self.nodes[self.elements]  # (M, 4, 3)
+        # Use vertex nodes only (first 4) for geometry metrics
+        vert_idx = self.elements[:, :4]  # (M, 4) — vertex indices
+        xe_ref = self.nodes[vert_idx]    # (M, 4, 3)
         self.elem_centroids_ref = xe_ref.mean(dim=1)
         _, _, _, dN_ref, vol_ref = _metrics_from_nodes(xe_ref)
         self.dNdx_ref = dN_ref
@@ -303,6 +364,67 @@ class ChartVectorFEMSolver:
             self.dNdx = self.dNdx_ref
             self.vol = self.vol_ref
 
+        # P2: precompute quadrature-point shape gradients
+        if self.element_order == 2:
+            self._precompute_p2_quantities()
+
+    def _precompute_p2_quantities(self) -> None:
+        """Pre-compute P2 shape function gradients at quadrature points.
+
+        For P2 tets, gradients vary within the element and must be evaluated
+        at each of 4 Gauss quadrature points. The geometric Jacobian is
+        still computed from the 4 vertex positions (isoparametric for the
+        linear geometry mapping).
+
+        After this call:
+          self.dNdx_qp : (M, 4, 10, 3) — dN/dx at each quad point
+          self.weights_qp : (4,) — quadrature weights (includes 1/6 tet volume)
+          self.n_qp : int = 4
+        """
+        from solvers.fem.p2_tet import (
+            QUAD_POINTS_BARY, QUAD_WEIGHTS,
+            p2_shape_gradients,
+        )
+
+        M = self.n_elements
+        n_qp = len(QUAD_WEIGHTS)
+        self.n_qp = n_qp
+
+        # Geometric Jacobian from P1 vertices (constant per element)
+        # Use first 4 columns of elements (vertex indices)
+        vert_idx = self.elements[:, :4]  # (M, 4)
+        xe_ref = self.nodes[vert_idx]    # (M, 4, 3) — vertex positions in ref space
+
+        # J_geom = [v0-v3 | v1-v3 | v2-v3] per element
+        J_geom = torch.stack([
+            xe_ref[:, 0] - xe_ref[:, 3],
+            xe_ref[:, 1] - xe_ref[:, 3],
+            xe_ref[:, 2] - xe_ref[:, 3],
+        ], dim=2)  # (M, 3, 3)
+
+        J_geom_inv = torch.linalg.inv(J_geom)  # (M, 3, 3)
+
+        # If decoder is present, chain-rule: dN/dx_phys = dN/dL @ J_geom^{-1} @ J_decoder^{-1}
+        # For simplicity, compute the composite inverse at the centroid
+        if self.chart_decoder is not None:
+            J_total_inv = torch.einsum("eij,ejk->eik", J_geom_inv, self.geom_J_inv)
+        else:
+            J_total_inv = J_geom_inv
+
+        # Evaluate P2 shape gradients at each quadrature point
+        self.dNdx_qp = torch.zeros(M, n_qp, 10, 3, device=self.device, dtype=self.dtype)
+
+        for q in range(n_qp):
+            L = QUAD_POINTS_BARY[q]  # (3,)
+            dN_dL = p2_shape_gradients(L)  # (10, 3)
+            dN_dL_t = torch.tensor(dN_dL, device=self.device, dtype=self.dtype)
+
+            # dN/dx = dN/dL @ J_total_inv  per element
+            # (M, 10, 3) = (10, 3) @ (M, 3, 3)  — broadcast over elements
+            self.dNdx_qp[:, q] = torch.einsum("aj,ejk->eak", dN_dL_t, J_total_inv)
+
+        self.weights_qp = torch.tensor(QUAD_WEIGHTS, device=self.device, dtype=self.dtype)
+
     def decoder_jacobian(self, xi: torch.Tensor) -> torch.Tensor:
         """Compute the exact decoder Jacobian dx/dxi at the supplied points."""
         if self.chart_decoder is None:
@@ -330,11 +452,18 @@ class ChartVectorFEMSolver:
 
     def compute_grad_u_ref(self, u: torch.Tensor) -> torch.Tensor:
         """Compute the chart-coordinate displacement gradient grad_xi(u)."""
+        if self.element_order == 2:
+            # Use first quadrature point for centroid-like evaluation
+            u_elem = u[self.elements]  # (M, 10, 3)
+            return torch.einsum("eai, eaj -> eij", u_elem, self.dNdx_qp[:, 0])
         u_elem = u[self.elements]
         return torch.einsum("eai, eaj -> eij", u_elem, self.dNdx_ref)
 
     def compute_grad_u_phys(self, u: torch.Tensor) -> torch.Tensor:
         """Compute the physical displacement gradient grad_x(u)."""
+        if self.element_order == 2:
+            u_elem = u[self.elements]
+            return torch.einsum("eai, eaj -> eij", u_elem, self.dNdx_qp[:, 0])
         u_elem = u[self.elements]
         basis_grads = self.dNdx_phys if self.chart_decoder is not None else self.dNdx_ref
         return torch.einsum("eai, eaj -> eij", u_elem, basis_grads)
@@ -438,6 +567,9 @@ class ChartVectorFEMSolver:
         f_int : torch.Tensor, shape (N, 3)
             Internal force vector (assembled).
         """
+        if self.element_order == 2:
+            return self._internal_forces_p2(u, stress_fn, use_fbar)
+
         F = self.compute_F_bar(u) if use_fbar else self.compute_F(u)  # (M, 3, 3)
         P = stress_fn(F)       # (M, 3, 3)
 
@@ -451,6 +583,41 @@ class ChartVectorFEMSolver:
         f_int = torch.zeros(self.n_nodes, 3, device=self.device, dtype=self.dtype)
         f_elem_flat = f_elem.reshape(-1, 3)                        # (M*4, 3)
         idx_flat = self.elements.reshape(-1).unsqueeze(-1).expand(-1, 3)  # (M*4, 3)
+        f_int.scatter_add_(0, idx_flat, f_elem_flat)
+        return f_int
+
+    def _internal_forces_p2(self, u, stress_fn, use_fbar=False):
+        """P2 internal force assembly with quadrature-point integration."""
+        M = self.n_elements
+        npe = 10  # nodes per element
+        I3 = torch.eye(3, device=self.device, dtype=self.dtype).unsqueeze(0)
+
+        f_elem = torch.zeros(M, npe, 3, device=self.device, dtype=self.dtype)
+        u_elem = u[self.elements]  # (M, 10, 3)
+
+        for q in range(self.n_qp):
+            # Gradient at this quadrature point: dNdx_qp[:, q] shape (M, 10, 3)
+            dNdx_q = self.dNdx_qp[:, q]  # (M, 10, 3)
+
+            # Displacement gradient: grad_u = u_elem^T @ dNdx
+            grad_u = torch.einsum("eai, eaj -> eij", u_elem, dNdx_q)  # (M, 3, 3)
+            F_q = I3 + grad_u  # (M, 3, 3)
+
+            P_q = stress_fn(F_q)  # (M, 3, 3)
+
+            # f_elem += w_q * vol * P @ dNdx^T
+            w = self.weights_qp[q]
+            f_elem += w * self.vol[:, None, None] * torch.einsum(
+                "eij, eaj -> eai", P_q, dNdx_q
+            )
+
+        # Note: weights_qp already includes 1/6 (ref tet volume factor),
+        # and self.vol is the physical volume. The product w * vol gives
+        # the correct integration weight.
+
+        f_int = torch.zeros(self.n_nodes, 3, device=self.device, dtype=self.dtype)
+        f_elem_flat = f_elem.reshape(-1, 3)
+        idx_flat = self.elements.reshape(-1).unsqueeze(-1).expand(-1, 3)
         f_int.scatter_add_(0, idx_flat, f_elem_flat)
         return f_int
 
@@ -478,47 +645,80 @@ class ChartVectorFEMSolver:
         K : torch.Tensor, shape (3N, 3N)
             Global tangent stiffness matrix (dense).
         """
+        if self.element_order == 2:
+            return self._tangent_stiffness_p2(u, tangent_fn, use_fbar)
+
         F = self.compute_F_bar(u) if use_fbar else self.compute_F(u)  # (M, 3, 3)
         C = tangent_fn(F)      # (M, 9, 9)
 
         n_dof = 3 * self.n_nodes
+        npe = 4  # nodes per element for P1
 
-        # Build element B-matrix: B_e has shape (9, 12) for each element
-        # Maps 12-DOF element displacement to 9-component grad(u) (row-major F)
-        # F_iJ = delta_iJ + sum_a u_a_i * dN_a / dx_J
-        # In row-major: component (3*i + J) = sum_a u_{a,i} * dNdx_{a,J}
-        # So B[(3*i+J), (3*a+i)] = dNdx[a, J]
-        # More systematically: for node a, dof offset 3*a+i contributes to
-        # F component (3*i+J) with weight dNdx[a, J].
-
-        # B_elem: (M, 9, 12) — build vectorized
-        B = torch.zeros(self.n_elements, 9, 12, device=self.device, dtype=self.dtype)
-        for a in range(4):
+        # B_elem: (M, 9, 12)
+        B = torch.zeros(self.n_elements, 9, 3 * npe, device=self.device, dtype=self.dtype)
+        for a in range(npe):
             for i in range(3):
                 for J in range(3):
-                    # F_{iJ} <-> row 3*i+J;  u_{a,i} <-> col 3*a+i
                     B[:, 3 * i + J, 3 * a + i] = self.dNdx[:, a, J]
 
-        # Element stiffness: K_e = vol_e * B^T @ C @ B  (12x12)
-        # (M, 12, 9) @ (M, 9, 9) @ (M, 9, 12) -> (M, 12, 12)
-        BtC = torch.einsum("eji, ejk -> eik", B, C)  # (M, 12, 9)
-        K_elem = self.vol[:, None, None] * torch.einsum("eij, ejk -> eik", BtC, B)  # (M, 12, 12)
+        # K_e = vol_e * B^T @ C @ B
+        BtC = torch.einsum("eji, ejk -> eik", B, C)
+        K_elem = self.vol[:, None, None] * torch.einsum("eij, ejk -> eik", BtC, B)
 
-        # Build global DOF index map: (M, 12)
-        # For element e, local DOF 3*a+i maps to global DOF 3*elements[e,a]+i
-        dof_map = torch.zeros(self.n_elements, 12, device=self.device, dtype=torch.long)
-        for a in range(4):
+        # DOF map
+        dof_map = torch.zeros(self.n_elements, 3 * npe, device=self.device, dtype=torch.long)
+        for a in range(npe):
             for i in range(3):
                 dof_map[:, 3 * a + i] = 3 * self.elements[:, a] + i
 
-        # Scatter into dense global matrix
         K_global = torch.zeros(n_dof, n_dof, device=self.device, dtype=self.dtype)
-
-        # Use index_put_ with accumulate
         row_idx = dof_map.unsqueeze(2).expand_as(K_elem).reshape(-1)
         col_idx = dof_map.unsqueeze(1).expand_as(K_elem).reshape(-1)
-        vals = K_elem.reshape(-1)
-        K_global.index_put_((row_idx, col_idx), vals, accumulate=True)
+        K_global.index_put_((row_idx, col_idx), K_elem.reshape(-1), accumulate=True)
+
+        return K_global
+
+    def _tangent_stiffness_p2(self, u, tangent_fn, use_fbar=False):
+        """P2 tangent stiffness with quadrature-point integration."""
+        M = self.n_elements
+        npe = 10
+        n_dof = 3 * self.n_nodes
+        n_elem_dof = 3 * npe  # 30
+        I3 = torch.eye(3, device=self.device, dtype=self.dtype).unsqueeze(0)
+        u_elem = u[self.elements]  # (M, 10, 3)
+
+        K_elem = torch.zeros(M, n_elem_dof, n_elem_dof, device=self.device, dtype=self.dtype)
+
+        for q in range(self.n_qp):
+            dNdx_q = self.dNdx_qp[:, q]  # (M, 10, 3)
+            w = self.weights_qp[q]
+
+            # F at quadrature point
+            grad_u = torch.einsum("eai, eaj -> eij", u_elem, dNdx_q)
+            F_q = I3 + grad_u
+            C_q = tangent_fn(F_q)  # (M, 9, 9)
+
+            # B-matrix at this quad point: (M, 9, 30)
+            B_q = torch.zeros(M, 9, n_elem_dof, device=self.device, dtype=self.dtype)
+            for a in range(npe):
+                for i in range(3):
+                    for J in range(3):
+                        B_q[:, 3 * i + J, 3 * a + i] = dNdx_q[:, a, J]
+
+            # K_elem += w * vol * B^T @ C @ B
+            BtC = torch.einsum("eji, ejk -> eik", B_q, C_q)
+            K_elem += w * self.vol[:, None, None] * torch.einsum("eij, ejk -> eik", BtC, B_q)
+
+        # DOF map for 10-node element
+        dof_map = torch.zeros(M, n_elem_dof, device=self.device, dtype=torch.long)
+        for a in range(npe):
+            for i in range(3):
+                dof_map[:, 3 * a + i] = 3 * self.elements[:, a] + i
+
+        K_global = torch.zeros(n_dof, n_dof, device=self.device, dtype=self.dtype)
+        row_idx = dof_map.unsqueeze(2).expand_as(K_elem).reshape(-1)
+        col_idx = dof_map.unsqueeze(1).expand_as(K_elem).reshape(-1)
+        K_global.index_put_((row_idx, col_idx), K_elem.reshape(-1), accumulate=True)
 
         return K_global
 
