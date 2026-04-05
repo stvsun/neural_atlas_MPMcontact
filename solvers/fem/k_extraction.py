@@ -1,13 +1,20 @@
-"""K_I extraction from FEM displacement fields near crack tips.
+"""K_I and K_II extraction from FEM displacement fields near crack tips.
 
 Supports two methods:
   - 'displacement': Williams asymptotic expansion fitting (legacy)
   - 'j_integral': Domain J-integral method (recommended, more robust on coarse meshes)
 
+Provides:
+  - extract_K_from_fem(): Single-chart K_I extraction
+  - extract_K_from_charts(): Multi-chart K_I extraction
+  - extract_K_II_from_fem(): Single-chart K_II extraction (Mode II)
+  - extract_K_II_from_charts(): Multi-chart K_II extraction (Mode II)
+
 Bridges the FEM solver displacement solution with analytical LEFM to extract
-stress intensity factors K_I (and K_II) from a chart-based FEM solution.
+stress intensity factors K_I and K_II from a chart-based FEM solution.
 """
 
+import math
 import numpy as np
 from typing import Optional, Tuple
 
@@ -229,3 +236,132 @@ def extract_K_from_charts(
     return extract_K_I_from_displacement(
         u_op_corrected, r_all[mask], theta_all[mask], E, nu, plane_strain
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Mode II (K_II) extraction via shear displacement component
+# ═══════════════════════════════════════════════════════════════
+
+def extract_K_II_from_fem(
+    solver, u, crack_tip, crack_direction, opening_direction,
+    E: float, nu: float, plane_strain: bool = True,
+    r_min: Optional[float] = None, r_max: Optional[float] = None,
+) -> float:
+    """Extract Mode-II stress intensity factor K_II from FEM displacement.
+
+    Projects the nodal displacement onto the crack-sliding direction
+    and fits the Williams Mode-II asymptotic expansion:
+        u_x ~ K_II/(2mu) * sqrt(r/(2pi)) * sin(theta/2) * [kappa+1+2cos^2(theta/2)]
+
+    Parameters
+    ----------
+    solver : ChartVectorFEMSolver
+    u : torch.Tensor (N, 3)
+    crack_tip, crack_direction, opening_direction : array-like (3,)
+    E, nu : float
+    plane_strain : bool
+    r_min, r_max : float or None
+
+    Returns
+    -------
+    K_II : float
+    """
+    nodes = solver.nodes_phys.detach().cpu().numpy()
+    u_np = u.detach().cpu().numpy()
+
+    crack_tip = np.asarray(crack_tip, dtype=float)
+    cd = np.asarray(crack_direction, dtype=float); cd = cd / np.linalg.norm(cd)
+    od = np.asarray(opening_direction, dtype=float); od = od / np.linalg.norm(od)
+
+    dx = nodes - crack_tip
+    x1 = dx @ cd; x2 = dx @ od
+    r = np.sqrt(x1**2 + x2**2)
+    theta = np.arctan2(x2, x1)
+
+    # Mode II: sliding displacement along crack direction
+    u_sliding = u_np @ cd
+
+    r_char = r.max() if r.max() > 0 else 1.0
+    if r_min is None: r_min = 0.02 * r_char
+    if r_max is None: r_max = 0.15 * r_char
+
+    mask = (r >= r_min) & (r <= r_max) & (r > 1e-10)
+    if np.sum(mask) < 5:
+        r_max = 0.3 * r_char
+        mask = (r >= r_min) & (r <= r_max) & (r > 1e-10)
+    if not np.any(mask):
+        return float("nan")
+
+    # Williams Mode-II: u_x = K_II/(2mu) * sqrt(r/(2pi)) * sin(theta/2) * shape_II
+    mu = E / (2.0 * (1.0 + nu))
+    kappa = (3.0 - 4.0 * nu) if plane_strain else ((3.0 - nu) / (1.0 + nu))
+
+    sqrt_r = np.sqrt(r[mask] / (2.0 * math.pi))
+    sin_half = np.sin(theta[mask] / 2.0)
+    cos_half = np.cos(theta[mask] / 2.0)
+    shape_fn = sin_half * (kappa + 1.0 + 2.0 * cos_half**2)
+
+    good = (np.abs(shape_fn) > 0.1) & np.isfinite(u_sliding[mask])
+    if not np.any(good):
+        return float("nan")
+
+    K_II_estimates = u_sliding[mask][good] * 2.0 * mu / (sqrt_r[good] * shape_fn[good])
+    return float(np.median(K_II_estimates))
+
+
+def extract_K_II_from_charts(
+    chart_solvers, u_charts, crack_tip, crack_direction, opening_direction,
+    E: float, nu: float, plane_strain: bool = True,
+    r_min: Optional[float] = None, r_max: Optional[float] = None,
+) -> float:
+    """Extract K_II from multi-chart FEM solution.
+
+    Pools displacement data from all charts and fits Williams Mode-II.
+    """
+    all_r, all_theta, all_u_sliding, all_x1 = [], [], [], []
+
+    crack_tip = np.asarray(crack_tip, dtype=float)
+    cd = np.asarray(crack_direction, dtype=float); cd = cd / np.linalg.norm(cd)
+    od = np.asarray(opening_direction, dtype=float); od = od / np.linalg.norm(od)
+
+    for ci, solver in enumerate(chart_solvers):
+        if u_charts[ci] is None: continue
+        nodes = solver.nodes_phys.detach().cpu().numpy()
+        u_np = u_charts[ci].detach().cpu().numpy()
+        dx = nodes - crack_tip
+        x1 = dx @ cd; x2 = dx @ od
+        all_r.append(np.sqrt(x1**2 + x2**2))
+        all_theta.append(np.arctan2(x2, x1))
+        all_u_sliding.append(u_np @ cd)
+        all_x1.append(x1)
+
+    if not all_r: return float("nan")
+
+    r_all = np.concatenate(all_r)
+    theta_all = np.concatenate(all_theta)
+    u_all = np.concatenate(all_u_sliding)
+
+    r_char = r_all.max() if r_all.max() > 0 else 1.0
+    if r_min is None: r_min = 0.02 * r_char
+    if r_max is None: r_max = 0.15 * r_char
+
+    mask = (r_all >= r_min) & (r_all <= r_max) & (r_all > 1e-10)
+    if np.sum(mask) < 5:
+        r_max = 0.3 * r_char
+        mask = (r_all >= r_min) & (r_all <= r_max) & (r_all > 1e-10)
+    if not np.any(mask):
+        return float("nan")
+
+    mu = E / (2.0 * (1.0 + nu))
+    kappa = (3.0 - 4.0 * nu) if plane_strain else ((3.0 - nu) / (1.0 + nu))
+
+    sqrt_r = np.sqrt(r_all[mask] / (2.0 * math.pi))
+    sin_half = np.sin(theta_all[mask] / 2.0)
+    cos_half = np.cos(theta_all[mask] / 2.0)
+    shape_fn = sin_half * (kappa + 1.0 + 2.0 * cos_half**2)
+
+    good = (np.abs(shape_fn) > 0.1) & np.isfinite(u_all[mask])
+    if not np.any(good): return float("nan")
+
+    K_II_estimates = u_all[mask][good] * 2.0 * mu / (sqrt_r[good] * shape_fn[good])
+    return float(np.median(K_II_estimates))
