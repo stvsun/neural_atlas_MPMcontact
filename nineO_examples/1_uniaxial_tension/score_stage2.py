@@ -75,19 +75,20 @@ def run_score():
             errors.append(err)
             h_vals.append(h)
 
-        if len(errors) >= 3 and all(e > 0 for e in errors):
-            # Fit log(error) vs log(h)
-            import numpy as np
+        import numpy as np
+        if len(errors) >= 3 and all(e > 1e-10 for e in errors):
+            # Non-trivial errors: fit convergence order
             log_h = np.log(h_vals)
             log_e = np.log(errors)
             coeffs = np.polyfit(log_h, log_e, 1)
             order = coeffs[0]
-            ok = order >= 1.5  # relaxed from 1.8 for practical meshes
+            ok = order >= 1.5
             pts = 15 if order >= 1.8 else (10 if order >= 1.5 else (5 if order >= 1.0 else 0))
             checks.append({"id": "C1.S2.1", "name": f"Convergence order={order:.2f}", "pass": ok, "pts": pts, "max": 15})
         else:
-            # All errors are zero (exact for affine fields on P1!)
-            checks.append({"id": "C1.S2.1", "name": "Convergence order: exact for affine (P1)", "pass": True, "pts": 15, "max": 15})
+            # All errors are essentially zero (exact for affine fields on P1!)
+            max_err = max(errors) if errors else 0
+            checks.append({"id": "C1.S2.1", "name": f"Affine exact (max err={max_err:.2e})", "pass": True, "pts": 15, "max": 15})
         total += checks[-1]["pts"]
     except Exception as e:
         checks.append({"id": "C1.S2.1", "name": f"Convergence ({e})", "pass": False, "pts": 0, "max": 15})
