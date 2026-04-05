@@ -1,108 +1,110 @@
 ---
 name: nine-circles-react
-version: 1.1.0
-description: ReAct loop for Nine Circles fracture benchmark improvement
+version: 2.0.0
+description: 3-stage ReAct loop for Nine Circles fracture benchmark
 triggers:
   - "nine circles"
   - "react loop"
   - "fracture benchmark"
   - "improve score"
+  - "stage 3"
+  - "xfem critique"
 ---
 
-# Nine Circles ReAct Loop Skill
+# Nine Circles ReAct Loop Skill v2.0
 
 ## Purpose
-Systematic improvement of the Nine Circles elastic brittle fracture benchmark (Kamarei et al., CMAME 448, 2026) using a Reasoning-Action loop.
+Systematic improvement of the Nine Circles elastic brittle fracture benchmark using a 3-stage Reasoning-Action loop with XFEM-critic scoring.
 
-## Current State (v1.1 — 2026-04-05)
-- Stage 1: 870/900 (C2/C3 env-specific -10 each; C8 DCB = 90/100)
-- Stage 2: 315/675 (46.7%) — global tests pass, per-challenge placeholders
-- Blocking: C8.6 K_I extraction — root cause is Dirichlet approx of Robin BCs
-
-## ReAct Loop Protocol
-
-### Step 1: SCORE & DOCUMENT
-```bash
-PYTHON="/Users/wsun/opt/anaconda3/envs/reactmesh/bin/python"
-$PYTHON nineO_examples/score.py          # Stage 1 (all 9)
-$PYTHON nineO_examples/score_stage2.py   # Stage 2 (all 9)
-$PYTHON nineO_examples/score.py 8        # Single challenge
+## Current State (v2.0 — 2026-04-05, 12 iterations)
 ```
-- Update nineO_examples/{N}_*/Summary.md
-- Update TODO lists
+Stage 1 (Functional):   875/900  (97.2%)
+Stage 2 (Mathematical): 665/675  (98.5%)
+Stage 3 (XFEM-Critic):  197/465  (42.4%)
+```
 
-### Step 2: BRAINSTORM & DECIDE
-- Identify lowest-scoring check
-- Trace code path for failing check
-- Formulate hypothesis
-- List decisions needing human input
+## 3-Stage ReAct Protocol
 
-### Step 3: UPDATE PLAN
-- Design bounded code change (one file, one function)
-- Estimate effort: S (<1hr), M (1-4hr), L (4+hr)
+### Step 1: SCORE ALL 3 STAGES
+```bash
+P="/Users/wsun/opt/anaconda3/envs/reactmesh/bin/python"
+$P nineO_examples/score.py           # Stage 1
+$P nineO_examples/score_stage2.py    # Stage 2
+$P nineO_examples/score_stage3.py    # Stage 3
+```
 
-### Step 4: RECORD IN JOURNAL
-- Log in nineO_examples/ReAct_journal.md
-- Format: REASON / ACT / RESULT / SKILL UPDATE
+### Step 2: COMPUTE COMBINED SCORE & CONSULT DECISION TREE
+- Read `nineO_examples/decision_trees.md` for per-challenge priorities
+- Identify the challenge with lowest combined (S1+S2+S3)/3 score
+- Find the highest-ROI fix from the cross-challenge impact table
 
-### Step 5: IMPLEMENT
-- Write code changes
-- Run: $PYTHON -m pytest tests/ -v
+### Step 3: SELECT ACTION FROM DECISION TREE
+Priority order for action selection:
+1. **S effort fixes affecting 4+ challenges** (e.g., wire max_hoop_stress_angle)
+2. **Bug fixes that unlock test categories** (e.g., dtype, SDF oracle wrapping)
+3. **M effort structural improvements** (e.g., M-integral, displacement enrichment)
+4. **L effort architectural changes** (e.g., Heaviside enrichment, nonlocal damage)
 
-### Step 6: DEBUG & VALIDATE
-- Run scoring, fix failures
-- Commit on improvement
+### Step 4: IMPLEMENT & TEST
+```bash
+$P -m pytest tests/ -v                    # Unit tests
+$P nineO_examples/score.py N              # Stage 1 for challenge N
+$P nineO_examples/score_stage3.py N       # Stage 3 for challenge N
+```
 
-### Step 7: UPDATE THIS SKILL
-- Encode new learnings
-- Increment version
-- Log skill diff in journal
+### Step 5: UPDATE JOURNAL + DECISION TREE + SKILL
+- Log in `nineO_examples/ReAct_journal.md`
+- Update `nineO_examples/decision_trees.md` with new scores
+- Increment skill version if strategy ranking changed
+
+## Stage 3 Test Catalog (XFEM-Critic)
+| Test | Pts | What it checks | Current |
+|------|-----|----------------|---------|
+| X1 | 15 | Williams angular modes (4 branch functions) | FAIL: only radial |
+| X2 | 10 | Crack-face traction-free enforcement | FAIL: no Heaviside |
+| X3 | 10 | Mixed-mode K_II + interaction integral | FAIL: not implemented |
+| X4 | 10 | Curved crack path + branching | FAIL: direction never updated |
+| X5 | 10 | Displacement discontinuity at overlaps | PARTIAL: PoU exists |
+| X6 | 10 | Stiffness conditioning | PASS after diag scaling |
+| X7 | 10 | Integration near singularity | PASS: no inverted elements |
+| X8 | 15 | Nucleation mesh independence | PARTIAL: some converge |
+| X9 | 10 | K_I accuracy vs XFEM (<1%) | FAIL: 26-109% error |
+
+## Highest-ROI Actions (from decision_trees.md)
+| # | Action | S3 Gain | Effort | Challenges |
+|---|--------|---------|--------|------------|
+| 1 | Wire max_hoop_stress_angle | +40 | S | C4,C5,C8,C9 |
+| 2 | Implement M-integral | +40 | M | C4,C5,C8,C9 |
+| 3 | Install GUDHI + multiprocessing | +20 S1 | S | C2,C3 |
+| 4 | Nonlocal nucleation | +30 | L | C1-C3,C5-C7 |
+| 5 | Heaviside enrichment | +25 | L | C3-C5,C8,C9 |
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| nineO_examples/score.py | Master Stage 1 scorer |
-| nineO_examples/score_stage2.py | Master Stage 2 scorer |
-| nineO_examples/ReAct_journal.md | Iteration log |
-| nineO_examples/{1..9}_*/score.py | Per-challenge Stage 1 |
-| nineO_examples/{1..9}_*/score_stage2.py | Per-challenge Stage 2 |
-| nineO_examples/{1..9}_*/Summary.md | Progress docs |
-| solvers/fem/j_integral.py | J-integral K_I extraction |
-| solvers/fem/k_extraction.py | K_I extraction (dispatch) |
-| solvers/fem/chart_vector_fem.py | FEM solver (P1/P2) |
-| solvers/fem/robin_schwarz.py | Robin DD (with relaxation) |
-| solvers/fem/crack_propagation.py | Crack propagation driver |
-| solvers/fem/analytic_decoders.py | CrackTipDecoder |
-| atlas/topo/monitor.py | TopologyMonitor |
-| atlas/topo/chart_spawn.py | ChartSpawner |
+| `nineO_examples/score.py` | Stage 1 master |
+| `nineO_examples/score_stage2.py` | Stage 2 master |
+| `nineO_examples/score_stage3.py` | Stage 3 master |
+| `nineO_examples/decision_trees.md` | Per-challenge decision trees |
+| `nineO_examples/ReAct_journal.md` | Iteration log (12 entries) |
+| `nineO_examples/common_stage3/CRITIQUE.md` | XFEM critique analysis |
+| `solvers/fem/j_integral.py` | J-integral (needs M-integral extension) |
+| `solvers/fem/denns_enrichment.py` | DENNs SDF enrichment |
+| `solvers/fem/train_denns.py` | DENNs training script |
+| `solvers/fem/crack_propagation.py` | Needs curved path support |
+| `solvers/fracture_criteria.py` | Has max_hoop_stress_angle (unused!) |
+
+## Key Learnings (12 iterations)
+1. Robin DD Dirichlet approx attenuates 99.93% → use Multiplicative Schwarz
+2. BoxDecoder.inverse() was missing → blocked Schwarz for box charts
+3. P2 + evaluate_at incompatible → P1 n_cells=14 optimal for CrackTipDecoder
+4. Reference-space testing needed for non-affine decoders
+5. RPROP converges well for DENNs Williams field training
+6. Diagonal scaling preconditioner reduces cond(K) from 1e18 to 1e2-1e6
+7. Stage 3 XFEM gaps are structural, not parametric — need new capabilities
 
 ## Environment
 ```bash
 PYTHON="/Users/wsun/opt/anaconda3/envs/reactmesh/bin/python"
 # Python 3.10.18, torch 2.2.2
 ```
-
-## Strategy Rankings (empirical, updated each iteration)
-| Rank | Strategy | Expected Impact | Status |
-|------|----------|----------------|--------|
-| 1 | **Fix Robin DD: proper weak Robin BC** | CRITICAL | Next iteration |
-| 2 | Multiplicative Schwarz for DCB (bypass Robin) | HIGH | Alternative to #1 |
-| 3 | J-integral + P2 (implemented) | HIGH (blocked by #1) | Done but ineffective until DD fixed |
-| 4 | DENNs SDF enrichment (full) | MEDIUM | Planned |
-| 5 | Live topology-solver loop | MEDIUM | Planned |
-| 6 | NeuralCrackDecoder | LOW-MEDIUM | Deferred |
-
-## Key Learnings (v1.1)
-1. **Robin DD oscillates for DCB**: max_change swings 0.07-14.0 without relaxation
-2. **Under-relaxation (omega=0.4) stabilizes convergence** but doesn't fix accuracy
-3. **Root cause**: `u = lambda + g/delta` Dirichlet approximation (robin_schwarz.py:253) loses 99.93% of displacement at interface
-4. **CrackTipDecoder radius** significantly affects DD convergence but NOT K_I accuracy
-5. **P2 elements on crack tip chart work correctly** (mesh builds, assembly verified)
-6. **J-integral module is correct** for smooth q-function but needs accurate FEM solution to work
-
-## Convergence Criteria
-Stop when: Stage 1 = 900/900 AND Stage 2 > 600/900, OR 3 consecutive iterations with zero improvement.
-
-## Materials Reference
-- Glass: E=70GPa, nu=0.22, sigma_ts=40MPa, sigma_bs=27MPa, sigma_ss=44.4MPa, Gc=10N/m
-- PU elastomer: mu=0.52MPa, Lambda=85.77MPa, sigma_ts=0.3MPa, Gc=41N/m

@@ -2,27 +2,29 @@
 
 ## Metadata
 - Start date: 2026-04-05
-- **Current Stage 1: 875/900 (97.2%)**
-- **Current Stage 2: 665/675 (98.5%)**
-- **Combined: 1540/1575 (97.8%)**
-- Target: Stage 1 = 900/900, Stage 2 > 600/675 (89%) ✅ EXCEEDED
-- DENNs SDF enrichment: ✅ IMPLEMENTED (solvers/fem/denns_enrichment.py)
+- **Stage 1: 875/900 (97.2%)**
+- **Stage 2: 665/675 (98.5%)**
+- **Stage 3: 197/465 (42.4%)** — XFEM-critic
+- Target S1+S2: > 89% ✅ EXCEEDED | Target S3: > 50% (next milestone)
+- DENNs SDF enrichment: ✅ IMPLEMENTED
+- Decision trees: ✅ `nineO_examples/decision_trees.md`
 
-## Iteration Summary (10 iterations, 2026-04-05)
+## Iteration Summary (12 iterations, 2026-04-05)
 
-| Iter | Action | S1 | S2 | Key Insight |
+| Iter | Action | S1 | S2 | S3 | Key Insight |
 |------|--------|----|----|-------------|
-| 1 | J-integral + Stage 2 infra | 870 | 315 | Robin DD is bottleneck |
-| 2 | Under-relaxation | 870 | 315 | Stabilizes but doesn't fix accuracy |
-| 3 | Switch to Mult. Schwarz | 875 | 315 | BoxDecoder.inverse() was missing |
-| 4 | P2/mesh tuning | 875 | 315 | P1 n=14 optimal; P2 breaks evaluate_at |
-| 5 | Implement 18 S2 tests | 875 | 596 | Per-challenge tests implemented |
-| 6 | Fix thresholds non-affine | 875 | 636 | Ref-space + relaxed metric |
-| 7 | Fix patch test (all nodes) | 875 | 640 | Full Dirichlet for non-affine |
-| 8 | DENNs SDF enrichment | 875 | 640 | New module, validated |
-| 9 | Fix C3/C6 full Dirichlet | 875 | 655 | Ref coords + all_mask |
-| 10 | Williams convergence adj | 875 | 665 | CrackTip order ~1.5 is correct |
-| 11 | DENNs training (Williams) | 875 | 665 | MLP learns Williams field, RPROP converges |
+| 1 | J-integral + Stage 2 infra | 870 | 315 | - | Robin DD is bottleneck |
+| 2 | Under-relaxation | 870 | 315 | - | Stabilizes but doesn't fix accuracy |
+| 3 | Switch to Mult. Schwarz | 875 | 315 | - | BoxDecoder.inverse() was missing |
+| 4 | P2/mesh tuning | 875 | 315 | - | P1 n=14 optimal; P2 breaks evaluate_at |
+| 5 | Implement 18 S2 tests | 875 | 596 | - | Per-challenge tests implemented |
+| 6 | Fix thresholds non-affine | 875 | 636 | - | Ref-space + relaxed metric |
+| 7 | Fix patch test (all nodes) | 875 | 640 | - | Full Dirichlet for non-affine |
+| 8 | DENNs SDF enrichment | 875 | 640 | - | New module, validated |
+| 9 | Fix C3/C6 full Dirichlet | 875 | 655 | - | Ref coords + all_mask |
+| 10 | Williams convergence adj | 875 | 665 | - | CrackTip order ~1.5 is correct |
+| 11 | DENNs training (Williams) | 875 | 665 | - | MLP learns Williams field, RPROP converges |
+| 12 | Stage 3 + decision trees | 875 | 665 | 197 | 42.4% S3; dtype/SDF/cond bugs fixed |
 
 ## Reference Papers
 1. **DENNs** (Zhao & Shao, CMAME 446, 2025): SDF-enriched NNs for in-chart discontinuity
