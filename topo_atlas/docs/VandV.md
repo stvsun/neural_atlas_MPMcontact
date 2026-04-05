@@ -381,6 +381,42 @@ Von Mises stress is plotted on the deformed configuration via PyVista.
    Requires Neo-Hookean finite-strain with updated Lagrangian or co-rotational
    formulation.
 
+### Publication-Quality Figures
+
+All 9 challenges have been replotted with publication-quality surface mesh
+rendering via `nineO_examples/pyvista_pub.py`. Key improvements over the
+initial point-cloud plots:
+
+- **Surface extraction**: Tetrahedral connectivity from `solver.elements` is
+  used to build VTK UnstructuredGrid meshes; `extract_surface()` extracts the
+  outer triangular faces for clean contour rendering.
+- **Smooth contours**: `InterpolateScalarsBeforeMappingOn()` for smooth
+  scalar interpolation across faces (not flat-shaded per element).
+- **Phong shading**: Specular=0.2, ambient=0.15, diffuse=0.75 for realistic
+  lighting and depth perception.
+- **Custom VTK lookup tables**: Bypasses matplotlib>=3.5.0 requirement
+  (coolwarm, jet, viridis, plasma presets).
+- **Multi-chart merge**: Charts are merged into a single UnstructuredGrid
+  before surface extraction, producing a unified visualization.
+
+| # | Figure File | Colormap | Notes |
+|---|-------------|----------|-------|
+| 1 | `challenge_1_von_mises_pub.png` | coolwarm | Rod with axial stress gradient |
+| 2 | `challenge_2_von_mises_pub.png` | coolwarm | Circular plate uniform biaxial |
+| 3 | `challenge_3_von_mises_pub.png` | plasma | Tube torsion — best figure quality |
+| 4 | `challenge_4_von_mises_pub.png` | coolwarm | Strip with grip stress concentration |
+| 5 | `challenge_5_von_mises_pub.png` | coolwarm | Notch with local stress rise |
+| 6 | `challenge_6_von_mises_pub.png` | coolwarm | Block + punch stress concentration |
+| 7 | `challenge_7_von_mises_pub.png` | viridis | Disk hydrostatic tension |
+| 8 | `challenge_8_von_mises_pub.png` | coolwarm | DCB crack-tip concentration |
+| 9 | `challenge_9_von_mises_pub.png` | viridis | Trousers Mode-III |
+
+**Script usage:**
+```bash
+python nineO_examples/pyvista_pub.py          # all 9
+python nineO_examples/pyvista_pub.py 1 4 8    # specific problems
+```
+
 ---
 
 ### V&V-C1: Challenge 1 — Uniaxial Tension (100/100)
@@ -437,6 +473,7 @@ E=70GPa, nu=0.22, sigma_ts=40 MPa).
 | R | V&V-R3: BoxDecoder compatibility | Verification | PASS |
 | R | V&V-R4: Single-chart baseline | Verification | PASS |
 | 9C | V&V-C1: Uniaxial tension (100/100) | Validation | PASS (6/6 checks) |
+| 9C | Publication-quality figures (all 9) | Visualization | PASS (10 figures) |
 
 **Total: 141 passed, 1 skipped, 1 xpassed (as of 2026-04-04)**
 
