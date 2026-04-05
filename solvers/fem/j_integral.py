@@ -32,6 +32,7 @@ Reference:
 
 import numpy as np
 import math
+import torch
 from typing import Optional, List, Tuple
 
 
@@ -96,6 +97,7 @@ def compute_J_integral(
     r_inner: Optional[float] = None,
     r_outer: Optional[float] = None,
     n_contours: int = 3,
+    small_strain: bool = True,
 ) -> float:
     """Compute the J-integral using the domain integral method.
 
@@ -135,8 +137,6 @@ def compute_J_integral(
     J : float
         J-integral value. Related to K_I by: K_I = sqrt(J * E').
     """
-    import torch
-
     crack_tip = np.asarray(crack_tip, dtype=np.float64)
     cd = np.asarray(crack_direction, dtype=np.float64)
     od = np.asarray(opening_direction, dtype=np.float64)
@@ -165,15 +165,19 @@ def compute_J_integral(
         F_elem = solver.compute_F(u)  # (M, 3, 3)
 
         # Compute stress: P = stress_fn(F)
-        P_elem = stress_fn(F_elem)  # (M, 3, 3) first Piola-Kirchhoff
+        P_elem = stress_fn(F_elem)  # (M, 3, 3)
 
-        # For small-strain linear elastic, Cauchy stress = P (approx)
-        # For finite strain: sigma = (1/J) P F^T
-        J_det = torch.det(F_elem)
-        J_det = torch.clamp(J_det, min=1e-10)
-
-        # Cauchy stress: sigma = (1/J) P F^T
-        sigma = torch.einsum("eij,ekj->eik", P_elem, F_elem) / J_det.unsqueeze(-1).unsqueeze(-1)
+        # Convert to Cauchy stress depending on formulation:
+        if small_strain:
+            # For make_linear_elastic_small_strain: stress_fn returns sigma directly
+            # (P = sigma for infinitesimal strain). NO push-forward needed.
+            sigma = P_elem
+        else:
+            # For finite-strain (Neo-Hookean, St. Venant-Kirchhoff):
+            # stress_fn returns first Piola-Kirchhoff P.
+            # Cauchy stress: sigma = (1/J) P F^T
+            J_det = torch.det(F_elem).clamp(min=1e-10)
+            sigma = torch.einsum("eij,ekj->eik", P_elem, F_elem) / J_det.unsqueeze(-1).unsqueeze(-1)
 
         # Displacement gradient: grad_u = F - I
         I3 = torch.eye(3, device=F_elem.device, dtype=F_elem.dtype).unsqueeze(0)
@@ -379,8 +383,8 @@ def compute_interaction_integral(
         centroids = solver.elem_centroids_phys.detach().cpu().numpy()
         F_elem = solver.compute_F(u)
         P_elem = stress_fn(F_elem)
-        J_det = torch.det(F_elem).clamp(min=1e-10)
-        sigma = torch.einsum("eij,ekj->eik", P_elem, F_elem) / J_det.unsqueeze(-1).unsqueeze(-1)
+        # For small-strain: stress_fn returns sigma directly (P = sigma)
+        sigma = P_elem
         I3 = torch.eye(3, device=F_elem.device, dtype=F_elem.dtype).unsqueeze(0)
         grad_u = F_elem - I3
 
