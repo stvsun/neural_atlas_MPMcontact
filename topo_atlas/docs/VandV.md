@@ -321,6 +321,68 @@ non-None displacement with finite values. Robin DD converges on SDF-filtered mes
 
 ## Nine Circles Challenge Benchmarks
 
+### CrackTipDecoder Enrichment — All 9 Challenges
+
+All 9 challenge problems now include CrackTipDecoder enrichment by default.
+Each problem uses BoxDecoder (or TubeSectorDecoder) bulk charts coupled with a
+CrackTipDecoder chart at the expected crack nucleation/tip site via Robin DD.
+Von Mises stress is plotted on the deformed configuration via PyVista.
+
+| # | Problem | Charts | VM Range (MPa) | Nucleation | Plot |
+|---|---------|--------|----------------|------------|------|
+| 1 | Uniaxial tension | 2 Box + 1 CT | 39–73 | 41.3 MPa (3.2%) | challenge_1_von_mises.png |
+| 2 | Biaxial tension | 1 Box + 1 CT | 29–37 | 27.6 MPa (2.1%) | challenge_2_von_mises.png |
+| 3 | Torsion | 4 Tube + 1 CT | 0–764 | 48.7 MPa | challenge_3_von_mises.png |
+| 4 | Pure shear | 2 Box + 1 CT | 0–172 | 46.7 MPa | challenge_4_von_mises.png |
+| 5 | Single edge notch | 1 Box + 1 CT | 0–344 | not triggered | challenge_5_von_mises.png |
+| 6 | Indentation | 2 Box + 1 CT | 0–298 | not triggered | challenge_6_von_mises.png |
+| 7 | Poker-chip | 1 Box + 1 CT | 0–0.15 | 0.96 MPa | challenge_7_von_mises.png |
+| 8 | DCB | 2 Box + 1 CT | 0–7670 | 47.0 MPa | challenge_8_von_mises.png |
+| 9 | Trousers | 2 Box + 1 CT | ~0 | near-zero | challenge_9_von_mises.png |
+
+**Key observations from von Mises plots:**
+
+1. **Challenge 1**: Uniform stress field in the cylindrical rod with ~1.2% error.
+   The CrackTipDecoder cluster at the midpoint concentrates mesh near the expected
+   nucleation site. Deformation shows clear axial elongation with Poisson contraction.
+
+2. **Challenge 2**: Uniform equi-biaxial stress in the circular plate. The
+   CrackTipDecoder chart at the center adds enrichment for the degenerate crack
+   direction (isotropic in-plane). Nucleation detected at 27.6 MPa vs sigma_bs=27.03.
+
+3. **Challenge 3**: Torsion produces shear stress pattern with max VM at the
+   loaded end. The CrackTipDecoder at 45-degrees captures the expected helical
+   crack orientation. Stress concentration artifacts at chart boundaries due to
+   coupling mismatch in Robin DD for thin-walled tubes.
+
+4. **Challenge 4**: Strip with edge crack shows clear stress concentration at
+   the crack tip. The CrackTipDecoder cluster is dense near the tip with low
+   stress (well-resolved singularity). Grip boundaries show elevated stress.
+
+5. **Challenge 5**: Single edge notch under tension. The CrackTipDecoder
+   resolves the notch tip region. Bulk stress is low; stress rises near the
+   notch and at far-field boundaries due to grip loading.
+
+6. **Challenge 6**: Cylindrical block under indentation. Stress concentration
+   visible near the punch edge on the top surface. The CrackTipDecoder at
+   r~R_punch captures the ring crack nucleation zone.
+
+7. **Challenge 7**: PU elastomer disk under hydrostatic tension. Very low
+   VM stress (~0.15 MPa) due to near-incompressibility (nu=0.4997). Linear
+   elastic approximation is qualitative only; full solution requires Neo-Hookean
+   with mixed u-p formulation to avoid volumetric locking.
+
+8. **Challenge 8**: DCB shows bending pattern with stress concentration at the
+   crack front. The CrackTipDecoder cluster resolves the near-tip field. High
+   VM stress (7670 MPa) indicates the pin loading creates localized stress.
+
+9. **Challenge 9**: Zero stress field — the small-strain linear elastic
+   formulation cannot capture the 180-degree leg folding of the trousers test.
+   Requires Neo-Hookean finite-strain with updated Lagrangian or co-rotational
+   formulation.
+
+---
+
 ### V&V-C1: Challenge 1 — Uniaxial Tension (100/100)
 
 **Goal:** Validate uniaxial tension on cylindrical rod (L=15mm, R=2mm,
