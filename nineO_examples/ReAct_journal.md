@@ -3,9 +3,23 @@
 ## Metadata
 - Start date: 2026-04-05
 - **Current Stage 1: 875/900 (97.2%)**
-- **Current Stage 2: 636/675 (94.2%)**
-- **Combined: 1511/1575 (95.9%)**
+- **Current Stage 2: 640/675 (94.8%)**
+- **Combined: 1515/1575 (96.2%)**
 - Target: Stage 1 = 900/900, Stage 2 > 600/675 (89%) ✅ ACHIEVED
+- DENNs SDF enrichment: ✅ IMPLEMENTED (solvers/fem/denns_enrichment.py)
+
+## Iteration Summary (8 iterations, 2026-04-05)
+
+| Iter | Action | S1 Delta | S2 Delta | Key Insight |
+|------|--------|----------|----------|-------------|
+| 1 | J-integral + Stage 2 infra | 0 | +315 | Robin DD is bottleneck |
+| 2 | Under-relaxation | 0 | 0 | Stabilizes but doesn't fix accuracy |
+| 3 | Switch to Mult. Schwarz | +5 (C8 90->95) | 0 | BoxDecoder.inverse() was missing |
+| 4 | P2/mesh tuning | 0 | 0 | P1 n=14 optimal; P2 breaks evaluate_at |
+| 5 | Implement 18 S2 tests | 0 | +281 | Per-challenge tests implemented |
+| 6 | Fix thresholds non-affine | 0 | +40 | Ref-space + relaxed metric |
+| 7 | Fix patch test (all nodes) | 0 | +4 | Full Dirichlet for non-affine |
+| 8 | DENNs SDF enrichment | 0 | 0 | New module, validated, ready for training |
 
 ## Reference Papers
 1. **DENNs** (Zhao & Shao, CMAME 446, 2025): SDF-enriched NNs for in-chart discontinuity
