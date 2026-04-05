@@ -160,6 +160,18 @@ class CylinderDecoder(torch.nn.Module):
 
         return torch.stack([r * torch.cos(theta), r * torch.sin(theta), z], dim=1)
 
+    def inverse(self, x_phys):
+        """Closed-form inverse: physical (x,y,z) -> reference (xi0,xi1,xi2)."""
+        x, y, z = x_phys[:, 0], x_phys[:, 1], x_phys[:, 2]
+        r = torch.sqrt(x**2 + y**2)
+        theta = torch.atan2(y, x)
+
+        xi0 = (theta - self.theta_center) / (self.theta_span / 2)
+        xi1 = (z - self.z_center) / self.L_half
+        xi2 = 2 * r / self.R - 1  # r = (xi2+1)/2 * R => xi2 = 2r/R - 1
+
+        return torch.stack([xi0, xi1, xi2], dim=1)
+
 
 class CrackTipDecoder(torch.nn.Module):
     """Maps [-1,1]^3 to a crack-tip region with radial coordinate squaring.
