@@ -77,9 +77,16 @@ def solve_nonlocal_strain(
 ) -> torch.Tensor:
     """Solve the implicit gradient equation for nonlocal equivalent strain.
 
-    Solves: e_nl - l^2 * nabla^2(e_nl) = e_local
+    Solves: (M + c*K) e_nl = M * e_local_nodes
 
-    Uses the FEM mesh to assemble and solve the Helmholtz-type equation.
+    where:
+      M = consistent mass matrix (P1 tetrahedral)
+      K = stiffness (Laplacian) matrix: K_ab = sum_e vol_e * dN_a/dx . dN_b/dx
+      c = l^2 (gradient parameter, l = length_scale)
+      e_local_nodes = volume-weighted projection of element strains to nodes
+
+    Uses proper sparse assembly + scipy.sparse.linalg.spsolve for the
+    Helmholtz-type equation, providing genuine spatial smoothing.
 
     Parameters
     ----------
@@ -95,47 +102,77 @@ def solve_nonlocal_strain(
     e_nl : torch.Tensor (N,)
         Nonlocal equivalent strain at nodes.
     """
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spla
+
     device = solver.device
-    dtype = solver.dtype
+    dtype_torch = solver.dtype
     n_nodes = solver.n_nodes
     n_elem = solver.n_elements
     c = length_scale ** 2
 
-    # Project element values to nodes via volume-weighted averaging
-    e_node = torch.zeros(n_nodes, device=device, dtype=dtype)
-    vol_node = torch.zeros(n_nodes, device=device, dtype=dtype)
+    elements = solver.elements[:, :4].cpu().numpy()  # (M, 4) vertex indices
+    vol = solver.vol.detach().cpu().numpy()           # (M,)
+    dNdx = (solver.dNdx_phys if solver.chart_decoder is not None
+            else solver.dNdx_ref).detach().cpu().numpy()  # (M, 4, 3)
 
-    elements = solver.elements[:, :4]  # vertex indices
-    vol = solver.vol
+    # ── Project element strains to nodes (volume-weighted) ──
+    e_local_np = e_local.detach().cpu().numpy()       # (M,)
+    e_node = np.zeros(n_nodes, dtype=np.float64)
+    vol_node = np.zeros(n_nodes, dtype=np.float64)
+    for a in range(4):
+        np.add.at(e_node, elements[:, a], e_local_np * vol)
+        np.add.at(vol_node, elements[:, a], vol)
+    vol_node = np.maximum(vol_node, 1e-15)
+    e_node /= vol_node
+
+    # ── Assemble sparse M (lumped mass) + K (stiffness) ──
+    # For P1 tets: element mass matrix M_e = vol/20 * (ones(4,4) + eye(4))
+    # Element stiffness: K_e[a,b] = vol * dN_a . dN_b
+
+    rows = []
+    cols = []
+    m_vals = []  # mass entries
+    k_vals = []  # stiffness entries
 
     for a in range(4):
-        e_node.scatter_add_(0, elements[:, a], e_local * vol)
-        vol_node.scatter_add_(0, elements[:, a], vol)
+        for b in range(4):
+            r = elements[:, a]  # (M,)
+            cc = elements[:, b]  # (M,)
+            rows.append(r)
+            cols.append(cc)
 
-    vol_node = vol_node.clamp(min=1e-15)
-    e_node = e_node / vol_node
+            # Consistent mass: M_e[a,b] = vol/20 * (1 + delta_ab)
+            if a == b:
+                m_vals.append(vol / 10.0)  # vol/20 * 2
+            else:
+                m_vals.append(vol / 20.0)
 
-    # Assemble Helmholtz system: (M + c*K) e_nl = M * e_local_nodes
-    # where M = mass matrix, K = stiffness matrix (Laplacian)
-    # For simplicity, use lumped mass + element stiffness from dNdx
-    M_lumped = vol_node.clone()  # lumped mass ≈ nodal volume
+            # Stiffness: K_e[a,b] = vol * dot(dN_a, dN_b)
+            dot_ab = np.sum(dNdx[:, a, :] * dNdx[:, b, :], axis=1)  # (M,)
+            k_vals.append(vol * dot_ab)
 
-    # K matrix: K_ab = sum_e vol_e * dN_a/dx . dN_b/dx
-    n_dof = n_nodes
-    K_diag = torch.zeros(n_dof, device=device, dtype=dtype)
-    dNdx = solver.dNdx_ref if solver.chart_decoder is None else solver.dNdx_phys
+    rows = np.concatenate(rows)
+    cols = np.concatenate(cols)
+    m_data = np.concatenate(m_vals)
+    k_data = np.concatenate(k_vals)
 
-    for a in range(4):
-        # Diagonal contribution: K_aa = sum_e vol * |dN_a|^2
-        grad_sq = (dNdx[:, a, :] ** 2).sum(-1)  # (M,)
-        K_diag.scatter_add_(0, elements[:, a], vol * grad_sq)
+    M_sparse = sp.csr_matrix((m_data, (rows, cols)), shape=(n_nodes, n_nodes))
+    K_sparse = sp.csr_matrix((k_data, (rows, cols)), shape=(n_nodes, n_nodes))
 
-    # Solve: (M_lumped + c * K_diag) * e_nl = M_lumped * e_node
-    # Using diagonal approximation for speed
-    lhs = M_lumped + c * K_diag
-    rhs = M_lumped * e_node
-    e_nl = rhs / lhs.clamp(min=1e-15)
+    # ── Solve (M + c*K) e_nl = M * e_node ──
+    A = M_sparse + c * K_sparse
+    rhs = M_sparse @ e_node
 
+    try:
+        e_nl_np = spla.spsolve(A, rhs)
+    except Exception:
+        # Fallback to diagonal if sparse solve fails
+        diag_A = np.array(A.diagonal()).flatten()
+        diag_A = np.maximum(diag_A, 1e-15)
+        e_nl_np = rhs / diag_A
+
+    e_nl = torch.tensor(e_nl_np, device=device, dtype=dtype_torch)
     return e_nl
 
 

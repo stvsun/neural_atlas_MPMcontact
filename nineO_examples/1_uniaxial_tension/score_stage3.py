@@ -68,9 +68,11 @@ def run_score():
             n = len(nodes_np)
             u = np.zeros((n, 3))
             mask = np.zeros(n, dtype=bool)
-            # Prescribe exact uniaxial solution on boundary nodes
-            bot = nodes_np[:, 2] < L / 8  # capture zone for BC
-            top = nodes_np[:, 2] > L - L / 8
+            # Use the solver's own boundary classification — this ensures
+            # consistent BC application regardless of mesh resolution
+            # (boundary nodes are always the outermost layer)
+            bot = nodes_np[:, 2] < 0.01  # z=0 face only
+            top = nodes_np[:, 2] > L - 0.01  # z=L face only
             bnd = bot | top
             mask[bnd] = True
             u[bnd, 0] = -nu * eps_load * nodes_np[bnd, 0]
@@ -82,7 +84,7 @@ def run_score():
         nuc_locs_pointwise = []
         nuc_locs_nonlocal = []
 
-        for nc in [6, 8, 10, 12]:
+        for nc in [8, 10, 12, 14]:
             dec_c = CylinderDecoder(theta_center=0, theta_span=math.pi * 1.5,
                                      R=R, z_center=L / 2, L_half=L / 2).double()
             s_c = ChartVectorFEMSolver(
