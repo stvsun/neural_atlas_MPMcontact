@@ -34,6 +34,112 @@ from solvers.fem.analytic_decoders import BoxDecoder
 from solvers.fracture_criteria import drucker_prager_F
 from solvers.fem.nonlocal_damage import compute_local_equivalent_strain, solve_nonlocal_strain
 
+
+# ═══════════════════════════════════════════════════════════════
+# VTU OUTPUT (ParaView compatible)
+# ═══════════════════════════════════════════════════════════════
+
+def write_vtu(filepath, nodes_phys, elements, u, P, e_local, e_nonlocal, J, step, delta):
+    """Write an unstructured grid VTU file for ParaView visualization.
+
+    Writes P1 tet mesh with per-node displacement and per-element stress,
+    strain, damage, and J (volume ratio) fields.
+    """
+    nodes_np = nodes_phys.detach().cpu().numpy() if hasattr(nodes_phys, 'detach') else nodes_phys
+    u_np = u.detach().cpu().numpy() if hasattr(u, 'detach') else u
+    el_np = elements[:, :4].cpu().numpy() if hasattr(elements, 'cpu') else elements[:, :4]
+    P_np = P.detach().cpu().numpy() if hasattr(P, 'detach') else P
+    el_np_local = e_local.detach().cpu().numpy() if hasattr(e_local, 'detach') else e_local
+    el_np_nonlocal = e_nonlocal.detach().cpu().numpy() if hasattr(e_nonlocal, 'detach') else e_nonlocal
+    J_np = J.detach().cpu().numpy() if hasattr(J, 'detach') else J
+
+    n_nodes = len(nodes_np)
+    n_cells = len(el_np)
+
+    # Deformed positions
+    x_def = nodes_np + u_np
+
+    with open(filepath, 'w') as f:
+        f.write('<?xml version="1.0"?>\n')
+        f.write('<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">\n')
+        f.write(f'  <!-- Step {step}, delta={delta:.6f} -->\n')
+        f.write('  <UnstructuredGrid>\n')
+        f.write(f'    <Piece NumberOfPoints="{n_nodes}" NumberOfCells="{n_cells}">\n')
+
+        # Points (deformed)
+        f.write('      <Points>\n')
+        f.write('        <DataArray type="Float64" NumberOfComponents="3" format="ascii">\n')
+        for i in range(n_nodes):
+            f.write(f'          {x_def[i,0]:.8e} {x_def[i,1]:.8e} {x_def[i,2]:.8e}\n')
+        f.write('        </DataArray>\n')
+        f.write('      </Points>\n')
+
+        # Cells (tets: VTK type 10)
+        f.write('      <Cells>\n')
+        f.write('        <DataArray type="Int32" Name="connectivity" format="ascii">\n')
+        for e in range(n_cells):
+            f.write(f'          {el_np[e,0]} {el_np[e,1]} {el_np[e,2]} {el_np[e,3]}\n')
+        f.write('        </DataArray>\n')
+        f.write('        <DataArray type="Int32" Name="offsets" format="ascii">\n')
+        for e in range(n_cells):
+            f.write(f'          {(e+1)*4}\n')
+        f.write('        </DataArray>\n')
+        f.write('        <DataArray type="UInt8" Name="types" format="ascii">\n')
+        for e in range(n_cells):
+            f.write('          10\n')
+        f.write('        </DataArray>\n')
+        f.write('      </Cells>\n')
+
+        # Point data: displacement
+        f.write('      <PointData Vectors="displacement">\n')
+        f.write('        <DataArray type="Float64" Name="displacement" '
+                'NumberOfComponents="3" format="ascii">\n')
+        for i in range(n_nodes):
+            f.write(f'          {u_np[i,0]:.8e} {u_np[i,1]:.8e} {u_np[i,2]:.8e}\n')
+        f.write('        </DataArray>\n')
+        # Nonlocal strain at nodes
+        f.write('        <DataArray type="Float64" Name="e_nonlocal" format="ascii">\n')
+        for i in range(n_nodes):
+            f.write(f'          {el_np_nonlocal[i]:.8e}\n')
+        f.write('        </DataArray>\n')
+        f.write('      </PointData>\n')
+
+        # Cell data: stress, strain, J
+        f.write('      <CellData Tensors="stress">\n')
+        # sigma_yy (axial)
+        f.write('        <DataArray type="Float64" Name="P_yy" format="ascii">\n')
+        for e in range(n_cells):
+            f.write(f'          {P_np[e,1,1]:.8e}\n')
+        f.write('        </DataArray>\n')
+        # von Mises equivalent
+        f.write('        <DataArray type="Float64" Name="e_local" format="ascii">\n')
+        for e in range(n_cells):
+            f.write(f'          {el_np_local[e]:.8e}\n')
+        f.write('        </DataArray>\n')
+        # J (volume ratio)
+        f.write('        <DataArray type="Float64" Name="J" format="ascii">\n')
+        for e in range(n_cells):
+            f.write(f'          {J_np[e]:.8e}\n')
+        f.write('        </DataArray>\n')
+        f.write('      </CellData>\n')
+
+        f.write('    </Piece>\n')
+        f.write('  </UnstructuredGrid>\n')
+        f.write('</VTKFile>\n')
+
+
+def write_pvd(filepath, vtu_files):
+    """Write a PVD (ParaView Data) collection file linking time steps."""
+    with open(filepath, 'w') as f:
+        f.write('<?xml version="1.0"?>\n')
+        f.write('<VTKFile type="Collection" version="0.1">\n')
+        f.write('  <Collection>\n')
+        for step, delta, vtu_path in vtu_files:
+            rel = os.path.basename(vtu_path)
+            f.write(f'    <DataSet timestep="{delta:.6f}" file="{rel}"/>\n')
+        f.write('  </Collection>\n')
+        f.write('</VTKFile>\n')
+
 # ═══════════════════════════════════════════════════════════════
 # MATERIAL AND GEOMETRY
 # ═══════════════════════════════════════════════════════════════
@@ -213,6 +319,15 @@ def run_simulation(nc=12, n_steps=500, delta_max=5.0, monitor_every=50,
             if F_dp_vals.max() >= 0:
                 nuc_detected_step = step
 
+        # ── VTU output ──
+        vtu_dir = os.path.join(output_dir, "vtu")
+        if step == 0:
+            os.makedirs(vtu_dir, exist_ok=True)
+            _vtu_files = []
+        vtu_path = os.path.join(vtu_dir, f"trousers_{step:05d}.vtu")
+        write_vtu(vtu_path, nodes, solver.elements, u_sol, P, e_local, e_nonlocal, J, step, delta)
+        _vtu_files.append((step, delta, vtu_path))
+
         # ── Persistent homology ──
         topo_str = ""
         if has_topo and (step % monitor_every == 0 or step == n_steps - 1):
@@ -302,6 +417,10 @@ def run_simulation(nc=12, n_steps=500, delta_max=5.0, monitor_every=50,
 
     with open(os.path.join(output_dir, "results.json"), "w") as f:
         json.dump(results, f, indent=2, default=convert)
+
+    # Write PVD collection file
+    pvd_path = os.path.join(output_dir, "trousers.pvd")
+    write_pvd(pvd_path, _vtu_files)
 
     if verbose:
         print()
