@@ -25,6 +25,16 @@
 | 10 | Williams convergence adj | 875 | 665 | - | CrackTip order ~1.5 is correct |
 | 11 | DENNs training (Williams) | 875 | 665 | - | MLP learns Williams field, RPROP converges |
 | 12 | Stage 3 + decision trees | 875 | 665 | 197 | 42.4% S3; dtype/SDF/cond bugs fixed |
+| T1 | Wire max_hoop_stress (X4) | 875 | 665 | 237 | S3 51.0%; all X4 PASS |
+| T2 | K_II + M-integral (X3) | 875 | 665 | 277 | S3 59.6%; all X3 PASS |
+| T5 | nonlocal_damage.py (X8) | 875 | 665 | 307 | S3 66.0% |
+| T6 | Crack-face check (X5) | 875 | 665 | 322 | S3 69.2% |
+| T12 | Install GUDHI | 885 | 665 | 322 | S1 98.3% |
+| -- | Fix J-integral Cauchy bug | 885 | 665 | 322 | Critical #1 from code review |
+| -- | C1 CylinderDecoder | 885 | 665 | 325 | O(h²) convergence, S1=100 |
+| -- | Sparse Helmholtz solve | 885 | 665 | 325 | Scatter 3.2→0.16mm |
+| -- | C1 100%: tight BCs | 885 | 665 | 325 | S3=25/25, first perfect challenge |
+| -- | Apply recipe to C2-C9 S3 | 885 | 665 | 325 | S3 69.2→69.9% |
 
 ## Reference Papers
 1. **DENNs** (Zhao & Shao, CMAME 446, 2025): SDF-enriched NNs for in-chart discontinuity
