@@ -145,6 +145,93 @@ class BoxDecoder(torch.nn.Module):
         return J
 
 
+class GradedBoxDecoder(torch.nn.Module):
+    """Maps [-1,1]^3 to a box with element concentration near the center.
+
+    Like BoxDecoder, but applies a power-law grading along one axis so that
+    elements are packed near center[grade_axis] (e.g., the crack tip) and
+    stretched in the far-field. This gives h-refinement exactly where it's
+    needed without multi-chart overhead.
+
+    Forward mapping (graded axis k):
+        x_k = center_k + sign(xi_k) * |xi_k|^grade_power * half_extents_k
+
+    Other axes are linear (same as BoxDecoder).
+
+    Element size ratio (center vs boundary):
+        h_center / h_boundary = 1 / grade_power   (at xi=0 vs xi=±1)
+        For grade_power=2: 2× finer at center
+        For grade_power=3: 3× finer at center
+
+    Parameters
+    ----------
+    center : tuple of 3 floats
+        Box center. The graded axis concentrates elements at this point.
+    half_extents : tuple of 3 floats
+        Half-widths in each direction.
+    grade_axis : int (0, 1, or 2)
+        Which axis to grade (0=x, 1=y, 2=z).
+    grade_power : float
+        Grading exponent. 1.0 = uniform (BoxDecoder), 2.0 = quadratic, etc.
+    """
+
+    def __init__(self, center=(0, 0, 0), half_extents=(1, 1, 1),
+                 grade_axis=1, grade_power=2.0):
+        super().__init__()
+        self.center = torch.tensor(center, dtype=torch.float64)
+        self.half_extents = torch.tensor(half_extents, dtype=torch.float64)
+        self.grade_axis = grade_axis
+        self.grade_power = grade_power
+
+    def forward(self, xi, **kwargs):
+        c = self.center.to(xi.device, xi.dtype).unsqueeze(0)
+        he = self.half_extents.to(xi.device, xi.dtype).unsqueeze(0)
+        x = c + xi * he  # start with linear mapping
+
+        # Apply power-law grading on the specified axis
+        k = self.grade_axis
+        p = self.grade_power
+        xi_k = xi[:, k]
+        # sign-preserving power: f(xi) = sign(xi) * |xi|^p
+        x_k = c[0, k] + torch.sign(xi_k) * torch.abs(xi_k).pow(p) * he[0, k]
+        x = x.clone()
+        x[:, k] = x_k
+        return x
+
+    def inverse(self, x, **kwargs):
+        c = self.center.to(x.device, x.dtype).unsqueeze(0)
+        he = self.half_extents.to(x.device, x.dtype).unsqueeze(0)
+        xi = (x - c) / he  # start with linear inverse
+
+        # Invert the power-law on graded axis: xi = sign(dx) * |dx/he|^(1/p)
+        k = self.grade_axis
+        p = self.grade_power
+        dx_k = x[:, k] - c[0, k]
+        normalized = dx_k / he[0, k]
+        xi_k = torch.sign(normalized) * torch.abs(normalized).pow(1.0 / p)
+        xi = xi.clone()
+        xi[:, k] = xi_k
+        return xi
+
+    def jacobian(self, xi, **kwargs):
+        n = xi.shape[0]
+        he = self.half_extents.to(xi.device, xi.dtype)
+        J = torch.zeros(n, 3, 3, device=xi.device, dtype=xi.dtype)
+
+        # Linear axes
+        for d in range(3):
+            J[:, d, d] = he[d]
+
+        # Graded axis: dx/dxi = he * p * |xi|^(p-1)
+        k = self.grade_axis
+        p = self.grade_power
+        xi_k = xi[:, k]
+        # Clamp |xi| away from 0 to avoid zero Jacobian at the center
+        abs_xi = torch.abs(xi_k).clamp(min=1e-6)
+        J[:, k, k] = he[k] * p * abs_xi.pow(p - 1)
+        return J
+
+
 class CylinderDecoder(torch.nn.Module):
     """Maps [-1,1]^3 to a solid cylinder sector.
 
