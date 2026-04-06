@@ -538,7 +538,7 @@ class ChartVectorFEMSolver:
         J_bar_node = J_node_sum / vol_node_sum.clamp(min=1e-15)  # (N,)
 
         # Element J_bar = mean of its 4 nodal J_bar values
-        J_bar = torch.mean(J_bar_node[elements].float(), dim=1).to(self.dtype)  # (M,)
+        J_bar = torch.mean(J_bar_node[elements[:, :4]], dim=1)  # (M,) — stay in float64
 
         # Scale: F_bar = (J_bar / J)^{1/3} * F
         scale = (J_bar / J).pow(1.0 / 3.0)       # (M,)
