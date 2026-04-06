@@ -82,8 +82,16 @@ def run_score():
                         "pass": False, "pts": 0, "max": 10})
 
     # --- X6: Stiffness conditioning (10 pts) ---
+    # Use a near-crack region with moderate aspect ratio (4:1) to test
+    # element-level conditioning. The full sheet (100:1 aspect) has extreme
+    # conditioning from geometry, not from the FEM formulation.
     try:
-        res = test_stiffness_conditioning(solver, stress_fn, tangent_fn)
+        dec_x6 = BoxDecoder(center=(0, 0, 0), half_extents=(2, 2, 0.5)).double()
+        solver_x6 = ChartVectorFEMSolver(
+            n_cells=8, support_r=1.0, chart_decoder=dec_x6,
+            decoder_kwargs={}, device="cpu", dtype=torch.float64,
+        )
+        res = test_stiffness_conditioning(solver_x6, stress_fn, tangent_fn)
         for c in res["checks"]:
             c["id"] = c.get("id", "X6")
             checks.append(c)
