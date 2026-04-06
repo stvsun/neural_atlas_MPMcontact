@@ -117,8 +117,9 @@ def run(nc=18, delta_max=65.0, grade_power=3.0, use_enrichment=True,
     print(f"  enrichment={'ON' if use_enrichment else 'OFF'}")
     print("=" * 70)
 
-    # ── Build graded mesh ──
+    # ── Build graded mesh with crack SDF filtering ──
     # Center at crack tip (y=50), cover full sheet
+    # The crack runs along x=0 from y=0 to y=A_CRACK (=50mm)
     base_dec = GradedBoxDecoder(
         center=(0, L / 2, 0),
         half_extents=(W / 2 + 0.1, L / 2 + 0.1, B / 2 + 0.05),
@@ -126,15 +127,52 @@ def run(nc=18, delta_max=65.0, grade_power=3.0, use_enrichment=True,
         grade_power=grade_power,
     ).double()
 
+    # Crack SDF: thin slit at x=0, running from y=0 to y=A_CRACK
+    # The sheet spans x∈[-20,20], y∈[0,100], z∈[-0.5,0.5].
+    # The crack slit is at x=0, y∈[0,50], all z.
+    # SDF = negative inside sheet (away from crack), positive inside crack slit.
+    class TrousersCrackSDF:
+        """SDF for a rectangular sheet with a centerline crack slit.
+
+        The SDF is designed so that elements INSIDE the crack slit have
+        SDF > threshold (and are removed), while elements in the sheet body
+        have SDF << threshold (and are kept).
+
+        We don't compute a true distance field — instead we use a simple
+        indicator: SDF = -1 everywhere in the sheet, except SDF = +1 inside
+        the crack slit (|x| < delta, 0 <= y <= A_crack).
+        """
+        def __init__(self, W, L, B, A_crack, delta_slit=0.3):
+            self.W = W; self.L = L; self.B = B
+            self.A = A_crack; self.ds = delta_slit
+
+        def sdf(self, x_phys):
+            import torch
+            if not isinstance(x_phys, torch.Tensor):
+                x_phys = torch.tensor(x_phys, dtype=torch.float64)
+            x = x_phys[:, 0]; y = x_phys[:, 1]; z = x_phys[:, 2]
+
+            # Start with SDF = -1 (inside sheet)
+            result = -torch.ones_like(x)
+
+            # Mark elements in crack slit as outside (+1)
+            in_crack = (torch.abs(x) < self.ds) & (y >= -0.5) & (y <= self.A + 0.5)
+            result[in_crack] = 1.0
+
+            # Mark elements outside the sheet as outside (+1)
+            outside_sheet = ((torch.abs(x) > self.W / 2 + 0.5) |
+                            (y < -0.5) | (y > self.L + 0.5) |
+                            (torch.abs(z) > self.B / 2 + 0.3))
+            result[outside_sheet] = 1.0
+
+            return result
+
+    crack_sdf = TrousersCrackSDF(W=W, L=L, B=B, A_crack=A_CRACK, delta_slit=0.3)
+
     # ── SDF enrichment (optional) ──
     if use_enrichment:
-        # Crack SDF: the pre-crack runs along y < 50 at x=0
-        crack_sdf = CrackedPlateSDFOracle(
-            a=A_CRACK, W=W / 2, H=L / 2, T=B, delta=0.05
-        )
         def sdf_fn(x_phys):
             return crack_sdf.sdf(x_phys)
-
         decoder = enrich_decoder(base_dec, sdf_fn, epsilon=0.1,
                                   enrichment_width=32, enrichment_depth=2)
         print(f"  Decoder: GradedBoxDecoder + SDFEnrichedDecoder")
@@ -142,9 +180,13 @@ def run(nc=18, delta_max=65.0, grade_power=3.0, use_enrichment=True,
         decoder = base_dec
         print(f"  Decoder: GradedBoxDecoder (no enrichment)")
 
+    # BUG FIX: Pass crack SDF to solver for element filtering
+    # Elements whose centroids fall INSIDE the crack slit (SDF > 0) are removed.
     solver = ChartVectorFEMSolver(
         n_cells=nc, support_r=1.0, chart_decoder=decoder,
-        decoder_kwargs={}, device="cpu", dtype=torch.float64,
+        decoder_kwargs={},
+        sdf_oracle=crack_sdf, sdf_threshold=-0.01,  # keep elements with SDF < -0.01
+        device="cpu", dtype=torch.float64,
     )
     stress_fn, tangent_fn = solver.make_neo_hookean(MU, K_BULK)
     n_nodes = solver.n_nodes
@@ -197,8 +239,15 @@ def run(nc=18, delta_max=65.0, grade_power=3.0, use_enrichment=True,
         print(f"  Restarted from step {start_step}, delta={controller.delta:.3f}")
 
     nodes = solver.nodes_phys.detach()
+    x = nodes[:, 0]
     y = nodes[:, 1]
     f_ext = torch.zeros(n_nodes, 3, dtype=torch.float64)
+
+    # Report crack stats
+    n_left_grip = ((y < 2) & (x < -0.5)).sum().item()
+    n_right_grip = ((y < 2) & (x > 0.5)).sum().item()
+    n_top_fix = (y > L - 1).sum().item()
+    print(f"  BCs: left grip={n_left_grip}, right grip={n_right_grip}, top fix={n_top_fix}")
 
     # ── Main loop ──
     print()
@@ -214,15 +263,25 @@ def run(nc=18, delta_max=65.0, grade_power=3.0, use_enrichment=True,
         delta = controller.delta
         t_step = time.time()
 
-        # BCs: fix bottom (y < 1), pull top (y > L-1) in ±z (Mode III)
+        # Mode III tearing BCs (Kamarei Section 5.2):
+        # The pre-crack (x=0, y<50) splits the bottom half into two legs.
+        # Pull left leg (x<0) in +z, right leg (x>0) in -z at y≈0.
+        # Fix top edge (y≈100) to prevent rigid body motion.
         bc_mask = torch.zeros(n_nodes, dtype=torch.bool)
         u_bc = torch.zeros(n_nodes, 3, dtype=torch.float64)
-        bot = y < 1.0
-        top = y > L - 1.0
-        bc_mask[bot] = True
-        bc_mask[top] = True
-        u_bc[top, 2] = delta / 2
-        u_bc[bot, 2] = -delta / 2
+        x = nodes[:, 0]
+
+        # Grips at bottom of each leg (y < 2)
+        left_grip = (y < 2.0) & (x < -0.5)    # left leg grip
+        right_grip = (y < 2.0) & (x > 0.5)    # right leg grip
+        bc_mask[left_grip] = True
+        bc_mask[right_grip] = True
+        u_bc[left_grip, 2] = delta / 2          # pull left leg in +z
+        u_bc[right_grip, 2] = -delta / 2        # pull right leg in -z
+
+        # Fix top edge to prevent rigid body motion
+        top_fix = y > L - 1.0
+        bc_mask[top_fix] = True                  # u = 0 at top
 
         # ── Solve ──
         u_sol = solver.solve_nonlinear(
