@@ -119,31 +119,40 @@ def propagate_crack(
                 'n_steps': step + 1,
             }
 
-        # Compute propagation angle via max hoop stress criterion
-        # (Erdogan & Sih 1963). For pure Mode I, theta_c = 0 (straight).
-        # For mixed-mode, crack kinks toward max tangential stress.
-        from solvers.fracture_criteria import max_hoop_stress_angle
-        K_II = 0.0  # TODO: extract K_II via interaction integral
-        theta_c = max_hoop_stress_angle(K_I, K_II)
+        # Compute 3D propagation direction from K_I, K_II, K_III
+        # Uses two angles:
+        #   θ (in-plane kink): Erdogan-Sih from K_I, K_II
+        #   ψ (out-of-plane twist): Pook/Schöllmann from K_I, K_III
+        from solvers.fracture_criteria import propagation_direction_3d
+        from solvers.fem.k_extraction import extract_K_II_from_charts, extract_K_III_from_charts
 
-        # Rotate crack_direction by theta_c around out-of-plane axis
-        # (enables curved crack paths when K_II != 0)
-        if abs(theta_c) > 1e-10:
-            out_of_plane = np.cross(crack_direction, opening_direction)
-            out_of_plane = out_of_plane / np.linalg.norm(out_of_plane)
-            cos_t = math.cos(theta_c)
-            sin_t = math.sin(theta_c)
-            # Rodrigues rotation formula
-            crack_direction = (cos_t * crack_direction
-                               + sin_t * np.cross(out_of_plane, crack_direction)
-                               + (1 - cos_t) * np.dot(out_of_plane, crack_direction) * out_of_plane)
-            crack_direction = crack_direction / np.linalg.norm(crack_direction)
-            # Update opening direction to stay perpendicular
-            opening_direction = np.cross(out_of_plane, crack_direction)
-            opening_direction = opening_direction / np.linalg.norm(opening_direction)
+        # Extract K_II and K_III (set to 0 if extraction fails)
+        try:
+            K_II = extract_K_II_from_charts(
+                solvers, u_charts, tip_pos,
+                crack_direction, opening_direction, E, nu, plane_strain)
+            if math.isnan(K_II): K_II = 0.0
+        except Exception:
+            K_II = 0.0
 
-            if verbose:
-                print(f"  [Propagation] kink angle theta_c={math.degrees(theta_c):.1f} deg")
+        try:
+            K_III = extract_K_III_from_charts(
+                solvers, u_charts, tip_pos,
+                crack_direction, opening_direction, E, nu)
+            if math.isnan(K_III): K_III = 0.0
+        except Exception:
+            K_III = 0.0
+
+        # Update crack tip triad (direction + opening + front)
+        crack_direction, opening_direction, front_direction = propagation_direction_3d(
+            K_I, K_II, K_III, crack_direction, opening_direction, nu)
+
+        if verbose and (abs(K_II) > 1e-6 or abs(K_III) > 1e-6):
+            from solvers.fracture_criteria import max_hoop_stress_angle, mode_III_twist_angle
+            theta = max_hoop_stress_angle(K_I, K_II)
+            psi = mode_III_twist_angle(K_I, K_III, nu)
+            print(f"  [Propagation] K_II={K_II:.2f}, K_III={K_III:.2f}, "
+                  f"θ={math.degrees(theta):.1f}°, ψ={math.degrees(psi):.1f}°")
 
         # Check for potential crack branching (Ramulu & Kobayashi 1985):
         # branching occurs when K_I exceeds ~1.5 * K_Ic in dynamic fracture.

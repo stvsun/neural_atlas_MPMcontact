@@ -365,3 +365,124 @@ def extract_K_II_from_charts(
 
     K_II_estimates = u_all[mask][good] * 2.0 * mu / (sqrt_r[good] * shape_fn[good])
     return float(np.median(K_II_estimates))
+
+
+# ═══════════════════════════════════════════════════════════════
+# Mode III (K_III) extraction via anti-plane displacement
+# ═══════════════════════════════════════════════════════════════
+
+def extract_K_III_from_fem(
+    solver, u, crack_tip, crack_direction, opening_direction,
+    E: float, nu: float,
+    r_min: Optional[float] = None, r_max: Optional[float] = None,
+) -> float:
+    """Extract Mode-III stress intensity factor K_III from FEM displacement.
+
+    Mode III is the anti-plane shear (tearing) mode. The displacement is
+    along the crack front direction e_3 = crack_dir × opening_dir:
+
+        u_3(r, θ) = K_III/μ · √(r/(2π)) · sin(θ/2)
+
+    Parameters
+    ----------
+    solver : ChartVectorFEMSolver
+    u : torch.Tensor (N, 3)
+    crack_tip, crack_direction, opening_direction : array-like (3,)
+    E, nu : float
+    r_min, r_max : float or None
+
+    Returns
+    -------
+    K_III : float
+    """
+    nodes = solver.nodes_phys.detach().cpu().numpy()
+    u_np = u.detach().cpu().numpy()
+
+    crack_tip = np.asarray(crack_tip, dtype=float)
+    cd = np.asarray(crack_direction, dtype=float); cd = cd / np.linalg.norm(cd)
+    od = np.asarray(opening_direction, dtype=float); od = od / np.linalg.norm(od)
+
+    # Crack front direction (out-of-plane / anti-plane)
+    e3 = np.cross(cd, od)
+    e3 = e3 / np.linalg.norm(e3)
+
+    dx = nodes - crack_tip
+    x1 = dx @ cd; x2 = dx @ od
+    r = np.sqrt(x1**2 + x2**2)
+    theta = np.arctan2(x2, x1)
+
+    # Anti-plane displacement along e3 (crack front direction)
+    u_antiplane = u_np @ e3
+
+    r_char = r.max() if r.max() > 0 else 1.0
+    if r_min is None: r_min = 0.02 * r_char
+    if r_max is None: r_max = 0.15 * r_char
+
+    mask = (r >= r_min) & (r <= r_max) & (r > 1e-10)
+    if np.sum(mask) < 5:
+        r_max = 0.3 * r_char
+        mask = (r >= r_min) & (r <= r_max) & (r > 1e-10)
+    if not np.any(mask):
+        return float("nan")
+
+    mu = E / (2.0 * (1.0 + nu))
+
+    # Williams Mode III: u_3 = K_III/mu * sqrt(r/(2pi)) * sin(theta/2)
+    sqrt_r = np.sqrt(r[mask] / (2.0 * math.pi))
+    sin_half = np.sin(theta[mask] / 2.0)
+
+    good = (np.abs(sin_half) > 0.1) & np.isfinite(u_antiplane[mask])
+    if not np.any(good):
+        return float("nan")
+
+    K_III_estimates = u_antiplane[mask][good] * mu / (sqrt_r[good] * sin_half[good])
+    return float(np.median(K_III_estimates))
+
+
+def extract_K_III_from_charts(
+    chart_solvers, u_charts, crack_tip, crack_direction, opening_direction,
+    E: float, nu: float,
+    r_min: Optional[float] = None, r_max: Optional[float] = None,
+) -> float:
+    """Extract K_III from multi-chart FEM solution."""
+    all_r, all_theta, all_u_ap = [], [], []
+
+    crack_tip = np.asarray(crack_tip, dtype=float)
+    cd = np.asarray(crack_direction, dtype=float); cd = cd / np.linalg.norm(cd)
+    od = np.asarray(opening_direction, dtype=float); od = od / np.linalg.norm(od)
+    e3 = np.cross(cd, od); e3 = e3 / np.linalg.norm(e3)
+
+    for ci, solver in enumerate(chart_solvers):
+        if u_charts[ci] is None: continue
+        nodes = solver.nodes_phys.detach().cpu().numpy()
+        u_np = u_charts[ci].detach().cpu().numpy()
+        dx = nodes - crack_tip
+        all_r.append(np.sqrt((dx @ cd)**2 + (dx @ od)**2))
+        all_theta.append(np.arctan2(dx @ od, dx @ cd))
+        all_u_ap.append(u_np @ e3)
+
+    if not all_r: return float("nan")
+
+    r_all = np.concatenate(all_r)
+    theta_all = np.concatenate(all_theta)
+    u_all = np.concatenate(all_u_ap)
+
+    r_char = r_all.max() if r_all.max() > 0 else 1.0
+    if r_min is None: r_min = 0.02 * r_char
+    if r_max is None: r_max = 0.15 * r_char
+
+    mask = (r_all >= r_min) & (r_all <= r_max) & (r_all > 1e-10)
+    if np.sum(mask) < 5:
+        r_max = 0.3 * r_char
+        mask = (r_all >= r_min) & (r_all <= r_max) & (r_all > 1e-10)
+    if not np.any(mask): return float("nan")
+
+    mu = E / (2.0 * (1.0 + nu))
+    sqrt_r = np.sqrt(r_all[mask] / (2.0 * math.pi))
+    sin_half = np.sin(theta_all[mask] / 2.0)
+
+    good = (np.abs(sin_half) > 0.1) & np.isfinite(u_all[mask])
+    if not np.any(good): return float("nan")
+
+    K_III_estimates = u_all[mask][good] * mu / (sqrt_r[good] * sin_half[good])
+    return float(np.median(K_III_estimates))

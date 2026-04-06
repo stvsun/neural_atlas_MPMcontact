@@ -123,7 +123,7 @@ def crack_normal_from_stress(sigma: np.ndarray) -> np.ndarray:
 
 
 def max_hoop_stress_angle(K_I: float, K_II: float) -> float:
-    """Maximum tangential stress angle for mixed-mode propagation.
+    """Maximum tangential stress angle for in-plane mixed-mode propagation.
 
     theta_c = 2 * arctan( (K_I - sqrt(K_I^2 + 8*K_II^2)) / (4*K_II) )
 
@@ -139,12 +139,128 @@ def max_hoop_stress_angle(K_I: float, K_II: float) -> float:
     Returns
     -------
     theta_c : float
-        Propagation angle in radians (0 = straight ahead).
+        In-plane kinking angle in radians (0 = straight ahead).
     """
     if abs(K_II) < 1e-12:
         return 0.0
     disc = math.sqrt(K_I**2 + 8 * K_II**2)
     return 2.0 * math.atan2(K_I - disc, 4 * K_II)
+
+
+def mode_III_twist_angle(K_I: float, K_III: float, nu: float = 0.3) -> float:
+    """Out-of-plane twist angle for Mode I + III mixed-mode propagation.
+
+    Implements the Schöllmann et al. (2002) criterion for the twist angle
+    ψ caused by the anti-plane shear component K_III:
+
+        ψ = -arctan( 2·K_III / (K_I + √(K_I² + (2/(2-ν))² · K_III²)) )  (simplified)
+
+    For engineering purposes, the Pook (1985) approximation is often used:
+        ψ ≈ -arctan( K_III / (2·K_I) ) · (1 - 2·ν) / (1 - ν)
+
+    For pure Mode I (K_III = 0): ψ = 0 (no twist).
+    For pure Mode III (K_I → 0): ψ → ±π/2 (maximum twist, crack becomes a kink).
+
+    References
+    ----------
+    Schöllmann, Richard, Kullmer & Fulland (2002), "A new criterion for the
+    prediction of crack development in multiaxially loaded structures",
+    Int J Fracture, 117(2), 129-141.
+
+    Pook (1985), "The fatigue crack direction and threshold behaviour of mild steel
+    under mixed mode I and III loading", Int J Fatigue, 7(1), 21-30.
+
+    Parameters
+    ----------
+    K_I : float
+        Mode-I stress intensity factor.
+    K_III : float
+        Mode-III stress intensity factor.
+    nu : float
+        Poisson's ratio.
+
+    Returns
+    -------
+    psi : float
+        Out-of-plane twist angle in radians.
+    """
+    if abs(K_III) < 1e-12:
+        return 0.0
+    if abs(K_I) < 1e-12:
+        # Pure Mode III: maximum twist
+        return -math.copysign(math.pi / 4, K_III)
+
+    # Pook approximation (simple, robust)
+    psi = -math.atan(K_III / (2.0 * K_I)) * (1.0 - 2.0 * nu) / max(1.0 - nu, 1e-10)
+    return psi
+
+
+def propagation_direction_3d(
+    K_I: float, K_II: float, K_III: float,
+    crack_direction: np.ndarray,
+    opening_direction: np.ndarray,
+    nu: float = 0.3,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute 3D crack propagation direction from K_I, K_II, K_III.
+
+    The propagation direction is determined by two angles:
+      θ (in-plane kink): from max hoop stress (Erdogan-Sih), K_I + K_II
+      ψ (out-of-plane twist): from Pook/Schöllmann criterion, K_I + K_III
+
+    The new crack tip triad (e_crack, e_opening, e_front) is obtained by
+    applying two rotations to the current triad:
+      1. Rotate by θ around e_front (in-plane kink)
+      2. Rotate by ψ around the new e_crack (out-of-plane twist)
+
+    Parameters
+    ----------
+    K_I, K_II, K_III : float
+        Stress intensity factors (Mode I, II, III).
+    crack_direction : ndarray (3,)
+        Current crack propagation direction (e_crack).
+    opening_direction : ndarray (3,)
+        Current crack opening direction (e_opening).
+    nu : float
+        Poisson's ratio.
+
+    Returns
+    -------
+    new_crack_dir : ndarray (3,)
+        Updated propagation direction.
+    new_opening_dir : ndarray (3,)
+        Updated opening direction.
+    new_front_dir : ndarray (3,)
+        Updated crack front direction.
+    """
+    cd = np.array(crack_direction, dtype=float)
+    od = np.array(opening_direction, dtype=float)
+    cd = cd / np.linalg.norm(cd)
+    od = od / np.linalg.norm(od)
+    e_front = np.cross(cd, od)
+    e_front = e_front / np.linalg.norm(e_front)
+
+    def rodrigues(v, axis, angle):
+        """Rotate vector v around axis by angle (Rodrigues formula)."""
+        c, s = math.cos(angle), math.sin(angle)
+        return c * v + s * np.cross(axis, v) + (1 - c) * np.dot(axis, v) * axis
+
+    # Step 1: In-plane kink (θ) — rotate around e_front
+    theta = max_hoop_stress_angle(K_I, K_II)
+    if abs(theta) > 1e-10:
+        cd = rodrigues(cd, e_front, theta)
+        od = rodrigues(od, e_front, theta)
+        cd = cd / np.linalg.norm(cd)
+        od = od / np.linalg.norm(od)
+
+    # Step 2: Out-of-plane twist (ψ) — rotate around new e_crack
+    psi = mode_III_twist_angle(K_I, K_III, nu)
+    if abs(psi) > 1e-10:
+        od = rodrigues(od, cd, psi)
+        e_front = rodrigues(e_front, cd, psi)
+        od = od / np.linalg.norm(od)
+        e_front = e_front / np.linalg.norm(e_front)
+
+    return cd, od, e_front
 
 
 # ---------------------------------------------------------------------------
