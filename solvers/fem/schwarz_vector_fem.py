@@ -290,3 +290,30 @@ class SchwarzVectorFEMSolver:
             P = stress_fn(F)
             stresses.append(P.detach().cpu().numpy())
         return stresses
+
+    def save_state(self) -> dict:
+        """Save solver state for checkpoint/restart.
+
+        Returns a dict that can be passed to torch.save().
+        The chart solvers themselves are NOT saved (rebuild from same params).
+        """
+        return {
+            "u_charts": [u.cpu().clone() if u is not None else None
+                         for u in self.u_charts],
+        }
+
+    def load_state(self, state: dict) -> None:
+        """Restore solver state from a checkpoint.
+
+        Parameters
+        ----------
+        state : dict from save_state()
+        """
+        device = self.chart_solvers[0].device if self.chart_solvers else "cpu"
+        dtype = self.chart_solvers[0].dtype if self.chart_solvers else torch.float64
+        for i in range(self.n_charts):
+            u = state["u_charts"][i]
+            if u is not None:
+                self.u_charts[i] = u.to(device=device, dtype=dtype)
+            else:
+                self.u_charts[i] = None
