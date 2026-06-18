@@ -52,6 +52,48 @@ machine precision on every path.
 
 ---
 
+## Contact detection & computation via transition maps
+
+Contacts are read from the **chart transition map** rather than from a level set alone. Each body
+$X$ carries boundary charts $\varphi_X:\theta\mapsto x$ (analytic today; trained `ChartDecoder`s
+once the neural charts land). The contact correspondence between two bodies $A,B$ is the
+**boundary-to-boundary transition map**
+
+$$\tau_{AB}:\ \theta_A\ \longmapsto\ \psi_B=\big(\varphi_B^{-1}\!\circ\varphi_A\big)(\theta_A),$$
+
+i.e. take a surface point on $A$, $\varphi_A(\theta_A)$, into physical space and **invert $B$'s
+chart** to find the matching surface parameter on $B$ (Newton inverse `common/geometry.py::invert_decoder`).
+
+**Detect.** Sample one body's boundary chart and evaluate the partner's *inverse-chart gap*
+
+$$g_B(p)=\lVert p-c_B\rVert-\rho_B(\psi),\qquad \psi=\angle\,Q_B^{-1}(p-c_B),$$
+
+which for a star-shaped body is single-valued and smooth everywhere; $g_B<0 \Rightarrow$ penetration.
+Scanning the chart parameter enumerates **every disjoint contact arc** — essential for nonconvex
+shapes, where a single closest-point projection returns only one foot. (CV-5 shows this head-to-head:
+the chart scan finds $\ge 2$ arcs while a single CPP reports 1.)
+
+**Compute.** The contact normal comes from the **chart Jacobian**, not $\nabla\phi$:
+
+$$\mathbf n=\frac{t_1\times t_2}{\lVert t_1\times t_2\rVert},\qquad t_\alpha=\frac{\partial\varphi}{\partial\xi^\alpha},$$
+
+exact even at high-curvature lobe tips. The force is then the standard penalty / augmented-Lagrangian
+normal force plus regularized Coulomb friction, scattered through the MPM P2G channel:
+$\mathbf f=\epsilon_n\langle -g\rangle_+\,\mathbf n\ (+\ \text{friction})$.
+
+**Why it helps (vs the SDF closest-point projection).** The transition map is single-valued and
+analytic in concavities, where the Euclidean SDF closest-point projection (Liu & Sun 2020, Eq. 22)
+becomes multivalued across the medial axis and the Eikonal normal degrades. **Honest caveats:** the
+inverse radial gap is *not* the Euclidean perpendicular distance (biased $\sim 1/\cos\alpha$ on steep
+flanks — a bounded 1-D chart refine removes it); and the production oracle `solvers/contact/gap.py`
+**currently uses the neural-SDF gradient** — the transition-map chart oracle is the analytical
+formulation exercised by CV-1..CV-5 and the target once neural charts replace the SDFs.
+
+Full treatment: `docs/contact_theory_manual.md` (algorithms), `docs/contact_verification_manual.md`
+§2 (kinematics) and §10 (neural-chart verification protocol), `solvers/contact/supershape.py` (CV-5).
+
+---
+
 ## Analytical verification (CV-1..CV-5)
 
 Closed-form contact solutions, derived in SymPy and adversarially cross-checked against Johnson's
