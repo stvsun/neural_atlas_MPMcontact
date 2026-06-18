@@ -6,9 +6,9 @@ Point Method (MPM), persistent-homology-based contact detection, and an analytic
 verification suite that doubles as the acceptance test for the neural charts.
 
 > **Status.** The contact framework (penalty / augmented-Lagrangian / friction / topology /
-> self-contact) and a closed-form **analytical verification suite (CV-1..CV-5)** are in place.
+> self-contact) and a closed-form **analytical verification suite (CV-1..CV-6)** are in place.
 > Training the neural coordinate charts is the next step — the analytical benchmarks are written
-> to verify those charts when they land (see [§10 of the verification manual](docs/contact_verification_manual.md)).
+> to verify those charts when they land (see [§11 of the verification manual](docs/contact_verification_manual.md)).
 >
 > The earlier **Nine-Circles brittle-fracture** work has been **archived** under
 > [`archive/`](archive/) (code, tests, docs, figures) — preserved for history, not maintained.
@@ -87,14 +87,14 @@ becomes multivalued across the medial axis and the Eikonal normal degrades. **Ho
 inverse radial gap is *not* the Euclidean perpendicular distance (biased $\sim 1/\cos\alpha$ on steep
 flanks — a bounded 1-D chart refine removes it); and the production oracle `solvers/contact/gap.py`
 **currently uses the neural-SDF gradient** — the transition-map chart oracle is the analytical
-formulation exercised by CV-1..CV-5 and the target once neural charts replace the SDFs.
+formulation exercised by CV-1..CV-6 and the target once neural charts replace the SDFs.
 
 Full treatment: `docs/contact_theory_manual.md` (algorithms), `docs/contact_verification_manual.md`
-§2 (kinematics) and §10 (neural-chart verification protocol), `solvers/contact/supershape.py` (CV-5).
+§2 (kinematics) and §11 (neural-chart verification protocol), `solvers/contact/supershape.py` (CV-5).
 
 ---
 
-## Analytical verification (CV-1..CV-5)
+## Analytical verification (CV-1..CV-6)
 
 Closed-form contact solutions, derived in SymPy and adversarially cross-checked against Johnson's
 *Contact Mechanics* and Timoshenko–Goodier, recast in the neural-atlas / transition-map framing.
@@ -107,9 +107,10 @@ They are the **acceptance targets for the neural charts**.
 | **CV-3** | Brazilian disc | $\sigma_t=2P/\pi Dt$, stress field, diametral compliance |
 | **CV-4** | Nine-disc packing | equibiaxial center, force–compression law |
 | **CV-5** | Nonconvex superformula contact | multi-arc detection, chart-gap vs SDF (the transition-map test) |
+| **CV-6** | Koch snowflake fractal contact | $O(1)$-storage, resolution-independent IFS chart ($O(\text{depth})$ detection) vs $O(9^n)$ uniform / $O(4^n)$ adaptive SDF |
 
 See **[docs/contact_verification_manual.md](docs/contact_verification_manual.md)** for the pass
-criteria, embedded figures, and the **two-level neural-chart verification protocol (§10)**. Symbolic
+criteria, embedded figures, and the **two-level neural-chart verification protocol (§11)**. Symbolic
 derivations + numpy evaluators: **[docs/hertz_derivation/](docs/hertz_derivation/README.md)** and
 `postprocessing/contact_fields.py`.
 
@@ -147,8 +148,8 @@ python3 postprocessing/plot_supershape_demo.py
 | Document | Description |
 |----------|-------------|
 | [Contact Theory Manual](docs/contact_theory_manual.md) | Algorithms: SDF gap oracle, penalty, augmented Lagrangian, regularized Coulomb friction, topology-aware detection, contact chart spawning, self-contact, multi-body orchestration |
-| [Contact Verification Manual](docs/contact_verification_manual.md) | CV-1..CV-5 closed-form benchmarks (embedded figures) + the **neural coordinate-chart verification protocol (§10)** |
-| [Analytical derivations index](docs/hertz_derivation/README.md) | SymPy derivations, numpy evaluators, plotting, and how it all maps to CV-1..CV-5 |
+| [Contact Verification Manual](docs/contact_verification_manual.md) | CV-1..CV-6 closed-form benchmarks (embedded figures) + the **neural coordinate-chart verification protocol (§11)** |
+| [Analytical derivations index](docs/hertz_derivation/README.md) | SymPy derivations, numpy evaluators, plotting, and how it all maps to CV-1..CV-6 |
 | [MPM Velocity-Gradient Audit](docs/mpm_velocity_gradient_audit.md) | Curved-chart MPM velocity-gradient correctness (the integrator underpinning contact) |
 | [Design docs](contact_atlas/) | Brainstorm, implementation plan, variational theory & well-posedness |
 
@@ -182,7 +183,7 @@ neural_atlas_MPMcontact/
 The framework currently uses analytical charts/SDFs. To bring up the neural charts:
 1. Train a neural SDF / `ChartDecoder` on each analytical shape (`atlas/sdf/train_sdf.py`, `atlas/charts/train_atlas.py`).
 2. Verify it against the closed forms with the **two-level protocol** (L0 geometry, L1 mechanics) in
-   `docs/contact_verification_manual.md §10`; the harness `tests/test_neural_chart_verification.py` is wired and waiting.
+   `docs/contact_verification_manual.md §11`; the harness `tests/test_neural_chart_verification.py` is wired and waiting.
 
 ---
 

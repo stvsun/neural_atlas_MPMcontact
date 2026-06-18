@@ -40,7 +40,7 @@ Each script is SymPy/mpmath only and **prints** its verified identities and clos
 | Test | Covers |
 |---|---|
 | `tests/test_supershape_contact.py` | CV-5 geometry, dynamics, momentum, multi-arc vs single-CPP, bias/refine, cusp regression (9 tests) |
-| `tests/test_neural_chart_verification.py` | **Skeleton** harness for verifying neural charts against CV-1..CV-5 (skipped until neural charts are trained; see manual §10) |
+| `tests/test_neural_chart_verification.py` | **Skeleton** harness for verifying neural charts against CV-1..CV-6 (skipped until neural charts are trained; see manual §11) |
 
 ## How it all fits (verification workflow)
 
@@ -51,5 +51,5 @@ analytical shape/chart  --(train)-->  neural SDF / ChartDecoder
         |                                     |
    contact_fields.py  <----- compare ------>  tests/test_neural_chart_verification.py
         |                                     |
-   CV-1..CV-5 pass criteria  ===  acceptance for the neural chart  (manual §8, §10)
+   CV-1..CV-6 pass criteria  ===  acceptance for the neural chart  (manual §9, §11)
 ```

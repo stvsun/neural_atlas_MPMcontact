@@ -7,7 +7,7 @@ Onboarding guide for Claude Code agents working on this codebase.
 **Neural Atlas for Contact Mechanics** — a meshfree framework for contact problems on complex 3D
 geometries using learned coordinate charts and neural SDFs, a chart-based Material Point Method
 (MPM), and persistent-homology-based contact detection. The contact stack and a closed-form
-analytical verification suite (CV-1..CV-5) are in place; **training the neural coordinate charts is
+analytical verification suite (CV-1..CV-6) are in place; **training the neural coordinate charts is
 the next step**, and the analytical benchmarks are written to verify them.
 
 The earlier Nine-Circles brittle-fracture work is **archived** under `archive/` (code, tests, docs,
@@ -98,9 +98,9 @@ python3 atlas/sdf/train_sdf.py                               # train a neural SD
 
 Active suite: **120 passed, 7 skipped** (`pytest`; the 7 skips are the neural-chart harness, awaiting trained charts).
 
-**Analytical contact verification (CV-1..CV-5)** — closed-form acceptance targets for the neural
+**Analytical contact verification (CV-1..CV-6)** — closed-form acceptance targets for the neural
 charts: `docs/contact_verification_manual.md` (Hertz, Cattaneo–Mindlin, Brazilian disc, nine-disc,
-nonconvex superformula; **§10 = the neural-chart verification protocol**). Closed forms:
+nonconvex superformula; **§11 = the neural-chart verification protocol**). Closed forms:
 `docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy). Harness skeleton:
 `tests/test_neural_chart_verification.py` (skipped until neural charts exist).
 
@@ -111,4 +111,4 @@ nonconvex superformula; **§10 = the neural-chart verification protocol**). Clos
 - **Large binary files** — do not read `.pt` checkpoints directly; `runs/` JSON is gitignored.
 - **GUDHI overhead** — use a 16³ grid for contact-topology monitoring and check every 50+ steps, not every step.
 - **`archive/` is frozen** — legacy fracture code with imports to other archived modules; do not extend it or wire active code to it.
-- **CV-5 radial gap ≠ Euclidean distance** — it's a single-body inverse radial chart (biased ~1/cosα on flanks); compare a neural *SDF* against the Euclidean reference, not the radial gap (see verification manual §10.2).
+- **CV-5 radial gap ≠ Euclidean distance** — it's a single-body inverse radial chart (biased ~1/cosα on flanks); compare a neural *SDF* against the Euclidean reference, not the radial gap (see verification manual §11.2).

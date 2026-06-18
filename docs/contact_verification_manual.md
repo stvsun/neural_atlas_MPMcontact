@@ -3,8 +3,9 @@
 Analytical benchmarks for verifying a neural-atlas contact implementation. Every
 result below is a closed form derived in SymPy and adversarially cross-checked
 against Johnson, *Contact Mechanics* (1985) and Timoshenko & Goodier, *Theory of
-Elasticity*. The four benchmarks reproduce the contact problems of Liu & Sun
-(2020), "ILS-MPM" (CMAME 369:113168).
+Elasticity*. CV-1..CV-4 reproduce the contact problems of Liu & Sun (2020),
+"ILS-MPM" (CMAME 369:113168); CV-5 (superformula) and CV-6 (Koch snowflake) are
+additional transition-map / resolution-independence benchmarks.
 
 This manual is the **verification** companion to:
 - `docs/contact_theory_manual.md` — contact *algorithms* (penalty, AL, friction, topology);
@@ -25,7 +26,7 @@ When the project switches to **trained neural charts** — a neural SDF (`atlas/
 and/or a `ChartDecoder` (`common/models.py`, trained by `atlas/charts/train_atlas.py`) replacing the
 analytical chart — these closed forms become the **acceptance targets**: train the neural chart on the
 same analytical shape, then check that its gap/normal/field/force match the analytical reference within
-a tolerance that accounts for neural approximation error. The concrete recipe is in **§10 (Neural
+a tolerance that accounts for neural approximation error. The concrete recipe is in **§11 (Neural
 coordinate-chart verification protocol)**; `postprocessing/contact_fields.py` holds the numpy reference
 values and `tests/test_neural_chart_verification.py` is the (skeleton) harness.
 
@@ -37,7 +38,7 @@ Verification is **two-level**, so a failure localizes to geometry vs mechanics:
 
 These are small-strain, linear-elastic, quasi-static, frictionless-or-monotone references — code-
 verification targets, not models of the full finite-deformation frictional MPM; they must be matched in
-the appropriate limit (see §10).
+the appropriate limit (see §11).
 
 ---
 
@@ -224,7 +225,77 @@ bounded 1D refine (refined mode).
 
 ---
 
-## 8. Master verification table
+## 8. CV-6 — Koch snowflake fractal contact (resolution-independence)
+
+**Goal.** Showcase the decisive advantage of the coordinate-chart / transition-map representation
+over a level-set: contact between *self-similar (fractal)* boundaries, where a uniform SDF grid is
+restricted by the resolution needed to render the pattern, while the recursive chart resolves contact
+to any depth on demand.
+
+**Formulation.** The Koch snowflake is an IFS (4 contraction maps, scale 1/3, applied recursively) —
+an exact, **O(1)-storage, resolution-independent** chart $\varphi(s)$ evaluable to any depth $n$.
+Contact uses a **pruned recursive descent** (the IFS doubles as a bounding hierarchy). The inside/outside
+**detection** test prunes to **O(depth) per query** (measured $\approx$21 nodes, bounded in $n$) — this is
+the resolution-independent primitive. The *exact* signed gap + normal (`nearest_boundary`) is verified
+equal to the brute-force polyline distance but costs more — its descent visits the boundary detail near
+the query, which on a fractal grows $\sim O(3^n)$ for a fixed-distance point (intrinsic: $\sim 3^n$ tiny
+segments cluster near any boundary point); it is evaluated only at the penetrating points detection already
+flagged, at a finite practical level ($n=3$: $\approx$110 nodes). The snowflake is
+NOT star-shaped for $n\ge2$ (verified), so the *parametric* chart is used, not the radial gap (CV-5).
+The outward normal is the **gradient of the signed distance** — $\pm(\mathbf{x}-\mathbf{foot})/\lVert\cdot\rVert$,
+sign-corrected by inside/outside — which equals the segment normal on a segment interior and is the
+*true* gap-ascent direction at a vertex/spike foot (the bare segment normal is wrong there). The normal
+exists at any finite level, but is undefined *at* a vertex and at the fractal limit.
+
+**Why it beats the level-set — the honest cost decomposition.** Compare on the right axes:
+
+| | storage / build | per query | resolution |
+|---|---|---|---|
+| recursive IFS chart | **$O(1)$** (4 maps) | $O(\text{depth})$, measured $\approx$21 nodes | **any depth on demand** |
+| uniform SDF grid | $O(9^n)$ cells | $O(1)$ lookup | capped at finest cell |
+| adaptive/narrow-band SDF | $O(4^n)$ boundary cells | $O(1)$ lookup | capped at max subdivision |
+| fixed-capacity neural SDF | $O(\text{params})$ | $O(1)$ eval | capped by capacity / spectral bias |
+
+A precomputed SDF is *cheaper per query* (one lookup) — the chart does **not** win on per-query speed. The
+chart's decisive, defensible wins are **storage** ($O(1)$ vs exponential) and **resolution-independence**
+(no maximum depth baked in). An adaptive/octree SDF narrows the storage gap to $O(4^n)$ but does not close
+it (still exponential, still depth-capped). A fixed-capacity neural SDF represents any *finite* pre-fractal
+level fine, but cannot keep refining self-similar detail without growing its parameter count — so it is
+likewise resolution-capped; the chart stores the generating rule instead. (The neural-SDF refinement
+ceiling is argued here, not yet measured — see §11.6.)
+
+**Honest scope.** At the true fractal limit there is no tangent/normal — contact mechanics is
+well-posed only at a finite pre-fractal level. The penalty *force model* struggles with thin fractal
+spikes (near-point contact → weak penalty → a free body can tunnel); this is a **force-model**
+limitation, not a chart one — chart *detection* still fires correctly, and the outward-normal sign is
+verified separately (`test_contact_normal_repulsive`, sampling the whole interior incl. vertex feet).
+The rigid-body engine conserves linear momentum (action–reaction pairing, $<10^{-8}$); note this is a
+*bookkeeping* check that holds regardless of the normal, so it is **not** evidence the normal is correct.
+The time-resolved dynamics demo therefore uses a robust **bounded regime**: a prescribed spinning Koch
+cam drives a spring-loaded **flat-faced** follower (a thin 1-DOF plate) under overdamped (quasi-static)
+relaxation. A flat face touches only the cam's right boundary (outward normals $\approx+x$), so contact
+is shallow (max penetration $\approx0.06R$), there is no fat-body overlap, and tunnelling is structurally
+impossible — the plate *rides* the fractal cam, tracing its lift curve. Free fractal-on-fractal collision
+(two fat snowflakes) is explicitly out of scope.
+
+**Pass criteria (all verified — 8 tests).**
+- exact IFS geometry ($3\cdot4^n{+}1$ vertices; perimeter $\propto(4/3)^n$).
+- inside-test = brute-force point-in-polygon (0 mismatches at $n=4$).
+- **resolution-independent per-query cost**: inside-query nodes plateau at $\approx$21 (bound $<80$) for
+  $n$ up to 12, $\ll 4^n$, $\ll 9^n$ — vs $O(1)$-storage IFS, $O(9^n)$ uniform / $O(4^n)$ adaptive SDF.
+- not star-shaped for $n\ge2$ (no radial shortcut).
+- **exact signed gap magnitude** = brute-force polyline distance (machine precision, $n=4$) — guards the
+  pruning correctness (a prior bug squared a negative slack and skipped the nearest segment).
+- repulsive normal **everywhere**: $g<0$ inside; the gap increases along $+\mathbf{n}$ for the full
+  interior grid, including the $\approx$85% of points whose nearest foot is a vertex.
+- contact micro-arcs grow with depth; the rigid-body engine conserves momentum ($<10^{-8}$).
+
+**Artifact / test.** `solvers/contact/koch.py`; `benchmarks/contact/koch_gears_drive.py`
+(+ `--free-A` control); `postprocessing/plot_koch_demo.py`; `tests/test_koch_contact.py` (8 tests).
+
+---
+
+## 9. Master verification table
 
 | Item | Analytical target | Tolerance | Artifact |
 |---|---|---|---|
@@ -243,11 +314,16 @@ bounded 1D refine (refined mode).
 | Supershape gap/normal | $\nabla g$ matched, conservative | < 1e-4 rel | supershape.py |
 | Supershape free-A momentum | linear & angular conserved | < 1e-8 | supershape_cam_drive.py |
 | Supershape multi-arc | $\ge 2$ contact arcs (vs 1 for single CPP) | count | supershape_cam_drive.py |
+| Koch IFS geometry | $3\cdot4^n{+}1$ verts, perimeter $(4/3)^n$ | exact | koch.py |
+| Koch inside-test | = brute-force point-in-polygon | 0 mismatch | koch.py |
+| Koch storage / per-query | $O(1)$ IFS vs $9^n$/$4^n$ SDF; nodes/query plateau | $\approx$21 ($<80$) @ $n\le12$ | koch.py |
+| Koch normal (incl. vertex feet) | $+\mathbf{n}$ is gap-ascent over full interior | repulsive everywhere | koch.py |
+| Koch engine momentum | free-free conserved (bookkeeping) | $<10^{-8}$ | koch_gears_drive.py |
 | Equilibrium / compatibility | $\nabla\!\cdot\sigma=0$, biharmonic | machine | all |
 
 ---
 
-## 9. Figures
+## 10. Figures
 
 Analytical re-plots of the Liu & Sun figures (paper style), embedded below. Regenerate the
 Hertz/Brazilian/nine-disc set with `python3 postprocessing/plot_liusun_all.py` and the superformula
@@ -284,15 +360,35 @@ comparison (smoothness advantage **and** radial bias), the run summary, and a st
 
 <img src="../figures/supershape_summary_pub.png" width="55%"> <img src="../figures/supershape_frames_pub.png" width="44%">
 
+### CV-6 — Koch snowflake fractal contact
+Headline cost decomposition (LEFT: storage — $O(1)$ IFS chart vs $O(9^n)$ uniform / $O(4^n)$ adaptive SDF;
+RIGHT: per-query — the SDF's $O(1)$ lookup vs the chart's *bounded* $\approx$21-node descent), the growth
+of contact micro-arcs with depth, and the exact boundary at levels 1/3/5 vs a grid-limited SDF.
+
+<img src="../figures/koch_cost_scaling_pub.png" width="62%"> <img src="../figures/koch_contact_count_pub.png" width="36%">
+
+<img src="../figures/koch_geometry_pub.png" width="98%">
+
+**Time-resolved contact dynamics.** A prescribed spinning Koch cam drives a spring-loaded 1-DOF Koch
+follower (overdamped/quasi-static relaxation — unconditionally stable for stiff contact, so the follower
+*rides* the fractal cam profile without tunnelling). Left: the animation (red = chart-detected contact
+set); right: the follower displacement traced against cam angle (the fractal cam lift curve).
+
+<img src="../figures/koch_contact_dynamics.gif" width="52%"> <img src="../figures/koch_follower_displacement_pub.png" width="44%">
+
+The earlier static-cam view (net contact force arrow on a *fixed* follower) is retained as a schematic:
+
+<img src="../figures/koch_spinning_contact.gif" width="45%">
+
 ---
 
-## 10. Neural coordinate-chart verification protocol
+## 11. Neural coordinate-chart verification protocol
 
-This is the operational recipe for using CV-1..CV-5 to verify a **trained neural chart** once the
+This is the operational recipe for using CV-1..CV-6 to verify a **trained neural chart** once the
 project replaces the analytical charts. The principle: *train the neural object on the same analytical
 shape, then compare its output to the closed form.*
 
-### 10.1 Substitution map (analytical → neural)
+### 11.1 Substitution map (analytical → neural)
 
 | Analytical object (now) | Neural replacement (under test) | Trained by |
 |---|---|---|
@@ -312,7 +408,7 @@ and sweeping the in-plane coordinate. The references are `postprocessing/contact
 **Dimensionality.** `SDFNet`/`evaluate_gap` are 3-D (in_dim=3, normal $(N,3)$); CV-3/4/5 are 2-D — embed
 the shape at $z=0$, compare only the in-plane normal, and assert $|n_z|$ is small.
 
-### 10.2 Two-level recipe (run per benchmark)
+### 11.2 Two-level recipe (run per benchmark)
 
 **L0 — geometry/kinematics (solver-free; do this first).** Sample query points $\{x_k\}$ near the contact
 region; evaluate the neural chart's gap $g^{\rm nn}(x_k)$ and normal $n^{\rm nn}(x_k)$ and compare to the
@@ -331,11 +427,11 @@ the radial gap, which is a different quantity — see §7). A neural **ChartDeco
 *boundary-to-boundary*: $\max_\theta\lVert\varphi^{\rm nn}(\theta)-\varphi^{\rm ana}(\theta)\rVert$ and the
 tangent/normal from its Jacobian.
 
-### 10.3 Tolerances (neural vs analytical)
+### 11.3 Tolerances (neural vs analytical)
 
-Analytical-vs-analytical checks are machine precision (§8). Neural charts carry training error, so use:
+Analytical-vs-analytical checks are machine precision (§9). Neural charts carry training error, so use:
 
-| Quantity | Analytical tol (§8) | Neural tol (realistic) | Driver of the looser bound |
+| Quantity | Analytical tol (§9) | Neural tol (realistic) | Driver of the looser bound |
 |---|---|---|---|
 | gap (L0) | machine | $\tau_g \sim 10^{-3} L$ | SDF Eikonal training error (~1e-3) |
 | normal angle (L0) | machine | $\tau_n \sim 1\text{–}2^\circ$ | $\lVert\nabla\phi\rVert\ne1$ off the surface |
@@ -349,7 +445,7 @@ measured** on these shapes — the trainer currently fits only the rabbit. Recor
 once an SDF is trained on the sphere/disc/superformula and tighten $\tau_g$ to it. The harness default
 `TAU_GAP_REL = 2e-3` is a deliberately relaxed starting value.
 
-### 10.4 Neural-specific failure modes each benchmark catches
+### 11.4 Neural-specific failure modes each benchmark catches
 
 - **Non-unit $\lVert\nabla\phi\rVert$ (broken Eikonal):** inflates the gap and rotates normals → caught by L0 on **any** benchmark (CV-1 sphere is the cleanest).
 - **Normal degradation near the medial axis / in concavities:** **CV-5** is the discriminating test — the analytical superformula chart is exact in the concave valleys where a neural SDF normal degrades; L0 gap/normal error there (vs the dense Euclidean reference) directly measures it.
@@ -357,13 +453,13 @@ once an SDF is trained on the sphere/disc/superformula and tighten $\tau_g$ to i
 - **Chart Jacobian ill-conditioning / non-bijective decoder:** caught by the L0 inverse-chart residual and `stabilized_jacobian_ops` condition number (CV-1/CV-5).
 - **Contact-radius / force drift:** small gap bias → systematic $a$, $p_0$, $F(\delta)$ offset → caught by L1 (CV-1, CV-3, CV-4).
 
-### 10.5 Harness
+### 11.5 Harness
 
 `tests/test_neural_chart_verification.py` is the skeleton: one test per benchmark, each currently
 `pytest.skip(...)` until a neural chart is provided. **Wiring status:** only the **SDF L0** path is
 runnable today (CV-1 sphere and CV-5 superformula, compared to the dense Euclidean reference). The
 **decoder L0** path and **all L1** paths are stubs — L1 needs a neural contact *solve* (no neural contact
-solver exists yet) and decoder L0 needs a boundary-evaluable map (§10.1 note). Activate a path by
+solver exists yet) and decoder L0 needs a boundary-evaluable map (§11.1 note). Activate a path by
 implementing its loader and removing the skip.
 
 | Benchmark | Neural object | L0 (geometry) | L1 (mechanics) | Failure mode caught |
@@ -373,8 +469,9 @@ implementing its loader and removing the skip.
 | CV-3 | neural disc SDF | gap/normal on rim | $\sigma$ field, $\sigma_t$ | rim normal accuracy |
 | CV-4 | neural disc SDF | per-disc gap/normal | equibiaxial center, $N(d)$ | multi-contact normals |
 | CV-5 | neural supershape SDF | Euclidean gap/normal **in concavities** (vs dense ref) ✓wired | cam-drive match | **medial-axis normal degradation, cusp smoothing** |
+| CV-6 | neural SDF on Koch level-$n$ | gap/Eikonal RMSE vs `koch.nearest_boundary` at rising $n$ | (out of scope) | **self-similar detail beyond fixed capacity (refinement ceiling)** |
 
-### 10.6 Worked example (train → L0 → L1)
+### 11.6 Worked example (train → L0 → L1)
 
 The one missing executable piece is an SDF trained on an **analytical shape** — the shipped
 `atlas/sdf/train_sdf.py` fits only the rabbit. The intended sequence:
@@ -382,7 +479,7 @@ The one missing executable piece is an SDF trained on an **analytical shape** �
 1. **Train** a neural `SDFNet` on the analytical shape by regressing to its closed-form signed distance
    (sphere $\phi=|x|-R$; disc; superformula via `supershape.closest_point_refine` for the Euclidean
    distance) with an Eikonal term. Save `<shape>_sdf.pt` and **record the final Eikonal residual** — that
-   number sets $\tau_g$ (§10.3).
+   number sets $\tau_g$ (§11.3).
 2. **Wire the loader**: make `load_neural_sdf("sphere")` (in `tests/test_neural_chart_verification.py`)
    return the trained `SDFNet`.
 3. **Run L0** (geometry, solver-free):
@@ -390,14 +487,24 @@ The one missing executable piece is an SDF trained on an **analytical shape** �
    gap RMSE / normal angle against the Euclidean reference. This alone validates the chart in isolation.
 4. **Run L1** (mechanics): once a neural contact *solve* exists, drop the neural SDF into the contact path
    and assert $a,p_0,F(\delta)$ (CV-1), $\sigma_t$ (CV-3), $N(d)$ (CV-4), cam-drive (CV-5) against
-   `contact_fields.py` / the CV pass criteria with the §10.3 tolerances.
+   `contact_fields.py` / the CV pass criteria with the §11.3 tolerances.
 
 The right-hand sides (analytical references) are already runnable now:
 `python3 postprocessing/contact_fields.py` (numpy self-test) and the three
 `docs/hertz_derivation/*.py` scripts (symbolic self-checks). Steps 1 (analytical-shape SDF trainer) and
 the L1 neural solver are the "later" neural-chart work this manual is written to verify.
 
-### 10.7 Level-set-free detection via radial boundary charts (implemented)
+**CV-6 refinement-ceiling experiment (proposed, not yet run).** The CV-6 claim that a *fixed-capacity*
+neural SDF cannot keep resolving self-similar detail is currently argued, not measured. The clean way to
+*earn* it on these analytical shapes: train one `SDFNet` of fixed width to regress the exact Koch signed
+distance (sign from `koch.inside`, magnitude from `koch.nearest_boundary`) at increasing level $n$, and
+plot the gap RMSE / Eikonal residual rising as $n$ grows past what the network can represent. That
+measured curve — rather than an asserted ceiling — is the rigorous chart-vs-neural-SDF showcase, and it
+also produces the $\tau_g$ number §11.3 still lacks. Until then the ceiling is stated as a conjecture with
+its mechanism (finite parameters + spectral bias), and the chart's *measured* wins (storage,
+resolution-independence) carry CV-6.
+
+### 11.7 Level-set-free detection via radial boundary charts (implemented)
 
 The SDF detector (`gap.py::evaluate_gap`) needs an *ambient* scalar field $\phi:\mathbb R^3\!\to\!\mathbb R$.
 A contact **detection** algorithm needs no such field: a star-shaped body can be carried level-set-free
@@ -445,13 +552,13 @@ penalty / friction / augmented-Lagrangian forces and the broad-phase culler are 
 **Staging.** Shipped now (Stage 0): *analytic* $\rho$ (sphere, superquadric) — fully provable without
 training, as above. Deferred: **Stage 1** a trained neural $\rho_\theta:S^2\!\to\!\mathbb R^+$ (the neural
 chart that *replaces* the neural SDF; same `evaluate_gap_chart` path, the projected-gradient step becomes
-load-bearing; validate to the §10.3 neural tolerances, not machine precision). **Stage 2** a multi-chart
+load-bearing; validate to the §11.3 neural tolerances, not machine precision). **Stage 2** a multi-chart
 atlas fallback (`ChartDecoder` + `invert_decoder`, signed-height gap with a Jacobian-metric correction,
 transition maps at overlaps) for **non-star-shaped** bodies, gated behind a star-shaped certificate.
 
 ---
 
-## 11. Scope & limitations
+## 12. Scope & limitations
 
 - **Small-strain, linear-elastic, quasi-static (CV-1..4).** Hertz/Brazilian/C–M are infinitesimal
   half-space/plane theory; the MPM is finite-deformation and frictional. Agreement is
