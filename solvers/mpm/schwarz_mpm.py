@@ -91,7 +91,10 @@ class SchwarzMPMSolver:
         membership_np = np.array(membership, dtype=np.float32)
         self.color_groups = choose_color_groups(meta_json, self.n_charts, membership_np)
 
-        # Build per-chart MPM solvers
+        # Build per-chart MPM solvers.  Each solver gets its own
+        # decoder bundle so the P2G/G2P transfers can chain-rule the
+        # ξ-space shape-function gradients into physical space on
+        # curved charts.
         self.solvers: List[ChartMPMSolver] = []
         for i in range(self.n_charts):
             extent = float(self.support_r_t[i].item()) * 1.5
@@ -103,6 +106,12 @@ class SchwarzMPMSolver:
                 bc_type=bc_type,
                 device=device,
                 dtype=dtype,
+                decoder=self.decoders[i],
+                seed=self.seeds_t[i],
+                t1=self.t1_t[i],
+                t2=self.t2_t[i],
+                n_vec=self.nvec_t[i],
+                chart_scale=self.support_r_t[i],
             )
             self.solvers.append(solver)
 
@@ -117,6 +126,16 @@ class SchwarzMPMSolver:
         self._chart_spawner = None    # ChartSpawner instance
         self._bbox_min = None         # (3,) domain lower bound
         self._bbox_max = None         # (3,) domain upper bound
+
+        # Contact configuration (set via configure_contact)
+        self._contact_bodies: Optional[list] = None
+        self._contact_manager = None
+        self._epsilon_n: float = 0.0
+
+        # Contact topology observation (set via observe_contact_topology)
+        self._contact_topology_monitor = None
+        self._contact_topology_interval: int = 1
+        self._contact_topology_events: list = []
 
     def setup_topology_monitoring(self, sdf_grid_fn, chart_spawner, bbox_min, bbox_max):
         """Configure live topology monitoring for dynamic chart spawning.
@@ -134,6 +153,146 @@ class SchwarzMPMSolver:
         self._chart_spawner = chart_spawner
         self._bbox_min = np.asarray(bbox_min, dtype=np.float64)
         self._bbox_max = np.asarray(bbox_max, dtype=np.float64)
+
+    def configure_contact(
+        self,
+        opponent_bodies: list,
+        epsilon_n: float,
+        margin: float = 0.1,
+    ) -> None:
+        """Configure contact with opponent bodies.
+
+        Parameters
+        ----------
+        opponent_bodies : list of ContactBody
+            Other bodies that this body may contact.
+        epsilon_n : float
+            Penalty stiffness.
+        margin : float
+            Broad-phase distance margin.
+        """
+        from solvers.contact.contact_manager import ContactManager
+
+        self._contact_bodies = opponent_bodies
+        self._epsilon_n = epsilon_n
+        self._contact_manager = ContactManager(
+            bodies=opponent_bodies, margin=margin,
+        )
+
+    def observe_contact_topology(
+        self,
+        monitor,
+        check_interval: int = 1,
+    ) -> None:
+        """Register a ``ContactTopologyMonitor`` to be ticked each step.
+
+        Parallels :meth:`setup_topology_monitoring` but for inter-body
+        contact events (H_0 merges on a combined SDF field) rather than
+        intra-body crack events (H_1 births on a single-body SDF).
+
+        After registration, every ``step()`` call invokes
+        ``monitor.update(self.step_count)`` once every ``check_interval``
+        steps.  Any emitted :class:`ContactTopologyEvent` objects are
+        appended to ``self._contact_topology_events`` and also returned
+        from ``step()`` via the ``contact_topology_events`` diagnostic
+        key.  The caller retains ownership of the monitor and can query
+        its ``event_history`` or call ``reset()`` directly at any time.
+
+        Parameters
+        ----------
+        monitor : ContactTopologyMonitor
+            A configured monitor — the solver does not construct one
+            for you because the monitor owns its own set of
+            ``ContactBody`` objects and bounding box.
+        check_interval : int
+            Number of steps between monitor ticks.  Default 1 (every
+            step); larger values amortise the GUDHI cost but may miss
+            brief contact events.
+        """
+        if check_interval < 1:
+            raise ValueError(
+                f"check_interval must be >= 1, got {check_interval}"
+            )
+        self._contact_topology_monitor = monitor
+        self._contact_topology_interval = int(check_interval)
+        self._contact_topology_events = []
+
+    def _tick_contact_topology(self):
+        """Call ``monitor.update`` if the monitor is configured and
+        the current step count is a multiple of the check interval.
+
+        Returns the list of new events emitted by this call (empty if
+        the monitor wasn't due to fire).
+        """
+        if self._contact_topology_monitor is None:
+            return []
+        if self.step_count % self._contact_topology_interval != 0:
+            return []
+        new_events = self._contact_topology_monitor.update(
+            load_step=self.step_count,
+        )
+        if new_events:
+            self._contact_topology_events.extend(new_events)
+        return list(new_events)
+
+    def _compute_contact_forces(self) -> List[Optional[torch.Tensor]]:
+        """Compute penalty contact forces for all charts.
+
+        For each chart with particles, pushes to physical space, evaluates
+        each opponent body's SDF, and accumulates penalty forces.
+
+        Returns
+        -------
+        forces : list of Optional[torch.Tensor]
+            ``forces[i]`` is ``(N_i, 3)`` or ``None``.
+        """
+        from solvers.contact.gap import evaluate_gap
+        from solvers.contact.penalty import compute_contact_force
+
+        forces: List[Optional[torch.Tensor]] = [None] * self.n_charts
+
+        for i in range(self.n_charts):
+            if self.particles[i] is None or self.particles[i].n_particles == 0:
+                continue
+
+            with torch.no_grad():
+                x_phys = self.particles[i].push_to_physical(
+                    self.decoders[i],
+                    seed=self.seeds_t[i], t1=self.t1_t[i],
+                    t2=self.t2_t[i], n_vec=self.nvec_t[i],
+                    chart_scale=self.support_r_t[i],
+                )
+
+            n_p = self.particles[i].n_particles
+            f_total = torch.zeros(
+                n_p, 3, device=self.device, dtype=self.dtype,
+            )
+
+            for body in self._contact_bodies:
+                # Broad-phase: skip if all particles far from this body
+                dists = torch.linalg.norm(
+                    x_phys.unsqueeze(1) - body.seeds.unsqueeze(0), dim=2,
+                )  # (n_p, M_body)
+                min_dist = dists.min().item()
+                max_r = body.support_radii.max().item()
+                if min_dist > max_r + self._contact_manager.margin:
+                    continue
+
+                gap, normal = evaluate_gap(x_phys, body.sdf_net)
+
+                if not (gap < 0).any():
+                    continue
+
+                volume = self.particles[i].current_volume
+                f_contact = compute_contact_force(
+                    gap, normal, volume, self._epsilon_n,
+                )
+                f_total += f_contact
+
+            if f_total.abs().max() > 0:
+                forces[i] = f_total
+
+        return forces
 
     def _build_neighbors(self, membership) -> List[List[int]]:
         membership = np.array(membership, dtype=bool)
@@ -200,11 +359,19 @@ class SchwarzMPMSolver:
         max_v = 0.0
         total_particles = 0
 
-        # Step each chart independently
+        # Compute contact forces (if configured)
+        contact_forces: List[Optional[torch.Tensor]] = [None] * self.n_charts
+        if self._contact_manager is not None:
+            contact_forces = self._compute_contact_forces()
+
+        # Step each chart with its contact forces
         for i in range(self.n_charts):
             if self.particles[i] is None or self.particles[i].n_particles == 0:
                 continue
-            diag = self.solvers[i].step(self.particles[i], dt)
+            diag = self.solvers[i].step(
+                self.particles[i], dt,
+                contact_force=contact_forces[i],
+            )
             total_ke += diag["kinetic_energy"]
             max_v = max(max_v, diag["max_velocity"])
             total_particles += self.particles[i].n_particles
@@ -218,12 +385,18 @@ class SchwarzMPMSolver:
         self.time += dt
         self.step_count += 1
 
+        # Tick the contact-topology monitor (if one is registered).
+        # Done after step_count is incremented so the monitor sees the
+        # current step index rather than the previous one.
+        topology_events = self._tick_contact_topology()
+
         return {
             "kinetic_energy": total_ke,
             "max_velocity": max_v,
             "total_particles": total_particles,
             "time": self.time,
             "step": self.step_count,
+            "contact_topology_events": topology_events,
         }
 
     def _exchange_boundary_velocities(self) -> None:
@@ -543,6 +716,12 @@ class SchwarzMPMSolver:
                     bc_type="fixed",
                     device=self.device,
                     dtype=self.dtype,
+                    decoder=new_dec,
+                    seed=seed_t,
+                    t1=t1_t,
+                    t2=t2_t,
+                    n_vec=n_t,
+                    chart_scale=r_t,
                 )
                 self.solvers.append(new_solver)
                 self.particles.append(None)  # empty cloud, filled by transfer

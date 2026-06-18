@@ -21,10 +21,28 @@ def _linear_bspline(x: torch.Tensor) -> torch.Tensor:
 def _shape_functions_and_indices(
     particles: MaterialPointCloud,
     grid: ChartGrid,
+    J_inv_T: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute shape function values and grid node indices for each particle.
 
     For linear B-splines, each particle interacts with at most 2^3 = 8 nodes.
+
+    Parameters
+    ----------
+    particles : MaterialPointCloud
+        Particle data.
+    grid : ChartGrid
+        Background grid.
+    J_inv_T : torch.Tensor, optional
+        (N_particles, 3, 3) transpose of the inverse chart Jacobian
+        ``J^{-T}`` at each particle.  When supplied, the returned
+        ``grad_weights`` are transformed to **physical space** via the
+        chain rule
+
+            ∇_x N_I(x_p) = J_p^{-T} ∇_ξ N_I(ξ_p).
+
+        When ``None`` (the default, identity-chart path), ``grad_weights``
+        is left in ξ-space.
 
     Returns
     -------
@@ -33,7 +51,9 @@ def _shape_functions_and_indices(
     weights : torch.Tensor
         (N_particles, 8) shape function values.
     grad_weights : torch.Tensor
-        (N_particles, 8, 3) shape function gradients in ξ-space.
+        (N_particles, 8, 3) shape function gradients — in ξ-space when
+        ``J_inv_T`` is None, in physical space when ``J_inv_T`` is
+        supplied.
     """
     h = grid.h
     npa = grid.n_nodes_per_axis
@@ -84,6 +104,14 @@ def _shape_functions_and_indices(
         other_dims = [i for i in range(3) if i != d]
         grad_weights[:, :, d] = dw_1d[:, :, d] * w_1d[:, :, other_dims[0]] * w_1d[:, :, other_dims[1]]
 
+    # Chain-rule transform to physical-space gradients for curved charts.
+    # With grad_weights_ξ of shape (N, 8, 3), and J_inv_T of shape
+    # (N, 3, 3), we want
+    #     grad_weights_phys[p, i, k] = Σ_j J_inv_T[p, k, j] * grad_weights_ξ[p, i, j]
+    # (subscripts must be lowercase a-z for torch einsum)
+    if J_inv_T is not None:
+        grad_weights = torch.einsum("pkj,pij->pik", J_inv_T, grad_weights)
+
     return node_indices, weights, grad_weights
 
 
@@ -91,13 +119,16 @@ def particle_to_grid(
     particles: MaterialPointCloud,
     grid: ChartGrid,
     gravity: Optional[torch.Tensor] = None,
+    contact_force: Optional[torch.Tensor] = None,
+    J_inv_T: Optional[torch.Tensor] = None,
 ) -> None:
     """Scatter particle mass, momentum, and force to grid nodes (P2G).
 
     Implements the standard MPM transfer:
         m_I = Σ_p m_p N_I(ξ_p)
         (mv)_I = Σ_p m_p v_p N_I(ξ_p)
-        f_I = -Σ_p V_p σ_p ∇N_I(ξ_p) + Σ_p m_p g N_I(ξ_p)
+        f_I = -Σ_p V_p σ_p ∇_x N_I(x_p) + Σ_p m_p g N_I(ξ_p)
+              + Σ_p f_contact_p N_I(ξ_p)
 
     Parameters
     ----------
@@ -107,10 +138,23 @@ def particle_to_grid(
         Background grid (must be reset before calling).
     gravity : torch.Tensor, optional
         (3,) gravity vector in physical space.
+    contact_force : torch.Tensor, optional
+        (N_particles, 3) per-particle contact force in physical space.
+        Unlike gravity (acceleration scaled by m_p), this is already a
+        force and scatters as ``f_I += f_p * N_I(ξ_p)`` without the
+        mass factor.
+    J_inv_T : torch.Tensor, optional
+        (N_particles, 3, 3) transpose inverse chart decoder Jacobian.
+        When supplied, the shape-function gradients are chain-ruled
+        into physical space so the internal-force scatter
+        ``σ_p · ∇_x N_I`` is dimensionally correct on curved charts.
+        Leave ``None`` for identity-chart use.
     """
     grid.reset()
 
-    node_indices, weights, grad_weights = _shape_functions_and_indices(particles, grid)
+    node_indices, weights, grad_weights = _shape_functions_and_indices(
+        particles, grid, J_inv_T=J_inv_T,
+    )
     # node_indices: (N, 8), weights: (N, 8), grad_weights: (N, 8, 3)
 
     n_particles = particles.n_particles
@@ -139,6 +183,14 @@ def particle_to_grid(
             grav_contrib = particles.mass.unsqueeze(1) * gravity[d] * weights  # (N, 8)
             grid.force[:, d].scatter_add_(0, node_indices.reshape(-1), grav_contrib.reshape(-1))
 
+    # External force (contact penalty)
+    if contact_force is not None:
+        for d in range(3):
+            cf_contrib = contact_force[:, d:d+1] * weights  # (N, 8)
+            grid.force[:, d].scatter_add_(
+                0, node_indices.reshape(-1), cf_contrib.reshape(-1)
+            )
+
 
 def grid_to_particle(
     particles: MaterialPointCloud,
@@ -146,11 +198,21 @@ def grid_to_particle(
     dt: float,
     update_position: bool = True,
     pic_flip_ratio: float = 0.95,
+    J_inv_T: Optional[torch.Tensor] = None,
 ) -> None:
     """Gather grid velocities back to particles (G2P).
 
     Updates particle velocities (PIC/FLIP blend), positions, and
     deformation gradients.
+
+    When ``J_inv_T`` is supplied, the shape-function gradients are
+    transformed to physical space via ``∇_x N_I = J^{-T} ∇_ξ N_I``,
+    and the resulting ``vel_grad`` is the true physical spatial
+    velocity gradient ``L = ∂v_phys/∂x_phys`` that
+    ``update_deformation_gradient`` requires.  When ``J_inv_T`` is
+    ``None``, ``vel_grad`` is the ξ-space gradient ``∂v_phys/∂ξ``,
+    which equals ``L`` only for identity decoders (the legacy path
+    that every existing test exercises).
 
     Parameters
     ----------
@@ -164,8 +226,15 @@ def grid_to_particle(
         If True, update particle positions using grid velocity.
     pic_flip_ratio : float
         Blending ratio: 1.0 = pure FLIP, 0.0 = pure PIC. Default 0.95.
+    J_inv_T : torch.Tensor, optional
+        (N_particles, 3, 3) transpose inverse chart decoder Jacobian.
+        Must be supplied whenever the containing ``ChartMPMSolver`` is
+        constructed with a curved decoder; ``None`` for the identity
+        path.
     """
-    node_indices, weights, grad_weights = _shape_functions_and_indices(particles, grid)
+    node_indices, weights, grad_weights = _shape_functions_and_indices(
+        particles, grid, J_inv_T=J_inv_T,
+    )
 
     # Gather grid velocity to particles (PIC velocity)
     v_pic = torch.zeros_like(particles.v)  # (N, 3)

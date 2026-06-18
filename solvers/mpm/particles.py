@@ -87,10 +87,22 @@ class MaterialPointCloud:
     def update_deformation_gradient(self, vel_grad: torch.Tensor, dt: float) -> None:
         """Update F via F_{n+1} = (I + dt * ∇v) @ F_n.
 
+        This is the forward Euler discretisation of ``dF/dt = L · F``,
+        so ``vel_grad`` must be the physical spatial velocity gradient
+        ``L = ∂v_phys/∂x_phys``.  ``transfers.grid_to_particle``
+        delivers exactly this when its ``J_inv_T`` argument is supplied
+        (automatic when the containing ``ChartMPMSolver`` was
+        constructed with a ``decoder`` bundle).  For identity-chart use
+        — the legacy path — ``vel_grad`` and ``L`` coincide and no
+        pull-back is required.  See
+        ``docs/mpm_velocity_gradient_audit.md`` for the full derivation
+        and the Option 3 fix that closes the curved-chart case.
+
         Parameters
         ----------
         vel_grad : torch.Tensor
-            (N, 3, 3) velocity gradient at particle positions.
+            (N, 3, 3) physical spatial velocity gradient at particle
+            positions.
         dt : float
             Time step.
         """

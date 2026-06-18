@@ -103,6 +103,12 @@ All 5 phases pass verification and validation (78 tests, 1 xpassed):
 Run full suite: `pytest tests/ topo_atlas/tests/ -v`
 See `topo_atlas/docs/VandV.md` for per-phase exercise details.
 
+**Analytical contact verification** (for verifying neural coordinate charts later): see
+`docs/contact_verification_manual.md` (benchmarks CV-1..CV-5 = Hertz, Cattaneo–Mindlin, Brazilian
+disc, nine-disc, nonconvex superformula; closed-form acceptance targets; §10 neural-chart protocol).
+Closed forms: `docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy). Harness
+skeleton: `tests/test_neural_chart_verification.py` (skipped until neural charts exist).
+
 ## Gotchas
 
 - **MPS (Apple Silicon)** requires float32 instead of float64. Use `resolve_dtype("auto", device)`.
