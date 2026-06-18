@@ -4,6 +4,11 @@
 
 This document provides a concrete, phased implementation plan for adding contact mechanics to the neural atlas FEM/MPM framework. Each phase is self-contained and testable, building incrementally toward full contact capability.
 
+> **Historical note.** This is the original design plan. The contact framework was ultimately built on
+> the **MPM** path (see `docs/contact_theory_manual.md`); the FEM-Robin contact path sketched below
+> references modules now under `archive/solvers/fem/` (e.g. `chart_vector_fem.py`, `schwarz_vector_fem.py`,
+> `robin_schwarz.py`) and is kept here as design history, not as an active spec.
+
 ---
 
 ## Phase 1: SDF Gap Oracle and Contact Manager
@@ -182,7 +187,7 @@ def penalty_tangent(gap: torch.Tensor, normal: torch.Tensor,
 
 ### 2.3 Integration into ChartVectorFEMSolver
 
-Modify `solvers/fem/chart_vector_fem.py`:
+Modify `archive/solvers/fem/chart_vector_fem.py`:
 
 - Add `contact_forces` parameter to `solve_nonlinear()`:
   ```python
@@ -195,7 +200,7 @@ Modify `solvers/fem/chart_vector_fem.py`:
 
 ### 2.4 Integration into SchwarzVectorFEMSolver
 
-Modify `solvers/fem/schwarz_vector_fem.py`:
+Modify `archive/solvers/fem/schwarz_vector_fem.py`:
 
 - At each Schwarz iteration, call `ContactManager.detect()` and `compute_penalty_forces()`
 - Pass contact forces to each chart's `solve_nonlinear()`
@@ -392,7 +397,7 @@ for k_uzawa in range(max_uzawa):
 
 ### 5.1 Contact Robin Interface
 
-Modify `solvers/fem/robin_schwarz.py`:
+Modify `archive/solvers/fem/robin_schwarz.py`:
 
 ```python
 def _update_contact_interface(self, contact_pairs):
@@ -609,9 +614,9 @@ Phase 1: Contact Detection (gap.py, contact_manager.py)
 
 | File | Modification | Phase |
 |---|---|---|
-| `solvers/fem/chart_vector_fem.py` | Add `contact_forces` param to `solve_nonlinear` | 2 |
-| `solvers/fem/schwarz_vector_fem.py` | Inject contact force loop into Schwarz iteration | 2 |
-| `solvers/fem/robin_schwarz.py` | Add inequality Robin interface conditions | 5 |
+| `archive/solvers/fem/chart_vector_fem.py` | Add `contact_forces` param to `solve_nonlinear` | 2 |
+| `archive/solvers/fem/schwarz_vector_fem.py` | Inject contact force loop into Schwarz iteration | 2 |
+| `archive/solvers/fem/robin_schwarz.py` | Add inequality Robin interface conditions | 5 |
 | `solvers/mpm/transfers.py` | Add `contact_force` param to `particle_to_grid` | 3 |
 | `solvers/mpm/schwarz_mpm.py` | Inject contact detection into multi-chart MPM | 3 |
 | `atlas/topo/monitor.py` | Add `monitor_contact` for combined SDF H0 tracking | 7 |

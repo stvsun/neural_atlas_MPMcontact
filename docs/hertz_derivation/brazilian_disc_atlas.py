@@ -6,9 +6,9 @@ analytic fields superpose to the exact plane-elasticity solution:
 
   * chart A, B : Flamant load-point charts at the two diametral loads.
                  Each carries the singular radial field sigma_rr = -(2p/pi) cos(theta)/r
-                 (p = P/t, force per thickness). These are the elastic analogue of the
-                 repository's CrackTipDecoder: a singularity-absorbing chart, here for the
-                 concentrated-load 1/r singularity instead of the crack-tip 1/sqrt(r).
+                 (p = P/t, force per thickness). Each is a singularity-absorbing
+                 chart for the concentrated-load 1/r singularity (analogous to a
+                 crack-tip 1/sqrt(r) enrichment).
   * chart 3    : a regular uniform biaxial-tension bulk chart.
 
 The transition maps are the rigid coordinate changes between each load-point polar

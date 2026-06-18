@@ -5,8 +5,7 @@ Renders a Cartesian field (e.g. an analytical stress component on a disc or a
 styled scalar bar -- matching the look of the Liu & Sun (2020) ILS-MPM figures.
 
 Uses raw VTK mappers + a self-contained jet lookup table (no matplotlib
-dependency, mirroring nineO_examples/pyvista_pub.py::make_lut), so it works with
-the repo's matplotlib 3.4 / pyvista 0.38 environment.
+dependency), so it works with the repo's matplotlib 3.4 / pyvista 0.38 environment.
 
 Design choices (see docs/contact_verification_manual.md):
 - StructuredGrid at z=0 with a NaN geometry mask (transparent outside the body

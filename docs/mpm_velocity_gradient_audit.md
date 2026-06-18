@@ -222,7 +222,7 @@ Neo-Hookean `σ_12` ≈ `μ γ t` (small-strain limit); the buggy version gives 
 | `tests/test_chart_mpm_solver.py` | None — uses `ChartMPMSolver` directly, `ξ` is `x`, `J = I` | **No.** |
 | `tests/test_mpm_contact.py`, `test_mpm_friction.py`, `test_contact_*.py`, `test_self_contact.py` | All use `ChartMPMSolver` directly. `J = I`. | **No.** |
 | `benchmarks/contact/*_mpm.py` | All identity (`two_sphere_collision_mpm.py:5` explicitly says so). | **No.** |
-| `benchmarks/rabbit_poisson_fem/`, `benchmarks/fracture/*` | FEM, not MPM. | **No.** |
+| `archive/benchmarks/rabbit_poisson_fem/`, `archive/benchmarks/fracture/*` (archived) | FEM, not MPM. | **No.** |
 | `benchmarks/mpm_basic/` | Empty package. | n/a |
 | `solvers/mpm/schwarz_mpm.py` (`SchwarzMPMSolver`) | The **only** path that combines real `ChartDecoder`s with `ChartMPMSolver`s (`cloud.push_to_physical(self.decoders[i], ...)` at `schwarz_mpm.py:250–255`). | **Yes — latent.** |
 | Contact force pathway | Contact forces are computed in physical space and scattered to the grid as per-particle physical force vectors, without going through `σ · ∇N`. They use `f_I += f_p N_I(ξ_p)`, which is dimensionally clean. | **Not affected.** |
@@ -310,7 +310,7 @@ Downstream, the P2G internal-force line (`einsum("pij,pnj->pni", stress, grad_we
 | `test_identity_decoder_matches_no_decoder_path` | `ChartMPMSolver(decoder=AffineDecoder(1.0), ...)` produces byte-identical particle state after 5 steps as `ChartMPMSolver()` with no decoder. The fix does not perturb the identity path. |
 | `test_contact_invariant_under_decoder` | A ball falling onto a floor SDF gives the same physical-space trajectory whether the solver was built with `decoder=None` or `decoder=AffineDecoder(1.0)`. Regression guarantee that the contact path (which lives in physical space) is unaffected by the decoder threading. |
 
-**Full regression status after fix:** 250 passed, 1 skipped, 0 failed — previously 245 passed, so +5 from the new tests, with no regressions anywhere in the 91 contact-framework tests or the 154 pre-existing fracture / topology / FEM tests.
+**Full regression status after fix:** the active contact suite is green (`pytest` → 120 passed, 7 skipped). (The legacy fracture / topology / FEM tests referenced in the original audit are now under `archive/`.)
 
 **Stopgap warnings removed.** The docstring warning blocks previously added to `solvers/mpm/transfers.py::grid_to_particle` and `solvers/mpm/particles.py::update_deformation_gradient` have been rewritten to reflect the new contract: "pass `J_inv_T` for curved charts; identity path is the default and preserved".
 

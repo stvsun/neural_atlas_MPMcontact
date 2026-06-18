@@ -1,5 +1,10 @@
 # Contact Mechanics for the Neural Atlas Framework: Research Brainstorm
 
+> **Historical note.** Design-history brainstorm. Some options below reference FEM modules
+> (`ChartFEMSolver`, `SchwarzFEMSolver`, `ChartVectorFEMSolver`, `robin_schwarz.py`, …) that now
+> live under `archive/solvers/fem/`; the framework was ultimately built on the **MPM** path
+> (see `docs/contact_theory_manual.md`). Kept for rationale, not as an active spec.
+
 ## Context
 
 This document brainstorms the techniques required to implement contact mechanics (self-contact and multi-body) within the neural atlas FEM/MPM framework. The framework uses neural SDFs for geometry, learned chart decoders for coordinate mappings, and Schwarz domain decomposition for multi-chart coupling. Contact introduces inequality-constrained inter-body coupling — a fundamentally new interface condition type beyond the existing Schwarz continuity conditions.

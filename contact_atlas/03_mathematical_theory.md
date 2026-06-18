@@ -1,5 +1,10 @@
 # Mathematical Theory: Contact Mechanics on Neural Atlas Domains
 
+> **Historical note.** Design-history theory doc. Some FEM-assembly passages reference
+> `ChartVectorFEMSolver` and related modules now under `archive/solvers/fem/`; the implemented
+> framework is MPM-based (see `docs/contact_theory_manual.md`). Kept for the variational/well-posedness
+> rationale, not as an active spec.
+
 ## 1. Problem Setting
 
 ### 1.1 Neural Atlas Domain Representation
@@ -156,7 +161,7 @@ a_i^alpha(u, v) = integral_{U_i} P(F(xi)) : [nabla_xi v * J_i^{-1}(xi)] * |det(J
 
 where F(xi) = I + nabla_xi u * J_i^{-1} is the deformation gradient in physical space, computed from the chart-local displacement gradient and the decoder Jacobian.
 
-The existing `ChartVectorFEMSolver` assembles this via:
+The (archived) `ChartVectorFEMSolver` assembled this via:
 ```
 K_i[a,b] = integral_{U_i} (nabla_xi N_a . J_i^{-1})^T : C : (nabla_xi N_b . J_i^{-1}) |det(J_i)| dxi
 ```
