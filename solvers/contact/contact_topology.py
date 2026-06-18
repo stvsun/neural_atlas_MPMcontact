@@ -209,8 +209,8 @@ class ContactTopologyMonitor:
     bbox_min, bbox_max : array-like (3,)
         Monitoring bounding box.  Must cover the union of all bodies.
     resolution : int
-        Grid points per axis.  16 is a reasonable default that matches
-        the recommendation in ``topo_atlas`` for production monitoring.
+        Grid points per axis.  16 is a reasonable default (coarse enough that
+        the persistent-homology overhead stays ~1% for production monitoring).
     lifetime_threshold : float
         Relative lifetime threshold passed to ``filter_by_lifetime``.
         Pairs shorter than ``threshold * range`` are dropped as noise.

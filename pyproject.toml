@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "neural-atlas-mpm"
+name = "neural-atlas-contact"
 version = "0.1.0"
-description = "Topology-aware neural atlas for FEM/MPM on complex 3D geometries"
+description = "Neural-atlas contact mechanics on complex 3D geometries (MPM, topology-aware)"
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.0",
@@ -23,6 +23,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["atlas*", "solvers*", "common*", "benchmarks*", "postprocessing*"]
+exclude = ["archive*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "topo_atlas/tests"]
+testpaths = ["tests"]

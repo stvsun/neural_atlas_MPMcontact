@@ -4,6 +4,11 @@
 
 This document provides a concrete, phased implementation plan for adding contact mechanics to the neural atlas FEM/MPM framework. Each phase is self-contained and testable, building incrementally toward full contact capability.
 
+> **Historical note.** This is the original design plan. The contact framework was ultimately built on
+> the **MPM** path (see `docs/contact_theory_manual.md`); the FEM-Robin contact path sketched below
+> references modules now under `archive/solvers/fem/` (e.g. `chart_vector_fem.py`, `schwarz_vector_fem.py`,
+> `robin_schwarz.py`) and is kept here as design history, not as an active spec.
+
 ---
 
 ## Phase 1: SDF Gap Oracle and Contact Manager

@@ -7,7 +7,7 @@ Elasticity*. The four benchmarks reproduce the contact problems of Liu & Sun
 (2020), "ILS-MPM" (CMAME 369:113168).
 
 This manual is the **verification** companion to:
-- `docs/theory_manual.md §15` — contact *algorithms* (penalty, AL, friction, topology);
+- `docs/contact_theory_manual.md` — contact *algorithms* (penalty, AL, friction, topology);
 - `contact_atlas/03_mathematical_theory.md` — contact *theory* (variational, well-posedness).
 
 Each benchmark gives: **Goal → Formulation → Pass criteria → Artifact/Test**.
