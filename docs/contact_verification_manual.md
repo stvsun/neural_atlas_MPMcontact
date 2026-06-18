@@ -247,27 +247,42 @@ bounded 1D refine (refined mode).
 
 ---
 
-## 9. Figure index
+## 9. Figures
 
-Analytical re-plots of the Liu & Sun figures (paper style). Regenerate the Hertz/Brazilian/
-nine-disc set with `python3 postprocessing/plot_liusun_all.py` and the superformula demo with
-`python3 postprocessing/plot_supershape_demo.py`; outputs in `figures/`.
+Analytical re-plots of the Liu & Sun figures (paper style), embedded below. Regenerate the
+Hertz/Brazilian/nine-disc set with `python3 postprocessing/plot_liusun_all.py` and the superformula
+demo with `python3 postprocessing/plot_supershape_demo.py`. Line plots leave commented
+numerical-overlay slots for the implementation's results.
 
-| Figure | File | Verifies |
-|---|---|---|
-| Fig.12 | liusun_fig12_hertz_schematic_pub.png | Hertz geometry/BCs |
-| Fig.13 | liusun_fig13_hertz_sigma_yy_pub.png | $\sigma_{yy}$ subsurface bulb (CV-1) |
-| Fig.14 | liusun_fig14_hertz_traction_pub.png | $\sigma_n,\sigma_t$ tractions (CV-1/CV-2) |
-| Fig.15 | liusun_fig15_nine_disc_schematic_pub.png | 9-disc geometry/BCs |
-| Fig.16 | liusun_fig16_nine_disc_S1_Sxy_pub.png | $S_1$ & $\sigma_{xy}$ over the array (CV-4) |
-| Fig.21 | liusun_fig21_brazilian_schematic_pub.png | Brazilian geometry/BCs |
-| Fig.22 | liusun_fig22_brazilian_aF_pub.png | $a$–$F$ (CV-3; standard vs Eq. 46) |
-| Fig.23 | liusun_fig23_brazilian_sigma_yy_pub.png | $\sigma_{yy}$ disc field (CV-3) |
-| CV-5 | supershape_cam_drive.gif | cam drives follower; contact arcs (CV-5) |
-| CV-5 | supershape_summary_pub.png | follower motion / spin / energy / #arcs (CV-5) |
-| CV-5 | supershape_chart_vs_sdf_pub.png | radial gap vs true SDF: advantage **and** bias (CV-5) |
+### CV-1 — Hertz normal contact
+Geometry & BCs (Fig.12), vertical-stress bulb $\sigma_{yy}$ (Fig.13), and contact tractions
+$\sigma_n,\sigma_t$ including Cattaneo–Mindlin partial slip (Fig.14, CV-1/CV-2).
 
-Line plots leave commented numerical-overlay slots for the implementation's results.
+<img src="../figures/liusun_fig12_hertz_schematic_pub.png" width="30%"> <img src="../figures/liusun_fig13_hertz_sigma_yy_pub.png" width="34%"> <img src="../figures/liusun_fig14_hertz_traction_pub.png" width="33%">
+
+Vector PDF: [Fig.14 traction](../figures/liusun_fig14_hertz_traction_pub.pdf).
+
+### CV-3 — Brazilian disc
+Geometry (Fig.21), contact radius $a$–$F$ — standard Hertz vs the paper's Eq. 46 (Fig.22), and the
+$\sigma_{yy}$ disc field (Fig.23).
+
+<img src="../figures/liusun_fig21_brazilian_schematic_pub.png" width="30%"> <img src="../figures/liusun_fig22_brazilian_aF_pub.png" width="33%"> <img src="../figures/liusun_fig23_brazilian_sigma_yy_pub.png" width="33%">
+
+Vector PDF: [Fig.22 a–F](../figures/liusun_fig22_brazilian_aF_pub.pdf).
+
+### CV-4 — Nine-disc packing
+Geometry (Fig.15) and the max-principal $S_1$ + shear $\sigma_{xy}$ over the 3×3 array (Fig.16;
+identical per disc by symmetry, contact concentrations at N/S/E/W).
+
+<img src="../figures/liusun_fig15_nine_disc_schematic_pub.png" width="32%"> <img src="../figures/liusun_fig16_nine_disc_S1_Sxy_pub.png" width="64%">
+
+### CV-5 — Nonconvex superformula contact
+Cam-drive animation (the rotating cam drives the free follower; red = active contact), the chart-vs-SDF
+comparison (smoothness advantage **and** radial bias), the run summary, and a static 3-frame montage.
+
+<img src="../figures/supershape_cam_drive.gif" width="48%"> <img src="../figures/supershape_chart_vs_sdf_pub.png" width="48%">
+
+<img src="../figures/supershape_summary_pub.png" width="55%"> <img src="../figures/supershape_frames_pub.png" width="44%">
 
 ---
 

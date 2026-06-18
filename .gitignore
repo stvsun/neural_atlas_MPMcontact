@@ -25,6 +25,9 @@ downloads/
 !figures/cracked_plate_3d.png
 !figures/williams_stress_3d.png
 !figures/benchmark_results.png
+# Exception: contact verification manual figures (docs/contact_verification_manual.md)
+!figures/liusun_*_pub.png
+!figures/supershape_*_pub.png
 *.svg
 *.vtu
 *.vtp
