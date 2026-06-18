@@ -187,7 +187,7 @@ def penalty_tangent(gap: torch.Tensor, normal: torch.Tensor,
 
 ### 2.3 Integration into ChartVectorFEMSolver
 
-Modify `solvers/fem/chart_vector_fem.py`:
+Modify `archive/solvers/fem/chart_vector_fem.py`:
 
 - Add `contact_forces` parameter to `solve_nonlinear()`:
   ```python
@@ -200,7 +200,7 @@ Modify `solvers/fem/chart_vector_fem.py`:
 
 ### 2.4 Integration into SchwarzVectorFEMSolver
 
-Modify `solvers/fem/schwarz_vector_fem.py`:
+Modify `archive/solvers/fem/schwarz_vector_fem.py`:
 
 - At each Schwarz iteration, call `ContactManager.detect()` and `compute_penalty_forces()`
 - Pass contact forces to each chart's `solve_nonlinear()`
@@ -397,7 +397,7 @@ for k_uzawa in range(max_uzawa):
 
 ### 5.1 Contact Robin Interface
 
-Modify `solvers/fem/robin_schwarz.py`:
+Modify `archive/solvers/fem/robin_schwarz.py`:
 
 ```python
 def _update_contact_interface(self, contact_pairs):
@@ -614,9 +614,9 @@ Phase 1: Contact Detection (gap.py, contact_manager.py)
 
 | File | Modification | Phase |
 |---|---|---|
-| `solvers/fem/chart_vector_fem.py` | Add `contact_forces` param to `solve_nonlinear` | 2 |
-| `solvers/fem/schwarz_vector_fem.py` | Inject contact force loop into Schwarz iteration | 2 |
-| `solvers/fem/robin_schwarz.py` | Add inequality Robin interface conditions | 5 |
+| `archive/solvers/fem/chart_vector_fem.py` | Add `contact_forces` param to `solve_nonlinear` | 2 |
+| `archive/solvers/fem/schwarz_vector_fem.py` | Inject contact force loop into Schwarz iteration | 2 |
+| `archive/solvers/fem/robin_schwarz.py` | Add inequality Robin interface conditions | 5 |
 | `solvers/mpm/transfers.py` | Add `contact_force` param to `particle_to_grid` | 3 |
 | `solvers/mpm/schwarz_mpm.py` | Inject contact detection into multi-chart MPM | 3 |
 | `atlas/topo/monitor.py` | Add `monitor_contact` for combined SDF H0 tracking | 7 |

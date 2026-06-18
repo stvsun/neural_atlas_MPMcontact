@@ -32,6 +32,8 @@ machine precision on every path.
 | 7b | `solvers/contact/contact_chart_spawn.py` | `spawn_contact_chart_pair()` bridges events to `add_charts()` | SDF normal → frame → spawn pair → solver grows 1→3 charts |
 | 8 | `solvers/contact/self_contact.py` | Surface-filter + initial-gap-delta heuristic for folding | Folding-slab: 36 surface particles flagged, 5 bulk never active |
 
+*(Phase 5 — an FEM-Robin contact-transmission path sketched in `contact_atlas/02_implementation_plan.md` — was not pursued; the framework is MPM-based.)*
+
 **Key design decisions**
 - **No Jacobian pull-back for contact forces** — MPM grid velocity/gravity are in physical space; contact forces scatter the same way (`f_I += f_p N_I(ξ_p)`, no $J^{-T}$). See `docs/contact_theory_manual.md §1.2`.
 - **Penalty and AL share one force API** — both return per-particle force for `particle_to_grid(..., contact_force=...)`; swap strategies without touching the solver.
@@ -122,7 +124,7 @@ neural_atlas_MPMcontact/
 │                     #   contact_chart_spawn, self_contact, contact_manager, supershape
 ├── benchmarks/
 │   ├── contact/      # ball-drop, two-sphere, sliding-block, folding-slab, topology, supershape cam-drive
-│   └── mpm_basic/    # MPM core verification
+│   └── mpm_basic/    # (placeholder for MPM core benchmarks)
 ├── postprocessing/   # contact_fields (numpy refs), pyvista_field2d, plot_liusun_*, plot_supershape_demo, utils
 ├── docs/             # contact_theory_manual, contact_verification_manual, hertz_derivation/, mpm audit
 ├── contact_atlas/    # design docs (brainstorm, implementation plan, math theory)

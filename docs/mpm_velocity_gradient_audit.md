@@ -310,7 +310,7 @@ Downstream, the P2G internal-force line (`einsum("pij,pnj->pni", stress, grad_we
 | `test_identity_decoder_matches_no_decoder_path` | `ChartMPMSolver(decoder=AffineDecoder(1.0), ...)` produces byte-identical particle state after 5 steps as `ChartMPMSolver()` with no decoder. The fix does not perturb the identity path. |
 | `test_contact_invariant_under_decoder` | A ball falling onto a floor SDF gives the same physical-space trajectory whether the solver was built with `decoder=None` or `decoder=AffineDecoder(1.0)`. Regression guarantee that the contact path (which lives in physical space) is unaffected by the decoder threading. |
 
-**Full regression status after fix:** 250 passed, 1 skipped, 0 failed — previously 245 passed, so +5 from the new tests, with no regressions anywhere in the 91 contact-framework tests or the 154 pre-existing fracture / topology / FEM tests.
+**Full regression status after fix:** the active contact suite is green (`pytest` → 120 passed, 7 skipped). (The legacy fracture / topology / FEM tests referenced in the original audit are now under `archive/`.)
 
 **Stopgap warnings removed.** The docstring warning blocks previously added to `solvers/mpm/transfers.py::grid_to_particle` and `solvers/mpm/particles.py::update_deformation_gradient` have been rewritten to reflect the new contract: "pass `J_inv_T` for curved charts; identity path is the default and preserved".
 

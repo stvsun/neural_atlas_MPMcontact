@@ -38,7 +38,7 @@ common/             # ChartDecoder/MaskNet/MLP (models.py), geometry.py (Jacobia
 
 benchmarks/
   contact/          #   ball-drop, two-sphere, sliding-block, folding-slab, topology, supershape cam-drive
-  mpm_basic/        #   MPM core verification
+  mpm_basic/        #   (placeholder for MPM core benchmarks)
 
 postprocessing/     # contact_fields.py (numpy CV references), pyvista_field2d.py,
                     #   plot_liusun_*.py, plot_supershape_demo.py, utils.py

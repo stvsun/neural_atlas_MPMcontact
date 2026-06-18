@@ -17,7 +17,7 @@ Because the teacher SDF has geometrically correct sign, the MLP inherits < 5%
 sign error (vs 31–46% from the neural sign-anchor approach).
 
 Output checkpoint is drop-in compatible with the existing pipeline
-(build_rabbit_atlas_volumetric.py, run_poisson_rabbit_atlas_schwarz.py).
+(legacy atlas-build pipeline, now under archive/).
 
 Sign conventions:
   open3d   : negative = inside, positive = outside  ← our convention
@@ -64,7 +64,7 @@ def set_seed(seed: int) -> None:
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MLP — identical architecture to train_sdf_rabbit.SDFNet (ensures checkpoint
-#        compatibility with load_sdf_net() in build_rabbit_atlas_volumetric.py)
+#        compatibility with load_sdf_net() (legacy load path, now archived))
 # ──────────────────────────────────────────────────────────────────────────────
 
 class MLP(torch.nn.Module):
