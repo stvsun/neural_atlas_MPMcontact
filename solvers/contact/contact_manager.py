@@ -13,6 +13,24 @@ from solvers.contact.contact_pair import ContactBody, ContactPair
 from solvers.contact.gap import evaluate_gap
 
 
+def body_gap_normal(
+    body: ContactBody,
+    x_phys: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Evaluate ``(gap, normal)`` for a body's particles using its detector.
+
+    Single dispatch point shared by :meth:`ContactManager.detect_mpm` and
+    ``schwarz_mpm._compute_contact_forces`` so the ``'sdf'`` / ``'chart'`` branch
+    lives in exactly one place.  Both branches return the identical contract:
+    ``gap`` (N,) with ``gap < 0`` => penetration, ``normal`` (N, 3) unit outward.
+    """
+    if body.detector == "chart":
+        # Imported lazily to keep the SDF-only path free of the chart module.
+        from solvers.contact.chart_gap import evaluate_gap_chart
+        return evaluate_gap_chart(x_phys, body.chart)
+    return evaluate_gap(x_phys, body.sdf_net)
+
+
 class ContactManager:
     """Detect contacts between multiple bodies.
 
@@ -103,7 +121,7 @@ class ContactManager:
         ContactPair or None
             ``None`` when no penetration is detected.
         """
-        gap, normal = evaluate_gap(x_phys, body_A.sdf_net)
+        gap, normal = body_gap_normal(body_A, x_phys)
         active = gap < 0
         if not active.any():
             return None

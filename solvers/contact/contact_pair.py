@@ -10,25 +10,72 @@ import torch
 class ContactBody:
     """One body participating in contact.
 
-    Wraps a neural SDF together with the chart seed geometry needed for
+    Wraps a contact-detection source (a neural SDF **or** a level-set-free
+    radial boundary chart) together with the chart seed geometry needed for
     broad-phase distance culling.
+
+    The ``detector`` field selects which source the narrow phase uses:
+
+    - ``"sdf"``   : evaluate ``sdf_net`` via :func:`solvers.contact.gap.evaluate_gap`
+      (the SDF benchmark path — must supply ``sdf_net``).
+    - ``"chart"`` : evaluate ``chart`` via
+      :func:`solvers.contact.chart_gap.evaluate_gap_chart` (the level-set-free
+      path — must supply ``chart``).
+
+    Both produce the identical ``(gap, normal)`` contract, so penalty / friction /
+    augmented-Lagrangian forces and the broad-phase culler are detector-agnostic.
 
     Attributes
     ----------
     body_id : int
         Unique identifier.
-    sdf_net : torch.nn.Module
-        Neural SDF for this body (``phi: R^3 -> R``).
+    sdf_net : torch.nn.Module, optional
+        Neural SDF for this body (``phi: R^3 -> R``).  Required for ``detector="sdf"``.
     seeds : torch.Tensor
         (M, 3) chart seed points in physical space.
     support_radii : torch.Tensor
         (M,) chart support radii.
+    chart : RadialChart, optional
+        Radial boundary chart.  Required for ``detector="chart"``.
+    detector : str
+        ``"sdf"`` (default) or ``"chart"``.
     """
 
     body_id: int
-    sdf_net: torch.nn.Module
-    seeds: torch.Tensor
-    support_radii: torch.Tensor
+    sdf_net: Optional[torch.nn.Module] = None
+    seeds: Optional[torch.Tensor] = None
+    support_radii: Optional[torch.Tensor] = None
+    chart: Optional[object] = None          # RadialChart (avoid import cycle)
+    detector: str = "sdf"
+
+    def __post_init__(self):
+        if self.detector not in ("sdf", "chart"):
+            raise ValueError(
+                f"detector must be 'sdf' or 'chart', got {self.detector!r}"
+            )
+        if self.detector == "sdf" and self.sdf_net is None:
+            raise ValueError("detector='sdf' requires sdf_net")
+        if self.detector == "chart" and self.chart is None:
+            raise ValueError("detector='chart' requires chart")
+
+    @classmethod
+    def from_chart(cls, body_id: int, chart, margin: float = 0.0) -> "ContactBody":
+        """Build a chart-detector body with broad-phase seeds from the bounding sphere.
+
+        A radial chart is star-shaped about its center, so a single seed at
+        ``chart.center`` with support radius ``chart.bounding_radius() + margin``
+        is an exact broad-phase bound.  Use this when registering a chart body
+        with ``SchwarzMPMSolver`` (whose broad-phase needs ``seeds`` /
+        ``support_radii``); ``ContactManager.detect_mpm`` works without them.
+        """
+        center = torch.as_tensor(chart.center).reshape(1, 3)
+        radius = torch.tensor(
+            [float(chart.bounding_radius()) + float(margin)], dtype=center.dtype
+        )
+        return cls(
+            body_id=body_id, chart=chart, seeds=center,
+            support_radii=radius, detector="chart",
+        )
 
 
 @dataclass

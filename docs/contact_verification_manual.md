@@ -397,6 +397,58 @@ The right-hand sides (analytical references) are already runnable now:
 `docs/hertz_derivation/*.py` scripts (symbolic self-checks). Steps 1 (analytical-shape SDF trainer) and
 the L1 neural solver are the "later" neural-chart work this manual is written to verify.
 
+### 10.7 Level-set-free detection via radial boundary charts (implemented)
+
+The SDF detector (`gap.py::evaluate_gap`) needs an *ambient* scalar field $\phi:\mathbb R^3\!\to\!\mathbb R$.
+A contact **detection** algorithm needs no such field: a star-shaped body can be carried level-set-free
+by a **radial boundary chart** $\rho:S^2\!\to\!\mathbb R^+$ (a height field on the sphere of directions —
+*not* an ambient SDF), with center $c$ and orientation $Q$ (body axes as columns). In the body frame
+$d=Q^\top(x-c)$, $r=\lVert d\rVert$, $\hat d=d/r$:
+
+$$ \text{gap}(x)=r-\rho(\hat d),\qquad n=\widehat{\,Q\,\nabla_d F\,},\quad \nabla_d F=\hat d-\nabla_S\rho/r, $$
+
+where $\nabla_S\rho=(I-\hat d\hat d^\top)\nabla_{\hat d}\rho$ is the **tangential** (projected) surface
+gradient — the projection is load-bearing for any non-sphere (a raw autograd gradient of $\rho$ carries a
+spurious radial component). This is the 3-D lift of the 2-D `supershape.py` oracle. The normal is the
+*matched / conservative* one (penalty force $=$ gradient of $\tfrac12\epsilon_n\langle F\rangle^2 V$).
+Implementation: `solvers/contact/chart_gap.py` (`RadialChart`, `SphereRho`, `SuperquadricRho`,
+`evaluate_gap_chart`, `closest_point_refine_chart`).
+
+**What is proven (acceptance vs the SDF benchmark).** Tested in `tests/test_chart_gap.py` and the head-to-head
+`benchmarks/contact/chart_vs_sdf_detection.py`:
+
+| Claim | Result |
+|---|---|
+| Sphere chart $=$ sphere SDF (gap + normal, all depths, $Q\ne I$) | machine precision ($\Delta\text{gap}=0$, $1-\cos<10^{-15}$) |
+| **Active set** $\{\text{gap}<0\}$ $=$ true SDF's, star-shaped body | exact (sign identity) |
+| Swap detector in the live MPM path (two-sphere collision) | **bit-identical** $v$, impulse, penetration ($\Delta$ between the sdf and chart runs $=0$) |
+| Radial normal $\to$ true surface normal at contact | $4.6^\circ$ at 10 % off-surface $\to 0.03^\circ$ at contact |
+| Hertz CV-1 contact circle (chart vs SDF) | identical; matches the closed-form lens radius |
+
+**What is NOT claimed (the honest bound).** The radial gap is **not** a Euclidean distance:
+$\text{gap}_\text{rad}=\text{gap}_\perp/\cos\alpha+O(\text{gap}^2)$ ($\alpha=$ ray-vs-normal angle), so its
+*magnitude* is conservative-large, $\lvert\text{gap}_\text{rad}\rvert\ge\lvert\text{gap}_\perp\rvert$ always
+(an exterior point reads a larger gap; a penetrating point a slightly *deeper* penetration — a marginally
+stiffer penalty, not a softer one). The sign is exact (hence the active-set equivalence); the *value*
+equals the SDF only on the sphere and in the $\text{gap}\to0$ limit. `closest_point_refine_chart` recovers
+the true perpendicular gap + surface normal (verification only — the foot jumps across the medial axis,
+non-smooth, would leak energy; never used by the integrator).
+
+**Preconditions / scope.** Valid only for **star-shaped** bodies (every ray from $c$ hits the boundary
+once). A plane/half-space is not star-shaped about any finite center, so **floors stay on the SDF path**
+(`FloorSDF`). Per-particle MPM detection makes multiple disjoint contact *patches* free (they appear as
+clusters of penetrating particles — no boundary-arc enumeration), but the *obstacle chart* must still be
+star-shaped. The detector is swapped behind one flag: `ContactBody(detector="chart", chart=...)`, dispatched
+by `contact_manager.body_gap_normal` (shared by `detect_mpm` and `schwarz_mpm._compute_contact_forces`);
+penalty / friction / augmented-Lagrangian forces and the broad-phase culler are unchanged.
+
+**Staging.** Shipped now (Stage 0): *analytic* $\rho$ (sphere, superquadric) — fully provable without
+training, as above. Deferred: **Stage 1** a trained neural $\rho_\theta:S^2\!\to\!\mathbb R^+$ (the neural
+chart that *replaces* the neural SDF; same `evaluate_gap_chart` path, the projected-gradient step becomes
+load-bearing; validate to the §10.3 neural tolerances, not machine precision). **Stage 2** a multi-chart
+atlas fallback (`ChartDecoder` + `invert_decoder`, signed-height gap with a Jacobian-metric correction,
+transition maps at overlaps) for **non-star-shaped** bodies, gated behind a star-shaped certificate.
+
 ---
 
 ## 11. Scope & limitations

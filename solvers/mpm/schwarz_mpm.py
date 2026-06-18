@@ -246,7 +246,7 @@ class SchwarzMPMSolver:
         forces : list of Optional[torch.Tensor]
             ``forces[i]`` is ``(N_i, 3)`` or ``None``.
         """
-        from solvers.contact.gap import evaluate_gap
+        from solvers.contact.contact_manager import body_gap_normal
         from solvers.contact.penalty import compute_contact_force
 
         forces: List[Optional[torch.Tensor]] = [None] * self.n_charts
@@ -269,16 +269,19 @@ class SchwarzMPMSolver:
             )
 
             for body in self._contact_bodies:
-                # Broad-phase: skip if all particles far from this body
-                dists = torch.linalg.norm(
-                    x_phys.unsqueeze(1) - body.seeds.unsqueeze(0), dim=2,
-                )  # (n_p, M_body)
-                min_dist = dists.min().item()
-                max_r = body.support_radii.max().item()
-                if min_dist > max_r + self._contact_manager.margin:
-                    continue
+                # Broad-phase: skip if all particles far from this body.
+                # A chart body may carry no seeds (use ContactBody.from_chart to
+                # populate them); when absent, skip the cull rather than crash.
+                if body.seeds is not None and body.support_radii is not None:
+                    dists = torch.linalg.norm(
+                        x_phys.unsqueeze(1) - body.seeds.unsqueeze(0), dim=2,
+                    )  # (n_p, M_body)
+                    min_dist = dists.min().item()
+                    max_r = body.support_radii.max().item()
+                    if min_dist > max_r + self._contact_manager.margin:
+                        continue
 
-                gap, normal = evaluate_gap(x_phys, body.sdf_net)
+                gap, normal = body_gap_normal(body, x_phys)
 
                 if not (gap < 0).any():
                     continue
