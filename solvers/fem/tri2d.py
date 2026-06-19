@@ -159,6 +159,41 @@ def disc_mesh(R: float = 1.0, n_rings: int = 16, center: Tuple[float, float] = (
     return nodes, tri, np.array(bnd, int)
 
 
+def graded_box_mesh(W: float, D: float, n_x: int = 80, n_y: int = 48, grade: float = 3.0):
+    """Half-plane box [-W, W] x [-D, 0], structured grid GRADED toward the top-centre contact
+    zone (x->0, y->0), each cell split into two CCW triangles.
+
+    The Hertz contact patch is tiny, so the mesh must refine where contact happens.  `grade`>1
+    clusters nodes near x=0 and y=0 (power-law).  Returns (nodes, tris, top_idx, bottom_idx)
+    where top_idx are the y=0 surface nodes (left->right) and bottom_idx the y=-D nodes."""
+    s = np.linspace(-1.0, 1.0, n_x + 1)
+    xs = W * np.sign(s) * np.abs(s) ** grade                  # cluster near x=0
+    v = np.linspace(0.0, 1.0, n_y + 1)
+    ys = -D * (1.0 - v) ** grade                              # cluster near y=0 (top)
+    XX, YY = np.meshgrid(xs, ys)                              # (n_y+1, n_x+1)
+    nodes = np.column_stack([XX.ravel(), YY.ravel()])
+    nx1 = n_x + 1
+
+    def nid(iy, ix):
+        return iy * nx1 + ix
+
+    tris = []
+    for iy in range(n_y):
+        for ix in range(n_x):
+            a, b, c, d = nid(iy, ix), nid(iy, ix + 1), nid(iy + 1, ix + 1), nid(iy + 1, ix)
+            tris.append([a, b, d])                            # CCW (y increases with iy)
+            tris.append([b, c, d])
+    tris = np.array(tris, int)
+    top_idx = np.array([nid(n_y, ix) for ix in range(nx1)])   # y=0 row
+    bottom_idx = np.array([nid(0, ix) for ix in range(nx1)])  # y=-D row
+    # enforce CCW (the grid winding above is CCW already, but guard against grading flips)
+    vtx = nodes[tris]
+    area2 = ((vtx[:, 1, 0] - vtx[:, 0, 0]) * (vtx[:, 2, 1] - vtx[:, 0, 1]) -
+             (vtx[:, 2, 0] - vtx[:, 0, 0]) * (vtx[:, 1, 1] - vtx[:, 0, 1]))
+    tris[area2 < 0] = tris[area2 < 0][:, [0, 2, 1]]
+    return nodes, tris, top_idx, bottom_idx
+
+
 if __name__ == "__main__":
     # self-test: uniaxial tension patch -> uniform sigma_xx, zero sigma_yy
     nodes, tris, bnd = disc_mesh(1.0, 10)
