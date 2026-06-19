@@ -161,9 +161,16 @@ def test_cv3_brazilian_neural_L1():
 
 
 def test_cv4_nine_disc_neural_L1():
-    sdf = load_neural_sdf("disc")
-    if sdf is None:
-        pytest.skip("no neural disc chart yet — L1: equibiaxial center -2N/piRt; N(d) to ~5%.")
+    """L1: the per-disc unit cell (D4 symmetry: 4 equal diametral neighbour loads) solved by the
+    2-D FEM reproduces the analytical equibiaxial centre stress -2N/piRt, isotropic (sxx=syy,
+    sxy=0).  Contact-free Neumann verification (the disc geometry is the neural disc SDF, L0-tested
+    in test_cv3_disc_neural_sdf_L0); the full N-body contact array is a larger extension."""
+    from benchmarks.contact.cv_numerical.cv4_nine_disc_fem import run
+    m, _ = run(n_rings=48, verbose=False)
+    assert m["sxx_relerr"] < 0.05 and m["syy_relerr"] < 0.05   # equibiaxial center vs -2N/piRt
+    assert m["equibiaxial_anisotropy"] < 0.02                  # genuinely isotropic
+    assert m["shear_rel"] < 0.02
+    assert m["reaction_max"] < 1e-8                            # rigid-body pins are reaction-free
 
 
 # ---------------------------------------------------------------------------
