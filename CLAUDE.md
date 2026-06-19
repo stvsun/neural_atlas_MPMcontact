@@ -97,17 +97,23 @@ python3 atlas/sdf/train_sdf.py                               # train a neural SD
 
 ## V&V Status
 
-Active suite: **122 passed, 7 skipped** (`pytest`; the 7 skips are the CV-1..CV-5 neural-chart harness,
-awaiting trained charts — CV-6 is now wired/runnable: it trains a fixed-capacity neural SDF on the exact
-Koch SDF and measures the refinement ceiling, see below).
+Active suite: **122 passed, 7 skipped** on the original contact suite; the **numerical-CV work is on
+branch `numerical-cv-suite`** (not yet merged to main) and adds the chart-FEM + neural-chart pipeline.
 
-**Analytical contact verification (CV-1..CV-6)** — closed-form acceptance targets for the neural
-charts: `docs/contact_verification_manual.md` (Hertz, Cattaneo–Mindlin, Brazilian disc, nine-disc,
-nonconvex superformula, Koch snowflake; **§11 = the neural-chart verification protocol**). Closed forms:
-`docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy). Harness:
-`tests/test_neural_chart_verification.py` — CV-1..CV-5 skip until neural charts exist; **CV-6 is wired and
-runnable** (`benchmarks/contact/koch_neural_ceiling.py` trains a fixed-capacity neural SDF on the exact
-Koch SDF; the measured refinement-ceiling curve is `figures/koch_neural_ceiling_pub.png`, manual §11.6).
+**Analytical contact verification (CV-1..CV-6)** — closed-form acceptance targets:
+`docs/contact_verification_manual.md` (Hertz, Cattaneo–Mindlin, Brazilian disc, nine-disc, superformula,
+Koch; **§11 = the neural-chart protocol**, **§11.8 = measured numerical status + capability matrix**).
+Closed forms: `docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy).
+
+**Numerical CV suite (branch `numerical-cv-suite`)** — trains neural charts on the CV shapes and solves
+numerically vs the closed forms. VERIFIED: chart-FEM port (`solvers/fem/`, patch test + MMS $O(h^2)$);
+**CV-3** Brazilian FEM (centre stress 1.62%); **CV-1** Hertz line contact (FEM + penalty contact, neural
+disc SDF indenter, $a(F)$–$E^*$ to ~1.6%); neural-SDF L0 (sphere 1.6e-3, disc 3.5e-3); **CV-5 the
+chart-over-SDF advantage MEASURED** — neural SDF degrades on cusps (8e-3) while the neural **radial chart**
+(`solvers/contact/radial_chart_2d.py`, Fourier-feature $\rho_\theta$) reaches 3.8e-3 / 0.42°; **CV-6**
+refinement ceiling measured. NOT BUILT: CV-2 friction, CV-4 multi-body, CV-5 L1 dynamics, ChartDecoder on
+CV shapes, 3-D Hertz. The harness `tests/test_neural_chart_verification.py` runs/passes these against
+trained `.pt` charts (gitignored, so a fresh checkout skips until retrained).
 
 ## Gotchas
 

@@ -462,9 +462,11 @@ Analytical-vs-analytical checks are machine precision (§9). Neural charts carry
 | force / approach | < 1% | ~5–10% | compounded |
 | momentum (free control) | < 1e-8 | < 1e-8 | dynamics-only; neural-independent |
 
-$\tau_g\sim10^{-3}L$ is a **target/assumption** (the typical neural-SDF Eikonal residual) for **smooth**
-shapes; the sphere/disc/superformula $\tau_g$ is still to be measured (the trainer fits only the rabbit
-and — via §11.6 — the Koch SDF so far). The **Koch fractal** now supplies the first measured numbers on
+$\tau_g\sim10^{-3}L$ is now **measured** for the smooth shapes (`atlas/sdf/train_analytical_sdf.py`,
+pure-regression of the exact SDF): **sphere $1.6\times10^{-3}L$ / 0.33°, disc $3.5\times10^{-3}L$ / 0.58°**
+near contact. The cusped **superformula** is the exception — a neural SDF only reaches $\approx8\times
+10^{-3}L$ with a degraded normal, but the neural **radial chart** (§11.7/§11.8) reaches $3.8\times10^{-3}L$
+/ 0.42° on the same shape (the accurate path). The **Koch fractal** now supplies the first measured numbers on
 these shapes (CV-6, §11.6): a fixed-capacity `SDFNet` reaches a zero-level-set deviation $\approx
 1.9\times10^{-2}L$ and an Eikonal residual $\langle(|\nabla\phi|-1)^2\rangle\approx 4.4\times10^{-2}$ at the
 representable level $n{=}1$, rising to a capacity-floor plateau ($\approx4$–$8\times10^{-2}L$ and
@@ -477,30 +479,29 @@ tests use a looser, shape-specific `TAU_GAP_KOCH`).
 ### 11.4 Neural-specific failure modes each benchmark catches
 
 - **Non-unit $\lVert\nabla\phi\rVert$ (broken Eikonal):** inflates the gap and rotates normals → caught by L0 on **any** benchmark (CV-1 sphere is the cleanest).
-- **Normal degradation near the medial axis / in concavities:** **CV-5** is the discriminating test — the analytical superformula chart is exact in the concave valleys where a neural SDF normal degrades; L0 gap/normal error there (vs the dense Euclidean reference) directly measures it.
+- **Normal degradation near the medial axis / in concavities:** **CV-5** is the discriminating test — a neural SDF's normal degrades in the concave valleys / at the cusps; L0 gap/normal error there directly measures it (measured: SDF gap 8e-3, normal tilted out-of-plane). The neural **radial chart** (§11.8) is the *resolution* — no medial axis, no ambient spectral bias, so it reproduces the analytical gap/normal to 3.8e-3 / 0.42° on the same shape.
 - **Over-smoothed sharp features (cusps/edges):** the neural SDF rounds lobe tips → CV-5 L0 tip-normal/gap error grows. (Multi-arc *count* is an analytical-chart boundary-scan property, not a quantity a single-foot neural SDF produces; for a neural SDF the concavity catcher is the L0 gap/normal error, not an arc count.)
 - **Chart Jacobian ill-conditioning / non-bijective decoder:** caught by the L0 inverse-chart residual and `stabilized_jacobian_ops` condition number (CV-1/CV-5).
 - **Contact-radius / force drift:** small gap bias → systematic $a$, $p_0$, $F(\delta)$ offset → caught by L1 (CV-1, CV-3, CV-4).
 
 ### 11.5 Harness
 
-`tests/test_neural_chart_verification.py` is the skeleton: one test per benchmark. The CV-1..CV-5
-tests `pytest.skip(...)` until a neural chart is provided (their **SDF L0** comparison logic is wired
-— activate by implementing the loader). **CV-6 is RUNNABLE today**: its analytical SDF is available on
-demand (`koch.inside` + `koch.nearest_boundary`), so the harness trains a fixed-capacity `SDFNet` on it
-directly (`test_cv6_koch_neural_sdf_L0`, `test_cv6_refinement_ceiling`) — no loader needed. The
-**decoder L0** path and **all L1** paths are stubs — L1 needs a neural contact *solve* (no neural contact
-solver exists yet) and decoder L0 needs a boundary-evaluable map (§11.1 note). Activate a CV-1..CV-5
-path by implementing its loader and removing the skip.
+`tests/test_neural_chart_verification.py` runs one test per benchmark. Much of the suite is now
+**LIVE and passing** against trained neural charts (see the measured numbers in §11.8): the analytical
+shapes are trained by `atlas/sdf/train_analytical_sdf.py` (neural SDFs) and
+`atlas/charts/train_radial_chart.py` (neural radial chart), loaded by `load_neural_sdf` /
+`load_neural_rho`; the numerical L1 solve is the chart-based FEM (`solvers/fem/`, plan M0/M2/M4). Tests
+`pytest.skip(...)` only where a chart is not yet trained (a fresh checkout, since `.pt` checkpoints are
+gitignored) or a benchmark is not yet built (CV-2, CV-4). ✓ = wired **and** measured-passing today.
 
-| Benchmark | Neural object | L0 (geometry) | L1 (mechanics) | Failure mode caught |
+| Benchmark | Neural object | L0 (geometry) | L1 (mechanics) | Status / measured |
 |---|---|---|---|---|
-| CV-1 | neural sphere/cyl SDF | gap, normal near contact ✓wired | $a,p_0,F(\delta)$ | Eikonal, gap drift |
-| CV-2 | + friction | (uses CV-1 chart) | $c/a$, $q(r)$ | normal error → traction |
-| CV-3 | neural disc SDF | gap/normal on rim | $\sigma$ field, $\sigma_t$ | rim normal accuracy |
-| CV-4 | neural disc SDF | per-disc gap/normal | equibiaxial center, $N(d)$ | multi-contact normals |
-| CV-5 | neural supershape SDF | Euclidean gap/normal **in concavities** (vs dense ref) ✓wired | cam-drive match | **medial-axis normal degradation, cusp smoothing** |
-| CV-6 | neural SDF on Koch level-$n$ | gap/Eikonal RMSE vs `koch.nearest_boundary` at rising $n$ **✓wired (measured, §11.6)** | (out of scope) | **self-similar detail beyond fixed capacity (refinement ceiling)** |
+| CV-1 | neural sphere/disc SDF | gap/normal near contact **✓** (sphere 1.6e-3, disc 3.5e-3 /L) | FEM Hertz line contact **✓** ($a(F)$–$E^*$ to ~1.6%, analytic & neural indenter) | Eikonal, gap drift |
+| CV-2 | + friction | (uses CV-1 chart) | not built (hardest; FEM static return-mapping) | normal → traction |
+| CV-3 | neural disc SDF | gap/normal on rim **✓** | FEM Brazilian **✓** (centre $\sigma$ to 1.62%/0.58% vs closed form) | rim normal accuracy |
+| CV-4 | neural disc SDF | per-disc gap/normal | not built (multi-body Schwarz + inter-disc contact) | multi-contact normals |
+| CV-5 | neural **SDF** (degrades) **+** neural **RADIAL chart** (accurate) | SDF: gap 8e-3, normal degraded **✓** ; radial chart: gap **3.8e-3**, normal **0.42°** **✓** | rigid-body cam-drive (analytic chart; neural-detection wiring = M6) | **the chart-over-SDF advantage, MEASURED** |
+| CV-6 | neural SDF on Koch level-$n$ | refinement ceiling **✓ (measured, §11.6)** | (out of scope: fractal contact ill-posed) | **self-similar detail beyond fixed capacity** |
 
 ### 11.6 Worked example (train → L0 → L1)
 
@@ -601,11 +602,57 @@ by `contact_manager.body_gap_normal` (shared by `detect_mpm` and `schwarz_mpm._c
 penalty / friction / augmented-Lagrangian forces and the broad-phase culler are unchanged.
 
 **Staging.** Shipped now (Stage 0): *analytic* $\rho$ (sphere, superquadric) — fully provable without
-training, as above. Deferred: **Stage 1** a trained neural $\rho_\theta:S^2\!\to\!\mathbb R^+$ (the neural
-chart that *replaces* the neural SDF; same `evaluate_gap_chart` path, the projected-gradient step becomes
-load-bearing; validate to the §11.3 neural tolerances, not machine precision). **Stage 2** a multi-chart
+training, as above. **Stage 1 — now BUILT in 2-D** (`solvers/contact/radial_chart_2d.py::NeuralRho2D`):
+a trained neural $\rho_\theta:S^1\!\to\!\mathbb R^+$ (Fourier-feature MLP) is the neural chart that
+*replaces* the neural SDF for CV-5 — it reproduces the analytical radial gap/normal to $3.8\times10^{-3}L$
+/ 0.42° where the SDF degrades (§11.8). The 3-D $\rho_\theta:S^2\!\to\!\mathbb R^+$ on the
+`evaluate_gap_chart` path is the analogous, still-deferred 3-D piece. **Stage 2** a multi-chart
 atlas fallback (`ChartDecoder` + `invert_decoder`, signed-height gap with a Jacobian-metric correction,
 transition maps at overlaps) for **non-star-shaped** bodies, gated behind a star-shaped certificate.
+
+---
+
+## 11.8 Numerical CV suite — measured status & capability matrix
+
+The numerical suite trains neural charts on the analytical CV shapes, runs a numerical solve, and
+compares to the closed forms. Components: the chart-based **FEM** ported to active `solvers/fem/`
+(3-D tet `chart_vector_fem.py` + 2-D plane-stress `tri2d.py`; patch test machine-zero, MMS $O(h^2)$),
+three neural objects (neural **SDF** `atlas/sdf/train_analytical_sdf.py`; neural **radial chart**
+`atlas/charts/train_radial_chart.py`; volumetric **ChartDecoder** — the FEM domain map, trained-on-CV-
+shapes deferred), and static penalty contact. **Honest scope notes are load-bearing here** (post
+adversarial review): the numbers below are what is *verified*, not what is aspired to.
+
+**Measured results (what holds):**
+
+| CV | what is numerically verified | measured | the honest caveat |
+|---|---|---|---|
+| CV-1 | FEM Hertz line contact, neural disc SDF indenter; $a=2\sqrt{FR/\pi E^*}$ ties $a$ to $E^*$ | **~1.6%** (constant $a/\sqrt F$ ratio over an 8× $E^*$ sweep) | one independent anchor ($E^*$); $p_0=2F/\pi a$ is the half-ellipse identity, **not** independent; neural **matches** the exact-SDF baseline, does not beat it; 3-D axisymmetric not tractable (patch resolution) |
+| CV-3 | FEM Brazilian, centre stress vs $\pm2P/\pi Dt,-6P/\pi Dt$ | **$\sigma_{xx}$ 1.62%, $\sigma_{yy}$ 0.58%** (vs the *exact* closed form) | CST gives a ~1.6% center floor that plateaus under refinement; pole singularity excluded; material-independent (verified) |
+| CV-5 (SDF) | neural SDF on the cusped superformula | gap 8e-3, normal degraded (median \|$n_z$\|~0.5) | a smooth SDF **cannot** represent cusps/concavities well — the spectral-bias ceiling, by design |
+| CV-5 (chart) | neural **radial chart** vs the analytical radial gap/normal | gap **3.8e-3**, median normal **0.42°** | the **accurate** path — the transition-map chart succeeds where the SDF degrades (Fourier-feature 1-D fit; star-shaped only) |
+| CV-6 | fixed-capacity SDF vs the exact Koch SDF, rising level | refinement ceiling **measured** (§11.6) | a level-set/SDF *fundamentally* cannot resolve a fractal at depth — that is the demonstrated point |
+
+**Capability matrix (what the framework can and cannot do, today):**
+
+*Can (verified):* run a numerical contact solve on **learned geometry** and reproduce analytical
+contact mechanics to **~1–2%** (CV-1, CV-3); represent geometry three ways behind one
+`(gap,normal,volume)` contract; localize failures via the L0/L1 split; and **measure the
+chart-over-level-set advantage** — the radial chart beats the SDF on cusps (CV-5) and the recursive
+IFS chart beats any SDF on fractals (CV-6). Smooth convex / star-shaped bodies throughout.
+
+*Cannot (yet or fundamentally):* a smooth neural **SDF cannot represent sharp features** (cusps,
+fractals) — intrinsic spectral bias; the framework's *answer* is to switch chart type (radial for
+star-shaped, recursive IFS for fractal). **Sharp contact patches need fine local mesh** (3-D Hertz not
+yet tractable on uniform meshes). **Learned geometry caps L1 accuracy at ~1–5%** (training error
+propagates) — never machine precision. **Not built:** CV-2 friction partial-slip, CV-4 multi-body
+packing, CV-5 L1 dynamics with neural detection, the ChartDecoder trained on CV shapes, 3-D Hertz, MPM
+cross-checks.
+
+*Bottom line:* a **verified pipeline for smooth/star-shaped contact** (CV-1, CV-3 at ~1–2%) plus a
+**rigorously-measured case for charts over level-sets** on geometry level-sets handle badly (CV-5
+cusps, CV-6 fractal). The distinctive value is not beating an SDF on a sphere — there they are
+equivalent — but representing geometry (cusps, fractals, multi-patch) a single neural SDF or uniform
+level-set cannot.
 
 ---
 
