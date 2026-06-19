@@ -155,9 +155,13 @@ def test_cv3_disc_neural_sdf_L0():
 
 
 def test_cv3_brazilian_neural_L1():
-    sdf = load_neural_sdf("disc")
-    if sdf is None:
-        pytest.skip("no neural disc chart yet — L1: center sxx=+2P/piDt, syy=-6P/piDt to ~5%.")
+    """L1: 2-D FEM Brazilian diametral compression reproduces the analytical centre stress
+    (+2P/piDt, -6P/piDt) to <5% vs the canonical closed form (contact-free Neumann; the disc
+    geometry is the L0-tested neural disc SDF)."""
+    from benchmarks.contact.cv_numerical.cv3_brazilian_fem import run
+    m, _ = run(n_rings=48, verbose=False)
+    assert m["center_sxx_relerr"] < 0.05 and m["center_syy_relerr"] < 0.05   # vs exact closed form
+    assert abs(m["center_ratio_fem"] - (-3.0)) < 0.2                         # signature ratio -3
 
 
 def test_cv4_nine_disc_neural_L1():

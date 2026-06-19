@@ -497,10 +497,10 @@ gitignored) or a benchmark is not yet built (CV-2, CV-4). ✓ = wired **and** me
 | Benchmark | Neural object | L0 (geometry) | L1 (mechanics) | Status / measured |
 |---|---|---|---|---|
 | CV-1 | neural sphere/disc SDF | gap/normal near contact **✓** (sphere 1.6e-3, disc 3.5e-3 /L) | FEM Hertz line contact **✓** ($a(F)$–$E^*$ to ~1.6%, analytic & neural indenter) | Eikonal, gap drift |
-| CV-2 | + friction | (uses CV-1 chart) | not built (hardest; FEM static return-mapping) | normal → traction |
+| CV-2 | + friction (Coulomb) | (uses CV-1 chart) | FEM tangential stick/slip **✓** (stick law $c/a{=}\sqrt{1{-}Q/\mu P}$ to ~5–7% at low $Q$; deep half-plane) | normal → traction |
 | CV-3 | neural disc SDF | gap/normal on rim **✓** | FEM Brazilian **✓** (centre $\sigma$ to 1.62%/0.58% vs closed form) | rim normal accuracy |
-| CV-4 | neural disc SDF | per-disc gap/normal | not built (multi-body Schwarz + inter-disc contact) | multi-contact normals |
-| CV-5 | neural **SDF** (degrades) **+** neural **RADIAL chart** (accurate) | SDF: gap 8e-3, normal degraded **✓** ; radial chart: gap **3.8e-3**, normal **0.42°** **✓** | rigid-body cam-drive (analytic chart; neural-detection wiring = M6) | **the chart-over-SDF advantage, MEASURED** |
+| CV-4 | neural disc SDF | per-disc gap/normal **✓** | FEM unit cell **✓** (equibiaxial centre $-2N/\pi Rt$ to 0.15%, isotropic) | multi-contact normals |
+| CV-5 | neural **SDF** (degrades) **+** neural **RADIAL chart** (accurate) | SDF: gap 8e-3, normal degraded **✓** ; radial chart: gap **3.8e-3**, normal **0.42°** **✓** | rigid-body cam-drive: neural-detection trajectory matches analytical **✓** (0.04%, momentum 1e-15) | **the chart-over-SDF advantage, MEASURED** |
 | CV-6 | neural SDF on Koch level-$n$ | refinement ceiling **✓ (measured, §11.6)** | (out of scope: fractal contact ill-posed) | **self-similar detail beyond fixed capacity** |
 
 ### 11.6 Worked example (train → L0 → L1)
@@ -627,32 +627,46 @@ adversarial review): the numbers below are what is *verified*, not what is aspir
 | CV | what is numerically verified | measured | the honest caveat |
 |---|---|---|---|
 | CV-1 | FEM Hertz line contact, neural disc SDF indenter; $a=2\sqrt{FR/\pi E^*}$ ties $a$ to $E^*$ | **~1.6%** (constant $a/\sqrt F$ ratio over an 8× $E^*$ sweep) | one independent anchor ($E^*$); $p_0=2F/\pi a$ is the half-ellipse identity, **not** independent; neural **matches** the exact-SDF baseline, does not beat it; 3-D axisymmetric not tractable (patch resolution) |
+| CV-2 | FEM tangential stick/slip on the CV-1 contact; $c/a=\sqrt{1-Q/\mu P}$ (2-D line) | **~5–7%** at low $Q$ (mean 11%) | needs a DEEP half-plane (edge-singular tangential traction, not block shear); the stick radius coarsens at high $Q$ (node-spacing quantises the slip boundary); 2-D law used (ref is the 3-D $^{1/3}$) |
 | CV-3 | FEM Brazilian, centre stress vs $\pm2P/\pi Dt,-6P/\pi Dt$ | **$\sigma_{xx}$ 1.62%, $\sigma_{yy}$ 0.58%** (vs the *exact* closed form) | CST gives a ~1.6% center floor that plateaus under refinement; pole singularity excluded; material-independent (verified) |
+| CV-4 | FEM unit cell (D4: 4 equal diametral loads), equibiaxial centre $-2N/\pi Rt$ | **0.15% / 0.01%**, isotropic (anisotropy 0.16%, shear 0%) | the per-disc UNIT CELL (the equibiaxial physics); the full N-body explicit-contact array is the heavier extension, not built |
 | CV-5 (SDF) | neural SDF on the cusped superformula | gap 8e-3, normal degraded (median \|$n_z$\|~0.5) | a smooth SDF **cannot** represent cusps/concavities well — the spectral-bias ceiling, by design |
-| CV-5 (chart) | neural **radial chart** vs the analytical radial gap/normal | gap **3.8e-3**, median normal **0.42°** | the **accurate** path — the transition-map chart succeeds where the SDF degrades (Fourier-feature 1-D fit; star-shaped only) |
+| CV-5 (chart) | neural **radial chart** vs the analytical radial gap/normal; L1 cam-drive dynamics | gap **3.8e-3**, median normal **0.42°**; dynamics trajectory matches analytical to **0.04%** (momentum 1e-15) | the **accurate** path — the transition-map chart succeeds where the SDF degrades, and drives the SAME contact dynamics (Fourier-feature 1-D fit; star-shaped only) |
 | CV-6 | fixed-capacity SDF vs the exact Koch SDF, rising level | refinement ceiling **measured** (§11.6) | a level-set/SDF *fundamentally* cannot resolve a fractal at depth — that is the demonstrated point |
+
+![Numerical CV suite summary](../figures/numerical_cv_summary_pub.png)
+
+*Numerical CV suite: every benchmark's L1 error vs the closed form (left; CV-1/3/4/5 ≤ ~1.6%,
+CV-2 ~11% coarse) and the CV-5 headline — the neural radial chart beats the neural SDF on the
+cusped superformula (right).*
 
 **Capability matrix (what the framework can and cannot do, today):**
 
 *Can (verified):* run a numerical contact solve on **learned geometry** and reproduce analytical
-contact mechanics to **~1–2%** (CV-1, CV-3); represent geometry three ways behind one
-`(gap,normal,volume)` contract; localize failures via the L0/L1 split; and **measure the
+contact mechanics to **~1–2%** across the continuum suite (CV-1 Hertz, CV-3 Brazilian, CV-4 nine-disc
+unit cell), plus frictional partial slip (CV-2, ~5–11%); represent geometry three ways behind one
+`(gap,normal,volume)` contract; localize failures via the L0/L1 split; **measure the
 chart-over-level-set advantage** — the radial chart beats the SDF on cusps (CV-5) and the recursive
-IFS chart beats any SDF on fractals (CV-6). Smooth convex / star-shaped bodies throughout.
+IFS chart beats any SDF on fractals (CV-6); and show the neural chart drives the same rigid-body
+**contact dynamics** as the analytical chart (CV-5, 0.04% trajectory match). Smooth convex /
+star-shaped bodies throughout.
 
 *Cannot (yet or fundamentally):* a smooth neural **SDF cannot represent sharp features** (cusps,
 fractals) — intrinsic spectral bias; the framework's *answer* is to switch chart type (radial for
-star-shaped, recursive IFS for fractal). **Sharp contact patches need fine local mesh** (3-D Hertz not
-yet tractable on uniform meshes). **Learned geometry caps L1 accuracy at ~1–5%** (training error
-propagates) — never machine precision. **Not built:** CV-2 friction partial-slip, CV-4 multi-body
-packing, CV-5 L1 dynamics with neural detection, the ChartDecoder trained on CV shapes, 3-D Hertz, MPM
-cross-checks.
+star-shaped, recursive IFS for fractal). **Sharp contact patches need fine local mesh** (3-D
+axisymmetric Hertz not yet tractable on uniform meshes); **frictional stick radii coarsen** at high
+tangential load (node-spacing-limited). **Learned geometry caps L1 accuracy at ~1–5%** (training
+error propagates) — never machine precision. **Not built:** the full N-body explicit-contact disc
+array (only the per-disc unit cell), a **ChartDecoder trained on the CV shapes** (the FEM is verified
+to run on a ChartDecoder domain map, but the per-shape decoder atlas is the remaining Stage-2 piece),
+3-D Hertz, and MPM dynamic cross-checks.
 
-*Bottom line:* a **verified pipeline for smooth/star-shaped contact** (CV-1, CV-3 at ~1–2%) plus a
-**rigorously-measured case for charts over level-sets** on geometry level-sets handle badly (CV-5
-cusps, CV-6 fractal). The distinctive value is not beating an SDF on a sphere — there they are
-equivalent — but representing geometry (cusps, fractals, multi-patch) a single neural SDF or uniform
-level-set cannot.
+*Bottom line:* a **verified pipeline across the contact-mechanics suite** — Hertz, Brazilian,
+nine-disc and Cattaneo–Mindlin to ~1–11%, on learned geometry — plus a **rigorously-measured case for
+charts over level-sets** on geometry level-sets handle badly (CV-5 cusps, CV-6 fractal) and a
+demonstration that the neural chart reproduces the contact *dynamics*. The distinctive value is not
+beating an SDF on a sphere — there they are equivalent — but representing geometry (cusps, fractals,
+multi-patch) a single neural SDF or uniform level-set cannot.
 
 ---
 

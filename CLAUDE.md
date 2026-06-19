@@ -65,7 +65,14 @@ python3 docs/hertz_derivation/hertz_transition_map.py   # CV-1/CV-2 symbolic sel
 
 python3 benchmarks/contact/supershape_cam_drive.py            # CV-5 rigid-body demo (+ --free-A)
 python3 postprocessing/plot_liusun_all.py                     # regenerate CV figures
-python3 atlas/sdf/train_sdf.py                               # train a neural SDF (when bringing up charts)
+
+# --- numerical CV suite (branch numerical-cv-suite) ---
+pytest tests/test_chart_fem.py -v                            # chart-FEM port: patch + MMS O(h^2)
+python3 -m pytest tests/test_neural_chart_verification.py -k "not cv6" -q   # L0/L1 vs analytical (fast)
+python3 atlas/sdf/train_analytical_sdf.py --all              # train sphere/disc/supershape neural SDFs
+python3 atlas/charts/train_radial_chart.py                   # train the CV-5 neural radial chart
+python3 benchmarks/contact/cv_numerical/cv3_brazilian_fem.py # CV-3 FEM vs closed form (also cv1/cv2/cv4/cv5)
+python3 postprocessing/plot_numerical_cv_summary.py          # numerical CV results summary figure
 ```
 
 ## Code Patterns
@@ -90,6 +97,11 @@ python3 atlas/sdf/train_sdf.py                               # train a neural SD
 - `friction.py` — regularized Coulomb, stateless, composes with any normal force.
 - `contact_topology.py` — combined-SDF $H_0$ persistent-homology events via `atlas/topo`.
 - `supershape.py` — Gielis superformula boundary chart + inverse radial gap (CV-5).
+- `chart_gap.py` — 3-D level-set-free radial-chart detector (`RadialChart`, `evaluate_gap_chart`).
+- `radial_chart_2d.py` — 2-D NEURAL radial chart (`NeuralRho2D`, Fourier-feature $\rho_\theta$) + gap/normal; the transition-map detector that gives the accurate CV-5 path (numerical-cv-suite branch).
+
+### Atlas-FEM (`solvers/fem/`, branch `numerical-cv-suite`)
+- Chart-based elastostatic FEM ported from `archive/`: `chart_vector_fem.py` (3-D P1/P2 tet, ChartDecoder-Jacobian pushforward, Newton; SVD-stabilized via `common.geometry.stabilized_jacobian_ops`), `tri2d.py` (2-D plane-stress CST, sparse), `linear_elastic.py`, `schwarz_vector_fem.py`. Static penalty contact lives in the CV-1/CV-2 drivers (`benchmarks/contact/cv_numerical/`).
 
 ### Topology Pipeline (`atlas/topo/`)
 - `filtration.py` / `persistence.py` — sublevel-set filtration + persistent homology (GUDHI).
@@ -106,14 +118,19 @@ Koch; **§11 = the neural-chart protocol**, **§11.8 = measured numerical status
 Closed forms: `docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy).
 
 **Numerical CV suite (branch `numerical-cv-suite`)** — trains neural charts on the CV shapes and solves
-numerically vs the closed forms. VERIFIED: chart-FEM port (`solvers/fem/`, patch test + MMS $O(h^2)$);
-**CV-3** Brazilian FEM (centre stress 1.62%); **CV-1** Hertz line contact (FEM + penalty contact, neural
-disc SDF indenter, $a(F)$–$E^*$ to ~1.6%); neural-SDF L0 (sphere 1.6e-3, disc 3.5e-3); **CV-5 the
-chart-over-SDF advantage MEASURED** — neural SDF degrades on cusps (8e-3) while the neural **radial chart**
-(`solvers/contact/radial_chart_2d.py`, Fourier-feature $\rho_\theta$) reaches 3.8e-3 / 0.42°; **CV-6**
-refinement ceiling measured. NOT BUILT: CV-2 friction, CV-4 multi-body, CV-5 L1 dynamics, ChartDecoder on
-CV shapes, 3-D Hertz. The harness `tests/test_neural_chart_verification.py` runs/passes these against
-trained `.pt` charts (gitignored, so a fresh checkout skips until retrained).
+numerically vs the closed forms (drivers in `benchmarks/contact/cv_numerical/`; summary figure
+`figures/numerical_cv_summary_pub.png`; full status + capability matrix in manual §11.8). VERIFIED:
+chart-FEM port (`solvers/fem/`, patch test + MMS $O(h^2)$); **CV-1** Hertz line contact (FEM + penalty
+contact, neural disc SDF indenter, $a(F)$–$E^*$ ~1.6%); **CV-2** Cattaneo stick/slip ($c/a$ law ~5–11%,
+deep half-plane); **CV-3** Brazilian (centre 1.62%); **CV-4** nine-disc unit cell (equibiaxial centre
+0.15%); neural-SDF L0 (sphere 1.6e-3, disc 3.5e-3); **CV-5 the chart-over-SDF advantage MEASURED** —
+neural SDF degrades on cusps (8e-3) while the neural **radial chart** (`solvers/contact/radial_chart_2d.py`,
+Fourier-feature $\rho_\theta$) reaches 3.8e-3 / 0.42°, and drives the cam-drive dynamics to a 0.04% match
+vs the analytical chart; **CV-6** refinement ceiling measured. NOT BUILT: full N-body disc-array contact
+(only the unit cell), ChartDecoder trained on CV shapes (the FEM is verified on a ChartDecoder), 3-D
+Hertz, MPM cross-checks. Harness `tests/test_neural_chart_verification.py` + `tests/test_chart_fem.py`
+pass against trained `.pt` charts (gitignored, so a fresh checkout skips until retrained); the slow
+contact sweeps (CV-1/CV-2/CV-5-dynamics) run as benchmark drivers, not routine tests.
 
 ## Gotchas
 

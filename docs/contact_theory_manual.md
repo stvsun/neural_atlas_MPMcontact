@@ -8,7 +8,9 @@ Companion documents:
 - `contact_atlas/03_mathematical_theory.md` — variational formulation & well-posedness;
   `contact_atlas/01_brainstorm.md`, `02_implementation_plan.md` — design rationale & phase plan.
 - `docs/contact_verification_manual.md` — analytical benchmarks CV-1..CV-6 + the neural-chart
-  verification protocol; `docs/hertz_derivation/` — the closed-form derivations.
+  verification protocol (§11), **and the measured NUMERICAL CV suite + capability matrix (§11.8)**:
+  neural charts trained on the CV shapes and solved with the chart-FEM (`solvers/fem/`) vs the
+  closed forms; `docs/hertz_derivation/` — the closed-form derivations.
 - `docs/mpm_velocity_gradient_audit.md` — curved-chart MPM velocity-gradient correctness (the MPM
   time integrator underpinning the contact forces).
 

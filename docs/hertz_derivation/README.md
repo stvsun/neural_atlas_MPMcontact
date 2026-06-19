@@ -53,3 +53,10 @@ analytical shape/chart  --(train)-->  neural SDF / ChartDecoder
         |                                     |
    CV-1..CV-6 pass criteria  ===  acceptance for the neural chart  (manual §9, §11)
 ```
+
+This workflow is now **executed** on the `numerical-cv-suite` branch: neural charts (SDF, radial,
+ChartDecoder) are trained on the CV shapes (`atlas/sdf/train_analytical_sdf.py`,
+`atlas/charts/train_radial_chart.py`) and solved with the chart-FEM (`solvers/fem/`) against these
+closed forms — CV-1/CV-3/CV-4 to ~1–2%, CV-2 to ~5–11%, with CV-5/CV-6 measuring the chart-over-
+level-set advantage. Drivers: `benchmarks/contact/cv_numerical/`; status & capability matrix:
+verification manual **§11.8**.

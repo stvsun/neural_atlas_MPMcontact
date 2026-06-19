@@ -6,9 +6,12 @@ Point Method (MPM), persistent-homology-based contact detection, and an analytic
 verification suite that doubles as the acceptance test for the neural charts.
 
 > **Status.** The contact framework (penalty / augmented-Lagrangian / friction / topology /
-> self-contact) and a closed-form **analytical verification suite (CV-1..CV-6)** are in place.
-> Training the neural coordinate charts is the next step — the analytical benchmarks are written
-> to verify those charts when they land (see [§11 of the verification manual](docs/contact_verification_manual.md)).
+> self-contact) and a closed-form **analytical verification suite (CV-1..CV-6)** are in place. A
+> **numerical verification suite** (branch `numerical-cv-suite`) now trains neural coordinate charts
+> on the CV shapes and solves them — a ported chart-FEM + a 2-D FEM + three neural chart types —
+> reproducing the closed forms to ~1–2% (CV-1 Hertz, CV-3 Brazilian, CV-4 nine-disc), and
+> **measuring the chart-over-level-set advantage** (CV-5 cusps, CV-6 fractal). Full status &
+> capability matrix: [§11.8 of the verification manual](docs/contact_verification_manual.md).
 >
 > The earlier **Nine-Circles brittle-fracture** work has been **archived** under
 > [`archive/`](archive/) (code, tests, docs, figures) — preserved for history, not maintained.
@@ -114,6 +117,27 @@ criteria, embedded figures, and the **two-level neural-chart verification protoc
 derivations + numpy evaluators: **[docs/hertz_derivation/](docs/hertz_derivation/README.md)** and
 `postprocessing/contact_fields.py`.
 
+### Numerical verification (branch `numerical-cv-suite`)
+
+The CV closed forms are now used as acceptance targets for **trained neural charts solved
+numerically** — a chart-based FEM (`solvers/fem/`, ported + verified: patch test, MMS $O(h^2)$), a
+2-D plane-stress FEM, and three neural chart types (neural SDF, neural radial/transition-map chart,
+and the ChartDecoder domain map). Drivers in `benchmarks/contact/cv_numerical/`; measured results:
+
+| CV | numerical result vs closed form |
+|---|---|
+| **CV-1** Hertz | FEM line contact, neural disc-SDF indenter; $a(F)$–$E^*$ to **~1.6%** |
+| **CV-2** Cattaneo | FEM tangential stick/slip; $c/a=\sqrt{1-Q/\mu P}$ to **~5–11%** |
+| **CV-3** Brazilian | FEM centre stress to **1.62% / 0.58%** |
+| **CV-4** nine-disc | FEM unit cell, equibiaxial centre to **0.15%** |
+| **CV-5** superformula | neural **radial chart** (gap 3.8e-3, normal 0.42°) **beats** the neural SDF (gap 8e-3, degraded normal); neural-detection dynamics match the analytical chart to **0.04%** |
+| **CV-6** Koch | neural-SDF refinement ceiling **measured** (charts beat level-sets on fractals) |
+
+![numerical CV summary](figures/numerical_cv_summary_pub.png)
+
+Full status, honest caveats, and the can/cannot **capability matrix**:
+[§11.8 of the verification manual](docs/contact_verification_manual.md).
+
 ---
 
 ## Quick start
@@ -180,10 +204,16 @@ neural_atlas_MPMcontact/
 
 ## Next steps (neural coordinate charts)
 
-The framework currently uses analytical charts/SDFs. To bring up the neural charts:
-1. Train a neural SDF / `ChartDecoder` on each analytical shape (`atlas/sdf/train_sdf.py`, `atlas/charts/train_atlas.py`).
-2. Verify it against the closed forms with the **two-level protocol** (L0 geometry, L1 mechanics) in
-   `docs/contact_verification_manual.md §11`; the harness `tests/test_neural_chart_verification.py` is wired and waiting.
+The neural-chart pipeline is now **built and verified** on the `numerical-cv-suite` branch: neural
+SDFs (`atlas/sdf/train_analytical_sdf.py`) and the neural radial chart
+(`atlas/charts/train_radial_chart.py`) are trained on the CV shapes and solved with the chart-FEM
+(`solvers/fem/`) / rigid-body engine against the closed forms via the two-level protocol
+(`docs/contact_verification_manual.md §11`, §11.8). Remaining work:
+1. The **ChartDecoder domain map trained per CV shape** (the FEM is verified to run on a ChartDecoder;
+   the per-shape atlas is the remaining Stage-2 piece).
+2. The **full N-body explicit-contact disc array** (CV-4 currently verifies the per-disc unit cell).
+3. **3-D axisymmetric Hertz** (needs adaptive/local mesh refinement for the small contact patch) and
+   **MPM dynamic cross-checks**.
 
 ---
 

@@ -29,6 +29,7 @@ downloads/
 !figures/liusun_*_pub.png
 !figures/supershape_*_pub.png
 !figures/koch_*_pub.png
+!figures/numerical_cv_*_pub.png
 *.svg
 *.vtu
 *.vtp
