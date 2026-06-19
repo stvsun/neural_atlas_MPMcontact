@@ -40,6 +40,7 @@ class Body:
     omega: float = 0.0
     mass: float = 1.0
     inertia: float = 1.0
+    chart: object = None          # optional trained NeuralRho2D radial chart (neural detection)
 
     @classmethod
     def make(cls, params, c, density=1.0, **kw):
@@ -70,7 +71,17 @@ def _contact_pass(intr: Body, obst: Body, theta, dtheta, eps_n, mu, eps_t):
     plus n_contacts, max_penetration, friction power (<=0), normal-force sum.
     """
     pts = ss.boundary(theta, intr.c, intr.alpha, intr.params)          # (N,2)
-    g, grad = ss.radial_gap(pts, obst.c, obst.alpha, obst.params)
+    if obst.chart is not None:
+        # NEURAL detection: the obstacle's gap/normal come from a trained radial chart
+        # (transition-map detector) instead of the analytical inverse radial gap.  grad is the
+        # matched unit normal (re-normalised below) — same (gap, normal) contract.
+        import torch
+        from solvers.contact.radial_chart_2d import evaluate_radial_gap_2d
+        gt, nt = evaluate_radial_gap_2d(torch.as_tensor(pts, dtype=torch.float64),
+                                        obst.chart, center=obst.c, alpha=obst.alpha)
+        g, grad = gt.numpy(), nt.numpy()
+    else:
+        g, grad = ss.radial_gap(pts, obst.c, obst.alpha, obst.params)
     active = g < 0.0
     out = dict(F_intr=np.zeros(2), T_intr=0.0, F_obst=np.zeros(2), T_obst=0.0,
                n_contacts=_count_arcs(active), max_pen=0.0, fric_power=0.0, fn_sum=0.0)
@@ -120,12 +131,14 @@ def step_forces(A, B, theta, dtheta, eps_n, mu, eps_t):
 
 
 def simulate(free_A=False, n_steps=3000, omega_drive=4.0, eps_n=2.0e4, mu=0.3,
-             eps_t=1e-3, n_samples=1400, seed_push=2.0):
+             eps_t=1e-3, n_samples=1400, seed_push=2.0, charts=None):
     # --- two nonconvex supershapes (n<1 -> concave lobes) ---
     pA = ss.SuperParams(m=4, n1=0.8, n2=0.8, n3=0.8, scale=1.7)        # 4-lobed cam
     pB = ss.SuperParams(m=7, n1=0.8, n2=0.8, n3=0.8, scale=1.0)        # 7-lobed follower
     A = Body.make(pA, c=[0.0, 0.0], density=1.0)
     B = Body.make(pB, c=[2.45, 0.15], density=1.0)
+    if charts is not None:                                            # NEURAL detection (chartA, chartB)
+        A.chart, B.chart = charts
 
     if free_A:
         A.v = np.array([seed_push, 0.0]); A.omega = 0.0; A.alpha = 0.0  # B pushed into A

@@ -32,8 +32,8 @@ CV5_PARAMS = dict(m=6, n1=0.7, n2=0.7, n3=0.7, a=1.0, b=1.0, scale=1.0)
 
 def train_superformula_radial(width: int = 96, depth: int = 3, n_freq: int = 16, epochs: int = 4000,
                               lr: float = 2e-3, n_train: int = 6000, n_eval: int = 4000, seed: int = 0,
-                              params: dict = None, save: bool = True, verbose: bool = True
-                              ) -> Tuple[object, Dict]:
+                              params: dict = None, name: str = "supershape",
+                              save: bool = True, verbose: bool = True) -> Tuple[object, Dict]:
     """Fit NeuralRho2D to the analytical superformula radius rho(psi); return (model, metrics)."""
     import torch
     from atlas.sdf.train_sdf import set_seed
@@ -81,7 +81,7 @@ def train_superformula_radial(width: int = 96, depth: int = 3, n_freq: int = 16,
     ang = np.degrees(np.arccos(np.clip(np.sum(n_nn * n_ana, axis=1), -1, 1)))
 
     m = {
-        "shape": "supershape", "object": "neural_radial_chart", "params": pr,
+        "shape": name, "object": "neural_radial_chart", "params": pr,
         "width": width, "depth": depth, "n_params": int(sum(p.numel() for p in model.parameters())),
         "L": L, "radius_rmse": radius_rmse, "radius_rmse_rel": radius_rmse / L,
         "gap_rmse": gap_rmse, "gap_rmse_rel": gap_rmse / L,
@@ -93,8 +93,8 @@ def train_superformula_radial(width: int = 96, depth: int = 3, n_freq: int = 16,
         torch.save({"model_state": model.state_dict(),
                     "model_kwargs": {"width": width, "depth": depth, "base": base, "n_freq": n_freq},
                     "params": pr, "metrics": m},
-                   os.path.join(RUN_DIR, "supershape_radial.pt"))
-        with open(os.path.join(RUN_DIR, "supershape_radial_meta.json"), "w") as f:
+                   os.path.join(RUN_DIR, f"{name}_radial.pt"))
+        with open(os.path.join(RUN_DIR, f"{name}_radial_meta.json"), "w") as f:
             json.dump(m, f, indent=2)
     if verbose:
         print(f"  [supershape radial chart] radiusRMSE/L={m['radius_rmse_rel']:.3e}  "
