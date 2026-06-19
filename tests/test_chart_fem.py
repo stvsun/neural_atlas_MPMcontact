@@ -183,5 +183,27 @@ def test_two_chart_schwarz_uniaxial():
             assert abs(P[:, 0, 0].mean().item() - expected) / expected < 0.5
 
 
+def test_stabilized_jacobian_consistency():
+    """The SVD-clamped ops must be SELF-CONSISTENT: for a healthy Jacobian det_abs == |det| and
+    valid is True; for a near-singular one valid is False and det_abs equals the product of the
+    SAME clamped singular values used for the inverse (so inverse and volume describe one
+    Jacobian). Regression for the review finding that valid stayed True while the inverse was
+    clamped but det was left unclamped."""
+    from common.geometry import stabilized_jacobian_ops
+    sf, df = 1e-9, 1e-12
+    healthy = torch.diag(torch.tensor([1.0, 2.0, 0.5], dtype=DT)).unsqueeze(0)
+    inv, det, kap, val = stabilized_jacobian_ops(healthy, sf, df)
+    assert bool(val[0])
+    assert abs(det[0].item() - 1.0) < 1e-12                  # |det| = 1*2*0.5
+    assert torch.allclose(inv[0], torch.linalg.inv(healthy[0]), atol=1e-12)
+    # near-singular: one tiny singular value -> clamped
+    sing = torch.diag(torch.tensor([1.0, 1.0, 1e-11], dtype=DT)).unsqueeze(0)
+    inv2, det2, kap2, val2 = stabilized_jacobian_ops(sing, sf, df)
+    assert not bool(val2[0])                                  # clamping => not well-posed
+    # det_abs consistent with the clamped inverse (product of clamped singular values = 1*1*sf)
+    assert abs(det2[0].item() - sf) < 1e-18
+    assert abs(inv2[0, 2, 2].item() - 1.0 / sf) < 1e-3       # inverse uses the SAME clamp
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

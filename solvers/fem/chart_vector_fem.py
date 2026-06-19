@@ -380,6 +380,16 @@ class ChartVectorFEMSolver:
             self.dNdx = self.dNdx_ref
             self.vol = self.vol_ref
 
+        # CONSUME geom_valid: an ill-conditioned chart Jacobian is SVD-clamped (so assembly does
+        # not blow up), but the clamped elements carry a regularized — not the true — metric, so
+        # surface them rather than letting them silently pollute the solve.
+        self.n_invalid_elements = int((~self.geom_valid).sum())
+        if self.n_invalid_elements > 0:
+            cmax = float(self.geom_cond.max())
+            print(f"  [ChartVectorFEM] WARNING: {self.n_invalid_elements}/{self.n_elements} elements "
+                  f"have an ill-conditioned chart Jacobian (SVD-clamped; max cond {cmax:.1e}); "
+                  f"their metric is regularized.")
+
         # P2: precompute quadrature-point shape gradients
         if self.element_order == 2:
             self._precompute_p2_quantities()

@@ -12,11 +12,22 @@ get a penalty force f = eps_n <-g> n * ds and a tangent eps_n (n (x) n) ds; the 
 is constant (linear elasticity), so only the contact active set is iterated to convergence.
 
 Hertz line contact is scale-free in P/E*, so a SOFT material + a GRADED mesh give a resolvable
-contact patch (a ~ 0.1 R); we verify the internal Hertz relations a(F) and p0(F) for the MEASURED
-load F (sidestepping the log-ambiguous 2-D approach-load relation):
+contact patch (a ~ 0.1 R); we check the internal Hertz relations for the MEASURED load F
+(sidestepping the log-ambiguous 2-D approach-load relation):
     a = 2 sqrt(F R / pi E*),   p0 = 2 F / pi a,   E* = E / (1 - nu^2)  (rigid-on-elastic).
 
-Run:  python3 benchmarks/contact/cv_numerical/cv1_hertz_fem.py [--neural]
+What is and is NOT verified (honest scope, after adversarial review):
+  * The ONE independent physics check is a = 2 sqrt(F R / pi E*) — it ties the contact half-width
+    to the elastic modulus E*.  It holds: over an 8x E* sweep, a/sqrt(F) tracks 2 sqrt(R/pi E*)
+    with a CONSTANT ratio (~0.97 => a steady ~3% low bias from mesh + finite-domain + edge
+    quadrature).  Run with --sweep to see it.
+  * p0 = 2 F / pi a is the half-ellipse LOAD IDENTITY (line_contact_params DEFINES p0 := 2F/pi a),
+    so it is NOT an independent check — it just re-expresses a.
+  * The EXACT-SDF (analytic) cylinder is the FAITHFUL solve at ~2-3%.  The trained NEURAL disc SDF
+    MATCHES this baseline; it does not beat it (a single-config sub-percent number is geometry-
+    specific error cancellation — non-monotonic in delta and degrading as the domain grows).
+
+Run:  python3 benchmarks/contact/cv_numerical/cv1_hertz_fem.py [--neural] [--sweep]
 """
 from __future__ import annotations
 
@@ -147,12 +158,16 @@ def run(E=10.0, nu=0.3, Rc=1.0, delta=0.02, W=0.6, D=0.6, n_x=140, n_y=70, grade
     active = g < 0.0
     pressure = eps_n * np.clip(-g, 0.0, None)          # contact pressure (force / length in 2-D)
     xt = x_cur[top, 0]
-    F = float(np.sum(pressure[active] * ds_top[active]))   # total line load
     a_edge = float(np.max(np.abs(xt[active]))) if active.any() else 0.0
+    # line load by TRAPEZOIDAL integration of the pressure profile (the midpoint/tributary sum
+    # over-counts F by ~3.5% because edge nodes get full half-tributaries where the pressure
+    # tapers to zero — review finding; trapz tapers correctly at the contact edge).
+    xa, pa = xt[active], pressure[active]
+    order = np.argsort(xa)
+    F = float(np.trapz(pa[order], xa[order]))
 
     # robust a, p0 by fitting the HERTZIAN half-ellipse p(x)=p0 sqrt(1-(x/a)^2) to ALL contact
     # pressures (the edge node alone is +/- one element noisy); p0 is linear given a -> scan a.
-    xa, pa = xt[active], pressure[active]
     best = None
     for a_try in np.linspace(0.6 * a_edge, 1.5 * a_edge + 1e-9, 400):
         w = np.sqrt(np.clip(1.0 - (xa / a_try) ** 2, 0.0, None))
@@ -166,32 +181,71 @@ def run(E=10.0, nu=0.3, Rc=1.0, delta=0.02, W=0.6, D=0.6, n_x=140, n_y=70, grade
 
     m = {
         "indenter": indenter, "E": E, "nu": nu, "Rc": Rc, "delta": delta, "Estar": Estar,
-        "eps_n": eps_n, "n_active": int(active.sum()), "iters": it + 1,
+        "eps_n": eps_n, "relax": relax, "n_active": int(active.sum()), "iters": it + 1,
+        "converged": bool(it + 1 < max_iter),
         "F_line_load": F, "a_fem": a_fem, "a_ana": float(a_ana), "a_edge_node": a_edge,
         "p0_fem": p0_fem, "p0_ana": float(p0_ana), "p0_peak_node": float(pressure.max()),
-        "a_relerr": float(abs(a_fem - a_ana) / a_ana), "p0_relerr": float(abs(p0_fem - p0_ana) / p0_ana),
+        # a(F) tying the half-width to E* is the ONE genuinely independent physics check; p0=2F/pi a
+        # is the half-ellipse load identity (p0_ana := 2F/pi a_ana BY DEFINITION) -> NOT independent.
+        "a_relerr": float(abs(a_fem - a_ana) / a_ana),
+        "p0_relerr": float(abs(p0_fem - p0_ana) / p0_ana),
+        "p0_independent": False,
         "n_nodes": int(sol.n_nodes), "n_elements": int(len(tris)),
     }
     if verbose:
         print(f"  CV-1 Hertz line contact  [{indenter} indenter]  "
-              f"({m['n_nodes']} nodes, {m['iters']} active-set iters, {m['n_active']} contact nodes)")
+              f"({m['n_nodes']} nodes, {m['iters']} iters{'' if m['converged'] else ' (HIT max_iter!)'}, "
+              f"{m['n_active']} contact nodes)")
         print(f"    line load F = {F:.4f}")
-        print(f"    half-width a: FEM={a_fem:.4f}  Hertz(F)={a_ana:.4f}  err={m['a_relerr']*100:.2f}%")
-        print(f"    peak press p0: FEM={p0_fem:.4f}  Hertz(F)={p0_ana:.4f}  err={m['p0_relerr']*100:.2f}%")
+        print(f"    half-width a: FEM={a_fem:.4f}  Hertz(F)={a_ana:.4f}  err={m['a_relerr']*100:.2f}%"
+              f"   <- the independent a(F)-E* physics check")
+        print(f"    peak press p0: FEM={p0_fem:.4f}  Hertz(F)={p0_ana:.4f}  err={m['p0_relerr']*100:.2f}%"
+              f"   (NOT independent: half-ellipse identity p0=2F/pi a)")
     return m, (sol, u, top, pressure, active)
+
+
+def estar_sweep(indenter="analytic", E_list=(5.0, 10.0, 20.0, 40.0), nu=0.3, Rc=1.0, delta=0.02):
+    """The GENUINE, reproducible Hertz physics check: the contact half-width must encode the
+    elastic modulus as a = 2 sqrt(F R / pi E*).  Vary E by 8x and confirm a/sqrt(F) tracks
+    2 sqrt(R/pi E*) with a CONSTANT ratio (the ~3% bias is mesh/finite-domain/edge-quadrature,
+    not E*-dependent).  This is the one degree of freedom that is NOT self-consistency."""
+    rows = []
+    for E in E_list:
+        m, _ = run(E=E, nu=nu, Rc=Rc, delta=delta, indenter=indenter, verbose=False)
+        Estar = E / (1.0 - nu ** 2)
+        ratio = (m["a_fem"] / np.sqrt(m["F_line_load"])) / (2.0 * np.sqrt(Rc / (np.pi * Estar)))
+        rows.append((E, Estar, m["F_line_load"], m["a_fem"], ratio))
+    ratios = np.array([r[4] for r in rows])
+    return rows, float(ratios.mean()), float(ratios.std() / ratios.mean())
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--neural", action="store_true", help="use the trained neural disc SDF as the indenter")
+    ap.add_argument("--sweep", action="store_true", help="run the E* and delta sweeps (honest accuracy)")
     args = ap.parse_args()
     os.makedirs(RUN_DIR, exist_ok=True)
-    m, _ = run(indenter="neural" if args.neural else "analytic")
+    ind = "neural" if args.neural else "analytic"
+    m, _ = run(indenter=ind)
     with open(os.path.join(RUN_DIR, "metrics.json"), "w") as f:
         json.dump(m, f, indent=2)
-    ok = m["a_relerr"] < 0.05 and m["p0_relerr"] < 0.10
-    print(f"\n  CV-1 numerical L1 vs analytical: {'PASS' if ok else 'CHECK'} "
-          f"(a within 5%, p0 within 10%)")
+    # PASS on the independent a(F)-E* check only (p0 is the half-ellipse identity, not independent)
+    ok = m["a_relerr"] < 0.05 and m["converged"]
+    print(f"\n  CV-1 numerical L1 (a(F)-E* check): {'PASS' if ok else 'CHECK'} (a within 5%)")
+    print("  NOTE: the exact-SDF (analytic) solve is the FAITHFUL baseline at ~2-3% (mesh + finite-"
+          "domain + edge); the neural disc SDF MATCHES it (it does not beat it — the occasional "
+          "sub-percent point is geometry-specific error cancellation, see --sweep).")
+    if args.sweep:
+        print("\n  delta sweep (geometry-dependence of the single-point a-error):")
+        for d in (0.01, 0.02, 0.04):
+            md, _ = run(delta=d, indenter=ind, verbose=False)
+            print(f"    delta={d:.3f}: a_err={md['a_relerr']*100:5.2f}%  (F={md['F_line_load']:.4f})")
+        rows, rmean, rcov = estar_sweep(indenter=ind)
+        print(f"\n  E* sweep (the genuine physics: a/sqrt(F) / 2sqrt(R/piE*) should be CONSTANT):")
+        for E, Es, F, a, ratio in rows:
+            print(f"    E={E:5.1f} (E*={Es:7.2f}): F={F:.4f} a={a:.4f}  ratio={ratio:.4f}")
+        print(f"    mean ratio={rmean:.4f}  coeff-of-variation={rcov*100:.2f}%  "
+              f"(~{(1-rmean)*100:.1f}% constant low bias = the discretization floor)")
 
 
 if __name__ == "__main__":

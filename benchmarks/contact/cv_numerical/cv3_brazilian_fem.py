@@ -69,13 +69,17 @@ def run(n_rings=64, arc_deg=4.0, E=1000.0, nu=0.25, R=1.0, t=1.0, P=1.0, verbose
     ns = sol.node_stress(u)                                    # nodal stress recovery (smoother)
     D = 2 * R
 
-    # centre stress: average the RECOVERED nodal stress over nodes within 0.1 R of the centre,
-    # compared to the ANALYTICAL field at the SAME nodes (like-for-like; the closed form varies
-    # across the patch, so comparing a region-average to a point value would be unfair).
+    # centre stress: average the RECOVERED nodal stress over nodes within 0.1 R of the centre.
+    # PRIMARY error is vs the canonical CLOSED-FORM centre value (+2P/piDt, -6P/piDt) — the number
+    # the docstring/manual cite.  A SECONDARY "patch-matched" error vs brazilian_field averaged
+    # over the SAME nodes is also reported, but it UNDERSTATES the true error (~2.7x) because the
+    # reference patch-average drifts in the same direction as the FEM error and cancels it
+    # (review finding); it is kept only for transparency, clearly labelled.
     near_n = np.sum(nodes ** 2, axis=1) < (0.1 * R) ** 2
-    sxx_c, syy_c = ns[near_n, 0].mean(), ns[near_n, 1].mean()
+    sxx_c, syy_c = float(ns[near_n, 0].mean()), float(ns[near_n, 1].mean())
+    sxx_exact, syy_exact = 2 * P / (np.pi * D * t), -6 * P / (np.pi * D * t)   # textbook centre
     sxx_a_f, syy_a_f, _ = cf.brazilian_field(nodes[near_n, 0], nodes[near_n, 1], R, P, t)
-    sxx_a, syy_a = float(np.mean(sxx_a_f)), float(np.mean(syy_a_f))
+    sxx_patch, syy_patch = float(np.mean(sxx_a_f)), float(np.mean(syy_a_f))     # patch-matched ref
 
     # global vertical balance: integrate sigma_yy across the horizontal diameter y=0
     xs = np.linspace(-0.85 * R, 0.85 * R, 60)
@@ -90,16 +94,20 @@ def run(n_rings=64, arc_deg=4.0, E=1000.0, nu=0.25, R=1.0, t=1.0, P=1.0, verbose
     interior = (rr < 0.8 * R) & (pole_d > 25.0)
     sa = np.column_stack(cf.brazilian_field(cen[interior, 0], cen[interior, 1], R, P, t))
     sf = es[interior]
-    scale = abs(syy_a)
+    scale = abs(syy_exact)                                     # peak-stress scale |-6P/piDt|
     field_rms_rel = float(np.sqrt(np.mean(np.sum((sf - sa) ** 2, axis=1))) / scale)
 
     m = {
-        "center_sxx_fem": float(sxx_c), "center_sxx_ana": sxx_a,
-        "center_syy_fem": float(syy_c), "center_syy_ana": syy_a,
-        "center_sxx_relerr": float(abs(sxx_c - sxx_a) / abs(sxx_a)),
-        "center_syy_relerr": float(abs(syy_c - syy_a) / abs(syy_a)),
+        "center_sxx_fem": sxx_c, "center_syy_fem": syy_c,
+        # PRIMARY: error vs the canonical closed-form centre value
+        "center_sxx_exact": float(sxx_exact), "center_syy_exact": float(syy_exact),
+        "center_sxx_relerr": float(abs(sxx_c - sxx_exact) / abs(sxx_exact)),
+        "center_syy_relerr": float(abs(syy_c - syy_exact) / abs(syy_exact)),
+        # SECONDARY (transparency): patch-matched reference UNDERSTATES the error ~2.7x
+        "center_sxx_ref_patch": sxx_patch, "center_syy_ref_patch": syy_patch,
+        "center_sxx_relerr_patchmatched": float(abs(sxx_c - sxx_patch) / abs(sxx_patch)),
         "center_ratio_fem": float(syy_c / sxx_c), "center_ratio_ana": -3.0,
-        "field_rms_rel": field_rms_rel,
+        "field_rms_rel": field_rms_rel, "field_rms_note": "mask-dependent at the 1-2% level",
         "syy_diameter_integral_fem": float(integral),
         "syy_diameter_integral_partial_ana": float(np.trapz(syy_line_a, xs)),
         "n_nodes": int(sol.n_nodes), "n_elements": int(len(tris)),
@@ -107,14 +115,14 @@ def run(n_rings=64, arc_deg=4.0, E=1000.0, nu=0.25, R=1.0, t=1.0, P=1.0, verbose
     }
     if verbose:
         print(f"  CV-3 Brazilian FEM  ({m['n_nodes']} nodes, {m['n_elements']} tris)")
-        print(f"    centre sigma_xx: FEM={sxx_c:+.4f}  analytical={sxx_a:+.4f}  "
-              f"err={m['center_sxx_relerr']*100:.2f}%")
-        print(f"    centre sigma_yy: FEM={syy_c:+.4f}  analytical={syy_a:+.4f}  "
+        print(f"    centre sigma_xx: FEM={sxx_c:+.4f}  closed-form(+2P/piDt)={sxx_exact:+.4f}  "
+              f"err={m['center_sxx_relerr']*100:.2f}%  (patch-matched={m['center_sxx_relerr_patchmatched']*100:.2f}%)")
+        print(f"    centre sigma_yy: FEM={syy_c:+.4f}  closed-form(-6P/piDt)={syy_exact:+.4f}  "
               f"err={m['center_syy_relerr']*100:.2f}%")
         print(f"    centre ratio syy/sxx: FEM={m['center_ratio_fem']:.3f}  analytical=-3.000")
-        print(f"    interior field RMS error / peak-stress: {field_rms_rel*100:.2f}%")
-        print(f"    integral sigma_yy on y=0 (|x|<0.85R): FEM={integral:+.4f}  "
-              f"analytical(partial)={m['syy_diameter_integral_partial_ana']:+.4f}")
+        print(f"    interior field RMS error / peak-stress: {field_rms_rel*100:.2f}% (mask-dependent ~1-2%)")
+        print(f"    sigma_yy balance on y=0 (|x|<0.85R): FEM={integral:+.4f}  "
+              f"analytical(partial)={m['syy_diameter_integral_partial_ana']:+.4f}  (partial chord, not -P/t)")
     return m, (sol, u)
 
 

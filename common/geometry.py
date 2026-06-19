@@ -69,11 +69,17 @@ def stabilized_jacobian_ops(
     inv_s = torch.diag_embed(1.0 / s_safe)
     inv_j = torch.bmm(vh.transpose(1, 2), torch.bmm(inv_s, u.transpose(1, 2)))
 
-    raw_det_abs = torch.abs(torch.det(jac))
-    det_abs = torch.clamp(raw_det_abs, min=det_floor)
+    # |det| CONSISTENT with the (possibly clamped) inverse: the product of the SAME clamped
+    # singular values used to form inv_j.  This equals |det(jac)| exactly when nothing is
+    # clamped (healthy elements unchanged), and stays consistent with inv_j when it is — so the
+    # returned inverse and volume always describe the same Jacobian.
+    det_abs = torch.clamp(torch.prod(s_safe, dim=-1), min=det_floor)
     kappa = s_safe[:, 0] / torch.clamp(s_safe[:, -1], min=sigma_floor)
-    valid = raw_det_abs > det_floor
-    valid = valid & torch.isfinite(kappa) & torch.isfinite(det_abs)
+    # an element is well-posed only if NOTHING was clamped: a clamped singular value means the
+    # returned inv_j/det_abs are a REGULARIZED Jacobian, not the true (singular) one.
+    raw_det_abs = torch.abs(torch.det(jac))
+    not_clamped = (s >= sigma_floor).all(dim=-1)
+    valid = (raw_det_abs > det_floor) & not_clamped & torch.isfinite(kappa) & torch.isfinite(det_abs)
     return inv_j, det_abs, kappa, valid
 
 
