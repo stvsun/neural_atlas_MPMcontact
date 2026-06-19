@@ -66,6 +66,17 @@ def load_neural_decoder(shape):
     return None
 
 
+def load_neural_rho(shape):
+    """Return a trained 2-D neural RADIAL chart (NeuralRho2D) for *shape*, or None.
+    Trained by atlas/charts/train_radial_chart.py; the transition-map detector for star-shaped
+    bodies (the accurate CV-5 path)."""
+    try:
+        from atlas.charts.train_radial_chart import load_trained_radial_chart
+    except Exception:
+        return None
+    return load_trained_radial_chart(shape)
+
+
 def _angle_deg(a, b):
     a = a / np.clip(np.linalg.norm(a, axis=-1, keepdims=True), 1e-12, None)
     b = b / np.clip(np.linalg.norm(b, axis=-1, keepdims=True), 1e-12, None)
@@ -201,6 +212,37 @@ def test_cv5_supershape_neural_sdf_L0():
     assert gap_rel < TAU_GAP_SUPERSHAPE              # usable gap (measured ~8e-3; cusp-relaxed)
     assert sign_err < 0.05                           # tells inside from outside (measured ~2%)
     assert inplane_angle_med < 12.0                  # in-plane normal degraded but not random (~2.5deg)
+
+
+def test_cv5_supershape_neural_radial_chart_L0():
+    """CV-5 — the ACCURATE chart path (the resolution of the SDF's cusp weakness above).
+
+    A 2-D NEURAL RADIAL chart rho_theta(psi) (transition-map detector, Fourier-feature MLP) is
+    compared to the analytical RADIAL reference supershape.radial_gap (like-for-like; the radial
+    gap is biased 1/cos(alpha) vs Euclidean, so the radial chart is verified against the radial
+    chart — manual §7/§11.2).  Fitting the 1-D boundary radius carries no ambient spectral bias and
+    no medial axis, so the chart reproduces the analytical gap/normal to ~4e-3 with a sub-degree
+    MEDIAN normal — markedly better than the neural SDF on the same cusped shape (the chart-over-
+    level-set advantage, MEASURED)."""
+    rho = load_neural_rho("supershape")
+    if rho is None:
+        pytest.skip("no neural radial chart yet — run atlas/charts/train_radial_chart.py")
+    import torch
+    from solvers.contact.radial_chart_2d import evaluate_radial_gap_2d
+    p = ss.SuperParams(m=6, n1=0.7, n2=0.7, n3=0.7, a=1.0, b=1.0, scale=1.0)
+    c = np.array([0.0, 0.0])
+    L = ss.radius(np.linspace(0, 2 * np.pi, 1024), p).max()
+    rng = np.random.RandomState(3)
+    xy = ss.boundary(rng.uniform(0, 2 * np.pi, 1500), c, 0.0, p) + rng.randn(1500, 2) * 0.1
+    g_ana, grad_ana = ss.radial_gap(xy, c, 0.0, p)
+    n_ana = grad_ana / np.clip(np.linalg.norm(grad_ana, axis=1, keepdims=True), 1e-12, None)
+    g_nn, n_nn = evaluate_radial_gap_2d(torch.tensor(xy, dtype=torch.float64), rho, center=(0, 0), alpha=0.0)
+    g_nn = g_nn.numpy(); n_nn = n_nn.numpy()
+    gap_rel = float(np.sqrt(np.mean((g_nn - g_ana) ** 2)) / L)
+    ang_med = float(np.median(_angle_deg(n_nn, n_ana)))
+    assert gap_rel < 6e-3                             # accurate radial gap (measured ~3.8e-3)
+    assert ang_med < 2.0                              # sub-degree median matched normal (measured ~0.4deg)
+    assert np.mean((g_nn < 0) != ss.inside(xy, c, 0.0, p)) < 0.02   # active set matches
 
 
 def test_cv5_supershape_neural_decoder_L0():
