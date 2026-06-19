@@ -56,8 +56,9 @@ archive/            # Legacy Nine-Circles fracture work — DO NOT extend; not m
 ```bash
 pip install -e .                                  # editable install
 
-pytest -q                                         # active suite: 120 passed, 7 skipped
+pytest -q                                         # active suite: 122 passed, 7 skipped
 pytest tests/test_supershape_contact.py -v        # CV-5 geometry + dynamics
+pytest tests/test_neural_chart_verification.py -v # CV-6 neural-SDF ceiling (trains; ~5 min)
 
 python3 postprocessing/contact_fields.py          # numpy CV evaluators self-test
 python3 docs/hertz_derivation/hertz_transition_map.py   # CV-1/CV-2 symbolic self-check
@@ -96,13 +97,17 @@ python3 atlas/sdf/train_sdf.py                               # train a neural SD
 
 ## V&V Status
 
-Active suite: **120 passed, 7 skipped** (`pytest`; the 7 skips are the neural-chart harness, awaiting trained charts).
+Active suite: **122 passed, 7 skipped** (`pytest`; the 7 skips are the CV-1..CV-5 neural-chart harness,
+awaiting trained charts — CV-6 is now wired/runnable: it trains a fixed-capacity neural SDF on the exact
+Koch SDF and measures the refinement ceiling, see below).
 
 **Analytical contact verification (CV-1..CV-6)** — closed-form acceptance targets for the neural
 charts: `docs/contact_verification_manual.md` (Hertz, Cattaneo–Mindlin, Brazilian disc, nine-disc,
-nonconvex superformula; **§11 = the neural-chart verification protocol**). Closed forms:
-`docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy). Harness skeleton:
-`tests/test_neural_chart_verification.py` (skipped until neural charts exist).
+nonconvex superformula, Koch snowflake; **§11 = the neural-chart verification protocol**). Closed forms:
+`docs/hertz_derivation/` (SymPy) + `postprocessing/contact_fields.py` (numpy). Harness:
+`tests/test_neural_chart_verification.py` — CV-1..CV-5 skip until neural charts exist; **CV-6 is wired and
+runnable** (`benchmarks/contact/koch_neural_ceiling.py` trains a fixed-capacity neural SDF on the exact
+Koch SDF; the measured refinement-ceiling curve is `figures/koch_neural_ceiling_pub.png`, manual §11.6).
 
 ## Gotchas
 

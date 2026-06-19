@@ -254,7 +254,7 @@ exists at any finite level, but is undefined *at* a vertex and at the fractal li
 | recursive IFS chart | **$O(1)$** (4 maps) | $O(\text{depth})$, measured $\approx$21 nodes | **any depth on demand** |
 | uniform SDF grid | $O(9^n)$ cells | $O(1)$ lookup | capped at finest cell |
 | adaptive/narrow-band SDF | $O(4^n)$ boundary cells | $O(1)$ lookup | capped at max subdivision |
-| fixed-capacity neural SDF | $O(\text{params})$ | $O(1)$ eval | capped by capacity / spectral bias |
+| fixed-capacity neural SDF | $O(\text{params})$ | $O(1)$ eval | capped by capacity / spectral bias **(measured, §11.6)** |
 
 A precomputed SDF is *cheaper per query* (one lookup) — the chart does **not** win on per-query speed. The
 chart's decisive, defensible wins are **storage** ($O(1)$ vs exponential) and **resolution-independence**
@@ -262,7 +262,12 @@ chart's decisive, defensible wins are **storage** ($O(1)$ vs exponential) and **
 it (still exponential, still depth-capped). A fixed-capacity neural SDF represents any *finite* pre-fractal
 level fine, but cannot keep refining self-similar detail without growing its parameter count — so it is
 likewise resolution-capped; the chart stores the generating rule instead. (The neural-SDF refinement
-ceiling is argued here, not yet measured — see §11.6.)
+ceiling is now **measured**, not argued: one fixed-capacity SDFNet — 12,801 params, trained on the
+*exact* Koch signed distance — jumps off its representable-level ($n{=}1$) error floor and plateaus at a
+capacity ceiling, with zero-level-set deviation $\approx2\times$, Eikonal residual $\approx3\times$, and
+median normal-angle error $\approx6\times$ the $n{=}1$ value, never recovering as the detail refines
+below the net's resolution. See §11.6, `benchmarks/contact/koch_neural_ceiling.py`, and
+`figures/koch_neural_ceiling_pub.png`.)
 
 **Honest scope.** At the true fractal limit there is no tangent/normal — contact mechanics is
 well-posed only at a finite pre-fractal level. The penalty *force model* struggles with thin fractal
@@ -319,6 +324,7 @@ impossible — the plate *rides* the fractal cam, tracing its lift curve. Free f
 | Koch storage / per-query | $O(1)$ IFS vs $9^n$/$4^n$ SDF; nodes/query plateau | $\approx$21 ($<80$) @ $n\le12$ | koch.py |
 | Koch normal (incl. vertex feet) | $+\mathbf{n}$ is gap-ascent over full interior | repulsive everywhere | koch.py |
 | Koch engine momentum | free-free conserved (bookkeeping) | $<10^{-8}$ | koch_gears_drive.py |
+| Koch neural-SDF ceiling | fixed-capacity SDF error vs level $n$ | floor at $n{=}1$; plateau $\approx2$–$3\times$ for $n{\ge}2$ (measured) | koch_neural_ceiling.py |
 | Equilibrium / compatibility | $\nabla\!\cdot\sigma=0$, biharmonic | machine | all |
 
 ---
@@ -368,6 +374,22 @@ of contact micro-arcs with depth, and the exact boundary at levels 1/3/5 vs a gr
 <img src="../figures/koch_cost_scaling_pub.png" width="62%"> <img src="../figures/koch_contact_count_pub.png" width="36%">
 
 <img src="../figures/koch_geometry_pub.png" width="98%">
+
+**Neural-SDF refinement ceiling (measured).** The chart's resolution-independence is the flip side of a
+ceiling the level-set representations *do* have. To measure it, one fixed-width `SDFNet` (12,801 params)
+is trained on the *exact* Koch signed distance (sign from `koch.inside`, magnitude/normal from
+`koch.nearest_boundary`) separately at each level $n$, with capacity held fixed. The error on a held-out
+near-boundary set jumps off its representable-level ($n{=}1$) floor as soon as fractal detail appears and
+plateaus at a capacity ceiling — the net never recovers $n{=}1$ fidelity as the detail refines below its
+resolution (the Koch boundary converges in Hausdorff distance, so the magnitude error rises to a peak
+where the feature scale $3^{-n}$ meets the net resolution, then plateaus, while the normal orientation
+saturates monotonically). Measured floors → ceilings: zero-level-set deviation $1.9\!\times\!10^{-2}L\to
+\sim4$–$8\!\times\!10^{-2}L$, Eikonal residual $\langle(|\nabla\phi|-1)^2\rangle\ 4.4\!\times\!10^{-2}\to
+\sim0.12$–$0.15$, median normal-angle error $7.8^\circ\to\sim45$–$48^\circ$. Run:
+`python3 benchmarks/contact/koch_neural_ceiling.py`; harness `tests/test_neural_chart_verification.py::test_cv6_*`.
+This is the experiment §11.6 specifies — the assertion in `koch.py` is now a measurement.
+
+<img src="../figures/koch_neural_ceiling_pub.png" width="92%">
 
 **Time-resolved contact dynamics.** A prescribed spinning Koch cam drives a spring-loaded 1-DOF Koch
 follower (overdamped/quasi-static relaxation — unconditionally stable for stiff contact, so the follower
@@ -440,10 +462,17 @@ Analytical-vs-analytical checks are machine precision (§9). Neural charts carry
 | force / approach | < 1% | ~5–10% | compounded |
 | momentum (free control) | < 1e-8 | < 1e-8 | dynamics-only; neural-independent |
 
-$\tau_g\sim10^{-3}L$ is a **target/assumption** (the typical neural-SDF Eikonal residual), **not yet
-measured** on these shapes — the trainer currently fits only the rabbit. Record the actual `final_eikonal`
-once an SDF is trained on the sphere/disc/superformula and tighten $\tau_g$ to it. The harness default
-`TAU_GAP_REL = 2e-3` is a deliberately relaxed starting value.
+$\tau_g\sim10^{-3}L$ is a **target/assumption** (the typical neural-SDF Eikonal residual) for **smooth**
+shapes; the sphere/disc/superformula $\tau_g$ is still to be measured (the trainer fits only the rabbit
+and — via §11.6 — the Koch SDF so far). The **Koch fractal** now supplies the first measured numbers on
+these shapes (CV-6, §11.6): a fixed-capacity `SDFNet` reaches a zero-level-set deviation $\approx
+1.9\times10^{-2}L$ and an Eikonal residual $\langle(|\nabla\phi|-1)^2\rangle\approx 4.4\times10^{-2}$ at the
+representable level $n{=}1$, rising to a capacity-floor plateau ($\approx4$–$8\times10^{-2}L$ and
+$\approx0.12$–$0.15$) by $n{=}5$. These are far above the smooth-shape $10^{-3}$ aspiration **because the
+Koch boundary is all corners** — the worst case for a smooth Eikonal SDF — which is exactly the
+spectral-bias/finite-capacity mechanism CV-6 isolates; the smooth-shape $\tau_g$ is expected to be much
+tighter. The harness default `TAU_GAP_REL = 2e-3` is a deliberately relaxed starting value (and the CV-6
+tests use a looser, shape-specific `TAU_GAP_KOCH`).
 
 ### 11.4 Neural-specific failure modes each benchmark catches
 
@@ -455,12 +484,14 @@ once an SDF is trained on the sphere/disc/superformula and tighten $\tau_g$ to i
 
 ### 11.5 Harness
 
-`tests/test_neural_chart_verification.py` is the skeleton: one test per benchmark, each currently
-`pytest.skip(...)` until a neural chart is provided. **Wiring status:** only the **SDF L0** path is
-runnable today (CV-1 sphere and CV-5 superformula, compared to the dense Euclidean reference). The
+`tests/test_neural_chart_verification.py` is the skeleton: one test per benchmark. The CV-1..CV-5
+tests `pytest.skip(...)` until a neural chart is provided (their **SDF L0** comparison logic is wired
+— activate by implementing the loader). **CV-6 is RUNNABLE today**: its analytical SDF is available on
+demand (`koch.inside` + `koch.nearest_boundary`), so the harness trains a fixed-capacity `SDFNet` on it
+directly (`test_cv6_koch_neural_sdf_L0`, `test_cv6_refinement_ceiling`) — no loader needed. The
 **decoder L0** path and **all L1** paths are stubs — L1 needs a neural contact *solve* (no neural contact
-solver exists yet) and decoder L0 needs a boundary-evaluable map (§11.1 note). Activate a path by
-implementing its loader and removing the skip.
+solver exists yet) and decoder L0 needs a boundary-evaluable map (§11.1 note). Activate a CV-1..CV-5
+path by implementing its loader and removing the skip.
 
 | Benchmark | Neural object | L0 (geometry) | L1 (mechanics) | Failure mode caught |
 |---|---|---|---|---|
@@ -469,7 +500,7 @@ implementing its loader and removing the skip.
 | CV-3 | neural disc SDF | gap/normal on rim | $\sigma$ field, $\sigma_t$ | rim normal accuracy |
 | CV-4 | neural disc SDF | per-disc gap/normal | equibiaxial center, $N(d)$ | multi-contact normals |
 | CV-5 | neural supershape SDF | Euclidean gap/normal **in concavities** (vs dense ref) ✓wired | cam-drive match | **medial-axis normal degradation, cusp smoothing** |
-| CV-6 | neural SDF on Koch level-$n$ | gap/Eikonal RMSE vs `koch.nearest_boundary` at rising $n$ | (out of scope) | **self-similar detail beyond fixed capacity (refinement ceiling)** |
+| CV-6 | neural SDF on Koch level-$n$ | gap/Eikonal RMSE vs `koch.nearest_boundary` at rising $n$ **✓wired (measured, §11.6)** | (out of scope) | **self-similar detail beyond fixed capacity (refinement ceiling)** |
 
 ### 11.6 Worked example (train → L0 → L1)
 
@@ -494,15 +525,35 @@ The right-hand sides (analytical references) are already runnable now:
 `docs/hertz_derivation/*.py` scripts (symbolic self-checks). Steps 1 (analytical-shape SDF trainer) and
 the L1 neural solver are the "later" neural-chart work this manual is written to verify.
 
-**CV-6 refinement-ceiling experiment (proposed, not yet run).** The CV-6 claim that a *fixed-capacity*
-neural SDF cannot keep resolving self-similar detail is currently argued, not measured. The clean way to
-*earn* it on these analytical shapes: train one `SDFNet` of fixed width to regress the exact Koch signed
-distance (sign from `koch.inside`, magnitude from `koch.nearest_boundary`) at increasing level $n$, and
-plot the gap RMSE / Eikonal residual rising as $n$ grows past what the network can represent. That
-measured curve — rather than an asserted ceiling — is the rigorous chart-vs-neural-SDF showcase, and it
-also produces the $\tau_g$ number §11.3 still lacks. Until then the ceiling is stated as a conjecture with
-its mechanism (finite parameters + spectral bias), and the chart's *measured* wins (storage,
-resolution-independence) carry CV-6.
+**CV-6 refinement-ceiling experiment (run; measured).** The CV-6 claim that a *fixed-capacity* neural SDF
+cannot keep resolving self-similar detail is now **measured**, not argued. `benchmarks/contact/koch_neural_ceiling.py`
+trains one `SDFNet` of **fixed** width/depth (width 64, depth 4 → 12,801 params) to regress the *exact*
+Koch signed distance (sign from `koch.inside`, magnitude/normal from `koch.nearest_boundary`; the 2-D
+shape is extrusion-lifted to a thin prism so the normal stays in-plane), separately at each level
+$n=1\ldots5$, and records on a held-out near-boundary set the zero-level-set deviation (distance of the
+net's surface from the true boundary — the §11.2 criterion), the near-band gap RMSE, the Eikonal residual,
+and the normal-angle error. Measured curve (`runs/koch_neural_ceiling/metrics.json`, figure
+`koch_neural_ceiling_pub.png`):
+
+| $n$ | segments $3\cdot4^n$ | feature $3^{-n}$ | zero-level-set dev. $/L$ | Eikonal residual | median normal angle |
+|---|---|---|---|---|---|
+| 1 | 12   | 0.333 | $1.9\times10^{-2}$ | $4.4\times10^{-2}$ | $7.8^\circ$ |
+| 2 | 48   | 0.111 | $5.9\times10^{-2}$ | $1.30\times10^{-1}$ | $42.8^\circ$ |
+| 3 | 192  | 0.037 | $8.0\times10^{-2}$ | $1.52\times10^{-1}$ | $45.8^\circ$ |
+| 4 | 768  | 0.012 | $5.1\times10^{-2}$ | $1.17\times10^{-1}$ | $45.4^\circ$ |
+| 5 | 3072 | 0.004 | $4.3\times10^{-2}$ | $1.24\times10^{-1}$ | $48.1^\circ$ |
+
+The error **jumps off the $n{=}1$ floor and plateaus** at a capacity ceiling: with capacity fixed the net
+fits the representable level ($n{=}1$) well, then loses fidelity the moment fractal detail appears and
+never recovers it (magnitude error $\approx2$–$3\times$, normal angle $\approx6\times$ the $n{=}1$ value).
+The magnitude error *peaks* near $n{=}3$ — where the feature scale $3^{-n}$ meets the net's resolution —
+then plateaus as still-finer detail falls below resolution and is simply averaged out (the Koch boundary
+converges in Hausdorff distance, so a monotone-forever rise would be *wrong*); the normal orientation
+saturates monotonically near $\sim45^\circ$ (decorrelated). This earns the prose claim in `koch.py` / §8,
+and supplies the first measured $\tau_g$-driver numbers §11.3 lacked. The harness paths are
+`tests/test_neural_chart_verification.py::test_cv6_koch_neural_sdf_L0` (representable-level L0) and
+`::test_cv6_refinement_ceiling` (the measured ceiling). The chart's complementary *measured* wins
+(storage, resolution-independence) remain in §8.
 
 ### 11.7 Level-set-free detection via radial boundary charts (implemented)
 

@@ -13,7 +13,10 @@ prunes to O(depth) per query (measured ~21 nodes, bounded in n), refining to ANY
 demand. A precomputed SDF is actually CHEAPER per query (one lookup); the chart's wins are
 STORAGE and RESOLUTION-INDEPENDENCE, not per-query speed. (A fixed-capacity neural SDF is
 likewise resolution-capped -- it cannot keep refining self-similar detail without growing its
-parameters -- but that ceiling is argued, not measured here; see the manual's CV-6 section.)
+parameters. That ceiling is now MEASURED, not just argued: a single fixed-width SDFNet trained
+on this exact signed distance shows its gap RMSE and Eikonal residual rise with fractal level n
+-- see benchmarks/contact/koch_neural_ceiling.py, figures/koch_neural_ceiling_pub.png, and the
+manual's CV-6 section / §11.6.)
 
 Cost caveat: the EXACT signed gap + normal (`nearest_boundary`) is more expensive than
 detection -- the descent visits the boundary detail clustered near the query, which on a fractal
