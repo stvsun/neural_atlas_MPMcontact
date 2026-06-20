@@ -97,8 +97,37 @@ class DecoderJointShear:
                     pen_max=float((-gN[active]).max()) if active.any() else 0.0)
         return f, diag
 
-    def solve_fixed(self, u_x, z_p, u0, max_iter=80, tol=1e-7):
-        """Newton (FEM + penalty contact + friction) for the lower block; bottom fixed."""
+    def _contact_tangent(self, U, u_x, z_p):
+        """Consistent 3x3 contact tangent per ACTIVE top node: eps_n*A*(n n^T + mu t_proj n^T).
+        The n n^T term is the tilted-normal penalty stiffness; the mu t_proj n^T term is the
+        friction-normal coupling (non-symmetric) — both are what the scalar-vertical tangent missed."""
+        from scipy.sparse import csr_matrix
+        ndof = 3 * self.N
+        p = self.xyz0[self.top] + U[self.top]
+        z_up, hx, hy = self._upper_surface(p[:, 0], p[:, 1], u_x, z_p)
+        sec = np.sqrt(1 + hx ** 2 + hy ** 2)
+        nx, ny, nz = hx / sec, hy / sec, -1.0 / sec
+        gN = (z_up - p[:, 2]) * (-nz)
+        act = gN < 0.0
+        tvec = np.stack([np.ones_like(hx), np.zeros_like(hx), np.zeros_like(hx)], 1)
+        nmat = np.stack([nx, ny, nz], 1)
+        tp = tvec - (tvec * nmat).sum(1, keepdims=True) * nmat
+        tp = tp / np.clip(np.linalg.norm(tp, axis=1, keepdims=True), 1e-12, None)
+        kA = self.eps_n * self.A_top
+        rows, cols, vals = [], [], []
+        for k, nidx in enumerate(self.top):
+            if not act[k]:
+                continue
+            nv = nmat[k]; tv = tp[k]
+            blk = kA * (np.outer(nv, nv) + self.mu * np.outer(tv, nv))   # normal + friction coupling
+            for a in range(3):
+                for b in range(3):
+                    rows.append(3 * nidx + a); cols.append(3 * nidx + b); vals.append(blk[a, b])
+        return csr_matrix((vals, (rows, cols)), shape=(ndof, ndof)), int(act.sum())
+
+    def solve_fixed(self, u_x, z_p, u0, max_iter=80, tol=1e-8):
+        """Newton (FEM + penalty contact + friction) for the lower block; bottom fixed.
+        Consistent contact tangent (tilted n n^T + friction coupling) + Armijo line search."""
         from scipy.sparse import csr_matrix
         from scipy.sparse.linalg import spsolve
         ndof = 3 * self.N
@@ -107,34 +136,25 @@ class DecoderJointShear:
             for c in range(3):
                 free[3 * nidx + c] = False
         Ksp = csr_matrix(self.K)
-        # penalty contact tangent: eps_n*(n n^T) on active top nodes (n ~ vertical) -> approx with k_n e_z
+        scaleR = tol * (1 + self.eps_n * self.A_top)
         u = u0.copy().reshape(-1)
+        rn = None
         for it in range(max_iter):
             U = u.reshape(self.N, 3)
             fext, diag = self.contact(U, u_x, z_p)
             R = self.K @ u - fext.reshape(-1)
-            Rf = R[free]
-            if np.linalg.norm(Rf) < tol * (1 + self.eps_n * self.A_top):
+            rn = np.linalg.norm(R[free])
+            if rn < scaleR:
                 break
-            # contact stiffness (normal, vertical) on active nodes
-            Kc = np.zeros(ndof)
-            p = self.xyz0[self.top] + U[self.top]
-            z_up, hx, hy = self._upper_surface(p[:, 0], p[:, 1], u_x, z_p)
-            gN = (z_up - p[:, 2]) * (1.0 / np.sqrt(1 + hx ** 2 + hy ** 2))
-            act = gN < 0
-            for k, nidx in enumerate(self.top):
-                if act[k]:
-                    Kc[3 * nidx + 2] += self.eps_n * self.A_top
-            Kt = Ksp + csr_matrix((Kc, (np.arange(ndof), np.arange(ndof))), shape=(ndof, ndof))
-            Kff = Kt[free][:, free].tocsc()
-            du = spsolve(Kff, -Rf)
-            # line search
+            Kc, _ = self._contact_tangent(U, u_x, z_p)
+            Kff = (Ksp + Kc)[free][:, free].tocsc()
+            du = spsolve(Kff, -R[free])
             step, ok = 1.0, False
-            for _ in range(25):
+            for _ in range(30):
                 ut = u.copy(); ut[free] += step * du
                 Ut = ut.reshape(self.N, 3); ft, _ = self.contact(Ut, u_x, z_p)
                 rnt = np.linalg.norm((self.K @ ut - ft.reshape(-1))[free])
-                if rnt < (1 - 1e-4 * step) * np.linalg.norm(Rf):
+                if rnt < (1 - 1e-4 * step) * rn:
                     u, ok = ut, True; break
                 step *= 0.5
             if not ok:
@@ -142,6 +162,7 @@ class DecoderJointShear:
         U = u.reshape(self.N, 3)
         fext, diag = self.contact(U, u_x, z_p)
         diag["resid"] = float(np.linalg.norm((self.K @ u - fext.reshape(-1))[free]))
+        diag["resid_rel"] = diag["resid"] / max(self.eps_n * self.A_top, 1e-12)
         return u, diag
 
     def normal_force(self, u, u_x, z_p):

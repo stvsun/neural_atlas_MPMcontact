@@ -894,11 +894,14 @@ rough geometry, no shortcut.
 
 ![atlas vs level set](../figures/rock_joint_atlas_vs_sdf_pub.png)
 
-**Honest caveats.** (i) Concentrated asperity-tip contact + Coulomb non-smoothness → the implicit residual
-is ~0.3–1% of the forces under shear (the **frictionless** case converges cleanly; the friction curves are
-qualitative — a semismooth-Newton / augmented-Lagrangian contact solver is the next refinement).  (ii) The
-roughness is **band-limited** to what the mesh resolves (a few asperity wavelengths), with a modest
-amplitude to keep det $J>0$.  (iii) ONE deformable block on a rigid mating rough surface (two deformable
+**Honest caveats.** (i) **(Resolved, Phase 0.)** The earlier ~0.3–1% friction residual was an *inconsistent*
+contact tangent (vertical-only penalty stiffness); the **consistent tangent** $\varepsilon_n A(\,\mathbf n\mathbf
+n^\top+\mu\,\mathbf t\,\mathbf n^\top)$ (tilted normal + friction–normal coupling, `_contact_tangent`) now drives
+the monotonic friction solve to a **relative residual $\sim10^{-9}$** (both frictionless and $\mu=0.3$) — the
+friction curves are converged, not qualitative.  Remaining solver work: augmented-Lagrangian for tight
+non-penetration and a clean cyclic energy balance (the §11.10 *flat* cyclic still shows ~1.5× and is the labeled
+benchmark).  (ii) The roughness is **band-limited** to what the mesh resolves (a few asperity wavelengths), with a
+modest amplitude to keep det $J>0$.  (iii) ONE deformable block on a rigid mating rough surface (two deformable
 decoders is the extension).  (iv) The flat effective-dilation model (§11.10) is retained only as the
 benchmark; this section is the genuine result.
 
@@ -998,12 +1001,14 @@ perpendicular distance for verification only (it leaks energy if used in the int
 
 ### (E) The plan to a success story
 
-Currently measured (do not overstate): friction Newton residual **0.3–1%**, cyclic energy balance **~1.5×**
-(frictionless converges cleanly); Patton anchor **0.00%**; geometry/MMS all pass. Staged plan:
+Currently measured: monotonic friction Newton residual **$\sim10^{-9}$ (converged, Phase 0 done)** via the
+consistent contact tangent; Patton anchor **0.00%**; geometry/MMS all pass; geometry reconstruction
+atlas **2.2%** vs SDF **16%**; emergent dilatancy/strength under-predicted by the SDF **98% / 35%**. The
+*flat* cyclic benchmark (§11.10) still shows energy balance **~1.5×**. Staged plan:
 
 | Phase | Goal | Acceptance (target) | Risk |
 |---|---|---|---|
-| **0. Semismooth-Newton / AL contact solver** *(critical path)* | kill the 0.3–1% friction residual (Coulomb non-smoothness) | monotone residual **<0.1%**; cyclic energy balance **∈[0.95,1.05]**; Patton stays 0.00% | Clarke-Jacobian stall / AL damping — prototype on 2-D Patton |
+| **0. Robust contact solver** *(monotonic DONE)* | consistent tangent $\varepsilon_n A(\mathbf{nn}^\top{+}\mu\mathbf{tn}^\top)$ killed the friction residual ($\to10^{-9}$); remaining: AL tight non-penetration + cyclic energy balance | monotone residual **<0.1%** ✓ (got $10^{-9}$); cyclic energy balance **∈[0.95,1.05]** (pending); Patton 0.00% ✓ | Clarke-Jacobian stall on cyclic — prototype on 2-D Patton |
 | **1. Two-block rough FEM** | two mutually deformable decoders (not one-on-rigid) | MMS rate ~2 on both; $\det J\in[0.9,1.1]$; energy balance ∈[0.98,1.02] | interface normal/quadrature alignment — start identity, swap rough in |
 | **2. Full multi-scale Inada + band-limit study** | spectral-cutoff sweep; dilatancy-vs-roughness law | recon <5% RMS all cutoffs; smooth dilatancy(RMS,Hurst) curve | over-refinement degrades $\det J$ — adaptive near asperities |
 | **3. Transition-map detection wired into the FEM contact-manager** | route chart gap/normal through `body_gap_normal` dispatch | active set = SDF on 1e5 pts; per-query <2×; sharper tip normals | decoder-inversion cost — cache + interpolate |
@@ -1014,7 +1019,9 @@ Currently measured (do not overstate): friction Newton residual **0.3–1%**, cy
 **Paper thesis (honest):** $\mu_{\rm app}=\tan(\phi_b+i)$ is *emergent* from asperity geometry, not imposed;
 a boundary-fitted neural chart resolves the asperity slopes an ambient SDF smooths (spectral bias), so the
 level set under-predicts strength (61% Inada / 35% synthetic) and dilatancy (98% synthetic frictionless).
-**Phase 0 (the robust contact solver) is the critical path to a publishable result.**
+**Phase 0 (the robust monotonic contact solver) is DONE** (consistent tangent → residual $10^{-9}$); the
+remaining path to publication is the cyclic energy balance (Phase 4) and two-block contact (Phase 1).
+Manuscript results + composite figure: `cv7_manuscript_results.py` → `figures/cv7_manuscript_pub.png`.
 
 ---
 
