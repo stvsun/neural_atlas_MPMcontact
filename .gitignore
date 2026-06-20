@@ -30,8 +30,9 @@ downloads/
 !figures/supershape_*_pub.png
 !figures/koch_*_pub.png
 !figures/numerical_cv_*_pub.png
-# Exception: rock-joint capstone figures (docs/contact_verification_manual.md §11.9)
+# Exception: rock-joint capstone figures (docs/contact_verification_manual.md §11.9, §11.10)
 !figures/rock_joint_*_pub.png
+!figures/rock_joint_stress_slice_*.png
 !figures/inada_joint_*_pub.png
 *.svg
 # Exception: compact rock-joint profiles (committable reproducibility artifact; raw CSVs stay ignored)

@@ -756,6 +756,268 @@ pytest tests/test_rock_joint_shear.py -v                                    # 6 
 
 ---
 
+## 11.10 Capstone in 3-D — mixed-mode cyclic shear of a deformable rough joint
+
+§11.9 is a 2-D profile. This extends it to a full **3-D surface** $z=h(x,y)$, the three shear
+**loading modes**, and a **deformable two-block FEM under mixed-mode cyclic loading**.
+
+**Joint-local triad (binding convention, reading (A) per the research brief).** Joint plane $=xy$,
+normal $=\mathbf e_z=(-h_x,-h_y,1)/\sqrt{1+|\nabla h|^2}$. There is **one normal mode** $(\sigma_n,u_n)$
+(opening/closing, dilation; compression-positive $\sigma_n$) and **two in-plane tangential shear modes**:
+**in-plane shear** $(\tau_x,u_{tx})$ = sliding along $x$ (Mode-II-like in the $x$–$z$ observation plane);
+**out-of-plane shear** $(\tau_y,u_{ty})$ = sliding along $y$ (anti-plane, Mode-III-like — "out of" the
+$x$–$z$ *observation* plane, still in the joint plane, **not** normal opening); **mixed-mode** = a
+combined in-plane azimuth $u_t=\Delta(\cos\theta,\sin\theta)$. (This disambiguates the plane-stress
+"in-plane" used elsewhere in this manual.) Interface traction = 1 normal + 2 tangential, the standard
+3-D interface-element form.
+
+**Geometry chart (3-D).** `solvers/contact/surface_chart_3d.py` — `NeuralHeight2D`, a Gaussian
+random-Fourier-feature height field $h_\theta(x,y)$ (the 2-D analog of §11.9's 1-D chart); fits a rough
+synthetic surface to 0.5 % of RMS; `RidgedSawtooth3D`/`PyramidSawtooth3D` analytic anchors.
+
+**(i) Rigid 3-D shear — the three modes** (`benchmarks/contact/cv_numerical/rock_joint_shear_3d.py`,
+node-to-surface penalty, plain Coulomb, CNL):
+- **Anisotropy V&V (ridged sawtooth).** Shearing **across** ridges (in-plane) emergently gives Patton
+  $\mu_{\rm app}=\tan(\phi_b+i)$ to **0.00 %** with dilation rate $\tan i$; shearing **along** ridges
+  (out-of-plane) gives $\mu_{\rm app}=\mu/\cos i$ (friction on the tilted facets) with **zero dilation**
+  and zero transverse traction — a closed-form in-plane-vs-out-of-plane check.
+- **Real Inada surface, three modes.** The genuine 3-D payoff — measured **roughness anisotropy**:
+  steady $\mu_{\rm app}$ 0.28 (in-plane) vs 0.48 (out-of-plane) vs 0.44 (mixed); dilation 1.0 vs 1.9 vs
+  1.8 mm; and a non-zero **transverse traction** $T_\perp/\sigma_n$ up to $\sim0.2$ for out-of-plane
+  shear (the asperities deflect the slip path — the in-plane shear-direction coupling, Grasselli).
+
+![3-D loading modes](../figures/rock_joint_3d_modes_pub.png)
+
+**(ii) Deformable two-block FEM** (`rock_joint_cyclic_fem.py`). Two elastic `ChartVectorFEMSolver`
+blocks (small-strain Hooke) meet at a **zero-thickness dilatant-frictional interface** (a Goodman/Plesha
+rock-joint interface element): normal penalty + an elastoplastic Coulomb return map with **effective
+friction $\tan(\phi_b+i)$** (the tilted-facet projection that supplies the Patton strength on the flat
+mean plane), dilation flow $\dot g_N=\tan(i)\,|\dot g_T|$, and **Plesha asperity degradation**
+$i=i_0e^{-cW_p}$. The roughness enters as the per-interface-point dilation-angle field $i_0(x,y)$ from the
+chart gradient (asperities live in the interface law; the blocks are flat — the standard idealisation).
+A rigid top platen (no tilting) drives the shear; CNV (constant normal displacement) by default, so
+$\sigma_n$ rises with dilation (confined-joint behaviour).
+
+- **VERIFIED (monotonic).** Flat joint $\to$ Coulomb $\tau/\sigma_n\to\mu$ (**0.2 %**); uniform $i\to$
+  Patton $\tau/\sigma_n\to\tan(\phi_b+i)$ (**0.2 %**). These verify the deformable interface mechanics.
+- **CYCLIC (mixed-mode).** Forward/reverse shear produces hysteresis loops with the correct friction
+  reversal (cap $\pm\tan(\phi_b+i)$), CNV normal-stress cycling, dilation, and — with degradation on —
+  **monotone peak-strength decay over cycles** (measured $0.669\to0.609$ over 4 cycles).
+
+![3-D cyclic FEM](../figures/rock_joint_cyclic_pub.png)
+
+**In-block stress fields.** `postprocessing/plot_rock_joint_stress_slices.py` extracts the per-element
+stress (via `compute_F` + the small-strain `stress_fn`) and plots the **mean pressure**
+$p=-(\sigma_1+\sigma_2+\sigma_3)/3$ and the **principal-stress differences** $(\sigma_1-\sigma_3),
+(\sigma_2-\sigma_3),(\sigma_1-\sigma_2)$ on $x$–$z$ cross-section slices at the **front, mid-section and
+back** ($y$-planes) across cyclic time. Driven by a spatially-varying (rough) dilation-angle field
+$i_0(x,y)$, the three slices carry genuinely different stress states; the principal differences
+concentrate near the joint plane (the contact/shear zone) and reverse with the shear.
+`figures/rock_joint_stress_slice_{front,mid,back}.png`, plus a 3-D **side view**
+(`rock_joint_stress_slice_sideview.png`). Since the FEM blocks use an *identity* chart (flat geometry,
+roughness in the interface law), the slices are **mapped to the physical (rough) domain by draping the
+joint chart $h(x,y)$ onto the interface** (decaying to the fixed outer faces) — so the cross-sections
+show the rough interface profile. **Caveat:** the stress is *computed* on the flat interface-element
+model and *displayed* on the chart-mapped geometry; capturing true asperity-tip stress concentrations
+would require meshing+solving on the rough geometry (a `chart_decoder` warp of the FEM mesh — the next
+refinement).
+
+![cross-section stress, mid slice](../figures/rock_joint_stress_slice_mid.png)
+
+**(iii) PyVista 3-D visualization** (`postprocessing/{surface_anim_3d,plot_rock_joint_3d}.py`): the two
+real Inada surfaces shearing in 3-D, coloured by the gap field — `figures/rock_joint_3d_shear.gif` (a
+still is `rock_joint_3d_surfaces_pub.png`). Traction–displacement data are stored via
+`postprocessing/joint_data_io.py` (`runs/rock_joint_3d/*/history.npz` + `params.json`).
+
+![3-D surfaces](../figures/rock_joint_3d_surfaces_pub.png)
+
+**Honest caveats.** (i) The crisp anchors are the **monotonic** checks (flat Coulomb, Patton, ridged
+anisotropy — all $\le$0.2 %). The **cyclic energy balance is only approximate** ($W_{\rm ext}/W_{\rm
+diss}\approx1.5$) because Coulomb friction is non-smooth and the implicit solve does not fully converge at
+slip peaks (a known issue needing a semismooth-Newton / augmented-Lagrangian solver — the next refinement);
+the cyclic loops are therefore qualitative. (ii) The interface is **flat with the roughness in the
+constitutive law** (asperities not meshed as elastic protrusions). (iii) Single-realization curves are
+asperity-spiky (use steady/ensemble). (iv) CNV protocol (CNL/CNS are the next extension). (v)
+Single-valued surfaces only.
+
+**Reproduce:**
+```bash
+python3 solvers/contact/surface_chart_3d.py                                  # 3-D height-chart self-test
+python3 benchmarks/contact/cv_numerical/rock_joint_shear_3d.py --ridged      # anisotropy V&V (0.00%)
+python3 benchmarks/contact/cv_numerical/rock_joint_shear_3d.py --surface rough --mode all   # 3 modes
+python3 benchmarks/contact/cv_numerical/rock_joint_cyclic_fem.py --mode mixed --cycles 3     # deformable cyclic
+python3 postprocessing/plot_rock_joint_3d.py                                 # figures + PyVista 3-D GIF
+pytest tests/test_rock_joint_3d.py -v                                        # rigid + FEM monotonic V&V
+```
+
+---
+
+## 11.11 The GENUINE atlas-vs-level-set demonstration — friction on the real rough geometry
+
+§11.10's deformable model put the roughness in the interface *constitutive law* (a flat interface with
+an EFFECTIVE dilation angle $\tan(\phi_b+i)$): the dilation is **imposed**, not emergent — a reviewer
+would rightly call that a shortcut.  This section does it **genuinely**: train a boundary-fitted
+ChartDecoder for the rough block, **verify it first**, then solve Coulomb friction on the *actual rough
+geometry*, so dilation/strength EMERGE from the resolved asperities.  §11.10 is kept as the **labeled
+flat benchmark** to compare against.
+
+**Train the decoder + VERIFY FIRST** (`solvers/fem/rough_block_decoder.py`,
+`benchmarks/contact/cv_numerical/cv7_decoder_verify.py`).  The decoder maps a reference cube
+$\xi\in[-1,1]^3$ to a physical block whose top face is the rough surface $z=1+h(x,y)$, with the relief
+net using **Fourier features** — *critical*: the stock tanh `ChartDecoder` suffers the SAME spectral bias
+as an ambient SDF and would smooth the asperities, so a fair claim requires the chart to actually resolve
+the roughness.  Verification gates (before any contact):
+
+| representation | rough-surface reconstruction (% of RMS) | chart-FEM |
+|---|---|---|
+| **Fourier boundary-fitted decoder (the atlas)** | **2.2%** | all elements valid, det $J\in[0.94,1.06]$, **MMS $O(h^2)$** (rates 2.07, 1.83) |
+| vanilla plain-MLP decoder | 48% (spectral bias) | — |
+| ambient 3-D neural SDF (the level set) | 16% / extracted level set 3% | — (smooths the asperities) |
+
+So the boundary-fitted Fourier chart resolves the geometry the level set smooths, AND the FEM provably
+solves on it ($O(h^2)$ on the curved chart — a curved chart passes the patch test only approximately).
+
+**Genuine friction shear on the rough geometry** (`rock_joint_decoder_shear.py`): a deformable block
+(chart-FEM on the trained decoder, rough top face, fixed bottom) is sheared against the *mating rigid
+rough surface* under node-to-surface penalty + Coulomb friction.  Dilation/strength **emerge** — there is
+no effective angle.  Measured: frictionless $\mu_{\rm app}$ rises $0\!\to\!0.17$ (pure GEOMETRIC dilatancy,
+emergent dilation $\approx9.7^\circ$, purely from the asperities interlocking); with $\mu=0.3$,
+$\mu_{\rm app}$ rises $0.24\!\to\!0.47$ — the dilatant strengthening $\tan(\phi_b+i)$ from the *real*
+geometry.
+
+**The payoff — atlas vs level set on the SAME problem** (`cv7_atlas_vs_sdf_shear.py`): solve the identical
+shear with the geometry from (a) the atlas (true rough surface) and (b) the ambient SDF's smoothed zero
+level set.  The level set under-predicts the emergent **dilatancy by 98%** (frictionless: 0.004 vs 0.171 —
+the smoothed surface has almost no asperity slope, so almost no dilatancy) and the **shear strength by 35%**
+(with friction: 0.31 vs 0.47).  This is the genuine "neural atlas beats the level set" claim — on resolved
+rough geometry, no shortcut.
+
+![atlas vs level set](../figures/rock_joint_atlas_vs_sdf_pub.png)
+
+**Honest caveats.** (i) Concentrated asperity-tip contact + Coulomb non-smoothness → the implicit residual
+is ~0.3–1% of the forces under shear (the **frictionless** case converges cleanly; the friction curves are
+qualitative — a semismooth-Newton / augmented-Lagrangian contact solver is the next refinement).  (ii) The
+roughness is **band-limited** to what the mesh resolves (a few asperity wavelengths), with a modest
+amplitude to keep det $J>0$.  (iii) ONE deformable block on a rigid mating rough surface (two deformable
+decoders is the extension).  (iv) The flat effective-dilation model (§11.10) is retained only as the
+benchmark; this section is the genuine result.
+
+**Reproduce:**
+```bash
+python3 solvers/fem/rough_block_decoder.py                                   # train + verify a rough decoder
+python3 benchmarks/contact/cv_numerical/cv7_decoder_verify.py               # reconstruction + no-foldover + MMS O(h^2)
+python3 benchmarks/contact/cv_numerical/rock_joint_decoder_shear.py         # genuine friction shear (emergent dilation)
+python3 benchmarks/contact/cv_numerical/cv7_atlas_vs_sdf_shear.py           # atlas vs level set + figure
+```
+
+---
+
+## 11.12 CV-7 — formulation, transition-map verification, and the plan to a success story
+
+This consolidates the **mathematics** behind CV-7 (Fourier-feature charts; interpenetration; traction),
+a **transition-map** contact-detection verification, and the **staged plan** to a publishable result.
+(Full derivation + the adversarial audit: `contact_atlas/cv7_formulation_brief.md`.)
+
+> **Scope discipline (two geometries, two solvers — never conflate).** §11.9 = the *real Inada* 1-D
+> profile, height-chart shear (chart recon 2.3 µm vs SDF 107 µm; **strength under-predicted 61%**;
+> dilation barely affected, **0.5%**, because total dilation is set by the large-scale waviness the SDF
+> does capture). §11.11 = a *band-limited synthetic* surface carried by a trained 3-D ChartDecoder,
+> chart-FEM shear (frictionless **dilatancy under-predicted 98%**; **strength 35%**). The 98% figure is
+> the synthetic decoder run, **not** Inada.
+
+### (A) Fourier-feature formulation
+
+Geometry is a learned *function on the surface's own parameter*, not an ambient field. The enabling
+choice is **Fourier-feature input encoding**, which hands the network high frequencies directly. Three
+banks are used:
+
+- **1-D height chart** (`profile_chart_2d.py`, the Inada chart) — *deterministic geometric* bank:
+  $\gamma(x)=[\cos(2\pi B\tilde x),\sin(2\pi B\tilde x)]$, $\tilde x\in[-1,1]$,
+  $B=\mathrm{geomspace}(0.5,f_{\max},K)$ ($K{=}192$, $f_{\max}{=}1500$); $z=h_\theta(x)=\texttt{base}+\mathrm{MLP}(\gamma(x))$.
+- **2-D surface chart** (`surface_chart_3d.py`) — *Gaussian-random* bank $B_i\sim\mathcal N(0,\sigma^2 I_2)$
+  ($\sigma{=}8$, $K{=}256$): $\gamma(\mathbf u)=[\cos(2\pi\tilde{\mathbf u}B^\top),\sin(2\pi\tilde{\mathbf u}B^\top)]$.
+- **3-D boundary-fitted decoder relief** (`rough_block_decoder.py`) — Gaussian bank
+  $B\sim\mathcal N(0,(k_{\max}/3)^2 I_2)$ ($k_{\max}{=}6$, $K{=}20$), encoded at $\pi$ (since $\xi_{xy}\in[-1,1]^2$):
+  $\mathrm{relief}(\xi_{xy})=\mathrm{MLP}([\cos(\pi\xi_{xy}B^\top),\sin(\pi\xi_{xy}B^\top)])$. The decoder map is
+  $$\mathbf x=D(\boldsymbol\xi)=\mathbf s+\xi_x\mathbf t_1+\xi_y\mathbf t_2+\xi_z\mathbf n+\mathrm{relief}(\xi_{xy})\,\mathrm{ramp}(\xi_z)\,\hat{\mathbf n},\quad
+  \mathrm{ramp}(\xi_z)=\tfrac{\xi_z+1}{2}\ (\text{rough top}),$$
+  with chart-Jacobian $J=\partial D/\partial\boldsymbol\xi$ whose third column $\mathbf n+\tfrac12\mathrm{relief}\,\hat{\mathbf n}$
+  couples the relief into $\det J$ (the foldover-amplitude limit; `verify_decoder` asserts $\det J>0$ on every element).
+
+**Why it beats the level set (spectral bias).** A plain coordinate MLP learns frequencies in increasing
+order (Rahaman et al. 2019): its NTK is Laplace-like, high-frequency density decays, so asperities are
+smoothed — exactly what an ambient neural SDF is built from. Fourier prepending (Tancik et al. 2020)
+replaces this with a *stationary band-limited* kernel: the geometric 1-D bank gives
+$\Theta(x,x')=\tfrac1K\sum_k\cos(2\pi f_k(x-x'))$; the Gaussian 2-D bank gives $J_0(2\pi\sigma\|\mathbf u-\mathbf v\|)$,
+flat to a cutoff $\sim2\pi\sigma$ — all sub-cutoff frequencies learned in parallel. The cutoff is a
+*transparent, tunable* ceiling, unlike the SDF's *intrinsic* bias. Measured: Fourier decoder reconstructs
+the surface to **2.2% of RMS**, plain-MLP decoder **48%**, ambient 3-D SDF **~16%**.
+
+### (B) Interpenetration prevention
+
+Gap (querying the mating rough surface $z_{\rm up}(X,Y)=z_p+h(X{-}u_x,Y)$ at the deformed top node, with the
+upper-body downward outward normal $\mathbf n=(h_x,h_y,-1)/\sec$, $n_z<0$): $g_N=(z_{\rm up}-Z)(-n_z)$,
+**$g_N<0$ = penetration**. Signorini/KKT: $g_N\ge0,\ t_N\ge0,\ g_N t_N=0$. Non-penetration is enforced by
+the **penalty** method — $f_n=\varepsilon_n\langle-g_N\rangle_+ A_{\rm top}$, $\varepsilon_n=20E/h$,
+$A_{\rm top}=(2L)^2/N_{\rm top}$, force $\mathbf F_N=f_n\mathbf n$ (pushes the penetrating node *out* of the
+upper body; the platen feels the upward reaction $-\sum f_z$) — with the **augmented-Lagrangian/Uzawa**
+(`augmented_lagrangian.py`) the route to tight non-penetration (Phase 0). The penetration scales as
+$\delta\sim\sigma_n/\varepsilon_n$, driven $\to0$ by raising $\varepsilon_n$ / AL updates.
+
+### (C) Surface traction
+
+Normal pressure $t_N=\varepsilon_n\langle-g_N\rangle_+$. Friction in the §11.11 quasi-static driver is a
+**prescribed-direction full-slip Coulomb drag** (no velocity regularization): slip direction
+$\mathbf t_{\rm proj}=\widehat{\hat{\mathbf t}-(\hat{\mathbf t}\!\cdot\!\mathbf n)\mathbf n}$ with $\hat{\mathbf t}=[1,0,0]$,
+$\mathbf F_T=\mu f_n\mathbf t_{\rm proj}$, $\mu=0.4$. (The regularized $\mathbf f_T=-\mu|f_N|v_T/\sqrt{|v_T|^2+\varepsilon_T^2}$
+in `friction.py` is the *MPM* path, not used here.) Per-node $\mathbf F_{\rm contact}=\mathbf F_N+\mathbf F_T$ is
+assembled work-conjugately into the Newton residual $R(u)=Ku-f_{\rm contact}$; the contact tangent adds
+$\varepsilon_n A_{\rm top}$ on active normal DOFs, $K_{\rm tot}=K_{\rm elastic}+K_c$, Armijo line search.
+
+### (D) Transition-map contact verification (`cv7_transition_map_verify.py`)
+
+For a single-valued surface the boundary chart is the graph $\varphi(x)=(x,h(x))$ — the domain coordinate
+IS the inverse-chart coordinate, so the **transition map needs no inversion**: $g_{\rm vert}=z-h_\theta(x)$,
+normal $(-h_\theta',1)/\sqrt{1+h_\theta'^2}$ (autograd). (Single-valuedness is the relevant condition; the
+CV-5 *radial* detector's star-shapedness is **not** required.) **Measured** (chart vs ambient SDF, vs the
+analytic gap/normal in a near-contact band):
+
+| detector | gap RMSE (% of RMS) | normal median / p90 |
+|---|---|---|
+| **transition map (height chart)** | **4.2%** | 13.4° / 24.8° |
+| ambient SDF (level set) | 44.7% | 10.6° / 20.1° |
+
+The transition-map **gap is 10.5× more accurate** (the ambient SDF gives a poor signed distance near the
+rough surface); honestly, the **normals are comparable** (the chart gradient carries some noise vs the
+finite-difference reference — a regularization target). The gap is the contact-driving quantity, so the
+chart detector is the right one. **Feasibility:** well-posed for the single-valued joint, no ambient field,
+Fourier-cutoff a transparent knob; overhangs would need the full transition-map atlas (out of scope).
+*Honesty:* the gap fed to the solver is the small-slope vertical proxy, not the closest-point distance —
+the fidelity story is **slopes/normals**, not gap magnitude; `closest_point_refine_chart` recovers the
+perpendicular distance for verification only (it leaks energy if used in the integrator).
+
+### (E) The plan to a success story
+
+Currently measured (do not overstate): friction Newton residual **0.3–1%**, cyclic energy balance **~1.5×**
+(frictionless converges cleanly); Patton anchor **0.00%**; geometry/MMS all pass. Staged plan:
+
+| Phase | Goal | Acceptance (target) | Risk |
+|---|---|---|---|
+| **0. Semismooth-Newton / AL contact solver** *(critical path)* | kill the 0.3–1% friction residual (Coulomb non-smoothness) | monotone residual **<0.1%**; cyclic energy balance **∈[0.95,1.05]**; Patton stays 0.00% | Clarke-Jacobian stall / AL damping — prototype on 2-D Patton |
+| **1. Two-block rough FEM** | two mutually deformable decoders (not one-on-rigid) | MMS rate ~2 on both; $\det J\in[0.9,1.1]$; energy balance ∈[0.98,1.02] | interface normal/quadrature alignment — start identity, swap rough in |
+| **2. Full multi-scale Inada + band-limit study** | spectral-cutoff sweep; dilatancy-vs-roughness law | recon <5% RMS all cutoffs; smooth dilatancy(RMS,Hurst) curve | over-refinement degrades $\det J$ — adaptive near asperities |
+| **3. Transition-map detection wired into the FEM contact-manager** | route chart gap/normal through `body_gap_normal` dispatch | active set = SDF on 1e5 pts; per-query <2×; sharper tip normals | decoder-inversion cost — cache + interpolate |
+| **4. Cyclic CNL/CNS + energy ledger** | constant-load/stiffness; closed loops; Plesha decay | $W_{\rm ext}=W_{\rm fric}+\Delta U_{\rm el}+W_{\rm dil}$ to <2% | feedback overshoot — one ledger term at a time |
+| **5. Finite-deformation ChartMPM cross-check** *(not built)* | explicit dynamic rough shear vs quasi-static | dilatancy/$\mu_{\rm app}$ within 10% of FEM | $\det J$ hourglassing — fine penalty, small dt |
+| **6. Publication figure + narrative** | atlas vs level set vs flat benchmark, one page | 3×3 grid, every number cited to its own geometry | density — lead with physics |
+
+**Paper thesis (honest):** $\mu_{\rm app}=\tan(\phi_b+i)$ is *emergent* from asperity geometry, not imposed;
+a boundary-fitted neural chart resolves the asperity slopes an ambient SDF smooths (spectral bias), so the
+level set under-predicts strength (61% Inada / 35% synthetic) and dilatancy (98% synthetic frictionless).
+**Phase 0 (the robust contact solver) is the critical path to a publishable result.**
+
+---
+
 ## 12. Scope & limitations
 
 - **Small-strain, linear-elastic, quasi-static (CV-1..4).** Hertz/Brazilian/C–M are infinitesimal

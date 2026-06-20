@@ -80,6 +80,14 @@ python3 benchmarks/contact/cv_numerical/rock_joint_shear.py --sawtooth   # Patto
 python3 benchmarks/contact/cv_numerical/rock_joint_capstone.py           # chart-vs-ambient-SDF + roughness sweep
 python3 postprocessing/plot_rock_joint_capstone.py                       # hero figure + shear GIF
 pytest tests/test_rock_joint_shear.py -v                                 # 6 pass (Patton + chart fidelity)
+
+# --- CV-7 in 3-D: mixed-mode cyclic shear of a deformable joint (manual §11.10) ---
+python3 solvers/contact/surface_chart_3d.py                              # 3-D height chart h(x,y) self-test
+python3 benchmarks/contact/cv_numerical/rock_joint_shear_3d.py --ridged  # rigid anisotropy V&V (0.00%)
+python3 benchmarks/contact/cv_numerical/rock_joint_shear_3d.py --surface rough --mode all   # 3 modes
+python3 benchmarks/contact/cv_numerical/rock_joint_cyclic_fem.py --mode mixed --cycles 3     # deformable FEM cyclic
+python3 postprocessing/plot_rock_joint_3d.py                             # 3-D figures + PyVista GIF
+pytest tests/test_rock_joint_3d.py -v                                    # rigid + FEM monotonic V&V
 ```
 
 ## Code Patterns
@@ -107,6 +115,7 @@ pytest tests/test_rock_joint_shear.py -v                                 # 6 pas
 - `chart_gap.py` — 3-D level-set-free radial-chart detector (`RadialChart`, `evaluate_gap_chart`).
 - `radial_chart_2d.py` — 2-D NEURAL radial chart (`NeuralRho2D`, Fourier-feature $\rho_\theta$) + gap/normal; the transition-map detector that gives the accurate CV-5 path (numerical-cv-suite branch).
 - `profile_chart_2d.py` — open 1-D NEURAL **height chart** (`NeuralHeight1D`, random-Fourier $h_\theta(x)$; `plain=True` = Fourier-free ambient-SDF-class ablation) + `AnalyticSawtooth1D` (Patton anchor); the CV-7 rock-joint capstone chart.
+- `surface_chart_3d.py` — open 2-D NEURAL **height field** (`NeuralHeight2D`, Gaussian random-Fourier $h_\theta(x,y)$) + `RidgedSawtooth3D`/`PyramidSawtooth3D` anchors; the 3-D rock-joint surface chart (manual §11.10). Drivers: `cv_numerical/rock_joint_shear_3d.py` (rigid 3 modes), `cv_numerical/rock_joint_cyclic_fem.py` (deformable two-block FEM, dilatant-frictional interface, mixed-mode cyclic). Data IO `postprocessing/joint_data_io.py`; PyVista viz `postprocessing/surface_anim_3d.py`.
 
 ### Atlas-FEM (`solvers/fem/`, branch `numerical-cv-suite`)
 - Chart-based elastostatic FEM ported from `archive/`: `chart_vector_fem.py` (3-D P1/P2 tet, ChartDecoder-Jacobian pushforward, Newton; SVD-stabilized via `common.geometry.stabilized_jacobian_ops`), `tri2d.py` (2-D plane-stress CST, sparse), `linear_elastic.py`, `schwarz_vector_fem.py`. Static penalty contact lives in the CV-1/CV-2 drivers (`benchmarks/contact/cv_numerical/`).
@@ -153,6 +162,33 @@ strength 61%**; rougher dilates more (3.13 vs 2.53 mm, ensemble). HONEST: the cl
 slopes → under-predicts strength* + *O(N_surface) storage*, NOT "lower height RMSE" (dense interp is
 easy for both); single-valued surfaces only (no overhangs); rigid blocks. Raw CSVs in
 `downloads/inada_granite/` (gitignored); compact profiles `data/inada_joint/*.npz`.
+
+**CV-7 in 3-D — mixed-mode cyclic shear of a DEFORMABLE joint** (manual §11.10; modules
+`solvers/contact/surface_chart_3d.py`, `cv_numerical/{rock_joint_shear_3d,rock_joint_cyclic_fem}.py`,
+`postprocessing/{joint_data_io,surface_anim_3d,plot_rock_joint_3d}.py`, `tests/test_rock_joint_3d.py`).
+Joint-local triad: in-plane=x-shear, out-of-plane=y-shear (anti-plane), mixed=azimuth, normal=z. MEASURED:
+rigid ridged anisotropy (in-plane→Patton 0.00%, out-of-plane→μ/cos i, zero dilation); real-surface 3-mode
+anisotropy (steady μ 0.28/0.48/0.44, dilation 1.0/1.9/1.8 mm, transverse-traction coupling). Deformable
+two-block FEM (zero-thickness dilatant-frictional Goodman/Plesha interface, effective friction
+tan(φ_b+i), rigid platen, CNV) VERIFIED monotonic: flat→Coulomb τ/σ=μ (0.2%), dilatant→Patton (0.2%);
+CYCLIC: hysteresis loops + Plesha degradation decay (0.669→0.609 over 4 cycles). HONEST: cyclic energy
+balance only ~1.5× (Coulomb non-smoothness; needs semismooth-Newton/AL — next refinement); flat-interface
+idealisation (roughness in the interface law, blocks flat); single-realization spiky; CNV only. Figures
+`figures/rock_joint_{3d_modes,cyclic,3d_surfaces}_pub.png` + `rock_joint_3d_shear.gif`; data
+`runs/rock_joint_3d/*/history.npz`. Design brief: `contact_atlas/rock_joint_3d_brief.md`.
+
+**CV-7 GENUINE rough-geometry atlas vs level set** (manual §11.11; PI mandate "no shortcuts" — the
+§11.10 flat effective-dilation model is KEPT as a labeled benchmark). Modules `solvers/fem/
+rough_block_decoder.py` (trainable Fourier boundary-fitted ChartDecoder — NB the vanilla tanh
+ChartDecoder smooths like the SDF, must use Fourier features), `cv_numerical/{cv7_decoder_verify,
+rock_joint_decoder_shear,cv7_atlas_vs_sdf_shear}.py`, `tests/test_rough_decoder_fem.py`. VERIFIED FIRST:
+atlas decoder reconstructs rough surface to 2.2% RMS (plain-MLP decoder 48%, ambient SDF ~16%), chart-FEM
+no foldover (det J>0), **MMS O(h²)** on the rough geometry. GENUINE: chart-FEM on the decoder + node-to-
+surface Coulomb friction on the real rough faces → dilation EMERGES (frictionless μ_app 0→0.17, friction
+0.24→0.47), NO effective angle. PAYOFF: same shear on SDF-smoothed geometry under-predicts dilatancy 98%
+(frictionless) / strength 35%. HONEST: resid ~0.3–1% under shear (Coulomb non-smoothness + concentrated
+asperity contact; frictionless converges cleanly), band-limited roughness, one deformable block on rigid
+mating surface. See [[genuine-rough-geometry-mandate]]. Figure `rock_joint_atlas_vs_sdf_pub.png`.
 
 ## Gotchas
 

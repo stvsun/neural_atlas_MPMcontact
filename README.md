@@ -159,6 +159,46 @@ resolved asperity geometry**. Measured:
 
 Detail + honest caveats: [§11.9 of the verification manual](docs/contact_verification_manual.md).
 
+#### 3-D extension — mixed-mode cyclic shear of a deformable joint
+
+The capstone extends to a full **3-D surface** $h_\theta(x,y)$ (`solvers/contact/surface_chart_3d.py`),
+the three **loading modes** (in-plane / out-of-plane / mixed, `rock_joint_shear_3d.py`), and a
+**deformable two-block chart-FEM** with a dilatant-frictional interface under **mixed-mode cyclic
+loading** (`rock_joint_cyclic_fem.py`). Measured:
+
+- **3-D anisotropy (rigid):** across vs along ridges → Patton (0.00 %) vs $\mu/\cos i$ (zero dilation);
+  on the real Inada surface the three modes differ (steady $\mu_{\rm app}$ 0.28 / 0.48 / 0.44; dilation
+  1.0 / 1.9 / 1.8 mm) with a transverse-traction coupling — the genuine 3-D payoff.
+- **Deformable FEM (verified, monotonic):** flat → Coulomb $\tau/\sigma_n=\mu$ (0.2 %); dilatant →
+  Patton $\tan(\phi_b+i)$ (0.2 %). **Cyclic:** hysteresis loops + CNV normal-stress coupling + Plesha
+  asperity degradation (peak decays 0.669→0.609 over 4 cycles). *Cyclic energy balance is approximate
+  (~1.5×) — Coulomb non-smoothness; honest caveat in §11.10.*
+- **PyVista** 3-D animation of the two real surfaces shearing (`figures/rock_joint_3d_shear.gif`).
+
+![3-D rock-joint surfaces](figures/rock_joint_3d_surfaces_pub.png)
+
+Detail + V&V: [§11.10 of the verification manual](docs/contact_verification_manual.md).
+
+#### The genuine atlas-vs-level-set demonstration (no shortcut)
+
+§11.10's deformable model imposed the dilation via an effective angle on a *flat* interface (kept as a
+labeled benchmark). The genuine version trains a **boundary-fitted ChartDecoder** for the rough block,
+**verifies it first**, then solves Coulomb friction on the *actual rough geometry* — dilation EMERGES
+from the asperities (`solvers/fem/rough_block_decoder.py`,
+`benchmarks/contact/cv_numerical/{cv7_decoder_verify,rock_joint_decoder_shear,cv7_atlas_vs_sdf_shear}.py`):
+
+- **Verified first:** the Fourier decoder reconstructs the rough surface to **2.2% of RMS** (a vanilla
+  tanh decoder: 48% — spectral bias), the chart-FEM has no element foldover, and converges **O(h²)** on
+  the curved geometry.
+- **Emergent (not imposed):** frictionless shear → μ_app 0→0.17 (pure geometric dilatancy ≈9.7°); with
+  μ=0.3 → 0.47.
+- **Payoff:** the same shear on the ambient-SDF-smoothed geometry under-predicts the dilatancy by **98%**
+  (frictionless) and the strength by **35%** — the level set smooths the asperity slopes the atlas resolves.
+
+![atlas vs level set](figures/rock_joint_atlas_vs_sdf_pub.png)
+
+Detail + honest caveats: [§11.11 of the verification manual](docs/contact_verification_manual.md).
+
 ---
 
 ## Quick start
