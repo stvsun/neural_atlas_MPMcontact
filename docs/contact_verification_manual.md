@@ -935,9 +935,11 @@ credibility checks on the emergent friction/dilatancy — all with the consisten
   **under-predicts the frictionless geometric dilatancy by $\sim$60%** ($\mu_{\rm app}$ 0.038 vs the
   atlas's 0.095) and the **friction strength by $\sim$17%** (0.329 vs 0.396).  The chart-beats-level-set
   result holds on **real data**, not only the synthetic band-limited surface.
-- **Robustness across realizations** (`cv7_robustness_study.py`).  Across independent random roughness
-  realizations the level set's under-prediction of the emergent dilatancy is a **statistical fact, not a
-  single cherry-picked surface** (see `runs/cv7_robustness/results.json`).
+- **Robustness across realizations** (`cv7_robustness_study.py`).  Across 5 independent random roughness
+  realizations the level set **under-predicts the emergent dilatancy by $58\%\pm35\%$** (atlas mean
+  $\mu_{\rm app}=0.120$ vs SDF $0.036$); the spread is wide (per-realization 15–100%) but the sign is
+  uniform — the under-prediction is a **statistical fact, not a single cherry-picked surface**.  The
+  magnitude depends on how much asperity slope each realization's smoothing destroys.
 
 **Reproduce:**
 ```bash

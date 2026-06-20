@@ -151,12 +151,16 @@ def energy_ledger_figure(tag="_genuine", mode="in_plane",
         ratios.append(dext / den if abs(den) > 1e-30 else np.nan)
     axs[2].axhline(1.0, color="#888", lw=0.8, ls="--")
     axs[2].plot(np.unique(cyc) + 1, ratios, "o-", color="#444", lw=1.4, ms=5)
-    axs[2].set_title("(c) energy closure per cycle", fontsize=8)
+    axs[2].set_title("(c) per-cycle ratio (boundary-sampled)", fontsize=8)
     axs[2].set_xlabel("cycle"); axs[2].set_ylabel("$W_{ext}/(W_{fric}{+}\\Delta U_{el}{+}W_{pen}{+}W_{stick})$",
                                                   fontsize=6)
     axs[2].set_xticks(np.unique(cyc) + 1); axs[2].set_ylim(0, 1.6)
-    fig.suptitle("Genuine rough-joint cyclic shear — closed energy ledger (decoder-FEM, stateful "
-                 "return-map friction)", y=1.02, fontsize=9)
+    # HONEST: the cumulative friction tally is the conserved measure — it over-counts the net work
+    g_ef = float(np.asarray(H["W_ext"])[-1] / (np.asarray(H["W_fric"])[-1] + 1e-30))
+    axs[2].annotate(f"cumulative $W_{{ext}}/W_{{fric}}={g_ef:.2f}$\n($W_{{fric}}$ over-counts {1/max(g_ef,1e-9):.1f}$\\times$)",
+                    xy=(0.5, 0.06), xycoords="axes fraction", ha="center", fontsize=6, color="#B22222")
+    fig.suptitle("Genuine rough-joint cyclic shear — energy ledger NOT yet closed: cumulative $W_{fric}$ "
+                 "over-counts the net dissipation (reversible asperity micro-sliding; §11.11)", y=1.02, fontsize=8)
     fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, out_name)
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
