@@ -73,6 +73,13 @@ python3 atlas/sdf/train_analytical_sdf.py --all              # train sphere/disc
 python3 atlas/charts/train_radial_chart.py                   # train the CV-5 neural radial chart
 python3 benchmarks/contact/cv_numerical/cv3_brazilian_fem.py # CV-3 FEM vs closed form (also cv1/cv2/cv4/cv5)
 python3 postprocessing/plot_numerical_cv_summary.py          # numerical CV results summary figure
+
+# --- CV-7 capstone: real fractal rock-joint direct shear ---
+python3 postprocessing/characterize_inada_joint.py                       # Inada data -> roughness + profiles
+python3 benchmarks/contact/cv_numerical/rock_joint_shear.py --sawtooth   # Patton method anchor (0.00%)
+python3 benchmarks/contact/cv_numerical/rock_joint_capstone.py           # chart-vs-ambient-SDF + roughness sweep
+python3 postprocessing/plot_rock_joint_capstone.py                       # hero figure + shear GIF
+pytest tests/test_rock_joint_shear.py -v                                 # 6 pass (Patton + chart fidelity)
 ```
 
 ## Code Patterns
@@ -99,6 +106,7 @@ python3 postprocessing/plot_numerical_cv_summary.py          # numerical CV resu
 - `supershape.py` — Gielis superformula boundary chart + inverse radial gap (CV-5).
 - `chart_gap.py` — 3-D level-set-free radial-chart detector (`RadialChart`, `evaluate_gap_chart`).
 - `radial_chart_2d.py` — 2-D NEURAL radial chart (`NeuralRho2D`, Fourier-feature $\rho_\theta$) + gap/normal; the transition-map detector that gives the accurate CV-5 path (numerical-cv-suite branch).
+- `profile_chart_2d.py` — open 1-D NEURAL **height chart** (`NeuralHeight1D`, random-Fourier $h_\theta(x)$; `plain=True` = Fourier-free ambient-SDF-class ablation) + `AnalyticSawtooth1D` (Patton anchor); the CV-7 rock-joint capstone chart.
 
 ### Atlas-FEM (`solvers/fem/`, branch `numerical-cv-suite`)
 - Chart-based elastostatic FEM ported from `archive/`: `chart_vector_fem.py` (3-D P1/P2 tet, ChartDecoder-Jacobian pushforward, Newton; SVD-stabilized via `common.geometry.stabilized_jacobian_ops`), `tri2d.py` (2-D plane-stress CST, sparse), `linear_elastic.py`, `schwarz_vector_fem.py`. Static penalty contact lives in the CV-1/CV-2 drivers (`benchmarks/contact/cv_numerical/`).
@@ -131,6 +139,20 @@ vs the analytical chart; **CV-6** refinement ceiling measured. NOT BUILT: full N
 Hertz, MPM cross-checks. Harness `tests/test_neural_chart_verification.py` + `tests/test_chart_fem.py`
 pass against trained `.pt` charts (gitignored, so a fresh checkout skips until retrained); the slow
 contact sweeps (CV-1/CV-2/CV-5-dynamics) run as benchmark drivers, not routine tests.
+
+**CV-7 capstone — real fractal rock-joint direct shear** (manual §11.9; the CMAME showcase). Real
+Inada-granite tensile fracture (Digital Rocks #273, DOI 10.17612/QXSA-TK92; self-affine $D\approx2.2$,
+RMS 1.7 mm, 23.4 µm) carried by a learned 1-D height chart `solvers/contact/profile_chart_2d.py`; two
+mating faces sheared under **plain Coulomb** (no dilatancy law) so dilation/friction are emergent from
+resolved geometry. Driver `benchmarks/contact/cv_numerical/{rock_joint_shear,rock_joint_capstone}.py`;
+plotter `postprocessing/plot_rock_joint_capstone.py` → `figures/rock_joint_capstone_pub.png` +
+`rock_joint_shear.gif`; `tests/test_rock_joint_shear.py` (6 pass). MEASURED: **Patton anchor 0.00%**
+(emergent $\tan(\phi_b{+}i)$, the L1 reference); chart recon **2.3 µm** vs ambient 2-D neural SDF
+**107 µm (47× worse, more params)**, SDF smooths asperity angle 19.4°→12.5° → **under-predicts peak
+strength 61%**; rougher dilates more (3.13 vs 2.53 mm, ensemble). HONEST: the claim is *SDF smooths
+slopes → under-predicts strength* + *O(N_surface) storage*, NOT "lower height RMSE" (dense interp is
+easy for both); single-valued surfaces only (no overhangs); rigid blocks. Raw CSVs in
+`downloads/inada_granite/` (gitignored); compact profiles `data/inada_joint/*.npz`.
 
 ## Gotchas
 

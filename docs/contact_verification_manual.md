@@ -670,6 +670,92 @@ multi-patch) a single neural SDF or uniform level-set cannot.
 
 ---
 
+## 11.9 Capstone (CV-7) — direct shear of a real fractal rock joint
+
+The CV-1..6 suite verifies the machinery against *closed forms*. The capstone turns that machinery
+on a problem with **no closed form and real engineering stakes**: the direct shear of a natural rock
+joint, where the chart-over-level-set advantage (abstract in CV-5/6) becomes a *different predicted
+shear strength*. This is the example written to "energize" a CMAME reader — built only after the
+analytical suite earned the right to make the claim.
+
+**Setup (real data, verified machinery).** The surface is a real tensile fracture in **Inada
+granite** (Digital Rocks Portal #273, Sawayama–Jiang–Tsuji 2020, DOI `10.17612/QXSA-TK92`, ODC-BY):
+a self-affine height map $z(x,y)$ at 23.4 µm sampling, Hurst $H\approx0.78$, fractal $D\approx2.2$,
+RMS roughness **1.70 mm** (matches the published 1.7 mm exactly — `characterize_inada_joint.py`).
+Each surface is carried by a learned **1-D height chart** $h_\theta(x)$ — a random-Fourier-feature
+MLP (`solvers/contact/profile_chart_2d.py`, the open, non-periodic 1-D analog of the CV-5 radial
+chart). Two mating faces are sheared under constant normal *stress* (`rock_joint_shear.py`); the
+vertical DOF is solved to normal equilibrium each shear increment (quasi-static direct shear).
+Friction is **plain Coulomb** ($\mu=\tan\phi_b$ constant) — *no dilatancy law*. Dilation and the
+apparent friction angle are therefore **emergent outputs of the resolved asperity geometry**, which
+is exactly what makes geometric fidelity the whole story.
+
+**Method verification (the L1 anchor — Patton).** For two mating sawtooth faces of asperity angle
+$i$, plain Coulomb on the resolved tilted contact must emergently give the closed-form **Patton law**
+$\mu_{\mathrm{app}}=\tan(\phi_b+i)=(\tan i+\mu)/(1-\mu\tan i)$. Measured: **0.00 %** error, with the
+dilation rate equal to $\tan i$ to within 1% (the block rides up the flank). This is a *real* closed
+form (not imposed: only plain Coulomb + geometry go in; Patton comes out), so it anchors the
+no-closed-form real-surface results. `test_rock_joint_shear.py` (6 tests) checks it at two
+$(i,\mu)$ pairs.
+
+**The chart-vs-level-set result — three complementary framings** (all measured; we present all three
+so the paper can lead with whichever fits). On the rough Inada profile we fit (a) the height chart
+and (b) a *real ambient 2-D neural SDF* $\phi(x,z)$ — a plain coordinate MLP, the canonical level
+set — and extract its zero level set $h_{\mathrm{SDF}}(x)$:
+
+1. **Reconstruction gap.** The chart reproduces the measured surface to **2.3 µm** (66k params); the
+   ambient SDF reaches only **107 µm — 47× worse — with *more* parameters (83k)**. The level set
+   spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well.
+2. **Slopes → consequence (the contact-relevant framing).** Friction/dilation depend on asperity
+   *angle* $i=\arctan|h'|$, so heights are the wrong metric — slopes are. The chart reproduces the
+   mean asperity angle (**19.8° vs 19.4° true**); the SDF's spectral bias **smooths it to 12.5°**.
+   Shearing the two representations, the smoothed level set **under-predicts peak shear strength by
+   61 %**. (Dilation is barely affected — 0.5 % — because total dilation is set by the large-scale
+   waviness the SDF *does* capture, while strength is asperity-slope-controlled. This split is itself
+   the honest, physical signature.)
+3. **Storage / resolution-independence.** The chart is $O(N_{\text{surface}})$ with $O(1)$ queries
+   and (with Fourier features) no spectral-bias ceiling; an ambient SDF must represent a 2-D field
+   whose zero set is the surface — the same scaling argument the CV-6 Koch ceiling makes, here on a
+   real surface across ~3.5 decades of scale (23.4 µm asperities over a 73 mm joint).
+
+**Roughness sweep (ensemble over the real 2-D surface).** Shearing 24 real scanlines of each surface
+(mean ± std): the **rougher** joint dilates more (**3.13 ± 0.49 vs 2.53 ± 0.36 mm**) — the Barton-JRC
+trend, recovered from real data with plain Coulomb. The steady *friction* trend is in the expected
+direction but within scatter (0.55 ± 0.19 vs 0.49 ± 0.12) at this modest RMS contrast (1.79 vs 1.21
+mm — both are rough natural fractures); the *dilation* is the clean discriminator.
+
+![Rock-joint capstone](../figures/rock_joint_capstone_pub.png)
+
+*Capstone summary: (a) the real Inada surface; (b) the Patton method anchor (0.00%); (c) the chart
+resolves the asperities the level set smooths away (shaded); (d) the 61% strength under-prediction;
+(e) rougher → more dilation (ensemble); (f) the headline numbers.*
+
+![Rock-joint shear animation](../figures/rock_joint_shear.gif)
+
+*Direct shear of the real joint: the hangingwall rides over the footwall asperities (contacts in red)
+and the joint dilates ~3.6 mm — emergent from plain Coulomb + resolved geometry.*
+
+**Honest caveats (load-bearing, per the review discipline).** (i) The claim is **not** "the chart
+has lower height RMSE than the SDF" — on a well-sampled single-valued profile dense *interpolation*
+of heights is easy for both; the defensible claim is the *slope-smoothing → strength under-prediction*
+(framing 2) plus storage (framing 3). (ii) Single-profile **peak** strength is single-asperity-noisy
+(we report steady/ensemble). (iii) These height maps are **single-valued** — the "level-set fails"
+argument rests on the spectral-bias ceiling + storage, **not** on overhangs (genuine re-entrant
+geometry would need the micro-CT voxel volumes, deferred). (iv) **Rigid blocks** (the verified
+rigid-body path); deformable/crushing asperities are the next step.
+
+**Reproduce:**
+```bash
+python3 postprocessing/characterize_inada_joint.py                          # data -> roughness + profiles
+python3 solvers/contact/profile_chart_2d.py                                 # height-chart self-test
+python3 benchmarks/contact/cv_numerical/rock_joint_shear.py --sawtooth      # Patton anchor (0.00%)
+python3 benchmarks/contact/cv_numerical/rock_joint_capstone.py              # full chart-vs-SDF + sweep
+python3 postprocessing/plot_rock_joint_capstone.py                          # hero figure + shear GIF
+pytest tests/test_rock_joint_shear.py -v                                    # 6 pass (Patton + fidelity)
+```
+
+---
+
 ## 12. Scope & limitations
 
 - **Small-strain, linear-elastic, quasi-static (CV-1..4).** Hertz/Brazilian/C–M are infinitesimal

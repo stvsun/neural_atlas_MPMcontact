@@ -138,6 +138,27 @@ and the ChartDecoder domain map). Drivers in `benchmarks/contact/cv_numerical/`;
 Full status, honest caveats, and the can/cannot **capability matrix**:
 [§11.8 of the verification manual](docs/contact_verification_manual.md).
 
+### Capstone (CV-7) — direct shear of a real fractal rock joint
+
+The closed-form suite earns the right to turn the machinery on a problem with **no closed form**: the
+direct shear of a real **Inada-granite** tensile fracture (Digital Rocks Portal #273, DOI
+`10.17612/QXSA-TK92`; self-affine, $D\approx2.2$, RMS 1.7 mm, 23.4 µm). Each face is a learned 1-D
+height chart $h_\theta(x)$ (`solvers/contact/profile_chart_2d.py`); two mating faces are sheared
+under plain Coulomb (no dilatancy law), so dilation and the friction angle are **emergent from the
+resolved asperity geometry**. Measured:
+
+- **Method anchor:** mating sawtooth shear reproduces the closed-form Patton law $\tan(\phi_b+i)$ to **0.00%**.
+- **Chart vs level set:** the height chart reconstructs the surface to **2.3 µm**; a real ambient 2-D
+  neural SDF reaches only **107 µm (47× worse) with more parameters**, smoothing the mean asperity
+  angle 19.4°→12.5° — so the level set **under-predicts peak shear strength by 61%**.
+- **Roughness:** rougher joint dilates more (3.13 vs 2.53 mm, ensemble of 24 real scanlines).
+
+![rock-joint capstone](figures/rock_joint_capstone_pub.png)
+
+![rock-joint shear animation](figures/rock_joint_shear.gif)
+
+Detail + honest caveats: [§11.9 of the verification manual](docs/contact_verification_manual.md).
+
 ---
 
 ## Quick start
