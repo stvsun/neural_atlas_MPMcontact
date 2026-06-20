@@ -88,6 +88,18 @@ python3 benchmarks/contact/cv_numerical/rock_joint_shear_3d.py --surface rough -
 python3 benchmarks/contact/cv_numerical/rock_joint_cyclic_fem.py --mode mixed --cycles 3     # deformable FEM cyclic
 python3 postprocessing/plot_rock_joint_3d.py                             # 3-D figures + PyVista GIF
 pytest tests/test_rock_joint_3d.py -v                                    # rigid + FEM monotonic V&V
+
+# --- CV-7 remaining phases 1-5 (manual §11.12; the heavy solves run on the Euler cluster) ---
+bash scripts/euler/sync_push.sh        # rsync repo -> euler (ws2414); env = conda 'atlas' (torch+scipy+gudhi)
+bash scripts/euler/sync_pull.sh        # pull runs/ (JSON/npz) back; figures generated locally
+python3 benchmarks/contact/cv_numerical/rock_joint_two_block.py --mode all --protocol CNL   # P1 two deformable blocks
+python3 benchmarks/contact/cv_numerical/cv7_roughness_sweep.py --workers 10                  # P2 dilatancy-vs-roughness law
+python3 benchmarks/contact/cv_numerical/cv7_transition_map_contact.py                        # P3 chart detector in contact loop
+python3 benchmarks/contact/cv_numerical/rock_joint_decoder_cyclic.py --mode all --cycles 2   # P4 cyclic + energy ledger
+python3 benchmarks/contact/cv_numerical/rock_joint_mpm_xcheck.py                             # P5 explicit ChartMPM cross-check
+python3 -c "import sys;sys.path.insert(0,'postprocessing');sys.path.insert(0,'.'); \
+  from postprocessing.plot_rock_joint_3d import modes_figure,roughness_law_figure,energy_ledger_figure; \
+  modes_figure(tag='twoblock',out_name='rock_joint_3d_twoblock_modes_pub.png'); roughness_law_figure(); energy_ledger_figure()"
 ```
 
 ## Code Patterns

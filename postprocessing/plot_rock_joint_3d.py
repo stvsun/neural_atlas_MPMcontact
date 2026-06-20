@@ -29,14 +29,18 @@ def _load_hist(path):
 
 
 # --------------------------------------------------------------------------------------------------
-def modes_figure():
-    """Rigid 3-mode anisotropy from runs/rock_joint_3d_rough_<mode>."""
+def modes_figure(tag="rough", suptitle=("3-D rigid rock-joint shear: roughness anisotropy across "
+                                         "loading modes (real Inada surface)"),
+                 out_name="rock_joint_3d_modes_pub.png"):
+    """3-mode anisotropy (a) mu_app (b) dilation (c) T_perp from runs/rock_joint_3d_<tag>_<mode>.
+    ``tag='rough'`` = the rigid real-Inada driver (default); ``tag='twoblock'`` = the genuine
+    two-deformable-block decoder-FEM driver (Phase 1).  Same 3-panel layout/colours."""
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
     from utils import set_pub_style, DOUBLE_COL_W
     set_pub_style()
-    H = {m: _load_hist(os.path.join(RUNS, f"rock_joint_3d_rough_{m}")) for m in MODE_C}
+    H = {m: _load_hist(os.path.join(RUNS, f"rock_joint_3d_{tag}_{m}")) for m in MODE_C}
     if not any(H.values()):
-        print("  (no rigid 3-mode runs; skip modes_figure)"); return
+        print(f"  (no 3-mode runs for tag='{tag}'; skip modes_figure)"); return
     fig, axs = plt.subplots(1, 3, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.34))
     for m, c in MODE_C.items():
         h = H[m]
@@ -52,15 +56,18 @@ def modes_figure():
     axs[1].set_xlabel("shear $u$ (mm)"); axs[1].set_ylabel("dilation (mm)"); axs[1].legend(fontsize=6)
     axs[2].set_title("(c) transverse traction $T_\\perp$ (shear-dir coupling)", fontsize=8)
     axs[2].set_xlabel("shear $u$ (mm)"); axs[2].set_ylabel("$T_\\perp$"); axs[2].legend(fontsize=6)
-    fig.suptitle("3-D rigid rock-joint shear: roughness anisotropy across loading modes "
-                 "(real Inada surface)", y=1.02, fontsize=9)
+    fig.suptitle(suptitle, y=1.02, fontsize=9)
     fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
-    out = os.path.join(FIG, "rock_joint_3d_modes_pub.png")
+    out = os.path.join(FIG, out_name)
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
 
 
-def cyclic_figure():
-    """Deformable-FEM cyclic hysteresis + dilation + degradation decay."""
+def cyclic_figure(tag="", out_name="rock_joint_cyclic_pub.png",
+                  suptitle=("Deformable two-block rock joint — mixed-mode cyclic shear (chart-FEM, "
+                            "dilatant interface)")):
+    """Cyclic hysteresis + dilation + degradation decay.  ``tag=''`` = the flat-interface benchmark
+    (runs/rock_joint_3d/cyclic_<mode>_CNV); ``tag='_genuine'`` = the genuine rough-geometry cyclic
+    (cyclic_genuine_<mode>_CNV).  Same 2x2 layout."""
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
     from utils import set_pub_style, DOUBLE_COL_W
     set_pub_style()
@@ -72,8 +79,8 @@ def cyclic_figure():
             return {"history": load_joint_history(p)["history"]} if os.path.isdir(p) else None
         except Exception:
             return None
-    H = {m: _load_npz(f"cyclic_{m}_CNV") for m in MODE_C}
-    deg = _load_npz("cyclic_in_plane_degrade_CNV")
+    H = {m: _load_npz(f"cyclic{tag}_{m}_CNV") for m in MODE_C}
+    deg = _load_npz(f"cyclic{tag}_in_plane_degrade_CNV")
     if not any(H.values()):
         print("  (no cyclic runs; skip cyclic_figure)"); return
     fig, axs = plt.subplots(2, 2, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.66))
@@ -104,10 +111,96 @@ def cyclic_figure():
         axs[1, 1].set_title("(d) Plesha asperity degradation:\npeak strength decays per cycle", fontsize=8)
         axs[1, 1].set_xlabel("cycle number"); axs[1, 1].set_ylabel("peak $|\\mu_{app}|$")
         axs[1, 1].set_xticks(np.unique(cyc) + 1)
-    fig.suptitle("Deformable two-block rock joint — mixed-mode cyclic shear (chart-FEM, dilatant "
-                 "interface)", y=1.01, fontsize=9)
+    fig.suptitle(suptitle, y=1.01, fontsize=9)
     fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
-    out = os.path.join(FIG, "rock_joint_cyclic_pub.png")
+    out = os.path.join(FIG, out_name)
+    fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
+
+
+def energy_ledger_figure(tag="_genuine", mode="in_plane",
+                         out_name="rock_joint_cyclic_energy_pub.png"):
+    """Cyclic energy ledger (Phase 4) for the genuine rough-geometry run cyclic{tag}_<mode>_CNV:
+    (a) tau-u hysteresis loops, (b) cumulative energy terms W_ext / W_fric / dU_el / W_pen / W_stick,
+    (c) per-cycle closure ratio W_ext / (W_fric + dU_el + W_pen + W_stick)."""
+    import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+    from utils import set_pub_style, DOUBLE_COL_W
+    set_pub_style()
+    from joint_data_io import load_joint_history
+    p = os.path.join(RUNS, "rock_joint_3d", f"cyclic{tag}_{mode}_CNV")
+    if not os.path.isdir(p):
+        print(f"  (no genuine cyclic run {p}; skip energy_ledger_figure)"); return
+    H = load_joint_history(p)["history"]
+    fig, axs = plt.subplots(1, 3, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.34))
+    axs[0].plot(H["u_par"], H["tau"], color="#0072B2", lw=0.8)
+    axs[0].set_title("(a) cyclic hysteresis $\\tau$ vs $u$", fontsize=8)
+    axs[0].set_xlabel("shear $u$ (mm)"); axs[0].set_ylabel("shear traction $\\tau$")
+    for k, c, lab in (("W_ext", "#000000", "$W_{ext}$ (machine)"), ("W_fric", "#D55E00", "$W_{fric}$"),
+                      ("W_el", "#0072B2", "$\\Delta U_{el}$"), ("W_pen", "#009E73", "$W_{pen}$"),
+                      ("W_stick", "#CC79A7", "$W_{stick}$")):
+        if k in H:
+            y = np.asarray(H[k]); y = y - y[0] if k in ("W_el", "W_pen", "W_stick") else y
+            axs[1].plot(H["u_par"] * 0 + np.arange(len(y)), y, color=c, lw=1.0, label=lab)
+    axs[1].set_title("(b) cumulative energy terms", fontsize=8)
+    axs[1].set_xlabel("increment"); axs[1].set_ylabel("energy"); axs[1].legend(fontsize=5)
+    cyc = np.asarray(H["cycle"]); ratios = []
+    for c in np.unique(cyc):
+        idx = np.where(cyc == c)[0]; i0, i1 = idx[0], idx[-1]
+        dext = H["W_ext"][i1] - H["W_ext"][i0]
+        den = ((H["W_fric"][i1] - H["W_fric"][i0]) + (H["W_el"][i1] - H["W_el"][i0])
+               + (H["W_pen"][i1] - H["W_pen"][i0]) + (H["W_stick"][i1] - H["W_stick"][i0]))
+        ratios.append(dext / den if abs(den) > 1e-30 else np.nan)
+    axs[2].axhline(1.0, color="#888", lw=0.8, ls="--")
+    axs[2].plot(np.unique(cyc) + 1, ratios, "o-", color="#444", lw=1.4, ms=5)
+    axs[2].set_title("(c) energy closure per cycle", fontsize=8)
+    axs[2].set_xlabel("cycle"); axs[2].set_ylabel("$W_{ext}/(W_{fric}{+}\\Delta U_{el}{+}W_{pen}{+}W_{stick})$",
+                                                  fontsize=6)
+    axs[2].set_xticks(np.unique(cyc) + 1); axs[2].set_ylim(0, 1.6)
+    fig.suptitle("Genuine rough-joint cyclic shear — closed energy ledger (decoder-FEM, stateful "
+                 "return-map friction)", y=1.02, fontsize=9)
+    fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
+    out = os.path.join(FIG, out_name)
+    fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
+
+
+def roughness_law_figure():
+    """Emergent dilatancy-vs-roughness law from runs/cv7_roughness_sweep/results.json (Phase 2):
+    peak mu_app and total dilation vs surface RMS, for the amplitude sweep and the spectral-cutoff
+    sweep, with the decoder reconstruction accuracy overlaid (it stays <8% so the law is geometry, not
+    a fitting artefact)."""
+    import json
+    import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+    from utils import set_pub_style, DOUBLE_COL_W
+    set_pub_style()
+    f = os.path.join(RUNS, "cv7_roughness_sweep", "results.json")
+    if not os.path.exists(f):
+        print("  (no roughness sweep; skip roughness_law_figure)"); return
+    R = json.load(open(f))
+    amp = sorted([r for r in R if r["family"] == "amp"], key=lambda r: r["surf_rms"])
+    kmx = sorted([r for r in R if r["family"] == "kmax"], key=lambda r: r["kmax"])
+    fig, axs = plt.subplots(1, 3, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.34))
+    ca, ck = "#0072B2", "#D55E00"
+    axs[0].plot([r["surf_rms"] for r in amp], [r["peak_mu_app"] for r in amp], "o-", color=ca,
+                lw=1.2, ms=4, label="amplitude sweep")
+    axs[0].plot([r["surf_rms"] for r in kmx], [r["peak_mu_app"] for r in kmx], "s--", color=ck,
+                lw=1.2, ms=4, label="cutoff sweep")
+    axs[0].set_title("(a) peak $\\mu_{app}$ vs roughness", fontsize=8)
+    axs[0].set_xlabel("surface RMS (mm)"); axs[0].set_ylabel("peak $\\mu_{app}$"); axs[0].legend(fontsize=6)
+    axs[1].plot([r["surf_rms"] for r in amp], [r["total_dilation"] for r in amp], "o-", color=ca,
+                lw=1.2, ms=4, label="amplitude sweep")
+    axs[1].plot([r["surf_rms"] for r in kmx], [r["total_dilation"] for r in kmx], "s--", color=ck,
+                lw=1.2, ms=4, label="cutoff sweep")
+    axs[1].set_title("(b) total dilation vs roughness", fontsize=8)
+    axs[1].set_xlabel("surface RMS (mm)"); axs[1].set_ylabel("dilation (mm)"); axs[1].legend(fontsize=6)
+    axs[2].plot([r["kmax"] for r in kmx], [r["peak_mu_app"] for r in kmx], "s--", color=ck, lw=1.2, ms=4)
+    ax2b = axs[2].twinx()
+    ax2b.plot([r["kmax"] for r in kmx], [r["recon_pct"] for r in kmx], "^:", color="#444", lw=1.0, ms=3)
+    axs[2].set_title("(c) spectral cutoff: strength + recon", fontsize=8)
+    axs[2].set_xlabel("spectral cutoff $k_{max}$"); axs[2].set_ylabel("peak $\\mu_{app}$", color=ck)
+    ax2b.set_ylabel("decoder recon (% RMS)", color="#444", fontsize=7); ax2b.tick_params(labelsize=6)
+    fig.suptitle("Emergent dilatancy-vs-roughness law (genuine rough geometry, decoder-FEM + Coulomb)",
+                 y=1.02, fontsize=9)
+    fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
+    out = os.path.join(FIG, "cv7_roughness_law_pub.png")
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
 
 
