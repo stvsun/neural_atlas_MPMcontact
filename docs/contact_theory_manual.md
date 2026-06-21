@@ -5,6 +5,9 @@ augmented-Lagrangian normal forces, regularized Coulomb friction, topology-aware
 contact chart spawning, self-contact, and multi-body orchestration on the chart-based MPM solver.
 
 Companion documents:
+- `docs/transition_map_contact_manual.md` — the **transition map** as a contact detector (chart vs level
+  set): what it is, why it detects contact, the matched normal and radial-gap bias, the Fourier-feature
+  spectral-bias argument, and the measured CV-1..CV-7 chart-vs-SDF comparison (with didactic figures).
 - `contact_atlas/03_mathematical_theory.md` — variational formulation & well-posedness;
   `contact_atlas/01_brainstorm.md`, `02_implementation_plan.md` — design rationale & phase plan.
 - `docs/contact_verification_manual.md` — analytical benchmarks CV-1..CV-6 + the neural-chart

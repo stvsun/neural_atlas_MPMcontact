@@ -43,7 +43,9 @@ benchmarks/
 postprocessing/     # contact_fields.py (numpy CV references), pyvista_field2d.py,
                     #   plot_liusun_*.py, plot_supershape_demo.py, utils.py
 
-docs/               # contact_theory_manual.md, contact_verification_manual.md,
+docs/               # contact_theory_manual.md, transition_map_contact_manual.md (chart-vs-level-set,
+                    #   CV-1..CV-7), fourier_feature_chart_training.md (how the charts are trained),
+                    #   contact_verification_manual.md, cv7_session_results.md,
                     #   hertz_derivation/ (SymPy derivations + index), mpm_velocity_gradient_audit.md
 contact_atlas/      # Design docs: brainstorm, implementation plan, variational theory
 tests/              # Contact + core-MPM tests (test_neural_chart_verification.py = neural-chart harness)
@@ -73,6 +75,8 @@ python3 atlas/sdf/train_analytical_sdf.py --all              # train sphere/disc
 python3 atlas/charts/train_radial_chart.py                   # train the CV-5 neural radial chart
 python3 benchmarks/contact/cv_numerical/cv3_brazilian_fem.py # CV-3 FEM vs closed form (also cv1/cv2/cv4/cv5)
 python3 postprocessing/plot_numerical_cv_summary.py          # numerical CV results summary figure
+python3 postprocessing/plot_transition_map_manual.py         # didactic schematics for docs/transition_map_contact_manual.md
+python3 postprocessing/plot_fourier_training.py              # trains NeuralHeight1D on real Inada (Fourier vs plain) for docs/fourier_feature_chart_training.md
 
 # --- CV-7 capstone: real fractal rock-joint direct shear ---
 python3 postprocessing/characterize_inada_joint.py                       # Inada data -> roughness + profiles

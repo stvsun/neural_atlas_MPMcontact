@@ -35,6 +35,10 @@ downloads/
 !figures/rock_joint_stress_slice_*.png
 !figures/inada_joint_*_pub.png
 !figures/cv7_*_pub.png
+# Exception: transition-map contact manual schematics (docs/transition_map_contact_manual.md)
+!figures/tm_*_pub.png
+# Exception: Fourier-feature chart training illustrations (docs/fourier_feature_chart_training.md)
+!figures/fourier_training_*_pub.png
 *.svg
 # Exception: compact rock-joint profiles (committable reproducibility artifact; raw CSVs stay ignored)
 !data/inada_joint/*.npz

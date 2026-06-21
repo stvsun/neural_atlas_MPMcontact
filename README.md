@@ -10,8 +10,13 @@ verification suite that doubles as the acceptance test for the neural charts.
 > **numerical verification suite** (branch `numerical-cv-suite`) now trains neural coordinate charts
 > on the CV shapes and solves them — a ported chart-FEM + a 2-D FEM + three neural chart types —
 > reproducing the closed forms to ~1–2% (CV-1 Hertz, CV-3 Brazilian, CV-4 nine-disc), and
-> **measuring the chart-over-level-set advantage** (CV-5 cusps, CV-6 fractal). Full status &
-> capability matrix: [§11.8 of the verification manual](docs/contact_verification_manual.md).
+> **measuring the chart-over-level-set advantage** (CV-5 cusps, CV-6 fractal). The suite culminates
+> in the **CV-7 capstone** — direct shear of a real **Inada-granite** rock joint with no closed form —
+> where a boundary-fitted neural chart resolves the asperity slopes an ambient level set smooths, so
+> the SDF under-predicts strength and dilatancy. The capstone is carried through a full §11.12 program
+> (two deformable blocks, a roughness law, the transition-map detector in the contact loop, a cyclic
+> energy ledger, and an explicit ChartMPM cross-check), with the heavy solves run on the Euler cluster.
+> Full status & capability matrix: [§11.8 of the verification manual](docs/contact_verification_manual.md).
 >
 > The earlier **Nine-Circles brittle-fracture** work has been **archived** under
 > [`archive/`](archive/) (code, tests, docs, figures) — preserved for history, not maintained.
@@ -88,9 +93,11 @@ $\mathbf f=\epsilon_n\langle -g\rangle_+\,\mathbf n\ (+\ \text{friction})$.
 analytic in concavities, where the Euclidean SDF closest-point projection (Liu & Sun 2020, Eq. 22)
 becomes multivalued across the medial axis and the Eikonal normal degrades. **Honest caveats:** the
 inverse radial gap is *not* the Euclidean perpendicular distance (biased $\sim 1/\cos\alpha$ on steep
-flanks — a bounded 1-D chart refine removes it); and the production oracle `solvers/contact/gap.py`
-**currently uses the neural-SDF gradient** — the transition-map chart oracle is the analytical
-formulation exercised by CV-1..CV-6 and the target once neural charts replace the SDFs.
+flanks — a bounded 1-D chart refine removes it); and the MPM production oracle `solvers/contact/gap.py`
+**still uses the neural-SDF gradient**. The transition-map chart oracle is exercised analytically by
+CV-5 and now drives a genuine **numerical** FEM contact loop in CV-7 (the trained neural height chart,
+§11.12 Phase 3: active-set 98.9 % vs 95.8 % for the ambient SDF) — the target once neural charts
+replace the SDFs throughout.
 
 Full treatment: `docs/contact_theory_manual.md` (algorithms), `docs/contact_verification_manual.md`
 §2 (kinematics) and §11 (neural-chart verification protocol), `solvers/contact/supershape.py` (CV-5).
@@ -199,6 +206,39 @@ from the asperities (`solvers/fem/rough_block_decoder.py`,
 
 Detail + honest caveats: [§11.11 of the verification manual](docs/contact_verification_manual.md).
 
+#### The full CV-7 program (§11.12, Phases 1–5) — run on the Euler cluster
+
+The capstone is carried through a five-phase program that turns the single-block demonstration into a
+genuine, verified, cyclic story. The heavy solves run on `euler.civil.columbia.edu` (conda env `atlas`,
+`scripts/euler/sync_{push,pull}.sh`); figures are generated locally from the pulled `runs/` data. All
+numbers are **measured, no tuning to targets**; honest caveats are listed.
+
+| Phase | Driver | Result (measured) |
+|---|---|---|
+| **P1** two mutually deformable decoder blocks | `cv_numerical/rock_joint_two_block.py` | emergent **anisotropy** (peak μ_app 0.42 / 0.54 / 0.74 out-/in-/mixed-plane; dilation 0.090 / 0.066 / 0.038 mm); **MMS $O(h^2)$** both blocks (2.39, 1.95); det $J\in[0.97,1.03]$. Mesh-refined n_cells 6→12 (2.6k→20.7k tets): peak μ_app→0.53, dilation→0.063 mm (converged ±2 %) |
+| **P2** roughness / spectral-cutoff sweep | `cv_numerical/cv7_roughness_sweep.py` | **emergent dilatancy law**: peak μ_app **0.61 → 1.20** as RMS 0.022 → 0.066 mm (0.68 → 1.21 with cutoff); decoder recon < 8 % |
+| **P3** transition-map detector in the FEM contact loop | `cv_numerical/cv7_transition_map_contact.py` | active-set agreement vs analytic **98.9 % (chart) vs 95.8 % (SDF)** on 1e5 pts; per-query **1.47×** SDF; FEM shear via chart ≈ analytic (τ within 9.5 %) |
+| **P4** cyclic + complete energy ledger (stateful return-map friction) | `cv_numerical/rock_joint_decoder_cyclic.py` | stick/slip hysteresis; **per-cycle ledger CLOSES** $W_{\rm ext}/(W_{\rm fric}{+}\Delta U_{\rm el}{+}W_{\rm pen}{+}W_{\rm stick})$ = **1.09 → 1.01** (within [0.98, 1.02]); Plesha decay |
+| **P5** explicit ChartMPM dynamic cross-check | `cv_numerical/rock_joint_mpm_xcheck.py` | reproduces the Coulomb floor: μ_app **0.34** ≈ base μ = 0.4 (~14 %) |
+
+**Honest open items** (reported, not hidden): the two-block **friction residual is 1.5–6 %** — the
+moving-master node-to-surface Coulomb non-smoothness, mesh-*independent* (vs the $10^{-9}$ of the
+frictionless / one-block cases); an AL / semismooth-Newton or mortar contact is the path to tight
+convergence. The cyclic **cumulative** ratio is 0.17 only because of the uncounted initial asperity-
+**seating** dissipation (a CNV bookkeeping offset, not an energy violation — the per-cycle balance
+closes). **MPM** reproduces friction but **not** dilatancy (a mated rough-on-rough explicit-penalty block
+is unstable; needs implicit / mortar contact). A prescribed-displacement rigid platen spikes the upper
+block's top element layer (a localized BC boundary layer, trimmed for display; the joint-interface and
+contact-derived quantities are unaffected).
+
+![two-block anisotropy](figures/rock_joint_3d_twoblock_modes_pub.png)
+
+![cyclic energy ledger](figures/rock_joint_cyclic_energy_pub.png)
+
+Full results, the mesh-refinement verification, units, and the figure plan:
+[`docs/cv7_session_results.md`](docs/cv7_session_results.md) and
+[§11.12 of the verification manual](docs/contact_verification_manual.md).
+
 ---
 
 ## Quick start
@@ -207,7 +247,7 @@ Detail + honest caveats: [§11.11 of the verification manual](docs/contact_verif
 pip install -e .
 
 # Run the active test suite (contact + core MPM)
-pytest -q                                   # 120 passed, 7 skipped
+pytest -q                                   # active suite: 122 passed, 7 skipped
 
 # Analytical CV references (self-checking, no solver needed)
 python3 postprocessing/contact_fields.py            # numpy evaluators self-test
@@ -233,7 +273,10 @@ python3 postprocessing/plot_supershape_demo.py
 | Document | Description |
 |----------|-------------|
 | [Contact Theory Manual](docs/contact_theory_manual.md) | Algorithms: SDF gap oracle, penalty, augmented Lagrangian, regularized Coulomb friction, topology-aware detection, contact chart spawning, self-contact, multi-body orchestration |
-| [Contact Verification Manual](docs/contact_verification_manual.md) | CV-1..CV-6 closed-form benchmarks (embedded figures) + the **neural coordinate-chart verification protocol (§11)** |
+| [**Transition-Map Contact Manual**](docs/transition_map_contact_manual.md) | The transition map (`τ_AB = φ_B⁻¹∘φ_A`) as a contact detector vs the ambient level set — what it is, why it detects contact, the matched normal & radial-gap bias, and the **CV-1..CV-7 chart-vs-level-set comparison**, with didactic figures |
+| [**Fourier-Feature Chart Training**](docs/fourier_feature_chart_training.md) | How the neural charts are trained — the Fourier-feature encoding that defeats spectral bias, the four banks, the MSE/Adam/cosine pipeline, and verify-first; with a **genuine training run on the real Inada joint** (Fourier vs the plain-MLP ablation) |
+| [Contact Verification Manual](docs/contact_verification_manual.md) | CV-1..CV-6 closed-form benchmarks (embedded figures) + the **neural coordinate-chart verification protocol (§11)** and the **CV-7 rock-joint capstone (§11.9–§11.12)** |
+| [CV-7 session results](docs/cv7_session_results.md) | Measured Phase 1–5 results, mesh-refinement verification, units, honest caveats, and the manuscript figure plan |
 | [Analytical derivations index](docs/hertz_derivation/README.md) | SymPy derivations, numpy evaluators, plotting, and how it all maps to CV-1..CV-6 |
 | [MPM Velocity-Gradient Audit](docs/mpm_velocity_gradient_audit.md) | Curved-chart MPM velocity-gradient correctness (the integrator underpinning contact) |
 | [Design docs](contact_atlas/) | Brainstorm, implementation plan, variational theory & well-posedness |
@@ -248,16 +291,20 @@ neural_atlas_MPMcontact/
 ├── common/           # ChartDecoder / MaskNet / MLP, geometry (Jacobians, invert_decoder), Schwarz utils
 ├── solvers/
 │   ├── mpm/          # chart-based MPM (particles, grid, transfers, constitutive, schwarz_mpm)
-│   └── contact/      # gap, penalty, augmented_lagrangian, friction, contact_topology,
-│                     #   contact_chart_spawn, self_contact, contact_manager, supershape
+│   ├── contact/      # gap, penalty, augmented_lagrangian, friction, contact_topology, contact_chart_spawn,
+│   │                 #   self_contact, contact_manager, supershape, {radial,profile}_chart_2d, surface_chart_3d
+│   └── fem/          # chart-based elastostatic FEM (chart_vector_fem, tri2d, rough_block_decoder, schwarz_vector_fem)
 ├── benchmarks/
 │   ├── contact/      # ball-drop, two-sphere, sliding-block, folding-slab, topology, supershape cam-drive
+│   │   └── cv_numerical/  # numerical CV drivers (CV-1..CV-5 FEM) + the CV-7 rock-joint capstone (P1–P5)
 │   └── mpm_basic/    # (placeholder for MPM core benchmarks)
-├── postprocessing/   # contact_fields (numpy refs), pyvista_field2d, plot_liusun_*, plot_supershape_demo, utils
-├── docs/             # contact_theory_manual, contact_verification_manual, hertz_derivation/, mpm audit
-├── contact_atlas/    # design docs (brainstorm, implementation plan, math theory)
-├── tests/            # contact + core-MPM tests (test_neural_chart_verification.py = neural-chart harness)
-├── figures/          # contact figures (embedded in the verification manual)
+├── postprocessing/   # contact_fields (numpy refs), pyvista_field2d, plot_liusun_*, plot_rock_joint_*, utils
+├── docs/             # contact_theory_manual, contact_verification_manual, cv7_session_results, hertz_derivation/
+├── contact_atlas/    # design docs (brainstorm, implementation plan, math theory, cv7 + rock-joint-3d briefs)
+├── scripts/euler/    # Euler-cluster sync (rsync push/pull) for the heavy CV-7 solves
+├── data/inada_joint/ # compact real Inada-granite rock-joint profiles (.npz)
+├── tests/            # contact + core-MPM + chart-FEM + rock-joint tests
+├── figures/          # contact + CV figures (embedded in the verification manual)
 └── archive/          # legacy Nine-Circles fracture work — preserved, not maintained
 ```
 
@@ -269,12 +316,15 @@ The neural-chart pipeline is now **built and verified** on the `numerical-cv-sui
 SDFs (`atlas/sdf/train_analytical_sdf.py`) and the neural radial chart
 (`atlas/charts/train_radial_chart.py`) are trained on the CV shapes and solved with the chart-FEM
 (`solvers/fem/`) / rigid-body engine against the closed forms via the two-level protocol
-(`docs/contact_verification_manual.md §11`, §11.8). Remaining work:
-1. The **ChartDecoder domain map trained per CV shape** (the FEM is verified to run on a ChartDecoder;
-   the per-shape atlas is the remaining Stage-2 piece).
+(`docs/contact_verification_manual.md §11`, §11.8). The CV-7 capstone goes further: a **boundary-fitted
+ChartDecoder** (`solvers/fem/rough_block_decoder.py`) is trained on the real rough geometry, **verified
+first** (recon 2.2 % of RMS, MMS $O(h^2)$, det $J>0$), then sheared with deformable two-block FEM and
+cross-checked against an explicit ChartMPM (§11.12). Remaining work:
+1. A **ChartDecoder domain map trained per analytical CV shape** (CV-1..CV-4): the FEM and the rough-joint
+   decoder are verified, but the analytical CV shapes are still solved via neural SDF / radial chart.
 2. The **full N-body explicit-contact disc array** (CV-4 currently verifies the per-disc unit cell).
-3. **3-D axisymmetric Hertz** (needs adaptive/local mesh refinement for the small contact patch) and
-   **MPM dynamic cross-checks**.
+3. **3-D axisymmetric Hertz** (needs adaptive/local mesh refinement for the small contact patch); the
+   explicit-MPM cross-check exists for the rough joint (P5) but not yet for the analytical CV benchmarks.
 
 ---
 
@@ -285,3 +335,8 @@ SDFs (`atlas/sdf/train_analytical_sdf.py`) and the neural radial chart
 - C. Liu & W. Sun (2020), "ILS-MPM," *CMAME* 369:113168.
 - Alart & Curnier (1991); Simo & Laursen (1992); Wriggers (2006) — contact algorithms.
 - Cohen-Steiner, Edelsbrunner & Harer (2007) — persistence-diagram stability.
+- Patton (1966) — bilinear rock-joint shear strength $\tan(\phi_b+i)$ (the CV-7 anchor);
+  Plesha (1987) — asperity degradation; Goodman (1976) — joint element (CV-7 §11.9–§11.12).
+- Tancik et al. (2020) — Fourier-feature input encoding; Rahaman et al. (2019) — spectral bias
+  (why the neural chart resolves asperities the ambient SDF smooths).
+- Inada-granite tensile fracture surfaces, Digital Rocks Portal #273, DOI `10.17612/QXSA-TK92`.
