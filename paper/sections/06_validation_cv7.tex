@@ -29,7 +29,16 @@ The method has one real closed-form anchor, and it comes from the simplest inter
 \muapp=\tan(\phi_b+i)=\frac{\tan i+\mu}{1-\mu\tan i},
 \end{equation}
 %
-The apparent friction angle is the base angle $\phi_b$ plus the climb angle $i$, and the joint dilates at rate $\tan i$ as the block rides the flank. Equation~\eqref{eq:patton} is the right anchor here for two reasons: it is exact for the sawtooth, and it ties strength directly to the resolved slope $i$, the very quantity the chart and the level set disagree about. We do not impose it; we feed plain Coulomb friction and the resolved tilt to the solver, and the Patton law must come out. On a mating sawtooth the framework reproduced \eqref{eq:patton} to $0.00\%$, with the dilation rate equal to $\tan i$ to within $1\%$. This anchors the no-closed-form real-surface results that follow. The rock-mechanics literature reads $i$ as the joint-roughness coefficient \citep{barton1977shear,barton1990review}; here $i$ is not a fitted coefficient but the slope distribution the chart resolves directly.
+The apparent friction angle is the base angle $\phi_b$ plus the climb angle $i$, and the joint dilates at rate $\tan i$ as the block rides the flank. Equation~\eqref{eq:patton} is the right anchor here for two reasons: it is exact for the sawtooth, and it ties strength directly to the resolved slope $i$, the very quantity the chart and the level set disagree about. We do not impose it; we feed plain Coulomb friction and the resolved tilt to the solver, and the Patton law must come out. On a mating sawtooth the framework reproduced \eqref{eq:patton} to $0.00\%$, with the dilation rate equal to $\tan i$ to within $1\%$. This anchors the no-closed-form real-surface results that follow. The rock-mechanics literature reads $i$ as the joint-roughness coefficient \citep{barton1977shear,barton1990review}; here $i$ is not a fitted coefficient but the slope distribution the chart resolves directly. Figure~\ref{fig:cv7-surfaces} renders the two mating Inada faces that the solver shears, colored by the local gap, the rough geometry from which the apparent friction and the dilation will emerge.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.82\linewidth]{rock_joint_3d_surfaces_pub}
+\caption{The two mating Inada-granite surfaces carried by learned charts, colored by the local gap
+(\textsc{PyVista} rendering). The asperities that the chart resolves, and that the level set smooths, are
+the bearing geometry that sets the joint's strength and dilation under shear.}
+\label{fig:cv7-surfaces}
+\end{figure}
 
 \subsection{Chart versus level set on the real Inada profile}\label{sec:cv7-headline}
 
@@ -86,6 +95,36 @@ The emergent response is mesh-converged. Refining the two-block shear across fou
   ($n_{\rm cells}=6\to12$, $2.6$k$\to$$20.7$k tetrahedra; nodal-averaged, platen layer trimmed). The peak
   apparent friction settles to $\approx0.53$ within $2\%$ and the total dilation to $\approx0.063$~mm.}
   \label{fig:cv7-p1vm}
+\end{figure}
+
+Two top-down fields on the joint face make the contact mechanism visible and explain why a smoothed
+surface mispredicts strength. Figure~\ref{fig:cv7-contact} maps the real contact area: the two faces touch
+only on a subset of the nominal area, the bearing asperity ridges, and as the joint shears and dilates the
+contact localizes onto fewer, more heavily loaded ridges, with the bearing fraction $A_c/A$ dropping and
+then recovering across the loading. Figure~\ref{fig:cv7-normal} shows the normal stress $\sigma_{zz}$ on
+the same face: it concentrates in bands aligned with the bearing asperities, which sharpen as the mesh
+refines and migrate as the block rides up the flanks. These are the asperity-scale spatial patterns that a
+chart resolves and an SDF-smoothed surface cannot, and they are the field-level cause of the strength and
+dilatancy gap reported in Section~\ref{sec:cv7-payoff}.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{cv7_refinement_p1_contact_area_pub}
+\caption{Phase 1, real contact area on the joint face (top-down), as a matrix of mesh size (columns) and
+shear displacement (rows). Bright marks the bearing asperity ridges in contact; dark marks separated
+regions; the real-contact fraction $A_c/A$ is annotated. The joint bears on $A_c/A\approx30$--$80\%$ of
+the nominal area, and the contact localizes onto fewer ridges as the block shears and dilates.}
+\label{fig:cv7-contact}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{cv7_refinement_p1_normal_top_pub}
+\caption{Phase 1, normal stress $\sigma_{zz}$ on the bottom-block contact face (top-down), on the same
+mesh-size $\times$ shear-displacement grid. The bearing stress concentrates in bands on the load-carrying
+asperities; the bands sharpen with mesh refinement (left to right) and migrate as the joint rides up the
+flanks (top to bottom), the spatial signature of the resolved roughness.}
+\label{fig:cv7-normal}
 \end{figure}
 
 \subsection{Phase 2: the dilatancy-versus-roughness law}\label{sec:cv7-p2}

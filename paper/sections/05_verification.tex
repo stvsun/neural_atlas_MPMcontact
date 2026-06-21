@@ -50,7 +50,19 @@ a neural-SDF disc indenter under penalty contact and sweep $E^{*}$ over a factor
 ratio holds the closed form to $\sim 1.6\%$ across the sweep. The contact pressure $p_0 = 2P'/\pi a$ is
 the half-ellipse identity, not an independent check, so we do not count it. The lesson: the neural-SDF
 indenter matches the exact-SDF baseline rather than improving on it, which is the expected outcome on a
-convex body where chart and level set coincide.
+convex body where chart and level set coincide. The agreement holds at the field level, not only in the
+half-width: Figure~\ref{fig:cv1-hertz} shows the chart-FEM subsurface vertical stress, whose stress bulb
+and off-surface maximum-shear depth $z/a\approx0.48$ reproduce the closed-form Hertz field.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.66\linewidth]{liusun_fig13_hertz_sigma_yy_pub}
+\caption{CV-1, subsurface stress evidence. The vertical stress $\sigma_{yy}$ beneath the Hertzian line
+contact, recovered by the chart-FEM solver against a neural-SDF indenter. The hemispherical stress bulb
+and the depth of maximum shear reproduce the closed-form Hertz field, confirming that the chart and the
+level set coincide on a convex contact.}
+\label{fig:cv1-hertz}
+\end{figure}
 
 % code: benchmarks/contact/cv_numerical/cv2_cattaneo_fem.py::run_cattaneo_fem
 \subsubsection{CV-2 (Cattaneo--Mindlin partial slip)} A tangential load below the friction limit, applied
@@ -71,7 +83,20 @@ shear does not reproduce the edge-singular tangential traction. The stick radius
 5$--$7\%$ at low $Q$, and the error rises to a mean of $\sim 11\%$ as $Q\to\mu P$. Near the friction
 limit the slip boundary sweeps across the contact faster than the node spacing can resolve, so the
 discrete stick radius coarsens. The lesson: CV-2 inherits the CV-1 contact and adds only a friction
-layer, so the transition map stays dormant and chart and level set remain equivalent.
+layer, so the transition map stays dormant and chart and level set remain equivalent. Figure~\ref{fig:cv2-traction}
+shows the recovered contact tractions: the elliptical Hertz normal pressure and the Cattaneo--Mindlin
+tangential traction, whose stick/slip transition at $r=c$ marks the boundary between the locked core and
+the slipping annulus.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.74\linewidth]{liusun_fig14_hertz_traction_pub}
+\caption{CV-2, contact-traction evidence. The normal pressure and the tangential traction of the
+Cattaneo--Mindlin partial-slip contact recovered by the solver. The tangential traction saturates at the
+Coulomb limit in the slip annulus and falls below it in the inner stick zone, matching the closed-form
+distribution.}
+\label{fig:cv2-traction}
+\end{figure}
 
 % code: benchmarks/contact/cv_numerical/cv3_brazilian_fem.py::run_brazilian_fem
 \subsubsection{CV-3 (Brazilian disc)} A disc compressed across a diameter develops a tensile stress
@@ -91,7 +116,19 @@ reproduces the center stresses of \eqref{eq:brazilian} to $1.62\%$ in $\sigma_{x
 $\sigma_{yy}$ against the exact closed form. The constant-strain triangulation leaves a $\sim 1.6\%$
 center floor that plateaus under mesh refinement, a discretization error rather than a modeling error,
 and we exclude the pole singularity from the comparison. The lesson: with no detector engaged, the chart
-contributes only the domain map, and chart and level set are again interchangeable.
+contributes only the domain map, and chart and level set are again interchangeable. Figure~\ref{fig:cv3-brazilian}
+shows the recovered $\sigma_{yy}$ field over the disc, with the compressive column under the loaded
+diameter and the transverse tensile band that splits the specimen, both following the Flamant
+superposition.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.6\linewidth]{liusun_fig23_brazilian_sigma_yy_pub}
+\caption{CV-3, stress-field evidence. The vertical stress $\sigma_{yy}$ across the Brazilian disc,
+recovered on a learned disc geometry by the chart-FEM solver. The compressive load column and the
+transverse tensile field reproduce the Flamant-superposition closed form away from the pole singularity.}
+\label{fig:cv3-brazilian}
+\end{figure}
 
 % code: benchmarks/contact/cv_numerical/cv4_nine_disc_fem.py::run_nine_disc_fem
 \subsubsection{CV-4 (nine-disc unit cell)} A $3\times3$ array of discs under isotropic confinement loads
@@ -112,7 +149,18 @@ measured in-plane anisotropy of $0.16\%$ and a center shear stress below the sol
 caveats accompany the result: the equal-$N$ collapse is exact only for rigid loading platens, and this
 is the per-disc unit cell rather than a full $N$-body explicit-contact solve, so the contacts only
 place the load poles. The lesson: the charts add by superposition exactly as in CV-3, and chart and
-level set stay equivalent.
+level set stay equivalent. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
+fields across the array; the pattern repeats identically from disc to disc and is equibiaxial at each
+center, the spatial signature of the symmetry that the closed form assumes.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{liusun_fig16_nine_disc_S1_Sxy_pub}
+\caption{CV-4, packing-field evidence. Maximum-principal stress (left) and shear stress $\sigma_{xy}$
+(right) across the $3\times3$ disc array. The field repeats from cell to cell and is equibiaxial at each
+disc center with negligible shear, confirming the $D_4$-symmetric superposition the closed form predicts.}
+\label{fig:cv4-ninedisc}
+\end{figure}
 
 Across CV-1--CV-4 the learned geometry reproduces the contact-mechanics closed forms to $\sim
 0.15$--$1.6\%$ (CV-1, CV-3, CV-4) and to $\sim 5$--$11\%$ for frictional partial slip (CV-2), with the
@@ -197,6 +245,18 @@ representation as geometric detail refines without bound. The snowflake is not s
 2$, so the radial gap of CV-5 no longer applies. Here the chart is the recursive generating rule
 itself, with the IFS doubling as a bounding hierarchy for a pruned recursive descent. The
 representation costs of chart and level set are asymmetric, and that asymmetry is the point.
+Figure~\ref{fig:cv6-geom} shows the Koch boundary at successive recursion levels; the chart stores the
+single generating rule that produces every level, while a grid or a fixed-capacity field must store the
+rendered detail.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{koch_geometry_pub}
+\caption{CV-6 geometry. The Koch boundary at increasing recursion depth $n$. The recursive chart
+represents every level with one $O(1)$ generating rule, whereas a uniform grid or a fixed-capacity neural
+field must store the rendered geometry and saturates once the detail falls below its resolution.}
+\label{fig:cv6-geom}
+\end{figure}
 
 % code: solvers/contact/koch.py::inside_query
 % code: solvers/contact/koch.py::KochChart
