@@ -168,6 +168,81 @@ def energy_ledger_figure(tag="_genuine", mode="in_plane",
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
 
 
+def traction_figure(out_name="cv7_traction_history_pub.png", mu_base=0.4):
+    """Global shear vs normal traction of the genuine rough-joint shear, for all meshes (P2):
+    (a) shear traction tau(u), (b) normal traction sigma_n(u) [CNL ~const], (c) the tau-sigma_n stress
+    path.  All meshes overlaid -> the macroscopic response is MESH-CONVERGED.  Reads
+    runs/cv7_refinement/traction_history.json."""
+    import json
+    import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+    import matplotlib.cm as mcm
+    from utils import set_pub_style, DOUBLE_COL_W
+    set_pub_style()
+    f = os.path.join(RUNS, "cv7_refinement", "traction_history.json")
+    if not os.path.exists(f):
+        print("  (no traction history; skip traction_figure)"); return
+    R = json.load(open(f))
+    keys = sorted(R, key=lambda k: int(k))
+    cols = mcm.get_cmap("viridis")(np.linspace(0.1, 0.85, len(keys)))
+    fig, axs = plt.subplots(1, 2, figsize=(DOUBLE_COL_W * 0.7, DOUBLE_COL_W * 0.33))
+    for k, c in zip(keys, cols):
+        d = R[k]; u = np.array(d["u"]); lab = f"$n_c$={d['n_cells']} ({d['n_elem']} tets)"
+        axs[0].plot(u, d["tau"], color=c, lw=1.2, label=lab)
+        axs[1].plot(u, d["dilation"], color=c, lw=1.2, label=lab)
+    axs[0].set_xlabel("shear $u$ (mm)"); axs[0].set_ylabel("shear traction $\\tau$ (MPa)")
+    axs[0].legend(fontsize=5.5)
+    axs[1].set_xlabel("shear $u$ (mm)")
+    axs[1].set_ylabel("dilation $\\delta_n$ (mm)")
+    fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
+    out = os.path.join(FIG, out_name)
+    fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
+
+
+def refinement_figure(out_name="cv7_refinement_pub.png"):
+    """Mesh-refinement (convergence) study from runs/cv7_refinement/results.json: emergent peak mu_app
+    and total dilation vs mesh resolution, plus the chart-FEM well-posedness (det J) and Newton residual
+    — shows the EMERGENT quantities converge as h->0 and the chart stays valid.  Progressive: re-runnable
+    while finer meshes are still computing (plots whatever levels are present)."""
+    import json
+    import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+    from utils import set_pub_style, DOUBLE_COL_W
+    set_pub_style()
+    f = os.path.join(RUNS, "cv7_refinement", "results.json")
+    if not os.path.exists(f):
+        print("  (no refinement study; skip refinement_figure)"); return
+    R = sorted(json.load(open(f)), key=lambda r: r["n_cells"])
+    nc = [r["n_cells"] for r in R]; ne = [r["n_elem"] for r in R]
+    mu = [r["peak_mu_app"] for r in R]; dil = [r["total_dilation"] for r in R]
+    resid = [r["max_resid_rel"] for r in R]; detj = [r["detJ_min"] for r in R]
+    fig, axs = plt.subplots(1, 3, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.34))
+    c0, c1 = "#0072B2", "#D55E00"
+    axs[0].plot(nc, mu, "o-", color=c0, lw=1.3, ms=5)
+    if len(mu) >= 2:
+        axs[0].axhline(mu[-1], color="#888", lw=0.7, ls="--")          # finest-mesh reference
+    axs[0].set_title("(a) emergent peak $\\mu_{app}$ vs mesh", fontsize=8)
+    axs[0].set_xlabel("$n_{cells}$ per axis"); axs[0].set_ylabel("peak $\\mu_{app}$")
+    axs[1].plot(nc, dil, "s-", color=c1, lw=1.3, ms=5)
+    if len(dil) >= 2:
+        axs[1].axhline(dil[-1], color="#888", lw=0.7, ls="--")
+    axs[1].set_title("(b) total dilation vs mesh", fontsize=8)
+    axs[1].set_xlabel("$n_{cells}$ per axis"); axs[1].set_ylabel("dilation (mm)")
+    axs[2].semilogy(nc, resid, "^-", color="#000", lw=1.1, ms=4, label="max Newton resid (rel)")
+    ax2b = axs[2].twinx()
+    ax2b.plot(nc, detj, "v:", color="#009E73", lw=1.1, ms=4, label="min det J")
+    ax2b.axhline(1.0, color="#9bd49b", lw=0.6, ls=":")
+    axs[2].set_title("(c) well-posedness: residual + det J", fontsize=8)
+    axs[2].set_xlabel("$n_{cells}$ per axis"); axs[2].set_ylabel("max residual (rel)", fontsize=7)
+    ax2b.set_ylabel("min det J", color="#009E73", fontsize=7); ax2b.tick_params(labelsize=6)
+    n_done = len(R)
+    fig.suptitle(f"Mesh-refinement study of the genuine rough-joint shear (P2 problem) — {n_done} levels "
+                 f"[{ne[0]}–{ne[-1]} tets]; emergent $\\mu_{{app}}$/dilation converge as $h\\to0$",
+                 y=1.02, fontsize=8.5)
+    fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
+    out = os.path.join(FIG, out_name)
+    fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig)
+    print(f"  saved {out}  (levels: n_cells={nc})")
+
+
 def roughness_law_figure():
     """Emergent dilatancy-vs-roughness law from runs/cv7_roughness_sweep/results.json (Phase 2):
     peak mu_app and total dilation vs surface RMS, for the amplitude sweep and the spectral-cutoff

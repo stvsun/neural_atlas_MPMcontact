@@ -61,7 +61,7 @@ class TwoBlockJointShear:
     """Two mutually-deformable rough decoder blocks in node-to-surface frictional contact."""
 
     def __init__(self, dec_L, dk_L, dec_U, dk_U, L=1.0, E=2.0e3, nu=0.25, mu=0.4, n_cells=10,
-                 surf_amp=0.08, eps_n=None):
+                 surf_amp=0.08, eps_n=None, build_K=True):
         self.L, self.mu, self.surf_amp = L, mu, surf_amp
         self.solL = ChartVectorFEMSolver(n_cells=n_cells, support_r=L, chart_decoder=dec_L,
                                          decoder_kwargs=dk_L, dtype=DT)
@@ -75,9 +75,12 @@ class TwoBlockJointShear:
         sfn, tfn = make_linear_elastic_small_strain(E, nu)
         self.stress_fn, self.tangent_fn = sfn, tfn
         import scipy.sparse as sp
-        KL = self.solL.tangent_stiffness(torch.zeros(self.NL, 3), tfn).numpy()
-        KU = self.solU.tangent_stiffness(torch.zeros(self.NU, 3), tfn).numpy()
-        self.K = sp.block_diag([sp.csr_matrix(KL), sp.csr_matrix(KU)]).tocsr()
+        if build_K:                                                   # skip the (dense) stiffness for viz-only rebuilds
+            KL = self.solL.tangent_stiffness(torch.zeros(self.NL, 3), tfn).numpy()
+            KU = self.solU.tangent_stiffness(torch.zeros(self.NU, 3), tfn).numpy()
+            self.K = sp.block_diag([sp.csr_matrix(KL), sp.csr_matrix(KU)]).tocsr()
+        else:
+            self.K = None
         # face node sets (reference coords)
         refL = self.solL.nodes.numpy(); refU = self.solU.nodes.numpy()
         self.slave = np.where(np.abs(refL[:, 2] - L) < 1e-9)[0]       # lower TOP face (slave)
@@ -273,6 +276,7 @@ def run_shear(mode="in_plane", protocol="CNL", amp=0.08, n_cells=10, mu=0.4, E=2
     rec = {k: [] for k in ("u", "z", "dilation", "Tx", "Ty", "T_par", "T_perp", "sigma_n",
                            "mu_app", "n_active", "pen_max", "resid", "resid_rel")}
     uz0 = None
+    snaps = []                                                          # (u_x, displacement) per increment
     for j in range(n_inc):
         umag = shear_total * j / (n_inc - 1)
         ux, uy = umag * d[0], umag * d[1]
@@ -297,12 +301,15 @@ def run_shear(mode="in_plane", protocol="CNL", amp=0.08, n_cells=10, mu=0.4, E=2
         rec["mu_app"].append(T_par / max(sigma_n, 1e-9))
         rec["n_active"].append(diag["n_active"]); rec["pen_max"].append(diag["pen_max"])
         rec["resid"].append(diag["resid"]); rec["resid_rel"].append(diag["resid_rel"])
+        snaps.append((float(umag), u.copy()))                           # snapshot for time-evolution viz
         if verbose:
             print(f"    u={umag:.3f}  uz={uz:+.4f}  dil={uz-uz0:+.4f}  tau={T_par:+.4f}  "
                   f"sig={sigma_n:.4f}  mu_app={T_par/max(sigma_n,1e-9):+.4f}  Tperp={T_perp:+.4f}  "
                   f"nC={diag['n_active']}  resid={diag['resid']:.1e}")
     for k in rec:
         rec[k] = np.asarray(rec[k])
+    js.u_final = u.copy(); js.uz_final = float(uz)                    # expose final state (for field viz)
+    js.u_snaps = snaps                                                # per-increment (u_x, u) for time evolution
     summary = dict(mode=mode, protocol=protocol, amp=amp, mu=mu, E=E, n_cells=n_cells,
                    peak_mu_app=float(np.abs(rec["mu_app"]).max()),
                    total_dilation=float(rec["dilation"][-1]),

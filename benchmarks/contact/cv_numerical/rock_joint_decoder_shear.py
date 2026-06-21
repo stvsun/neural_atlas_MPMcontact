@@ -183,6 +183,7 @@ def run_shear(decoder, dk, protocol="CNL", sigma_n=2.0, shear_total=0.18, n_inc=
     hist = {k: [] for k in ("u_x", "z_p", "dilation", "tau", "sigma_n", "mu_app", "n_active",
                             "pen_max", "resid")}
     z_p0 = None
+    traj = []                                                        # per-increment (u_x, z_p, u) for field viz
     for j in range(n_inc):
         u_x = shear_total * j / (n_inc - 1)
         if protocol == "CNL":                                        # warm-started wide bracket
@@ -195,6 +196,7 @@ def run_shear(decoder, dk, protocol="CNL", sigma_n=2.0, shear_total=0.18, n_inc=
                     zhi = zm
             z_p = 0.5 * (zlo + zhi)
         u, diag = js.solve_fixed(u_x, z_p, u, max_iter=120)
+        traj.append((float(u_x), float(z_p), u.copy()))
         Fn = js.normal_force(u, u_x, z_p)
         U = u.reshape(js.N, 3); fc, _ = js.contact(U, u_x, z_p)
         Fx = float(fc[js.top, 0].sum())
@@ -211,6 +213,9 @@ def run_shear(decoder, dk, protocol="CNL", sigma_n=2.0, shear_total=0.18, n_inc=
                   f"pen={diag['pen_max']:.2e}  resid={diag['resid']:.1e}")
     for k in hist:
         hist[k] = np.asarray(hist[k])
+    js.u_final = u.copy()                                            # expose final displacement (for field viz)
+    js.z_p_final = float(z_p)
+    js.traj = traj                                                   # full (u_x, z_p, u) trajectory
     return js, hist
 
 
