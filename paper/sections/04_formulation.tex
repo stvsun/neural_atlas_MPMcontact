@@ -1,0 +1,360 @@
+\section{Contact formulation and discretization}\label{sec:form}
+
+The transition map of Section~\ref{sec:tmap} acts as a geometric oracle: queried at any point, it
+reports two numbers that a contact solver needs and nothing more. The first is the gap $\gn$, the
+signed distance from the point to the obstacle surface. The second is the outward unit normal $\nbf$,
+the direction along which contact pushes. The atlas reads this pair from the boundary-to-boundary
+chart map $\tmap=\map{B}^{-1}\circ\map{A}$, which composes the inverse of one body's boundary chart
+with the other's. A neural signed-distance function (a level set) supplies the same pair as a
+comparison baseline. This section places that oracle inside a standard contact solver and keeps the
+two sources interchangeable.
+
+Everything the solver does with $(\gn,\nbf)$ is classical, and we want the reader to see that nothing
+in it depends on where the pair came from. The constraint enforcement (penalty and augmented
+Lagrangian), the friction law, the consistent Newton tangent, and the spatial discretization are all
+textbook constructions. We route them through a single interface that returns $(\gn,\nbf)$, so that
+force assembly, broad phase, tangent, and well-posedness are byte-for-byte identical whether the
+geometry comes from the atlas or from the level set. The accuracy gap reported in
+Sections~\ref{sec:verif}--\ref{sec:cv7} is therefore charged to the geometry alone, not to the
+constraint solver.
+
+We fix the sign convention once. The gap $\gn(\xbf)$ is the signed distance from a candidate contact
+point $\xbf$ to the obstacle surface: positive when the bodies are apart, negative when they overlap,
+so $\gn<0$ flags penetration. The normal $\nbf$ points outward from the obstacle, which makes the
+contact force $-t_N\nbf$ push a penetrating point back out, where $t_N\ge0$ is the contact pressure.
+We write $\pos{\cdot}$ for the Macaulay bracket $\pos{a}=\max(0,a)$, which returns a quantity only
+when it is positive, and zero otherwise.
+
+\subsection{Signorini conditions and the contact potential}\label{sec:form-signorini}
+
+% code: solvers/contact/augmented_lagrangian.py
+Contact is governed by three plain physical rules: bodies may not interpenetrate, contact only
+pushes and never pulls, and pressure builds up only where the surfaces actually touch. We state them
+for two deformable bodies $\Omega^A,\Omega^B\subset\R^3$ that undergo displacement fields
+$\ubf^A,\ubf^B$ and may meet along a candidate contact surface $\Gamma_c$ in the deformed
+configuration. The three rules become the Signorini--Hertz--Moreau conditions, which are the
+Karush--Kuhn--Tucker (KKT) optimality conditions of the constrained problem,
+\begin{equation}\label{eq:signorini}
+\gn\ \ge\ 0,\qquad t_N\ \ge\ 0,\qquad \gn\, t_N\ =\ 0\qquad\text{on }\Gamma_c .
+\end{equation}
+Reading them in order: the first inequality forbids penetration; the second forbids tensile
+(adhesive) tractions, so the surface can push but not glue; and the complementarity $\gn t_N=0$ ties
+the two together, allowing pressure only where the gap has closed to zero. These unilateral
+conditions of \citet{johnson1985contact} and \citet{wriggers2006computational} are what make
+equilibrium a variational inequality rather than a smooth minimization
+\citep{kikuchi1988contact,laursen2002computational}: the active contact set is itself an unknown.
+
+We now write equilibrium in weak (virtual-work) form so that the contact pressure enters as a force
+on the boundary. Let
+$a^\alpha(\ubf^\alpha,\delta\ubf^\alpha)=\int_{\Omega^\alpha}\bm{P}(\bm{F}^\alpha):\grad_{\xbf}\delta\ubf^\alpha\,dV$
+be the internal virtual work of body $\alpha\in\{A,B\}$, in which $\bm{P}$ is the first
+Piola--Kirchhoff stress, $\bm{F}^\alpha=\bm{I}+\grad\ubf^\alpha$ is the deformation gradient, and
+$\delta\ubf^\alpha$ is an admissible virtual displacement; let $L^\alpha$ collect the external
+virtual work of the body and surface loads. We need one more ingredient: how the gap responds to a
+virtual displacement. Because the gap is a distance measured along the normal, its first variation is
+just the relative virtual motion projected onto $\nbf$,
+\begin{equation}\label{eq:gap-variation}
+\delta\gn\ =\ \nbf\cdot(\delta\ubf^B-\delta\ubf^A),
+\end{equation}
+which uses only the contact normal and is exact to first order no matter how the surface is
+represented. This is the key point for the atlas-versus-level-set comparison: the variation depends on
+the geometry through $\nbf$ alone. Constrained equilibrium then reads: find $(\ubf^A,\ubf^B)$ and a
+pressure multiplier $t_N\ge0$ such that
+\begin{equation}\label{eq:weak-contact}
+\sum_{\alpha\in\{A,B\}}\!\Big[a^\alpha(\ubf^\alpha,\delta\ubf^\alpha)-L^\alpha(\delta\ubf^\alpha)\Big]
+\ +\ \int_{\Gamma_c} t_N\,\delta\gn\,dA\ =\ 0,
+\end{equation}
+holds together with the Signorini conditions~\eqref{eq:signorini}. The new term is the contact
+integral: the pressure $t_N$ does virtual work against the gap variation along $\Gamma_c$. What
+remains is to supply $t_N$, and the next two paragraphs give the two standard ways to do so.
+
+\paragraph{Penalty regularization: a stiff one-sided spring.}
+% code: solvers/contact/penalty.py::compute_contact_force
+The penalty method replaces the exact pressure by a stiff spring that switches on only when the
+constraint is violated. Picture a spring that does nothing while the bodies are apart and pushes back
+ever harder the deeper they overlap. With penalty stiffness $\varepsilon_n>0$ the pressure is
+\begin{equation}\label{eq:penalty-pressure}
+t_N\ =\ \varepsilon_n\,\pos{-\gn},
+\end{equation}
+which is zero whenever $\gn\ge0$ and rises linearly with the penetration depth $-\gn$ once the bodies
+overlap. The spring stores energy as it compresses, and that stored energy is the smooth contact
+potential,
+\begin{equation}\label{eq:penalty-potential}
+\Pi_c(\gn)\ =\ \tfrac{1}{2}\varepsilon_n\,\pos{-\gn}^2,
+\qquad
+t_N\ =\ \frac{\partial \Pi_c}{\partial(-\gn)}\ =\ \varepsilon_n\,\pos{-\gn} .
+\end{equation}
+Differentiating the potential recovers the pressure~\eqref{eq:penalty-pressure}, which tells us the
+normal contact force is conservative: it is the gradient of a scalar energy. Because that energy is
+non-negative, adding it to the total potential keeps the problem coercive, the property used in
+Section~\ref{sec:form-wellposed}. The force carried by one quadrature point (or, in the meshfree
+setting, one particle) in physical space then follows from the pressure,
+\begin{equation}\label{eq:penalty-force}
+\fbf^{\,\mathrm{N}}\ =\ t_N\,A\,\nbf\ =\ \varepsilon_n\,\pos{-\gn}\,A\,\nbf ,
+\end{equation}
+where $A$ is the tributary area carried by that point (or the particle volume $V_p$ in the MPM
+coupling of Section~\ref{sec:form-mpm}). The force points along the normal and scales with both the
+penetration and the stiffness. Equation~\eqref{eq:penalty-force} is exactly what
+\code{compute\_contact\_force} in \code{solvers/contact/penalty.py} does: clamp $-\gn$ to its positive
+part, scale by $\varepsilon_n A$, and project onto the obstacle normal. We size the spring to the
+material it restrains, $\varepsilon_n=\beta E/h$, with $\beta\in[1,20]$, $E$ the Young modulus, and
+$h$ the local mesh size, so the contact stiffness matches the bulk stiffness. The leftover penetration
+then scales as $\delta\sim\sigma_n/\varepsilon_n$ and shrinks as $\varepsilon_n$ grows.
+
+\paragraph{Augmented Lagrangian: a spring whose rest force is remembered.}
+% code: solvers/contact/augmented_lagrangian.py
+The penalty spring forces a compromise: a stiffer $\varepsilon_n$ shrinks the residual penetration but
+worsens the conditioning of the system, and in explicit dynamics it shortens the stable time step. The
+augmented-Lagrangian method of \citet{alart1991mixed} and \citet{simo1992augmented} escapes the
+compromise by giving the spring a memory. Alongside the penalty it carries a persistent multiplier
+$\lambda\ge0$ that remembers the pressure accumulated so far, so the spring no longer has to supply the
+full pressure from penetration alone. The augmented pressure and its Uzawa update are
+\begin{equation}\label{eq:al-pressure}
+t_N\ =\ p_{\mathrm{aug}}(\gn,\lambda)\ =\ \pos{\lambda-\varepsilon_n\,\gn},
+\qquad
+\lambda^{k+1}\ =\ \pos{\lambda^{k}-\varepsilon_n\,\gn(\ubf^{k+1})} .
+\end{equation}
+Reading the update: with $\gn<0$ on overlap, the term $-\varepsilon_n\gn$ is positive, so both the
+pressure and the remembered multiplier grow while penetration persists; once the gap closes
+($\gn\ge0$) the Macaulay clamp drives both back to zero. The payoff is that at convergence the memory
+$\lambda$ settles on the true contact pressure, $\lambda\to t_N^\star$, and the penetration vanishes
+without sending $\varepsilon_n\to\infty$ \citep{laursen2002computational}. This is
+\code{AugmentedLagrangianContact} in \code{solvers/contact/augmented\_lagrangian.py}; the solver stores
+$\lambda$ per contact point and reuses it across iterations, so the caller must pass the gap with
+stable indexing (the implementation resets $\lambda$ and warns if the array shape changes between
+calls). The plain penalty~\eqref{eq:penalty-pressure} is the special case with no memory,
+$\lambda\equiv0$.
+
+\subsection{Regularized Coulomb friction}\label{sec:form-friction}
+
+% code: solvers/contact/friction.py
+Once contact carries a normal pressure, friction resists tangential sliding. The Coulomb law caps the
+tangential traction $\tbf_T$ by the friction cone $\norm{\tbf_T}\le\mu\,t_N$: inside the cone the
+surfaces stick ($\vbf_T=0$), and on its boundary they slip with
+$\tbf_T=-\mu t_N\,\vbf_T/\norm{\vbf_T}$, where $\mu$ is the friction coefficient and $\vbf_T$ the
+tangential slip velocity \citep{wriggers2006computational}. This law has a kink at zero sliding speed
+that a Newton solver cannot differentiate, so we smooth it. We replace the sharp law by the
+bracket form
+\begin{equation}\label{eq:friction-reg}
+\tbf_T\ =\ -\,\mu\,\norm{\fbf^{\,\mathrm{N}}}\,
+\frac{\vbf_T}{\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}},
+\end{equation}
+in which the tangential velocity is the full velocity with its normal component removed,
+\begin{equation}\label{eq:vt-projection}
+\vbf_T\ =\ \big(\bm{I}-\nbf\otimes\nbf\big)\,\vbf\ =\ \vbf-(\vbf\cdot\nbf)\,\nbf .
+\end{equation}
+The parameter $\varepsilon_T$ is a small velocity scale that controls the rounding of the kink. When
+sliding is fast, $\norm{\vbf_T}\gg\varepsilon_T$, the traction approaches the cone bound
+$\mu\norm{\fbf^{\,\mathrm{N}}}$ and the law behaves like sharp Coulomb slip; when sliding is slow,
+$\norm{\vbf_T}\ll\varepsilon_T$, the traction grows linearly with $\vbf_T$ and passes smoothly through
+zero, so stick is approximated by a stiff tangential spring. Like the penalty, this surrogate comes
+from a potential: the pseudo-potential
+$\Psi_T(\vbf_T)=\mu\,t_N\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}$ yields
+$\tbf_T=-\partial\Psi_T/\partial\vbf_T$, so the regularized problem stays variational. In code,
+\code{compute\_friction\_force} in \code{solvers/contact/friction.py} takes the scalar normal-force
+magnitude $\norm{\fbf^{\,\mathrm{N}}}$ as input, so it composes unchanged with either normal model: the
+penalty pressure ($\norm{\fbf^{\,\mathrm{N}}}=\varepsilon_n\pos{-\gn}A$) or the augmented-Lagrangian
+pressure ($\norm{\fbf^{\,\mathrm{N}}}=p_{\mathrm{aug}}A$). The total contact force is then the sum of
+normal and tangential parts, $\fbf^{\,\mathrm{contact}}=\fbf^{\,\mathrm{N}}+\tbf_T A$. By construction
+the friction force opposes the slip, $\tbf_T\cdot\vbf_T\le0$, which the verification suite confirms
+node by node.
+
+The quasi-static rough-joint driver of Section~\ref{sec:cv7} has no sliding velocity to regularize, so
+there we drive friction differently. We drag each active node along a prescribed full-slip direction
+$\tbf_{\mathrm{proj}}=\widehat{\hat{\tbf}-(\hat{\tbf}\cdot\nbf)\nbf}$, formed by projecting the loading
+direction $\hat{\tbf}$ onto the tangent plane and renormalizing, and set
+$\tbf_T=\mu\,t_N\,\tbf_{\mathrm{proj}}$. The velocity surrogate~\eqref{eq:friction-reg} is instead the
+path used in the explicit MPM cross-check. Both sit at the cone bound and are plain Coulomb, and
+neither imposes a dilation angle. The dilatant, slope-dependent response seen in
+Section~\ref{sec:cv7} is therefore not put in by hand. It emerges from the resolved asperity geometry
+through the normal $\nbf$, rather than from a constitutive dilation law of the
+Patton~\citep{patton1966multiple} or Barton~\citep{barton1977shear,barton1990review} type.
+
+\subsection{Consistent contact tangent}\label{sec:form-tangent}
+
+% code: benchmarks/contact/cv_numerical/rock_joint_decoder_shear.py::_contact_tangent
+A Newton solver needs the derivative of the contact force with respect to the displacement; supplying
+the right derivative is what makes Newton converge quadratically. Writing the residual as
+$\bm{R}(\ubf)=\bm{K}_{\mathrm{elastic}}\ubf-\fbf_{\mathrm{contact}}(\ubf)$, the contact part of the
+tangent at an active node ($\gn<0$) gathers three contributions,
+\begin{equation}\label{eq:contact-tangent}
+\bm{K}_c\ =\ \frac{\partial \fbf_{\mathrm{contact}}}{\partial \ubf}
+\ =\ \underbrace{\varepsilon_n A\,\big(\nbf\otimes\nbf\big)}_{\text{normal penalty stiffness}}
+\ +\ \underbrace{\varepsilon_n A\,\mu\,\big(\tbf_{\mathrm{proj}}\otimes\nbf\big)}_{\text{friction--normal coupling}}
+\ +\ \underbrace{t_N A\,\frac{\partial\nbf}{\partial\ubf}}_{\text{curvature / shape operator}} .
+\end{equation}
+Each term answers a distinct question. The first is the normal stiffness: it is the penalty stiffness
+$\varepsilon_n A$ projected onto the active normal through $\nbf\otimes\nbf$, and it tells Newton how
+the normal force stiffens as the node sinks in. Because $\nbf$ tilts with the asperity slope,
+$\nbf\otimes\nbf$ is a full rank-one $3\times3$ block, not the single vertical stiffness a
+flat-interface model would assume, so a tilted asperity already couples the vertical and horizontal
+directions. The second term is the friction--normal coupling: it tells Newton how the frictional drag
+changes when the normal pressure changes. It is non-symmetric, which is the structural signature of a
+non-associative friction law \citep{wriggers2006computational}. The third term is the curvature (or
+geometric) stiffness: it accounts for the normal direction itself rotating as the surface deforms,
+which matters wherever the surface bends. That rotation is the shape operator (the Weingarten map) of
+the contact surface,
+\begin{equation}\label{eq:shape-operator}
+\frac{\partial n_i}{\partial x_j}
+\ =\ \frac{1}{\norm{\grad\phi}}\,\big(\delta_{ik}-n_i n_k\big)\,
+\frac{\partial^2\phi}{\partial x_k\partial x_j},
+\end{equation}
+which the surface description supplies through its second derivative: either second-order autograd on
+the neural SDF, or the second derivative $h_\theta''$ of the Fourier-feature height chart. In
+practice, the rough-joint driver assembles the first two terms (this is
+\code{\_contact\_tangent}). On the smooth single-asperity benchmarks the curvature term is small, so
+keeping only the rank-one normal and friction--normal blocks, with an Armijo line search, still drives
+the frictional Newton residual down to $\sim10^{-9}$ on the one-block shear, a fully converged solve.
+One configuration resists this convergence. On the two-deformable, moving-master node-to-surface
+problem the friction residual settles at $1.5$--$6\%$ and does not shrink under mesh refinement,
+because the contact point itself moves and makes the active set non-smooth. The remedy there is a
+semismooth-Newton, augmented, or mortar treatment
+\citep{alart1991mixed,puso2004mortar,chouly2013nitsche}, not a finer mesh.
+
+\subsection{Discretization: chart-FEM pushforward and physical-space MPM}\label{sec:form-mpm}
+
+We enforce the contact constraint on two discretizations: a chart-based finite element method and a
+chart-based material point method. Both share the same force expressions and the same $(\gn,\nbf)$
+oracle. They differ only in how they carry the geometry of the chart, and the contrast between the two
+is the point of this subsection.
+
+\paragraph{Chart-FEM pushforward.}
+% code: solvers/fem/chart_vector_fem.py
+The chart-FEM solves the elasticity problem on a simple reference cube and then maps it onto the curved
+physical body. Concretely, on each chart the elastostatic problem lives on the reference parametric
+cube $U_i=[-r,r]^3$, and the chart decoder $\map{i}$ carries it to physical space through its Jacobian
+$\bm{J}_i=\partial\map{i}/\partial\bm{\xi}$, the matrix of derivatives of the physical coordinate with
+respect to the reference coordinate $\bm{\xi}$. Gradients computed on the cube must be converted to
+physical gradients by the chain rule, which means multiplying by $\bm{J}_i^{-1}$,
+\begin{equation}\label{eq:fem-pushforward}
+\grad_{\xbf}\ubf\ =\ \grad_{\bm{\xi}}\ubf\,\bm{J}_i^{-1},
+\qquad
+\bm{F}\ =\ \bm{I}+\grad_{\bm{\xi}}\ubf\,\bm{J}_i^{-1},
+\end{equation}
+so $\grad_{\xbf}\ubf$ is the physical displacement gradient and $\bm{F}$ the physical deformation
+gradient. The same chain rule and the change-of-variables volume factor $\abs{\det\bm{J}_i}$ then turn
+the cube integral into the physical stiffness,
+\begin{equation}\label{eq:fem-assembly}
+\bm{K}_{ab}\ =\ \int_{U_i}\big(\grad_{\bm{\xi}}N_a\,\bm{J}_i^{-1}\big)^{\!\top}
+:\mathbb{C}:\big(\grad_{\bm{\xi}}N_b\,\bm{J}_i^{-1}\big)\,\abs{\det\bm{J}_i}\,d\bm{\xi},
+\end{equation}
+where $N_a,N_b$ are the shape functions and $\mathbb{C}$ is the elasticity tensor. The one subtlety is
+that a neural chart can be steep, which makes $\bm{J}_i$ nearly singular and $\bm{J}_i^{-1}$ large. We
+therefore form $\bm{J}_i^{-1}$ and $\abs{\det\bm{J}_i}$ through the SVD-clamped operator
+\code{stabilized\_jacobian\_ops} (\code{solvers/fem/chart\_vector\_fem.py}), which floors the singular
+values so a poorly conditioned chart cannot blow up the assembly, while $\det\bm{J}_i>0$ (no fold-over)
+is monitored throughout. On the boundary-fitted rough geometry this pushforward passes a patch test and
+recovers the manufactured-solution rate $O(h^2)$ (measured exponents $2.07$ and $1.83$), which
+confirms that the discretization error is controlled independently of the contact treatment. The
+penalty force $\fbf^{\,\mathrm{N}}=\varepsilon_n\pos{-\gn}A\,\nbf$ enters the chart residual
+work-conjugately, with $A$ the tributary boundary-face area measured in physical space.
+
+\paragraph{MPM coupling in physical space.}
+% code: docs/contact_theory_manual.md section 1.2
+The material point method needs no such pushforward for the contact force, and this is the point to
+isolate. The chart-based MPM stores particle velocity, gravity, and stress directly in physical
+space, so the contact force is added through the same particle-to-grid (P2G) channel as gravity,
+with \emph{no Jacobian pull-back},
+\begin{equation}\label{eq:mpm-p2g}
+\fbf_I^{\mathrm{ext}}\ \mathrel{+}=\ \sum_p \fbf_p^{\,\mathrm{contact}}\,N_I(\bm{\xi}_p),
+\qquad
+\fbf_p^{\,\mathrm{contact}}\ =\ \varepsilon_n\,\pos{-\gn(\xbf_p)}\,V_p\,\nbf_p\ +\ \tbf_T\,V_p ,
+\end{equation}
+where $N_I$ is the grid shape function and $\xbf_p=\map{i}(\bm{\xi}_p)+\ubf_p$ is the particle's
+physical position. The volume factor $V_p$ converts the penalty pressure into a force (pressure times a
+volume), so $\fbf_p^{\,\mathrm{contact}}$ scatters to the grid like any other force: without the mass
+weight that gravity carries, and without the $\bm{J}_i^{-\top}$ that a chart-local force would need.
+Put plainly, forces and grid velocities already live in the same physical space, so the contact force
+is added verbatim, and that is the central bookkeeping point of the MPM coupling. The penalty spring
+also adds its own stability bound to the explicit time step,
+$\Delta t_{\mathrm{contact}}\le 0.5\sqrt{m_{\min}/\varepsilon_n}$, so the effective step is the smaller
+of the elastic CFL limit and this contact limit, $\min(\Delta t_{\mathrm{CFL}},\Delta
+t_{\mathrm{contact}})$. The MPM path reproduces the Coulomb floor, returning an apparent friction
+$\muapp\approx0.34$ against an imposed $\mu=0.4$, but it does not reproduce the dilatancy, because a
+mated rough-on-rough block is unstable in explicit penalty dynamics. We therefore use the MPM as a
+dynamic cross-check rather than as the primary rough-joint solver, and we mark that limit plainly.
+
+\subsection{Level-set-free detector dispatch}\label{sec:form-dispatch}
+
+% code: solvers/contact/contact_manager.py::body_gap_normal
+The geometry enters the solver at exactly one place, by design. A single function
+\code{body\_gap\_normal} takes a batch of physical-space query points and returns the pair
+$(\gn,\nbf)$, choosing its source according to the body's declared detector,
+\begin{equation}\label{eq:detector-dispatch}
+(\gn,\nbf)\ =\
+\begin{cases}
+\big(\phi_A(\xbf),\ \grad\phi_A/\norm{\grad\phi_A}\big), & \text{detector} = \texttt{sdf},\\[4pt]
+\texttt{evaluate\_gap\_chart}(\xbf,\ \text{chart}), & \text{detector} = \texttt{chart}.
+\end{cases}
+\end{equation}
+Both branches honor the identical contract: $\gn$ has shape $(N,)$ with $\gn<0$ meaning penetration,
+and $\nbf$ has shape $(N,3)$ and is a unit outward normal. The \texttt{sdf} branch evaluates the
+neural level set $\phi_A$ and its autograd gradient; the \texttt{chart} branch evaluates the
+transition-map detector of Section~\ref{sec:tmap}, which is the radial chart for star-shaped bodies, or
+the height chart $\gn=z-h_\theta(x)$ with normal $(-h_\theta',1)/\sqrt{1+h_\theta'^2}$ for
+single-valued joints. Everything downstream reads only $(\gn,\nbf)$: the broad-phase seed-to-seed cull,
+the narrow-phase active-set selection $\{\gn<0\}$, the penalty and augmented-Lagrangian forces, the
+friction law, the consistent tangent~\eqref{eq:contact-tangent}, and both discretizations. None of it
+can tell which branch produced the pair. Swapping the atlas for the level set therefore touches one
+branch of~\eqref{eq:detector-dispatch} and nothing else, and that is what makes the comparison
+controlled: the same solver, the same loading, the same tolerances, with only the geometric oracle
+changed.
+
+% code: solvers/contact/contact_manager.py::body_gap_normal
+Figure~\ref{fig:tm-levelset-vs-chart} puts the two oracles side by side on a rough profile. The atlas
+detector resolves the asperity slopes; the level set, built from an ambient field whose spectral bias
+favors low frequencies \citep{rahaman2019spectral}, smooths them away. The numbers follow the
+picture. On the real Inada-granite joint, the chart detector returns a contact gap with $4.2\%$ RMS
+error against the analytic surface, while the ambient SDF returns $44.7\%$. That is a factor of $10.5$
+on the quantity that drives contact, and the chart reaches it at only $1.47\times$ the per-query cost
+of the SDF and with no ambient field to store. That accuracy difference propagates. As
+Section~\ref{sec:cv7} quantifies, the level set under-predicts the emergent dilatancy by $98\%$ and the
+frictional strength by $35\%$, purely because it feeds the same solver a smoothed normal.
+
+\subsection{Well-posedness and the penalty estimate}\label{sec:form-wellposed}
+
+% code: contact_atlas/03_mathematical_theory.md
+We close with the standard existence and stability statements. They carry over unchanged here, because
+the contact treatment is classical and the chart changes only how the gap is evaluated, not the
+analysis around it. Assume that each body's stored-energy density $W(\bm{F})$ is polyconvex with the
+usual coercivity and growth bounds (the Neo-Hookean and small-strain models used here qualify), that
+the admissible set $K=\{(\ubf^A,\ubf^B): \gn\ge0\text{ on }\Gamma_c\}$ is non-empty, that the body
+loads lie in
+$L^2(\Omega)$, and that the Dirichlet data lie in $H^{1/2}(\Gamma_D)$. The natural object to minimize is the
+total energy, the stored elastic energy minus the work of the loads,
+\begin{equation}\label{eq:total-energy}
+E(\ubf^A,\ubf^B)\ =\ \sum_{\alpha\in\{A,B\}}\int_{\Omega^\alpha}W(\bm{I}+\grad\ubf^\alpha)\,dV
+\ -\ \sum_{\alpha\in\{A,B\}}L^\alpha(\ubf^\alpha),
+\end{equation}
+and under these assumptions $E$ attains a minimizer on the admissible set $K$. The argument is the
+direct method: polyconvexity gives weak lower semicontinuity of $E$, the growth bound keeps a
+minimizing sequence bounded in $H^1\times H^1$, the trace inequality and the continuity of the gap
+operator make $K$ weakly closed, and weak compactness then delivers the minimizer
+\citep{ball1977convexity,ciarlet1988mathematical}. Adding the penalty changes nothing essential: the
+penalty energy $\Pi_c$ of~\eqref{eq:penalty-potential} is non-negative and convex in $\gn$, so adding
+it to $E$ preserves both lower semicontinuity and coercivity, and the penalized problem is well posed
+for every $\varepsilon_n>0$.
+
+% code: contact_atlas/03_mathematical_theory.md
+The remaining question is how close the penalty solution lands to the exact one, and how that closeness
+depends on the stiffness. Let $\ubf_\varepsilon$ be the penalty solution and $\ubf^\star$ the exact
+(multiplier) solution. The standard estimate of \citet{kikuchi1988contact} bounds their difference in
+terms of the penalty stiffness,
+\begin{equation}\label{eq:penalty-estimate}
+\norm{\ubf_{\varepsilon}-\ubf^\star}_{H^1}\ \le\ \frac{C}{\sqrt{\varepsilon_n}},
+\qquad
+\norm{t_{N,\varepsilon}-t_N^\star}_{H^{-1/2}(\Gamma_c)}\ \le\ C\sqrt{\varepsilon_n},
+\end{equation}
+so the displacement converges at rate $O(\varepsilon_n^{-1/2})$ while the pressure converges at
+$O(\varepsilon_n^{1/2})$. These two rates pull in opposite directions, and balancing the penalty error
+against the $O(h)$ discretization error fixes the stiffness at $\varepsilon_n\sim E/h$. The augmented
+Lagrangian removes the trade-off altogether: the Uzawa iteration~\eqref{eq:al-pressure} contracts,
+$\norm{\lambda^{k+1}-\lambda^\star}\le\rho\,\norm{\lambda^{k}-\lambda^\star}$ with $\rho<1$ for any
+$\varepsilon_n>0$, so the multiplier converges to the exact pressure, $\lambda^k\to t_N^\star$, without
+sending $\varepsilon_n\to\infty$ \citep{alart1991mixed,simo1992augmented}. Collecting the pieces, the
+total error in the contact pressure splits into three terms,
+$\norm{t_{N,h}-t_N^\star}\le C_1 h + C_2\varepsilon_n^{-1/2}+C_3\,\epsilon_{\mathrm{geom}}$, where
+$\epsilon_{\mathrm{geom}}$ is the geometric approximation error of the oracle, the $L^\infty$ error of
+the chart or of the level set. The first two terms are common to both detectors and shrink with mesh
+and stiffness. The third term is where the atlas and the level set part company, and it is precisely
+the term that Sections~\ref{sec:verif} and~\ref{sec:cv7} measure.

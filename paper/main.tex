@@ -1,0 +1,117 @@
+%% ============================================================================
+%%  Transition-map contact mechanics on a neural coordinate atlas
+%%  Target journal: Computer Methods in Applied Mechanics and Engineering (CMAME)
+%%  Class: Springer svjour3 (matching the group's CMAME submission template)
+%%
+%%  Build:  latexmk -pdf main.tex
+%%  Per-section "% code: <file::symbol>" comments tie each claim to the source.
+%% ============================================================================
+\documentclass{svjour3}                 % onecolumn (standard format)
+\smartqed                               % flush-right qed marks
+
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{newtxtext,newtxmath}        % Times-compatible text + math
+\usepackage{bm}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{upgreek}
+\usepackage{placeins}
+\usepackage{enumitem}
+\usepackage{indentfirst}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,positioning,decorations.markings,fit,backgrounds,
+  patterns,shapes.geometric,shapes.misc,angles,quotes}
+
+\usepackage{natbib}
+\setcitestyle{numbers,square,comma}
+
+\usepackage[letterpaper,margin=3cm]{geometry}
+
+\usepackage{lineno}
+\linenumbers                            % line numbers for review submission
+
+\journalname{Computer Methods in Applied Mechanics and Engineering}
+
+%% --- notation macros (used throughout the section files) --------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Sph}{\mathbb{S}}
+\newcommand{\norm}[1]{\lVert#1\rVert}
+\newcommand{\abs}[1]{\lvert#1\rvert}
+\newcommand{\dhat}{\hat{\bm{d}}}
+\newcommand{\nbf}{\bm{n}}
+\newcommand{\tbf}{\bm{t}}
+\newcommand{\xbf}{\bm{x}}
+\newcommand{\ubf}{\bm{u}}
+\newcommand{\fbf}{\bm{f}}
+\newcommand{\vbf}{\bm{v}}
+\newcommand{\gn}{g_{\scriptscriptstyle N}}
+\newcommand{\tmap}{\tau_{AB}}
+\newcommand{\map}[1]{\varphi_{#1}}
+\newcommand{\pos}[1]{\langle #1\rangle_{+}}
+\newcommand{\muapp}{\mu_{\mathrm{app}}}
+\newcommand{\grad}{\nabla}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\graphicspath{{../figures/}{figures/}}
+
+\begin{document}
+
+\title{Transition-map contact mechanics on a neural coordinate atlas:
+resolving rough and non-convex geometry that the level set smooths}
+\titlerunning{Transition-map contact on a neural atlas}
+
+\author{WaiChing Sun}
+\institute{WaiChing Sun \at
+  Department of Civil Engineering and Engineering Mechanics, Columbia University,
+  614 SW Mudd, 500 W 120th St, New York, NY 10027, USA \\
+  \email{ws2414@columbia.edu}}
+
+\date{Received: [DATE] / Accepted: [DATE]}
+
+\maketitle
+
+\begin{abstract}
+We study contact between geometrically complex bodies and argue that the geometric representation, not
+the constraint-enforcement scheme, is the dominant control on accuracy. Contact is posed as a
+boundary-to-boundary chart map, the transition map, that composes the inverse of one body's boundary
+chart with the other's; on a learned coordinate atlas this map delivers the gap, the surface normal, and
+the active set directly, without an ambient level set. We build the atlas from Fourier-feature coordinate
+charts, whose random-feature embedding defeats the spectral bias that smooths a neural signed-distance
+function across sharp asperities and cusps. The neural level set is retained throughout as the compared
+baseline, evaluated on the same meshes and tolerances. The method is verified against closed-form
+solutions on a six-problem ladder, CV-1 through CV-6, spanning Hertz line contact, Cattaneo stick--slip,
+the Brazilian disc, a nine-disc unit cell, a superformula boundary, and a Koch refinement ceiling, with
+errors of a few percent or below. It is then validated on a real Inada-granite tensile fracture, where
+dilation and apparent friction emerge from the resolved asperity geometry under plain Coulomb friction
+with no imposed dilatancy law. The level set smooths the mean asperity slope from $19.4^\circ$ to
+$12.5^\circ$ and under-predicts peak shear strength by $61\%$ on the granite joint, and under-predicts the
+emergent dilatancy by $98\%$ on a synthetic rough block, while the chart reconstructs the surface to
+$2.3~\mu$m against $107~\mu$m for the level set.
+\keywords{computational contact mechanics \and coordinate atlas \and transition map \and
+neural signed-distance function \and Fourier-feature charts \and rock-joint dilatancy}
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_transition_map}
+\input{sections/03_fourier_charts}
+\input{sections/04_formulation}
+\input{sections/05_verification}
+\input{sections/06_validation_cv7}
+\input{sections/07_discussion}
+\input{sections/08_conclusions}
+
+\begin{appendix}
+\input{sections/A_appendix_closedforms}
+\input{sections/B_appendix_training}
+\input{sections/C_appendix_reproducibility}
+\input{sections/S_supplementary}
+\end{appendix}
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
+
+\end{document}

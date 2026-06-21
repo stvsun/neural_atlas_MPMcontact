@@ -1,0 +1,204 @@
+\section{Supplementary material}\label{app:supp}
+
+This appendix records three deferred studies of the rough rock joint of Section~\ref{sec:cv7}. Each
+study isolates one question that the main text raises but does not develop. The first (S.1) asks whether
+the transition-map detector survives being wired into the contact loop of an unsteady solve, rather than
+only queried on a fixed point cloud. The second (S.2) asks whether the dilatant interface obeys the first
+law over a full load cycle, with the energy ledger closed term by term. The third (S.3) asks whether an
+independent explicit solver reproduces the same frictional response. We report each study with its
+measured numbers and with the limit it exposes. The level set (a neural signed-distance function, or SDF)
+runs throughout as the comparison baseline, on the same geometry and the same query set as the chart.
+
+\subsection{Transition-map detection inside the contact loop}\label{app:supp:p3}
+
+The main text reports the chart and the level set as static geometry estimators, each queried on a fixed
+grid. Here we instead let the transition-map detector supply the gap and the normal that drive a
+quasi-static direct-shear solve, so the detector is evaluated inside the Newton loop. The chart reads
+contact as the boundary-to-boundary map $\tmap=\map{B}^{-1}\!\circ\map{A}$, which sends a point on one
+face to the mating point on the other: for a query point on face $A$, the height chart returns the mating
+surface height on face $B$ directly, and the gap then follows as the signed normal separation between the
+two. The level set returns the same gap as the value of the ambient neural SDF $\phi$, with normal
+$\nbf=\grad\phi/\norm{\grad\phi}$.
+
+% code: cv7_transition_map_contact.py::_analytic
+Throughout, $\gn$ denotes the signed normal gap, with the convention $\gn<0$ in penetration. The detector
+declares a query point in contact when its gap is negative, so the active set is the index set of those
+points,
+%
+\begin{equation}\label{eq:supp_activeset}
+\mathcal{A}=\{\,p : \gn(\xbf_p)<0\,\},
+\end{equation}
+%
+where $p$ indexes the query points and $\xbf_p$ is the position of point $p$. To score the active set, we
+compare it against the analytic active set $\mathcal{A}^{\star}$, which we obtain from the closed-form
+mating surface. The score is the symmetric agreement
+%
+\begin{equation}\label{eq:supp_agreement}
+\eta=1-\frac{\abs{\mathcal{A}\,\triangle\,\mathcal{A}^{\star}}}{N},
+\end{equation}
+%
+in which $\triangle$ is the symmetric difference (the points the two sets disagree on) and $N$ is the
+number of query points; $\eta=1$ means the detector and the closed form agree on every point. We measure
+gap accuracy separately, as the relative root-mean-square error of the predicted gap $\gn$ against the
+analytic gap $\gn^{\star}$,
+%
+\begin{equation}\label{eq:supp_gaprmse}
+e_g=\frac{\norm{\gn-\gn^{\star}}_{2}}{\norm{\gn^{\star}}_{2}}.
+\end{equation}
+%
+The gap error matters because the gap, not the active-set membership, sets the contact pressure.
+
+% code: cv7_transition_map_contact.py::_chart cv7_transition_map_contact.py::_sdf
+On $N=10^{5}$ query points sampled over the joint footprint, the chart detector reproduced the analytic
+active set to $\eta=98.9\%$, against $95.8\%$ for the level set. On the gap, the chart was sharper by a
+wider margin: $e_g=4.2\%$ for the chart against $44.7\%$ for the level set, a factor of $10.5$ on the
+quantity that sets the contact pressure. Wired into the FEM shear, the chart-driven solve tracked the
+analytic-surface solve closely, reaching a peak apparent friction $\muapp=0.566$ against the analytic
+$0.513$, with the shear traction agreeing to within $9.5\%$ over the loading history. Table~\ref{tab:supp_p3}
+collects these results.
+
+% code: cv7_transition_map_contact.py::ang
+One quantity runs the other way. At the asperity tips the level set carries the sharper
+normal, $0.8^{\circ}$ of deviation against $10.3^{\circ}$ for the chart, because the random-Fourier height
+field has a noisier gradient at the tips than the smooth ambient field does. The chart advantage is on the
+gap and the active set, the two quantities that decide where contact occurs and how hard, not on the
+pointwise normal direction at the sharpest features. We state the tip-normal result so the comparison is
+not read as uniform: the level set is a fair baseline, and on the tip-normal direction it is the more
+accurate estimator on this surface.
+
+% code: cv7_transition_map_contact.py::main
+The chart detector costs $1.47\times$ the level set per query. A chart query is a single forward
+evaluation of $\map{A}$ followed by the chart read of $\map{B}^{-1}$, with no level-set root find or ray
+march, because the mating height is the chart output. The factor below two is the overhead of evaluating
+two Fourier-feature charts in place of one ambient SDF, and it stays constant as the number of query
+points grows. The shear traction and the emergent normal dilation that this detector produces over the
+loading history appear in Figure~\ref{fig:supp_traction}.
+
+\begin{table}
+\centering
+\caption{Transition-map detector wired into the FEM contact loop (Phase~3), scored against the analytic
+mating surface on $N=10^{5}$ query points. Gap $\gn<0$ denotes penetration. The chart wins on active-set
+agreement and gap error; the level set has the sharper asperity-tip normal on this random-Fourier surface.}
+\label{tab:supp_p3}
+\begin{tabular}{lccc}
+\toprule
+quantity & chart & level set (SDF) & note \\
+\midrule
+active-set agreement $\eta$ & $98.9\%$ & $95.8\%$ & Eq.~\eqref{eq:supp_agreement} \\
+gap error $e_g$            & $4.2\%$  & $44.7\%$ & Eq.~\eqref{eq:supp_gaprmse}; $10.5\times$ sharper \\
+tip-normal deviation       & $10.3^{\circ}$ & $0.8^{\circ}$ & level set sharper \\
+peak $\muapp$ (FEM shear)  & $0.566$  & $0.513^{\dagger}$ & $^{\dagger}$analytic-surface reference \\
+shear traction $\tau$      & \multicolumn{2}{c}{within $9.5\%$ of analytic} & chart-driven vs analytic \\
+per-query cost             & $1.47\times$ & $1\times$ & constant in $N$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{cv7_traction_history_pub}
+\caption{Phase~3 transition-map detection inside the direct-shear loop. Global shear traction $\tau$ and
+emergent normal dilation $\delta_n$ as functions of the imposed tangential displacement, with the chart
+detector supplying the gap and normal to the FEM. The traces are mesh-converged across the refinement
+sequence of Section~\ref{sec:cv7}; the chart-driven response tracks the analytic-surface reference, and
+Table~\ref{tab:supp_p3} reports the quantitative agreement.}
+\label{fig:supp_traction}
+\end{figure}
+
+\subsection{Cyclic loading and the energy ledger}\label{app:supp:p4}
+
+The cyclic study drives the joint through a triangle-wave tangential schedule under constant normal
+displacement. It accounts for every term of the first law. The friction model uses a stateful
+return-map update, so stick and slip alternate and the shear-traction response forms hysteresis loops.
+The Plesha asperity-degradation parameter decays across cycles, from $0.3405$ to $0.3377$ over four
+cycles, and the contact Newton residual averages $7\times10^{-5}$. The peak apparent friction is
+$\abs{\muapp}\approx0.33$.
+
+% code: rock_joint_decoder_cyclic.py::run_cyclic
+The first law states that the external work fed into the joint must reappear as stored energy plus
+dissipation. With $\gn<0$ in penetration and slip taken as plastic, the ledger reads
+%
+\begin{equation}\label{eq:supp_ledger}
+W_{\mathrm{ext}}
+= \Delta U_{\mathrm{el}}
++ W_{\mathrm{pen}}
++ W_{\mathrm{stick}}
++ W_{\mathrm{fric}},
+\end{equation}
+%
+where each term has a physical meaning. The left side, $W_{\mathrm{ext}}=\sum \fbf_{\mathrm{contact}}\cdot
+\mathrm{d}\ubf_{\mathrm{platen}}$, is the machine work the contact tractions do on the moving platen. On
+the right, $\Delta U_{\mathrm{el}}=\tfrac12\ubf^{\!\top}\!K\ubf$ is the recoverable strain energy of the
+blocks, $W_{\mathrm{pen}}=\tfrac12\sum\varepsilon_n A\,\gn^{2}$ is the recoverable normal penalty energy,
+$W_{\mathrm{stick}}$ is the recoverable tangential spring energy of the stuck nodes, and
+$W_{\mathrm{fric}}=\sum\abs{\tbf_T}\,\abs{\mathrm{d}\bm{s}_p}\ge0$ is the frictional dissipation
+accumulated over the plastic slip increments. The three recoverable terms make up the moving part of the
+balance over a cycle: each one returns to its start value once the load closes,
+$\Delta U_{\mathrm{el}}\to0$, $W_{\mathrm{pen}}\to0$, $W_{\mathrm{stick}}\to0$. The per-cycle closure
+therefore reduces to a single ratio that should equal one,
+%
+\begin{equation}\label{eq:supp_closure}
+\Pi_{\mathrm{cyc}}
+= \frac{W_{\mathrm{ext}}}
+{\,W_{\mathrm{fric}}+\Delta U_{\mathrm{el}}+W_{\mathrm{pen}}+W_{\mathrm{stick}}\,}
+\;\longrightarrow\; 1 .
+\end{equation}
+%
+A value of $\Pi_{\mathrm{cyc}}=1$ means the work in matches the energy out, term for term, over the cycle.
+
+% code: rock_joint_decoder_cyclic.py::energy_report
+Measured per cycle, $\Pi_{\mathrm{cyc}}=1.09$ on the first cycle and $1.01$ on the second, the latter
+inside the acceptance band $[0.98,1.02]$. The first-cycle excess is the recoverable terms not yet having
+returned to zero after a single traversal; by the second cycle they do return, and the ledger closes to
+one percent. Figure~\ref{fig:supp_cyclic} shows the hysteresis loops and the per-cycle ledger.
+
+% code: rock_joint_decoder_cyclic.py::energy_report
+The \emph{cumulative} ratio over the whole history is a different number, $0.17$, far from one. The
+shear-only constant-normal machine work $W_{\mathrm{ext}}$ does not count the dissipation spent seating
+the asperities under the initial normal load. The run begins with
+$W_{\mathrm{fric}}[0]=0.91$ already accumulated while $W_{\mathrm{ext}}[0]=0$, because the normal-load
+seating happens before the tangential schedule starts. That offset enters the denominator of the
+cumulative ratio but never the numerator, so it depresses the ratio permanently. The offset is a
+bookkeeping artifact, the unmeasured seating dissipation, not an energy violation. The per-cycle balance
+of Eq.~\eqref{eq:supp_closure} differences the accumulated work across one full cycle and so cancels the
+constant offset; that per-cycle balance is the correct first-law statement, and it closes.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{rock_joint_cyclic_energy_pub}
+\caption{Phase~4 cyclic shear under constant normal displacement. Left: stick/slip hysteresis loops of the
+shear traction against tangential displacement, with Plesha degradation decaying across cycles. Right: the
+energy ledger of Eq.~\eqref{eq:supp_ledger}; the per-cycle closure $\Pi_{\mathrm{cyc}}$ of
+Eq.~\eqref{eq:supp_closure} is $1.09$ then $1.01$. The cumulative ratio $0.17$ is the uncounted initial
+asperity-seating dissipation, a bookkeeping offset rather than an energy violation.}
+\label{fig:supp_cyclic}
+\end{figure}
+
+\subsection{Explicit ChartMPM cross-check}\label{app:supp:p5}
+
+% code: rock_joint_mpm_xcheck.py::RoughFloorSDF
+The last study checks the frictional response with an independent solver. We discretize a deformable block
+with the explicit finite-deformation ChartMPM (linear B-spline transfers, Neo-Hookean response) and shear
+it against the \emph{same} band-limited rough surface that the chart-FEM uses, sliding the surface beneath
+the block at a constant rate to impose direct-shear kinematics. The contact runs through the existing
+per-particle MPM channel: the gap comes from \code{evaluate\_gap}, the normal force from the penalty model,
+and the tangential force from regularized Coulomb friction, all scattered as physical-space per-particle
+forces through the same projection-to-grid channel as gravity. The solver sees the floor as the analytic
+SDF $\phi(\xbf)=z-h(x-u_x,y)$, where $h$ is the rough height field and $u_x$ is the imposed slide.
+
+% code: rock_joint_mpm_xcheck.py::main
+The explicit solve reproduced the Coulomb friction floor. A flat-bottomed block sliding on the rough floor
+reached an emergent apparent friction $\muapp\approx0.34$ against the prescribed base $\mu=0.4$, within
+about $14\%$, and converged stably under dynamic relaxation. This is an independent dynamic confirmation
+of the frictional channel that the quasi-static FEM uses.
+
+% code: rock_joint_mpm_xcheck.py::RoughFloorSDF
+The explicit solve does not, however, confirm the dilatant interlock. The chart-FEM produces emergent
+dilation and an apparent-friction enhancement above the base value because two rough faces ride over one
+another. A \emph{mated} rough-on-rough block in the explicit solver, with the full surface in conformal
+contact, is unstable in explicit penalty dynamics and diverges without an implicit or mortar contact
+treatment. The cross-check therefore validates friction but not dilatancy. We state this limit rather
+than hide it: the explicit MPM is a consistent check of the Coulomb response, and the emergent dilatancy
+of Section~\ref{sec:cv7} rests instead on the quasi-static implicit chart-FEM, whose consistent tangent
+drives the contact Newton residual to $\sim10^{-9}$. An implicit or mortar contact treatment for the
+mated MPM case is the documented path to a full dynamic cross-check of dilatancy.

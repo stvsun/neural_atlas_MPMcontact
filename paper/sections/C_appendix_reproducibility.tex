@@ -1,0 +1,142 @@
+\section{Reproducibility}\label{app:repro}
+
+This appendix records the software environment, the driver script that produces each
+verification (CV) result, the plotting script that produces each figure, and the provenance
+of the rock-joint data. Each driver writes JSON or \code{.npz} records to
+\code{runs/<name>/} (git-ignored). Each plotting script reads those records and writes a
+\code{.png} file to \code{figures/}.
+
+\subsection{Environment and installation}
+
+The framework is implemented in Python with PyTorch. The code resolves the device and the
+floating-point precision automatically, choosing CUDA, Apple~MPS, or CPU. From the repository
+root, the package installs in editable mode:
+
+\begin{verbatim}
+pip install -e .
+pytest -q          # active contact + chart-FEM suite
+\end{verbatim}
+
+\noindent The heavy three-dimensional solves (the two-block and cyclic studies of
+\S\ref{sec:cv7}) ran on a CPU cluster under a Conda environment that provides PyTorch,
+SciPy, and GUDHI. The analytical evaluators and all plotting run on a workstation. The neural
+chart and SDF checkpoints (\code{.pt}) are git-ignored, so a fresh checkout retrains them
+before the chart-dependent tests pass.
+
+\subsection{Verification and validation drivers}
+
+Table~\ref{tab:repro_drivers} lists, for each CV benchmark, the driver that runs it and the
+closed-form or measured quantity it reports. The paths are relative to the repository root;
+the numerical-CV drivers live under \code{benchmarks/contact/cv\_numerical/}.
+
+\begin{table}
+\centering
+\caption{Benchmark drivers. Each command reproduces the named result without tuning to the
+acceptance target.}
+\label{tab:repro_drivers}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Benchmark & Driver (\code{benchmarks/contact/cv\_numerical/}) & Reports \\
+\midrule
+CV-1 Hertz line contact   & \code{cv1\_hertz\_fem.py}        & $a(F)$ vs $E^\ast$, $\sim$1.6\% \\
+CV-2 Cattaneo stick/slip  & \code{cv2\_cattaneo\_fem.py}     & $c/a$ law, 5--11\% \\
+CV-3 Brazilian disc       & \code{cv3\_brazilian\_fem.py}    & centre stress, 1.62\% \\
+CV-4 nine-disc unit cell  & \code{cv4\_nine\_disc\_fem.py}   & equibiaxial centre, 0.15\% \\
+CV-5 superformula cam     & \code{cv5\_cam\_neural.py}       & chart vs SDF gap; dynamics 0.04\% \\
+CV-7 chart vs SDF (recon) & \code{cv7\_decoder\_verify.py}   & decoder recon 2.2\% vs SDF 15.7\% \\
+CV-7 atlas vs SDF shear   & \code{cv7\_atlas\_vs\_sdf\_shear.py} & dilatancy/strength gap \\
+CV-7 P1 two-block         & \code{rock\_joint\_two\_block.py} & emergent anisotropy ($\muapp$, dilation) \\
+CV-7 P2 roughness law     & \code{cv7\_roughness\_sweep.py}  & $\muapp\!=\!0.61\to1.20$ vs RMS \\
+CV-7 P3 detector-in-loop  & \code{cv7\_transition\_map\_contact.py} & active-set 98.9\% chart / 95.8\% SDF \\
+CV-7 P4 cyclic ledger     & \code{rock\_joint\_decoder\_cyclic.py} & hysteresis; per-cycle balance $\to$1.01 \\
+CV-7 P5 ChartMPM xcheck   & \code{rock\_joint\_mpm\_xcheck.py} & $\muapp\!=\!0.344$ vs base $0.40$ \\
+CV-7 mesh refinement (P2) & \code{cv7\_refinement\_study.py} & peak $\muapp$ 0.885--0.908 \\
+CV-7 mesh refinement (P1) & \code{cv7\_refinement\_study\_p1.py} & peak $\muapp\to0.53\pm2\%$ \\
+CV-7 traction history     & \code{cv7\_traction\_history.py} & $\tau(u)$, $\delta_n(u)$, 4 meshes \\
+CV-7 Inada 2-D capstone   & \code{rock\_joint\_capstone.py}  & chart 2.3\,\textmu m vs SDF 107\,\textmu m \\
+CV-7 manuscript composite & \code{cv7\_manuscript\_results.py} & 6-panel summary table \\
+Koch neural ceiling       & \code{benchmarks/contact/koch\_neural\_ceiling.py} & error-vs-level, cost scaling \\
+CV-7 robustness (5 realiz.) & \code{cv7\_robustness\_study.py} & SDF under-predicts dilatancy $58\%\pm35\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent A few supporting commands are not tied to a single figure. The chart-FEM patch test
+and the manufactured-solution convergence rates run under
+\code{pytest tests/test\_chart\_fem.py}. The rock-joint fidelity and 3-D V\&V tests run under
+\code{pytest tests/test\_rock\_joint\_shear.py} and \code{tests/test\_rock\_joint\_3d.py}.
+The rough-decoder geometry is verified by \code{tests/test\_rough\_decoder\_fem.py}.
+
+\subsection{Training scripts}
+
+Three scripts train the neural representations:
+
+\begin{itemize}
+\item \code{atlas/sdf/train\_analytical\_sdf.py --all} trains the ambient neural SDF baselines
+      (sphere, disc, supershape) with the Eikonal loss.
+\item \code{atlas/charts/train\_radial\_chart.py} trains the CV-5 Fourier-feature radial chart
+      $\rho_\theta$.
+\item The boundary-fitted Fourier height and decoder charts
+      (\code{solvers/contact/profile\_chart\_2d.py}, \code{surface\_chart\_3d.py},
+      \code{solvers/fem/rough\_block\_decoder.py}) train inside their CV-7 drivers.
+\end{itemize}
+
+\subsection{Figure scripts}
+
+Table~\ref{tab:repro_figures} maps each figure file (extension dropped; resolved from
+\code{figures/}) to the script that generates it. All scripts live under
+\code{postprocessing/} except where noted.
+
+\begin{table}
+\centering
+\caption{Figure-generating scripts. Run after the corresponding driver in
+Table~\ref{tab:repro_drivers} has written its \code{runs/} record.}
+\label{tab:repro_figures}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Figure file & Script (\code{postprocessing/}) \\
+\midrule
+\code{tm\_concept\_pub}, \code{tm\_levelset\_vs\_chart\_pub},          & \multirow{2}{*}{\code{plot\_transition\_map\_manual.py}} \\
+\code{tm\_multiarc\_pub}, \code{tm\_radial\_bias\_pub}, \code{tm\_spectral\_bias\_pub} & \\
+\code{fourier\_training\_architecture\_pub}, \code{fourier\_training\_curves\_pub}, & \multirow{2}{*}{\code{plot\_fourier\_training.py}} \\
+\code{fourier\_training\_pipeline\_pub} & \\
+\code{supershape\_chart\_vs\_sdf\_pub}, \code{supershape\_summary\_pub} & \code{plot\_supershape\_demo.py} \\
+\code{koch\_neural\_ceiling\_pub}, \code{koch\_cost\_scaling\_pub} & \code{plot\_koch\_demo.py} \\
+\code{rock\_joint\_capstone\_pub} & \code{plot\_rock\_joint\_capstone.py} \\
+\code{rock\_joint\_atlas\_vs\_sdf\_pub}, \code{rock\_joint\_3d\_twoblock\_modes\_pub}, & \multirow{3}{*}{\code{plot\_rock\_joint\_3d.py}} \\
+\code{cv7\_roughness\_law\_pub}, \code{cv7\_traction\_history\_pub}, & \\
+\code{rock\_joint\_cyclic\_energy\_pub} & \\
+\code{cv7\_refinement\_p1\_vm\_pub} & \code{plot\_rock\_joint\_p1\_refinement\_vm.py} \\
+\code{cv7\_refinement\_p1\_contact\_area\_pub} & \code{plot\_rock\_joint\_p1\_contact\_area.py} \\
+\code{numerical\_cv\_summary\_pub} & \code{plot\_numerical\_cv\_summary.py} \\
+\code{cv7\_manuscript\_pub} & \code{cv7\_manuscript\_results.py} (driver) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Rock-joint data}
+
+The rough surfaces in \S\ref{sec:cv7} come from a real tensile fracture of Inada granite
+(Digital Rocks Portal \#273, DOI \code{10.17612/QXSA-TK92}) \citep{inada2020digitalrocks}.
+The fracture is self-affine, with fractal dimension $D\!\approx\!2.2$, root-mean-square height
+$1.7$\,mm, and in-plane sampling $23.4$\,\textmu m. The raw CSV scans sit under
+\code{downloads/inada\_granite/} (git-ignored). From those scans,
+\code{postprocessing/characterize\_inada\_joint.py} writes the compact profiles used by the
+drivers to \code{data/inada\_joint/*.npz} and reports the roughness statistics. The roughness
+and spectral-cutoff sweeps build their synthetic band-limited surfaces within the drivers
+from a fixed random seed, so the reported $\muapp$ and dilation values reproduce
+bit-for-bit.
+
+\subsection{Caveats on exact reproduction}
+
+Two points govern how closely a re-run matches the reported numbers. First, the deformable
+rock-joint study reports stress magnitudes in a consistent mm--MPa--N system with an
+uncalibrated modulus $E=2000$\,MPa. Stresses scale linearly with $E$, so a different
+modulus rescales them. The apparent friction $\muapp$ (a dimensionless stress ratio)
+and the dilation (geometry-set, in mm) are calibration-independent and do not move. Second,
+the two-block node-to-surface friction residual settles at $\sim$4\% and does not shrink with
+mesh refinement. This residual measures the Coulomb non-smoothness of the moving-master
+contact rather than discretization error, and it is the one quantity whose last digits depend
+on the contact-solver tolerances.

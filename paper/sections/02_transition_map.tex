@@ -1,0 +1,573 @@
+\section{The transition map for contact}\label{sec:tmap}
+
+Every contact algorithm answers two questions about a query point $\xbf$ that sits near a body $X$. Is
+$\xbf$ inside $X$, and if so by how much? This signed depth is the \emph{gap}. Which way is outward? This
+direction is the \emph{normal}. The neural-atlas framework answers both questions from one of two ways of
+describing the body. The thesis of this paper is that the description, not the scheme that enforces the
+contact constraint, controls accuracy on geometrically hard contact.
+
+A few conventions fix the signs and the notation we use throughout. The gap is negative when the point
+penetrates the body: $\gn<0\Leftrightarrow$ penetration, so an interior point reads a negative gap and two
+surfaces that overlap read a negative gap. The Macaulay bracket $\pos{z}=\max(0,z)$ keeps only the
+positive part of its argument and so isolates the penetrating cases. We label bodies $A,B,\dots$; a body's
+interior is the open region $\Omega_X\subset\R^d$ in $d=2$ or $3$ dimensions, and its boundary is the
+surface $\partial\Omega_X$. We describe that boundary in two ways. A \emph{chart} parametrizes
+the boundary directly, $\map{X}:\Theta_X\to\partial\Omega_X$, sending a parameter $\theta\in\Theta_X$ to
+the surface point it labels. A \emph{level set} instead fills all of space with a scalar field
+$\phi_X:\R^d\to\R$ whose zero crossing is the boundary $\partial\Omega_X$. The next subsection compares the
+two.
+
+\subsection{Two ways to describe a body}\label{sec:tmap:two}
+
+\subsubsection{The ambient level set}
+
+The classical description stores a signed-distance function, a scalar field over all of space whose value
+is the distance to the surface, negative inside and positive outside. For body $A$ we train a neural
+network $\phi_A:\R^d\to\R$ to approximate this field, and we read the gap and the outward normal from the
+field and its gradient. The gap is the field value, and the normal is the field's gradient made into a
+unit vector.
+%
+\begin{equation}\label{eq:sdf-gap}
+\gn^A(\xbf)=\phi_A(\xbf),\qquad
+\nbf_A(\xbf)=\frac{\grad\phi_A(\xbf)}{\norm{\grad\phi_A(\xbf)}}.
+\end{equation}
+%
+Here $\grad\phi_A$ is the spatial gradient of the field and $\norm{\cdot}$ is the Euclidean norm, so both
+the gap and the normal come from one automatic-differentiation call. We train the network to behave like a
+true distance through the Eikonal penalty $\mathbb E_{\xbf}\big[(\norm{\grad\phi}-1)^2\big]$, which drives
+the gradient to unit length, together with a surface loss, a normal-alignment loss, and sign-anchor terms
+\citep{liu2020implicit,park2019deepsdf}; the architecture is a $\tanh$ multilayer perceptron.
+
+The level set fails on hard geometry in two ways. Both are built into the description rather than being
+fixable implementation defects. The first is the medial axis. The exact Euclidean signed distance is only
+$C^0$ on the locus of points equidistant from two or more boundary points, because there the nearest-point
+map is multivalued and the gradient $\grad\phi$ jumps. In a concavity this medial set reaches close to the
+surface, so the gradient normal degrades exactly where a nonconvex contact happens
+\citep{kolev2003level}. The second is spectral bias. A coordinate network learns low frequencies first and
+high frequencies slowly or never, because its neural-tangent kernel is Laplace-like
+\citep{rahaman2019spectral}. A network $\phi$ of fixed capacity therefore smooths cusps, asperities, and
+fine detail; it cannot represent a boundary sharper than its capacity ceiling.
+Section~\ref{sec:fourier} makes this quantitative.
+
+\subsubsection{The boundary chart}
+
+The alternative stores only the boundary, written as a function of the boundary's own parameter. Three
+chart families appear in this work, in order of increasing generality. The \emph{radial chart}
+$\rho_X:\Sph^{d-1}\to\R^+$ is a height field on the sphere of directions: for each unit direction it
+records how far the surface lies from the center. It works for star-shaped bodies, those seen entirely
+from one interior point. With center $c_X$ and orientation $Q_X$ (the body axes as columns), the boundary
+point in direction $\hat\ubf$ is $\map{X}(\hat\ubf)=c_X+Q_X\,\rho_X(\hat\ubf)\,\hat\ubf$. The \emph{height
+chart} $h_X:\mathcal D\to\R$ over an open parameter domain $\mathcal D$ is the graph $z=h(x)$ of a
+single-valued rough surface, such as one face of a rock joint. The \emph{decoder chart}
+$D_X:\bm\xi\mapsto\xbf$ is a boundary-fitted volumetric map for general, possibly non-star-shaped geometry,
+inverted by Newton iteration.
+
+A chart costs less to fit than a level set, for a simple reason. The radius or
+height function lives in one dimension fewer than the ambient field, models no interior, and carries no
+medial axis. The price is a precondition that the body must meet (star-shapedness for radial charts,
+single-valuedness for height charts) and a gap measured along a ray rather than perpendicular to the
+surface (Section~\ref{sec:tmap:bias}). The payoff is fidelity, because a $(d{-}1)$-dimensional boundary
+function is far easier to fit sharply than a $d$-dimensional ambient field.
+Figure~\ref{fig:tm-levelset-vs-chart} contrasts the two descriptions.
+
+\begin{figure}
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\footnotesize,>=Stealth,line join=round,
+  starpts/.style={}]
+
+  % ===== reusable star coordinates (concave notches) =====
+  % defined relative to each panel origin via shifts
+
+  %% ---------------------------------------------------------------
+  %% PANEL (a): level set
+  %% ---------------------------------------------------------------
+  \begin{scope}[shift={(0,0)}]
+    % nested OUTER level-set contours (fainter)
+    \draw[gray!35,line width=0.4pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:1.55)(45:0.95)(90:1.55)(135:0.95)(180:1.55)(225:0.95)(270:1.55)(315:0.95)};
+    \draw[gray!50,line width=0.4pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:1.4)(45:0.82)(90:1.4)(135:0.82)(180:1.4)(225:0.82)(270:1.4)(315:0.82)};
+    % the body boundary (zero level set)
+    \draw[black,line width=0.9pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:1.25)(45:0.68)(90:1.25)(135:0.68)(180:1.25)(225:0.68)(270:1.25)(315:0.68)};
+    % nested INNER contours (fainter)
+    \draw[gray!50,line width=0.4pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:1.05)(45:0.52)(90:1.05)(135:0.52)(180:1.05)(225:0.52)(270:1.05)(315:0.52)};
+    \draw[gray!35,line width=0.4pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:0.82)(45:0.38)(90:0.82)(135:0.38)(180:0.82)(225:0.38)(270:0.82)(315:0.38)};
+    % medial axis: dashed line from a concave notch toward interior
+    \draw[red!70,dashed,line width=0.7pt] (45:0.68) -- (0,0);
+    \node[red!75,font=\scriptsize,anchor=west] at (0.18,0.62) {medial axis};
+    % title
+    \node[anchor=north,text width=3.2cm,align=center] at (0,-1.75)
+      {(a) level set $\phi:\mathbb{R}^d\!\to\!\mathbb{R}$};
+  \end{scope}
+
+  %% ---------------------------------------------------------------
+  %% PANEL (b): radial chart
+  %% ---------------------------------------------------------------
+  \begin{scope}[shift={(4.0,0)}]
+    % body boundary in teal
+    \draw[teal,line width=0.9pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:1.25)(45:0.68)(90:1.25)(135:0.68)(180:1.25)(225:0.68)(270:1.25)(315:0.68)};
+    % 8 thin rays center -> boundary
+    \draw[teal!70,line width=0.4pt] (0,0)--(0:1.25);
+    \draw[teal!70,line width=0.4pt] (0,0)--(45:0.68);
+    \draw[teal!70,line width=0.4pt] (0,0)--(90:1.25);
+    \draw[teal!70,line width=0.4pt] (0,0)--(135:0.68);
+    \draw[teal!70,line width=0.4pt] (0,0)--(180:1.25);
+    \draw[teal!70,line width=0.4pt] (0,0)--(225:0.68);
+    \draw[teal!70,line width=0.4pt] (0,0)--(270:1.25);
+    \draw[teal!70,line width=0.4pt] (0,0)--(315:0.68);
+    % center dot
+    \fill[teal] (0,0) circle (1.6pt);
+    \node[teal!80,font=\scriptsize,anchor=north east] at (-0.04,-0.04) {$c$};
+    % a sample angle label
+    \node[teal!80,font=\scriptsize] at (0:1.0) [above] {$\rho(\theta)$};
+    % title
+    \node[anchor=north,text width=3.2cm,align=center] at (0,-1.75)
+      {(b) radial chart $\rho:\mathbb{S}^1\!\to\!\mathbb{R}^{+}$};
+  \end{scope}
+
+  %% ---------------------------------------------------------------
+  %% PANEL (c): the radial gap
+  %% ---------------------------------------------------------------
+  \begin{scope}[shift={(8.0,0)}]
+    % body boundary
+    \draw[teal,line width=0.9pt] plot[smooth cycle,tension=0.7]
+      coordinates {(0:1.25)(45:0.68)(90:1.25)(135:0.68)(180:1.25)(225:0.68)(270:1.25)(315:0.68)};
+    % center dot c
+    \fill[black] (0,0) circle (1.6pt);
+    \node[font=\scriptsize,anchor=north east] at (-0.04,-0.04) {$c$};
+    % exterior point p along ~20 deg ray, beyond boundary
+    \coordinate (P) at (20:1.95);
+    % foot where ray meets boundary (green) ~ rho at 20deg
+    \coordinate (F) at (20:1.15);
+    % the ray c -> p
+    \draw[gray!70,line width=0.5pt,dashed] (0,0)--(P);
+    % unit direction marker hat d
+    \node[font=\scriptsize,anchor=south] at (20:0.7) {$\hat{d}$};
+    % foot dot (green)
+    \fill[teal!60!black] (F) circle (1.8pt);
+    % exterior point p
+    \fill[orange] (P) circle (1.8pt);
+    \node[font=\scriptsize,anchor=west] at ($(P)+(0.06,0.02)$) {$p$};
+    % violet double arrow foot -> p  (the gap)
+    \draw[violet,line width=0.9pt,<->] ($(F)+(20:0.02)$) -- ($(P)-(20:0.02)$);
+    \node[violet,font=\scriptsize,anchor=south west] at ($(F)!0.5!(P)+(0,0.08)$)
+      {$g=r-\rho(\hat{d})$};
+    % title
+    \node[anchor=north,text width=3.2cm,align=center] at (0,-1.75)
+      {(c) the radial gap};
+  \end{scope}
+
+\end{tikzpicture}%
+}
+\caption{Two representations of the same star-shaped body. (a) The ambient level set
+$\phi:\R^d\to\R$ fills all of space; its zero set is the boundary, but it carries a medial axis in the
+interior where $\grad\phi$ is non-smooth, and a fixed-capacity neural $\phi$ low-passes sharp features.
+(b) The radial boundary chart $\rho:\Sph^{1}\to\R^+$ stores only the boundary as a height field on the
+circle of directions, with no ambient field and no medial axis. (c) The gap is read along the ray from
+the center, $\gn=r-\rho(\dhat)$, with the matched normal $\grad_d F=\dhat-\grad_S\rho/r$.}
+\label{fig:tm-levelset-vs-chart}
+\end{figure}
+
+\subsection{The transition map and why it detects contact}\label{sec:tmap:def}
+
+\subsubsection{The idea before the formula}
+
+Here is the central construction in one sentence. Take a point on body $A$'s surface and ask where that
+point lands on body $B$'s surface. The transition map is the rule that answers, carrying every surface
+point of $A$ to its counterpart on $B$. Two charts make this possible: each surface point of $A$ is named
+by a parameter $\theta_A$, each surface point of $B$ by a parameter $\psi_B$, and the transition map turns
+the first name into the second. It does so in two steps. First push the $A$-point into physical space with
+$A$'s chart, then invert $B$'s chart to read off the $B$-parameter at that location.
+%
+\begin{equation}\label{eq:tmap-def}
+\tmap:\ \theta_A\ \longmapsto\ \psi_B=\big(\map{B}^{-1}\circ\map{A}\big)(\theta_A).
+\end{equation}
+%
+Reading the formula left to right: $\map{A}$ takes the parameter $\theta_A$ to the physical point
+$\xbf=\map{A}(\theta_A)$ on $A$, and $\map{B}^{-1}$ takes that physical point back to the matching surface
+parameter $\psi_B$ on $B$. The name is the standard one from differential geometry, where a transition map
+is the change of coordinates $\map{B}^{-1}\circ\map{A}$ between two charts of an atlas; we apply it across
+two bodies to read their contact correspondence. Figure~\ref{fig:tm-concept} illustrates the construction.
+
+Once the correspondence is known, the contact normal follows from the chart's own geometry rather than
+from a signed-distance gradient. Two tangent vectors span the surface at the contact point, and their
+cross product points out of it. Normalizing that cross product gives the unit normal.
+%
+\begin{equation}\label{eq:jacobian-normal}
+\nbf=\frac{\tbf_1\times\tbf_2}{\norm{\tbf_1\times\tbf_2}},\qquad
+\tbf_\alpha=\frac{\partial\map{A}}{\partial\xi^\alpha},
+\end{equation}
+%
+Here $\tbf_\alpha$ is the surface tangent obtained by differentiating the chart $\map{A}$ along its
+parameter direction $\xi^\alpha$, and the normalized cross product $\nbf$ is the outward unit normal. The
+undeformed normal gap is then the chart form of the implicit level-set MPM normal gap
+\citep{liu2020implicit}, $g_{n0}=(\map{}^{(j)}-\map{}^{(i)})\cdot\nbf$, the projection of the
+surface-to-surface offset onto that normal.
+
+\begin{figure}
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\footnotesize,>={Stealth[length=2.4mm]}]
+  \fill[blue!12,draw=blue!70,line width=0.8pt]
+    plot[smooth cycle,tension=0.8] coordinates
+    {(-1.7,1.5) (-0.4,1.85) (0.95,1.0) (1.25,0.0) (0.95,-1.25)
+     (-0.4,-1.7) (-1.7,-1.25) (-2.25,0.0) (-1.95,0.95)};
+  \fill[orange!14,draw=orange!85!black,line width=0.8pt]
+    plot[smooth cycle,tension=0.8] coordinates
+    {(4.5,1.55) (5.85,1.9) (7.0,1.05) (7.35,0.0) (6.9,-1.3)
+     (5.55,-1.7) (4.35,-1.2) (3.95,0.0) (4.15,1.0)};
+  \coordinate (cA) at (-0.55,0.05);
+  \coordinate (cB) at (5.55,0.0);
+  \fill (cA) circle (1.3pt) node[below=1pt]{$c_A$};
+  \fill (cB) circle (1.3pt) node[below=1pt]{$c_B$};
+  \coordinate (x) at (1.1,0.2);
+  \coordinate (foot) at (3.95,0.1);
+  % rays
+  \draw[blue!70,dashed,line width=0.7pt] (cA) -- (x) node[pos=0.45,above,sloped]{$\theta_A$};
+  \draw[orange!85!black,dashed,line width=0.7pt] (cB) -- (foot) node[pos=0.55,below,sloped]{$\psi_B$};
+  \fill (x) circle (1.6pt);
+  \fill[orange!85!black] ($(foot)+(-0.07,-0.07)$) rectangle ($(foot)+(0.07,0.07)$);
+  % gap arrow (long, between separated bodies)
+  \draw[violet,line width=1pt,<->] (x) -- (foot);
+  % spread labels: x-label up-left, gap formula high, foot-label down-right
+  \node[anchor=east] at ($(x)+(-0.05,0.45)$) {$x=\varphi_A(\theta_A)$};
+  \draw[gray,line width=0.3pt] ($(x)+(-0.05,0.40)$) -- (x);
+  \node[violet,anchor=south] at (2.5,1.15) {$g_B(x)=\|x-c_B\|-\rho_B(\psi_B)$};
+  \draw[violet,line width=0.3pt] (2.5,1.12) -- ($(x)!0.5!(foot)+(0,0.06)$);
+  \node[anchor=north west] at ($(foot)+(0.02,-0.18)$) {$\varphi_B(\psi_B)$};
+  % body labels + boxed map
+  \node[font=\small\bfseries,blue!70!black] at (-0.55,-2.05) {body $A$};
+  \node[font=\small\bfseries,orange!75!black] at (5.55,-2.05) {body $B$};
+  \node[draw=black,line width=0.7pt,rounded corners=2pt,inner sep=5pt,font=\small]
+    at (2.5,-2.95) {$\tau_{AB}:\ \theta_A\mapsto\psi_B=(\varphi_B^{-1}\circ\varphi_A)(\theta_A)$};
+\end{tikzpicture}%
+}
+\caption{The transition map $\tmap=\map{B}^{-1}\circ\map{A}$. A boundary point $\xbf=\map{A}(\theta_A)$ of
+body $A$ is taken into physical space, then $B$'s chart is inverted along the ray from $c_B$ to give
+$\psi_B$ and the foot $\map{B}(\psi_B)$. The signed gap $\gn^B(\xbf)=\norm{\xbf-c_B}-\rho_B(\psi_B)$ falls
+out of the inversion; no ambient field is evaluated.}
+\label{fig:tm-concept}
+\end{figure}
+
+\subsubsection{Detection needs no ambient field}
+
+% code: solvers/contact/chart_gap.py::evaluate_gap_chart ; solvers/contact/supershape.py::radial_gap
+Detection asks only for a signed gap and an outward normal at a query point, and neither requires an
+ambient field. Given $B$'s chart, three steps suffice: express the query point $\xbf$ in $B$'s local
+coordinates, invert the chart to find the boundary parameter that the point points toward, and compare the
+two radii. For a star-shaped body all three collapse to almost nothing: the inversion is a closed-form
+direction, and the comparison is a single radius subtraction. We first form
+the body-frame coordinate $\bm d=Q_B^\top(\xbf-c_B)$, which re-expresses the offset from $B$'s center in
+$B$'s own axes, then split it into a direction and a length.
+%
+\begin{equation}\label{eq:radial-gap}
+\dhat=\frac{Q_B^\top(\xbf-c_B)}{\norm{Q_B^\top(\xbf-c_B)}},\qquad
+\gn^B(\xbf)=\underbrace{\norm{Q_B^\top(\xbf-c_B)}}_{r}-\rho_B(\dhat),
+\end{equation}
+%
+Here $\dhat$ is the unit direction from $B$'s center to the query point, $r$ is the distance from the
+center to the point, and $\rho_B(\dhat)$ is the chart's surface radius in that direction; the gap is the
+point's radius minus the surface's radius. This gap is globally single-valued and $C^1$ wherever $\rho_B$
+is, and it is negative exactly when the point lies inside. This is the level set turned inside out. A
+signed-distance function answers ``how far is the nearest surface, in any direction'' by storing a field
+over all of $\R^d$; the transition map answers ``which point of $B$'s boundary does this point correspond
+to, and is it inside'' by storing only $\partial\Omega_B$ and inverting. On star-shaped and single-valued
+geometry the second is both cheaper to store and sharper to fit.
+
+In two dimensions the radial chart can carry an analytic radius, the Gielis superformula, which generates
+a wide family of closed boundaries from a few parameters.
+%
+\begin{equation}\label{eq:superformula-chart}
+\rho(\theta)=\Big(\big\lvert\tfrac1a\cos\tfrac{m\theta}{4}\big\rvert^{n_2}
++\big\lvert\tfrac1b\sin\tfrac{m\theta}{4}\big\rvert^{n_3}\Big)^{-1/n_1},
+\end{equation}
+%
+Here $\theta$ is the polar angle, $m$ sets the number of lobes, and $a,b,n_1,n_2,n_3$ shape the lobes; the
+inverse chart is simply $\theta=\angle\,Q_B^\top(\xbf-c_B)$, the angle of the body-frame offset, evaluated
+by \code{atan2} \citep{gielis2003generic}. The analytic radius and a trained neural radius feed the
+identical gap expression~\eqref{eq:radial-gap}: the evaluator itself is validated against the closed-form
+gap to $10^{-10}$ on a self-test, and the trained neural radius reproduces the analytic gap to
+$3.8\times10^{-3}L$ on the cusped superformula (Section~\ref{sec:verif}), so the neural chart is a drop-in
+replacement for the analytic one.
+
+\subsection{The matched conservative normal}\label{sec:tmap:matched}
+
+One detail decides whether the contact forces conserve energy: the normal we return with the gap must be
+the gradient of that gap. Only then is the penalty force the gradient of a potential, so that the work it
+does is path-independent and nothing leaks. Differentiating the radial gap $F(\xbf)=r-\rho(\dhat)$ asks
+for the gradient of $\rho$ with respect to direction, but that raw gradient is not what we want, because
+$\rho$ is a function of a \emph{unit} vector. Moving along the direction $\dhat$ would change its length,
+and $\rho$ does not respond to a length change. The raw gradient therefore carries a spurious
+radial component that we must remove. We remove it by projecting onto the plane tangent to the direction
+sphere.
+%
+\begin{equation}\label{eq:tangential-proj}
+\grad_S\rho=(I-\dhat\dhat^\top)\,\grad_{\hat d}\rho,
+\end{equation}
+%
+Here $\grad_{\hat d}\rho$ is the raw direction gradient of the radius, $I-\dhat\dhat^\top$ is the
+projector that strips off the component along $\dhat$, and $\grad_S\rho$ is the surviving tangential
+(surface) gradient. With the spurious part gone, the gap gradient in the body frame and the world-frame
+normal both follow cleanly.
+%
+\begin{equation}\label{eq:matched-normal}
+\grad_d F=\dhat-\frac{\grad_S\rho}{r},\qquad
+\nbf=\widehat{\,Q\,\grad_d F\,}.
+\end{equation}
+%
+Here $\grad_d F$ is the gap gradient in $B$'s body frame, the radial unit vector $\dhat$ corrected by the
+tangential slope of the surface, and $\nbf$ is that vector rotated into world axes by $Q$ and normalized
+(the hat denotes normalization). With this matched pair the penalty force is exactly
+$-\grad\!\big(\tfrac12\epsilon_n\pos{-F}^2 V\big)$, the gradient of the penalty potential, and so is
+conservative; an unmatched normal would leak energy. The projection~\eqref{eq:tangential-proj} is what
+makes this work for any non-spherical body, where the slope $\grad_S\rho$ is nonzero.
+
+The forces that consume the matched pair are standard. Penalty, augmented-Lagrangian, and
+regularized-Coulomb friction all take only the triple $(\gn,\nbf,\norm{\fbf_N})$ as input
+\citep{wriggers2006computational,kikuchi1988contact,laursen2002computational,alart1991mixed,simo1992augmented}.
+Because they depend on nothing else, the chart and the level set are interchangeable at the force layer,
+and swapping one description for the other changes only the geometry, never the constraint solver.
+
+This interchangeability has a useful consequence on geometry both descriptions can represent. On a sphere
+the radial chart reproduces the sphere signed distance, gap and normal alike, to machine precision at
+all depths and orientations, and substituting the chart detector into a live two-sphere MPM collision is
+bit-identical in velocity, impulse, and penetration. The chart never does worse than the level set where
+both apply; it pulls ahead only where the level set degrades.
+
+\subsection{Multi-arc enumeration}\label{sec:tmap:multiarc}
+
+The transition map carries a kinematic advantage. Picture sliding a finger
+along body $A$'s whole boundary and, at each step, asking whether that point has crossed into $B$. Wherever
+the answer is yes, the finger is inside a contact region; the boundary breaks into runs of ``inside'' and
+``outside,'' and each inside run is one contact patch. A single closest-point projection cannot see this
+structure, because it returns only the one globally nearest foot. Concretely, we scan $A$'s chart
+$\theta_A\mapsto\xbf=\map{A}(\theta_A)$, evaluate the inverse-chart gap~\eqref{eq:radial-gap} against $B$
+at each $\theta_A$, and mark the parameters with $\gn^B<0$; the contiguous marked runs are the contact
+arcs. For a star shape this is a one-dimensional sweep over $\theta$ in two dimensions, or a geodesic cap
+scan in three dimensions.
+
+Figure~\ref{fig:tm-multiarc} shows the payoff on a nonconvex pair. The boundary scan reports two or more
+disjoint arcs where a single closest-point projection returns only the globally nearest foot and misses
+the second contact entirely. This matters for cams, gears, and any geometry that touches in more than one
+place. On the cusped superformula benchmark of Section~\ref{sec:verif} the chart scan reports $\ge 2$ arcs
+where a single closest-point projection reports $1$. The obstacle chart must still be star-shaped;
+conventional node-to-surface and mortar schemes recover disjoint patches by segment search instead
+\citep{zavarise1998segment,puso2004mortar,fischer2005frictionless}.
+
+\begin{figure}
+\centering
+\resizebox{0.9\linewidth}{!}{%
+\begin{tikzpicture}[font=\footnotesize,>=Stealth,line join=round]
+  % ---------- body B (gently wavy top, filled below) ----------
+  \def\wavetop{
+    (-4.2,0.45)
+    .. controls (-3.3,0.95) and (-2.6,0.05) .. (-1.8,0.55)
+    .. controls (-1.0,1.0)  and (-0.4,0.35) .. (0.3,0.6)
+    .. controls (1.0,0.85)  and (1.7,0.15)  .. (2.4,0.5)
+    .. controls (3.1,0.85)  and (3.6,0.25)  .. (4.2,0.55)
+  }
+  \fill[orange!18]
+    \wavetop -- (4.2,-1.6) -- (-4.2,-1.6) -- cycle;
+  \draw[orange!85!black,thick] \wavetop;
+  \node[orange!60!black,font=\small\bfseries] at (3.3,-1.15) {body $B$};
+
+  % ---------- follower A: two-footed staple ----------
+  % circle centres
+  \coordinate (cL) at (-1.2,1.35);
+  \coordinate (cR) at ( 1.2,1.35);
+  \def\rr{0.55}
+  % top connecting bar
+  \draw[blue!70!black,thick,fill=blue!10]
+    (-1.2,1.95) -- (1.2,1.95) -- (1.2,2.25) -- (-1.2,2.25) -- cycle;
+  % the two circular feet
+  \fill[blue!10] (cL) circle (\rr);
+  \fill[blue!10] (cR) circle (\rr);
+  \draw[blue!70!black,thick] (cL) circle (\rr);
+  \draw[blue!70!black,thick] (cR) circle (\rr);
+  \node[blue!60!black,font=\small\bfseries] at (0,2.7) {follower $A$};
+
+  % ---------- contact arcs dipping below the curve ----------
+  % left foot: lower arc below curve (shallower contact)
+  \draw[red,line width=1.4pt] ([shift=(232:\rr)]cL) arc (232:308:\rr);
+  \node[red] at (-1.2,0.45) {arc 1};
+  % right foot: lower arc below curve (deeper contact)
+  \draw[red,line width=1.4pt] ([shift=(225:\rr)]cR) arc (225:315:\rr);
+  \node[red] at (1.2,0.5) {arc 2};
+
+  % ---------- single CPP on the deeper (right) contact ----------
+  \coordinate (lp) at (1.2,0.8);              % lowest point of right foot
+  \draw[teal!70!black,thick] (lp) circle (0.16);
+  \node[teal!60!black,anchor=west] at (2.05,0.05)
+    {single CPP: 1 foot};
+  \draw[teal!70!black,->] (3.0,0.2) .. controls (2.2,0.4) .. (lp);
+\end{tikzpicture}%
+}
+\caption{A boundary scan over body $A$'s chart evaluates the inverse-chart gap~\eqref{eq:radial-gap} at
+every $\theta_A$ and marks the parameters with $\gn^B<0$. On a nonconvex pair these form two disjoint
+contact arcs; a single closest-point projection returns only the globally nearest foot, missing the
+second contact.}
+\label{fig:tm-multiarc}
+\end{figure}
+
+\subsection{Inverting the chart in practice}\label{sec:tmap:invert}
+
+% code: common/geometry.py::invert_decoder ; solvers/contact/profile_chart_2d.py::vertical_gap
+The step that costs the most is inverting $B$'s chart, $\map{B}^{-1}$, and its cost depends on the chart
+family. It takes three forms, in increasing order of work.
+
+For \emph{radial charts} the inverse is closed form. The boundary parameter is just the direction angle
+$\psi=\angle\,Q_B^\top(\xbf-c_B)$, computed by \code{atan2} in two dimensions or by normalizing
+$Q_B^\top(\xbf-c_B)$ in three dimensions; the cost is $O(1)$ per query with no iteration.
+
+For \emph{height charts} there is nothing to invert at all. The boundary is the graph $\map{}(x)=(x,h(x))$,
+so the domain coordinate $x$ already \emph{is} the inverse-chart coordinate, and the transition map reads
+off the gap by a single height comparison. The gap is how far the query point sits above the surface, and
+the normal is perpendicular to the surface slope.
+%
+\begin{equation}\label{eq:height-gap}
+g_{\mathrm{vert}}(x,z)=z-h_\theta(x),\qquad
+\nbf=\frac{(-h_\theta'(x),\,1)}{\sqrt{1+h_\theta'^2(x)}}.
+\end{equation}
+%
+Here $z$ is the height of the query point, $h_\theta(x)$ is the learned surface height at $x$, and
+$h_\theta'(x)$ is its slope; the normal tilts away from vertical in proportion to that slope, and the
+denominator normalizes it. The three-dimensional analogue is
+$\nbf=(-h_x,-h_y,1)/\sqrt{1+\norm{\grad h}^2}$, built from the two surface slopes $h_x,h_y$. This is the
+form the rough rock-joint detector of Section~\ref{sec:cv7} uses, and it is the reason that detector costs
+$O(1)$ per query with no Newton solve.
+
+For a general \emph{decoder chart} $D_B(\bm\xi)$ no closed form exists, so the inverse is found by Newton
+iteration: we look for the parameter $\bm\xi$ whose image $D_B(\bm\xi)$ equals the query point $\xbf$, by
+driving the residual $D_B(\bm\xi)-\xbf$ to zero.
+%
+\begin{equation}\label{eq:newton-invert}
+\bm\xi^{(k+1)}=\bm\xi^{(k)}-J^{-1}\big(D_B(\bm\xi^{(k)})-\xbf\big),\qquad
+J=\frac{\partial D_B}{\partial\bm\xi}.
+\end{equation}
+%
+Here $\bm\xi^{(k)}$ is the $k$th guess, $J$ is the decoder Jacobian assembled by automatic
+differentiation, and each step corrects the guess by the linearized residual. We stabilize the solve by
+flooring the Jacobian's singular values and keeping the determinant consistent with the clamped spectrum,
+which guards against a near-folded chart. The initial guess is the linear local-coordinate projection, and
+the iteration runs until $\norm{D_B(\bm\xi)-\xbf}<10^{-8}$.
+
+\subsection{A conservative-large but sign-exact gap}\label{sec:tmap:bias}
+
+% code: solvers/contact/contact_manager.py::body_gap_normal
+The radial inverse-chart gap buys its cheapness at one cost: it is not a true Euclidean distance. Because
+it measures along the ray from the center rather than perpendicular to the surface, it overshoots the
+perpendicular distance whenever the surface is tilted relative to the ray. The angle $\alpha$ is the tilt
+between the ray direction $\dhat$ and the true surface normal at the radial foot, and $g_\perp$ is the
+perpendicular (shortest) distance.
+%
+\begin{equation}\label{eq:radial-bias}
+g_{\mathrm{rad}}=\frac{g_\perp}{\cos\alpha}+O(g^2)
+\quad\Longrightarrow\quad
+\abs{g_{\mathrm{rad}}}\ge\abs{g_\perp}\ \text{always}.
+\end{equation}
+%
+Because $\cos\alpha\le1$, the radial gap $g_{\mathrm{rad}}$ is never smaller in magnitude than the
+perpendicular gap $g_\perp$; the two agree only when the ray meets the surface head-on.
+Figure~\ref{fig:tm-radial-bias} shows the geometry. The consequences are precise and benign. The sign of
+$g_{\mathrm{rad}}$ is exact, so for star-shaped bodies the active set $\{\gn<0\}$ of penetrating points is
+identical to the true level set's. The magnitude is conservative-large, so an exterior point reads a
+slightly larger gap and a penetrating point a slightly deeper penetration; the penalty it produces is
+marginally stiffer, never softer. The value equals the signed distance only on the sphere and in the
+$g\to0$ limit.
+
+The radial field is $C^1$ but not eikonal, meaning its gradient is continuous but not of unit length. In
+deep concave valleys $\norm{\grad g}$ can reach $\sim10^4$, because the radial normal rotates rapidly there.
+A perpendicular-foot refinement recovers the true normal-projected distance, but we use it only for
+verification, because that foot jumps across the medial axis and would leak energy inside the integrator.
+
+Swapping the chart detector in for the level set is a one-flag change. Declaring a body with the chart
+detector routes its gap-normal dispatch to the radial evaluator instead of the signed-distance evaluator,
+while the force laws, the broad-phase culler, and the MPM and FEM scatter all stay the same. Floors and
+half-spaces, which are not star-shaped about any finite center, stay on the signed-distance path. The
+transition map is therefore an opt-in detector that composes with the rest of the contact stack rather than
+forking it. For height charts the matching statement is that~\eqref{eq:height-gap} is the small-slope-exact
+normal-projected gap, not the closest-point distance; for those charts the fidelity story is the asperity
+slopes, not the gap magnitude, as Section~\ref{sec:cv7} measures.
+
+\begin{figure}
+\centering
+\resizebox{0.62\linewidth}{!}{%
+\begin{tikzpicture}[font=\footnotesize,>=Latex,line join=round]
+  % ---- geometry ----------------------------------------------------------
+  % wall inclined ~20 deg from vertical: direction (sin20, cos20)
+  \coordinate (W1) at (1.30,-2.20);   % wall bottom
+  \coordinate (W2) at (3.45, 3.70);   % wall top
+  % interior point c (lower-left)
+  \coordinate (c)  at (-0.70,-0.60);
+  % radial foot on the wall (ray crossing)
+  \coordinate (F)  at (1.85,-0.50);
+  % exterior point p along the ray c->F, beyond the wall
+  \coordinate (p)  at (3.55, 0.62);
+
+  % ---- shaded interior side of the wall ----------------------------------
+  \begin{scope}
+    \clip (-1.6,-2.4) rectangle (4.6,4.0);
+    \fill[teal!12]
+      ($(W1)!1!(W2)$) -- (W1) -- (-1.6,-2.4) -- (-1.6,4.0) --
+      ($ (W2) + (-1.6,0) $) -- (W2) -- cycle;
+  \end{scope}
+  % cleaner: just fill the half-plane left of the wall
+  \begin{scope}
+    \clip (-1.6,-2.4) rectangle (4.6,4.0);
+    \fill[teal!12] (W1) -- (W2) -- (-1.6,4.0) -- (-1.6,-2.4) -- cycle;
+  \end{scope}
+
+  % ---- the wall (body boundary) ------------------------------------------
+  \draw[teal,line width=1.6pt] (W1) -- (W2)
+        node[pos=0.93,right=2pt,teal] {wall $\partial\Omega$};
+
+  % ---- outward unit normal n at the radial foot --------------------------
+  % outward = to the right of the wall; normal dir (cos20, -sin20) rotated:
+  \coordinate (N) at ($(F)+(0.94,-0.34)$);
+  \draw[->,black,line width=0.9pt] (F) -- (N) node[above right=-1pt,black] {$n$};
+
+  % ---- radial ray  c -> foot -> p ----------------------------------------
+  \draw[violet,line width=1.0pt,->] (c) -- (p);
+  % along-ray gap segment foot->p (drawn in green over the ray)
+  \draw[teal!70!black] (F) -- (p);
+
+  % ---- perpendicular drop from p to the wall -----------------------------
+  % foot of perpendicular from p onto line (W1)-(W2)
+  \coordinate (Q) at ($(W1)!(p)!(W2)$);
+  \draw[red,line width=1.0pt] (p) -- (Q);
+  \draw[red,fill=red] ($(Q)+(-0.06,-0.06)$) rectangle ($(Q)+(0.06,0.06)$);
+  \node[red,below left=1pt and 0pt of Q,align=center] {perpendicular\\ foot};
+
+  % ---- angle alpha between normal and ray --------------------------------
+  \pic[draw=black,angle radius=0.95cm,angle eccentricity=1.28,
+       "$\alpha$"black] {angle = N--F--p};
+
+  % ---- points ------------------------------------------------------------
+  \fill[black] (c) circle (2.2pt) node[below left=0pt,black] {$c$};
+  \fill[black] (p) circle (2.2pt) node[above right=0pt,black] {$p$};
+  \fill[teal!70!black] (F) circle (2.2pt);
+  \node[teal!70!black,below=10pt,align=center] at ($(F)+(-0.15,-0.05)$)
+       {radial foot\\ $\rho(\hat d)$};
+
+  % ---- segment labels ----------------------------------------------------
+  \node[teal!70!black] at ($(F)!0.5!(p)+(0.18,0.30)$) {$g_{\mathrm{rad}}$};
+  \node[red] at ($(p)!0.5!(Q)+(0.34,0.02)$) {$g_\perp$};
+
+  % ---- boxed identity ----------------------------------------------------
+  \node[draw,rounded corners,inner sep=5pt,fill=gray!6,align=center,
+        font=\small] at (1.2,-3.15)
+       {$g_{\mathrm{rad}}=g_\perp/\cos\alpha
+         \ \Rightarrow\ |g_{\mathrm{rad}}|\ge|g_\perp|$};
+\end{tikzpicture}%
+}
+\caption{On an inclined flank the ray from the center meets the surface at angle $\alpha$ to the true
+normal, so the radial foot and the perpendicular foot differ and
+$g_{\mathrm{rad}}=g_\perp/\cos\alpha\ge g_\perp$. The sign is exact, which yields the active-set
+equivalence with the level set; the magnitude is conservative-large.}
+\label{fig:tm-radial-bias}
+\end{figure}

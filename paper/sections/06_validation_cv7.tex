@@ -1,0 +1,149 @@
+\section{Validation: a real rough rock joint (CV-7)}\label{sec:cv7}
+
+The closed-form hierarchy of Section~\ref{sec:verif} verifies the solver against problems where the answer is known. There the transition map is exercised on cusped and fractal geometry, but the gains remain abstract: a sharper gap, a cheaper representation. This section closes the argument on a problem with no closed form and direct engineering stakes, the direct shear of a natural rock joint, where resolving or smoothing the asperity geometry changes the \emph{predicted shear strength} of the interface. The quantity the chart and the level set disagree about is the one an engineer would design with.
+
+\paragraph{What a direct-shear test of a rock joint measures.} A rock joint is a fracture surface inside rock: the two faces left behind when the rock splits. The faces are rough, and their bumps, the \emph{asperities}, interlock like two meshed sawteeth. In a direct-shear test, a press holds the two faces together under a fixed normal stress $\sigma_n$ and then slides the top face sideways over the bottom one while recording the shear stress $\tau$ needed to keep it moving. Because the asperities interlock, the top face cannot slide horizontally without also riding up the flanks of the bumps, and the joint opens vertically as it shears. That climbing is \emph{dilatancy}, and it makes the joint stronger than a flat sawcut would be, because part of the applied shear now does work lifting the normal load. Engineers summarize the measured resistance by the \emph{apparent friction}, the stress ratio $\muapp=\tau/\sigma_n$, and read it as an \emph{apparent friction angle} $\arctan\muapp$ that combines the material's base friction with the geometric climb. The asperity geometry, not a material constant, sets how much extra strength the climb supplies, so a method's accuracy on this test is decided by how faithfully it represents the bumps.
+
+The plan is built only after the analytical suite earns the right to make the claim. We first state the problem, the data, and the closed-form anchor that pins the emergent friction law (Section~\ref{sec:cv7-data}). We then report the head-to-head reconstruction and its mechanical consequence on the real Inada profile (Section~\ref{sec:cv7-headline}), carry the machinery through two mutually deformable blocks (Section~\ref{sec:cv7-p1}) and a dilatancy-versus-roughness law (Section~\ref{sec:cv7-p2}), and close with the atlas-versus-level-set comparison on identical shear (Section~\ref{sec:cv7-payoff}). Three further studies, the transition-map detector inside the FEM contact loop, a cyclic energy ledger, and an explicit ChartMPM cross-check, are reported in the supplementary appendix (Appendix~\ref{app:supp}).
+
+\subsection{Problem, data, and the Patton anchor}\label{sec:cv7-data}
+
+% code: benchmarks/contact/cv_numerical/rock_joint_shear.py
+The specimen is a real surface, not an idealized one. It is a tensile fracture in Inada granite (Digital Rocks Portal \#273, DOI~\code{10.17612/QXSA-TK92}; \citealp{inada2020digitalrocks}), scanned as a height map $z(x,y)$ that gives the surface elevation $z$ over the in-plane coordinates $(x,y)$. The scan is sampled at $23.4~\mu$m, and the surface is self-affine: its roughness repeats statistically across scales, with Hurst exponent $H\approx0.78$ and fractal dimension $D\approx2.2$, so asperities exist from the micron sampling up to the joint length. The root-mean-square roughness is $1.70$~mm, matching the published value. The point of using this specimen is that no equation predicts its shear response; geometric fidelity is the only thing standing between a method and the right answer.
+
+Each of the two mating faces is carried by a learned height chart $h_\theta:\mathcal D\to\R$ (Section~\ref{sec:fourier}), a random-Fourier-feature MLP with weights $\theta$ that stores the surface as a graph $z=h_\theta(x)$ rather than as a field in the surrounding space. Because the surface is single-valued, with one height per in-plane point, the chart is already its own inverse coordinate. The transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which composes one face's boundary chart with the inverse of the other's, then needs no numerical inversion, and the signed gap reduces to a vertical offset. The next equation states that gap and the surface normal it carries.
+%
+\begin{equation}\label{eq:cv7-gap}
+\gn(x,z)=z-h_\theta(x),\qquad
+\nbf=\frac{(-h_\theta'(x),\,1)}{\sqrt{1+h_\theta'(x)^2}},\qquad \gn<0\ \Leftrightarrow\ \text{penetration},
+\end{equation}
+%
+Here $\gn$ is the signed normal gap (negative when the point lies below the surface, i.e.\ in penetration), $\nbf$ is the unit outward normal built from the surface slope $h_\theta'(x)$, and the equation says simply that the gap is how far a point sits above or below the height graph. The slope $h_\theta'(x)$ is the moving part: it sets the normal direction, and through it the tilt of every contact force. The solver receives the small-slope vertical proxy of the gap, and the true foot point is recovered only for verification.
+
+The two faces are sheared under constant normal stress, with the normal degree of freedom solved to equilibrium at each shear increment, so the test is quasi-static direct shear. Friction is \emph{plain Coulomb}: the local coefficient $\mu=\tan\phi_b$ is held constant, where $\phi_b$ is the base friction angle of the rock material. There is \emph{no imposed dilatancy law}. The dilation and the apparent friction angle are therefore emergent outputs of the resolved asperity geometry, which is precisely what makes geometric fidelity the entire story. We report the apparent friction as the stress ratio $\muapp=\tau/\sigma_n$.
+
+% code: benchmarks/contact/cv_numerical/rock_joint_shear.py
+The method has one real closed-form anchor, and it comes from the simplest interlocking surface. Patton \citep{patton1966multiple} idealized a joint as two mating sawtooth faces whose flanks all rise at one asperity angle $i$. As the top face shears, it must climb each flank, so the local friction acts on a contact plane tilted by $i$, and the measured strength is the base friction rotated by the climb. The next equation is that bilinear Patton law: it expresses the apparent friction of an ideal sawtooth joint in terms of the base friction $\mu$ and the asperity angle $i$.
+%
+\begin{equation}\label{eq:patton}
+\muapp=\tan(\phi_b+i)=\frac{\tan i+\mu}{1-\mu\tan i},
+\end{equation}
+%
+The apparent friction angle is the base angle $\phi_b$ plus the climb angle $i$, and the joint dilates at rate $\tan i$ as the block rides the flank. Equation~\eqref{eq:patton} is the right anchor here for two reasons: it is exact for the sawtooth, and it ties strength directly to the resolved slope $i$, the very quantity the chart and the level set disagree about. We do not impose it; we feed plain Coulomb friction and the resolved tilt to the solver, and the Patton law must come out. On a mating sawtooth the framework reproduced \eqref{eq:patton} to $0.00\%$, with the dilation rate equal to $\tan i$ to within $1\%$. This anchors the no-closed-form real-surface results that follow. The rock-mechanics literature reads $i$ as the joint-roughness coefficient \citep{barton1977shear,barton1990review}; here $i$ is not a fitted coefficient but the slope distribution the chart resolves directly.
+
+\subsection{Chart versus level set on the real Inada profile}\label{sec:cv7-headline}
+
+% code: benchmarks/contact/cv_numerical/cv7_real_inada_decoder.py
+The head-to-head fits two representations to the same Inada profile and then shears them. The first is the height chart $h_\theta$. The second is the comparison baseline: an ambient 2-D neural SDF $\phi(x,z)$, a plain coordinate MLP that learns the signed distance to the surface as a field in the plane, from whose zero level set we extract a reconstructed surface $h_{\rm SDF}(x)$. We compare the two on three things in turn: how well each reconstructs the surface, how well each captures the asperity slope, and what shear strength each then predicts.
+
+The reconstruction gap is large and one-signed. The height chart reproduced the measured surface to $2.3~\mu$m with 66k parameters; the ambient SDF reached only $107~\mu$m, $47\times$ worse, and did so with \emph{more} parameters (83k). The level set spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well. The mechanism is the spectral bias of a fixed-capacity coordinate MLP \citep{rahaman2019spectral}: such a network learns smooth, low-frequency content first and starves the sharp high-frequency detail. The Fourier-feature encoding of the chart defeats that bias \citep{tancik2020fourier}, whereas the plain SDF carries it intrinsically.
+
+% code: benchmarks/contact/cv_numerical/cv7_real_inada_decoder.py
+Reconstruction error in heights is the wrong metric for contact. Friction and dilation depend on the asperity \emph{angle} $i=\arctan\abs{h'}$, the local slope of the surface, not on the height itself. On slope the two representations separate. The chart reproduced the mean asperity angle, $19.8^\circ$ against $19.4^\circ$ for the true surface, while the SDF's spectral bias smoothed it to $12.5^\circ$. Through the Patton law \eqref{eq:patton}, a smoothed slope is a softer joint: shearing the two representations, the level set under-predicted the peak shear strength by $61\%$. The total dilation, by contrast, was barely affected ($0.5\%$). The split is itself diagnostic. Dilation is set by the large-scale waviness the SDF does capture, while strength is controlled by the asperity slope the SDF smooths, so a strongly affected strength beside a barely affected dilation is the physical signature of where the level set fails, not a tuned outcome. Figure~\ref{fig:cv7-capstone} collects the results.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth]{rock_joint_capstone_pub}
+  \caption{Direct shear of the real Inada-granite tensile fracture, both faces carried by learned height
+  charts. (a) the scanned Inada surface; (b) the Patton method anchor, reproduced to $0.00\%$ from plain
+  Coulomb friction on the resolved tilt; (c) the height chart resolves the asperities the ambient neural
+  SDF smooths away (shaded); (d) the chart reconstructs the surface to $2.3~\mu$m and the SDF to
+  $107~\mu$m, smoothing the mean asperity angle $19.4^\circ\!\to\!12.5^\circ$; (e) through the Patton law
+  this under-predicts the peak shear strength by $61\%$; (f) the headline numbers. The dilation, set by the
+  large-scale waviness the SDF does capture, is barely affected ($0.5\%$).}
+  \label{fig:cv7-capstone}
+\end{figure}
+
+The defensible claim is narrow and stated as such. It is \emph{not} that the chart has a lower height RMSE than the SDF on a well-sampled single-valued profile, since dense interpolation of heights is easy for both. It is that the SDF smooths the asperity \emph{slopes}, and that the smoothing under-predicts strength through \eqref{eq:patton}, together with the storage scaling: the chart is $O(N_{\rm surface})$ with $O(1)$ queries and, with Fourier features, no spectral-bias ceiling, whereas the ambient SDF must represent a 2-D field whose zero set is the surface. This is the same scaling argument as the Koch ceiling (CV-6), here on a real surface spanning roughly $3.5$ decades of scale, from $23.4~\mu$m asperities over a $73$~mm joint. Single profiles are single-asperity noisy in their peak, so the reported strength uses the steady or ensemble response. The surfaces are single-valued, so the argument rests on the spectral-bias ceiling and storage, not on overhangs.
+
+\subsection{Phase 1: two mutually deformable decoder blocks}\label{sec:cv7-p1}
+
+% code: benchmarks/contact/cv_numerical/rock_joint_two_block.py
+The Inada result treats the blocks as rigid. Phase 1 makes both faces deformable. Two elastic blocks, each carried by a boundary-fitted Fourier ChartDecoder $D_X:\boldsymbol\xi\mapsto\xbf$ that maps a reference coordinate $\boldsymbol\xi$ to the deformed position $\xbf$ (Section~\ref{sec:fourier}), meet at a fully rough mating interface and exchange node-to-surface penalty and regularized Coulomb forces through the chart-FEM solver. Both faces are rough; neither is a flat platen; the contact is mutual. The roughness lives in the decoder geometry, not in an interface constitutive law, so dilation and strength again emerge from the resolved bumps rather than from a calibrated rule.
+
+% code: benchmarks/contact/cv_numerical/rock_joint_two_block.py
+The geometry is verified before any mechanical claim. The Fourier decoders reconstruct the rough faces without element foldover ($\det J\in[0.97,1.03]$ on every element, so the chart Jacobian stays positive and the mesh never inverts), and a method-of-manufactured-solutions study on the curved chart of \emph{both} blocks recovered the optimal $O(h^2)$ convergence of the P1 discretization (measured rates $2.39$ and $1.95$). The chart-FEM provably solves on the rough geometry it resolves.
+
+The mechanical response is emergently \emph{anisotropic}: the joint resists differently depending on which way it is sheared relative to the asperity fabric. Shearing across, along, and obliquely to that fabric gave distinct peak apparent friction, with $\muapp$ of $0.42$ (out-of-plane), $0.54$ (in-plane), and $0.74$ (mixed), and with dilation ranging from $0.038$ to $0.090$~mm across the three modes. No direction-dependent friction is imposed; the anisotropy is the asperity geometry expressed through plain Coulomb. Figure~\ref{fig:cv7-twoblock} shows the three modes.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth]{rock_joint_3d_twoblock_modes_pub}
+  \caption{Phase 1: two mutually deformable decoder blocks sheared across, along, and obliquely to the
+  asperity fabric. The peak apparent friction $\muapp$ ($0.42/0.54/0.74$ out-of-plane/in-plane/mixed),
+  the emergent dilation, and the transverse traction differ by shear direction. The anisotropy is produced
+  by the resolved geometry under plain Coulomb friction, with no direction-dependent friction imposed.}
+  \label{fig:cv7-twoblock}
+\end{figure}
+
+% code: benchmarks/contact/cv_numerical/rock_joint_two_block.py
+The emergent response is mesh-converged. Refining the two-block shear across four meshes ($n_{\rm cells}=6,8,10,12$; $2.6$k to $20.7$k tetrahedra), the peak $\muapp$ settled to $\approx0.53$ within $2\%$ ($0.510\to0.528\to0.535\to0.526$) and the total dilation converged to $\approx0.063$~mm ($0.094\to0.078\to0.066\to0.063$~mm; the coarse mesh over-predicts), with $\det J_{\min}$ steady near $0.96$. Figure~\ref{fig:cv7-p1vm} shows the von Mises field on both blocks across refinement. Two points deserve comment. First, the two-deformable, moving-master, node-to-surface Coulomb friction residual stays at $3.8$ to $4.8\%$ across all meshes. Because it is mesh-\emph{independent}, it reflects the non-smoothness of the moving-master contact, not discretization error, and the frictionless and one-block cases converge to $10^{-9}$. An augmented-Lagrangian or mortar formulation \citep{alart1991mixed,simo1992augmented,puso2004mortar} is the route to tight convergence and is left as future work. Second, the rigid-platen prescribed-displacement boundary concentrates the imposed shear into the top element layer and produces a spurious von Mises spike there. The joint-interface stress and the contact-derived $\muapp$ and dilation are unaffected, since they come from the contact forces, and the platen layer is trimmed for display.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth]{cv7_refinement_p1_vm_pub}
+  \caption{Phase 1 mesh convergence: von Mises stress on both deformable blocks across mesh refinement
+  ($n_{\rm cells}=6\to12$, $2.6$k$\to$$20.7$k tetrahedra; nodal-averaged, platen layer trimmed). The peak
+  apparent friction settles to $\approx0.53$ within $2\%$ and the total dilation to $\approx0.063$~mm.}
+  \label{fig:cv7-p1vm}
+\end{figure}
+
+\subsection{Phase 2: the dilatancy-versus-roughness law}\label{sec:cv7-p2}
+
+% code: benchmarks/contact/cv_numerical/cv7_roughness_sweep.py
+Phase 2 asks how strength depends on roughness, and builds the dilatancy law from the geometry rather than calibrating one. Holding the friction coefficient and the loading protocol fixed and varying only the root-mean-square roughness of the decoder surface, the peak apparent friction rose monotonically from $0.61$ to $1.20$ as the surface RMS rose from $0.022$ to $0.066$~mm, with the emergent dilation tracking it ($0.018\to0.059$~mm). The trend is the expected one, in which a rougher joint mobilizes a higher apparent friction angle and dilates more. It is recovered here as an output of resolved geometry under plain Coulomb, in the direction of the empirical Barton trend \citep{barton1977shear,barton1990review}. The same monotone law appears when the spectral cutoff of the decoder is swept instead of the amplitude ($0.68\to1.21$), which isolates the resolved frequency content as the control. Across the entire sweep the decoder reconstruction stayed under $8\%$ of RMS, so the strength variation is geometry the chart resolves, not a reconstruction artifact. Figure~\ref{fig:cv7-roughness} plots the law.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth]{cv7_roughness_law_pub}
+  \caption{Phase 2: the emergent dilatancy-versus-roughness law. Peak apparent friction $\muapp$ and
+  emergent dilation rise monotonically with surface RMS ($\muapp:0.61\to1.20$ as RMS $0.022\to0.066$~mm)
+  and with the decoder spectral cutoff ($0.68\to1.21$). The decoder reconstruction stays under $8\%$ of RMS
+  across the sweep, so the strength variation is resolved geometry, not reconstruction error.}
+  \label{fig:cv7-roughness}
+\end{figure}
+
+\subsection{Atlas versus level set on identical shear: the payoff}\label{sec:cv7-payoff}
+
+% code: benchmarks/contact/cv_numerical/cv7_atlas_vs_sdf_shear.py
+The two preceding subsections establish that strength and dilatancy are emergent properties of the resolved geometry. The payoff runs the \emph{identical} shear twice: once on the geometry from the atlas (the true rough surface) and once on the geometry from the ambient SDF's smoothed zero level set, and reads off the difference in the predicted mechanics. A band-limited rough surface is carried by a trained 3-D ChartDecoder, verified first: the Fourier decoder reconstructs the surface to $2.2\%$ of RMS, against $48\%$ for a vanilla $\tanh$ decoder and $\sim16\%$ for the ambient neural SDF, with no element foldover and $O(h^2)$ chart-FEM convergence (Section~\ref{sec:fourier}). The same band-limited surface is then sheared under chart-FEM Coulomb friction.
+
+% code: benchmarks/contact/cv_numerical/cv7_atlas_vs_sdf_shear.py
+On the atlas geometry the dilatancy emerges from the asperities with no effective angle imposed. With friction switched off, the apparent friction rises from $0$ to $0.171$, a pure geometric dilatancy with dilation angle $\approx9.7^\circ$ produced by interlocking alone, and with $\mu=0.3$ it rises from an initial $0.24$ to a peak of $0.467$, the dilatant strengthening of \eqref{eq:patton} read off the real geometry. On the SDF-smoothed geometry the same shear under-predicts the emergent dilatancy by $98\%$ (frictionless: $0.004$ against $0.171$, because the smoothed surface has almost no asperity slope and hence almost no dilatancy) and the shear strength by $35\%$ (with friction: $0.306$ against $0.467$). Table~\ref{tab:cv7-atlas-sdf} collects the comparison and Figure~\ref{fig:cv7-atlas-sdf} shows it. No dilation angle is supplied to either run; the geometry produces it, and the level set, by smoothing the geometry, fails to.
+
+\begin{table}
+  \centering
+  \caption{Atlas versus level set on the identical band-limited rough-block shear. The boundary-fitted
+  Fourier chart resolves the asperity geometry the ambient SDF smooths; the smoothing under-predicts the
+  emergent dilatancy and strength. No effective dilation angle is imposed, and both quantities emerge from
+  the resolved geometry.}
+  \label{tab:cv7-atlas-sdf}
+  \begin{tabular}{lccc}
+    \toprule
+    Quantity & Atlas (chart) & Level set (SDF) & SDF under-predicts \\
+    \midrule
+    Rough-surface reconstruction (\% of RMS)      & $2.2$   & $15.7$  & --- \\
+    Contact-detection gap RMSE (\% of RMS)         & $4.2$   & $44.7$  & $10.5\times$ sharper \\
+    Frictionless peak $\muapp$ (geometric dilatancy) & $0.171$ & $0.004$ & $98\%$ \\
+    Frictional peak $\muapp$ (strength)            & $0.467$ & $0.306$ & $35\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\linewidth]{rock_joint_atlas_vs_sdf_pub}
+  \caption{The atlas-versus-level-set comparison on identical shear. Chart-FEM Coulomb friction
+  on the real rough geometry (dilatancy emergent) against the same shear on the SDF-smoothed geometry. The
+  level set under-predicts the emergent dilatancy by $98\%$ (frictionless) and the shear strength by $35\%$.
+  No effective dilation angle is imposed; the resolved geometry produces it, and the smoothed geometry does
+  not.}
+  \label{fig:cv7-atlas-sdf}
+\end{figure}
+
+The result holds on real data, not only the synthetic band-limited surface. On an actual Inada-granite topography patch resolved at the mesh scale, the atlas decoder reconstructs the surface to $3.2\%$ of RMS against the SDF's $15.8\%$, and the level set under-predicts the frictionless geometric dilatancy by $\sim60\%$ and the friction strength by $\sim17\%$. The two geometries must not be conflated. The $61\%$ strength figure is the real Inada 1-D profile (Section~\ref{sec:cv7-headline}), and the $98\%/35\%$ pair is the synthetic 3-D decoder run. The sign is nonetheless uniform across both, and across five independent roughness realizations the level set under-predicts the emergent dilatancy by $58\%\pm35\%$. The magnitude depends on how much asperity slope each realization's smoothing destroys, but the under-prediction itself is a statistical fact, not a cherry-picked surface.
+
+% code: benchmarks/contact/cv_numerical/cv7_atlas_vs_sdf_shear.py
+Three further studies carry the program beyond this headline and are reported in the supplementary appendix (Appendix~\ref{app:supp}): the transition-map height-chart detector routed as the FEM $(\text{gap},\text{normal})$ contract (active-set agreement $98.9\%$ for the chart against $95.8\%$ for the ambient SDF on $10^5$ query points, at $1.47\times$ the per-query cost), a cyclic stick/slip energy ledger that closes per cycle, and an explicit ChartMPM cross-check that reproduces the Coulomb friction floor.
+
+The scope of CV-7 is stated plainly. The blocks here are one deformable face on a rigid mating surface, or two single-realization deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the measured thesis is firm: the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength ($61\%$ Inada, $35\%$ synthetic) and dilatancy ($98\%$ synthetic frictionless) on a problem an engineer would design with.

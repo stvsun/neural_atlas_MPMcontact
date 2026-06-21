@@ -1,0 +1,83 @@
+\section{Chart training and verification protocol}\label{app:training}
+
+Every coordinate chart in this work is a small multilayer perceptron with a Fourier-encoded input. We train each one by the same regression recipe and admit it to a contact solve only after it passes a fixed set of acceptance checks. This appendix records the four chart families and their Fourier banks (Sec.~\ref{app:training:families}), the training recipe shared by all of them (Sec.~\ref{app:training:recipe}), and the verify-first acceptance thresholds that a chart must clear before it enters a solve (Sec.~\ref{app:training:verify}). The charts differ only in their domain and in which Fourier bank they carry. The optimizer, the network, and the schedule are the same for all four; the loss is mean-squared error for the height and decoder charts and mean-absolute error for the radial chart.
+
+\subsection{Four chart families, three Fourier banks}\label{app:training:families}
+
+% code: solvers/contact/profile_chart_2d.py::NeuralHeight1D ; solvers/contact/surface_chart_3d.py::NeuralHeight2D ; solvers/contact/radial_chart_2d.py::NeuralRho2D ; solvers/fem/rough_block_decoder.py::RoughBlockDecoder
+A chart maps a low-dimensional parameter on the body's boundary to a coordinate in physical space; the volumetric decoder maps a parameter on the reference cube instead. Three of the four charts are surface charts. The fourth is a boundary-fitted decoder $\xbf=D(\bm\xi)$ that carries a rough relief on one face of a deformable block, which the chart-FEM of Sec.~\ref{app:training:verify} then deforms. Each chart prepends a \emph{fixed}, non-trainable bank of sinusoidal features to its input before the MLP. We first normalize the input to $\tilde x\in[-1,1]^d$, where $d$ is the input dimension, so that a frequency means ``cycles across the domain'' rather than per physical unit. With that normalization the encoding reads
+
+\begin{equation}\label{eq:appB-fourier}
+\gamma(\tilde x)=\big[\cos(2\pi\,\tilde x B^{\!\top}),\ \sin(2\pi\,\tilde x B^{\!\top})\big]\in\R^{2K},
+\qquad
+h_\theta(x)=\mathrm{base}+\mathrm{MLP}_\theta\!\big(\gamma(\tilde x)\big),
+\end{equation}
+
+where $B\in\R^{K\times d}$ is the frequency bank, $K$ is the number of features, and $\mathrm{base}$ is a single learnable scalar. The scalar $\mathrm{base}$ carries the mean of the target, so the network regresses only the deviation about that offset. The bank $B$ is a registered buffer: the optimizer never updates it. Only the MLP weights $\theta$ and the scalar $\mathrm{base}$ are trained. This fixed encoding carries the method, as Sec.~\ref{sec:fourier} establishes. A chart of the raw coordinate inherits the same spectral bias as an ambient neural SDF and smooths the geometry in the same way. The bank supplies the high frequencies that the raw network suppresses.
+
+The three banks differ in how they tile frequency space, each in the manner appropriate to its chart's domain.
+
+\begin{itemize}
+\item \emph{Geometric} (deterministic), for the 1-D height chart on the open interval. The frequencies are spaced geometrically, $B=\operatorname{geomspace}(0.5,f_{\max},K)$, which gives equal coverage per octave of scale; the scalar $\mathrm{base}$ carries the DC component. A self-affine rock profile sampled at spacing $\Delta x$ over a length $L$ contains on the order of $L/\Delta x\approx 3000$ resolvable wavelengths, so we set $f_{\max}$ to that count of cycles across the normalized domain.
+\item \emph{Gaussian random}, for the 2-D height field and the 3-D rough decoder. The rows of $B$ are drawn $B_i\sim\mathcal N(0,\sigma^2 I)$, which induces an isotropic, stationary kernel that stays flat out to a bandwidth set by $\sigma$ (Sec.~\ref{sec:fourier}). The decoder draws its relief bank from the same generator at a capped amplitude (see Sec.~\ref{app:training:verify}).
+\item \emph{Harmonic}, for the 2-D radial chart on $\Sph^1$. The bank is the integer harmonics $[\cos(k\psi),\sin(k\psi)]_{k=1,\dots,K}$, which is \emph{periodic by construction}. Periodicity is mandatory here: the radius $\rho(\psi)$ must close up at $\psi$ and $\psi+2\pi$, so a non-periodic bank is inadmissible on the circle. The radial chart also wraps its output in a softplus, $\rho=\mathrm{softplus}(\mathrm{base}+\Delta)$, to keep $\rho>0$.
+\end{itemize}
+
+Table~\ref{tab:appB-charts} collects the four families, their domains and outputs, and the bank parameters used in production. The 1-D and 2-D height charts share the width-128, depth-4 MLP of Sec.~\ref{app:training:recipe}. The radial chart uses a smaller width-96, depth-3 MLP, and the volumetric decoder a width-64, depth-3 MLP, because each of these carries fewer degrees of freedom than a full topography map.
+
+\begin{table}
+\centering
+\caption{The four trained chart families. All share the training recipe of
+Sec.~\ref{app:training:recipe}; they differ only in domain and in the Fourier bank
+(Eq.~\eqref{eq:appB-fourier}). $K$ is the number of features ($2K$ is the MLP input width); $d$ is the
+input dimension. Each chart exposes a \code{plain=True} flag that disables the bank, recovering the
+spectral-bias baseline used in the ablations of Sec.~\ref{sec:fourier}.}
+\label{tab:appB-charts}
+\small
+\begin{tabular}{@{}llllll@{}}
+\toprule
+Chart & Implementation & Domain & Output & Bank & Parameters \\
+\midrule
+1-D height & \code{NeuralHeight1D}   & $x\in\R$ (open)         & $h(x)$       & geometric & $K{=}192$, $f_{\max}{=}1500$ \\
+2-D height & \code{NeuralHeight2D}   & $(x,y)\in\R^2$ (open)   & $h(x,y)$     & Gaussian  & $K{=}256$, $\sigma{=}8$ \\
+2-D radial & \code{NeuralRho2D}      & $\psi\in\Sph^1$ (per.)  & $\rho(\psi)$ & harmonic  & $K{=}16$ \\
+3-D decoder& \code{RoughBlockDecoder}& $\bm\xi\in[-1,1]^3$     & $\xbf=D(\bm\xi)$ & Gaussian & $K{=}20$ (relief) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Common training recipe}\label{app:training:recipe}
+
+% code: solvers/contact/profile_chart_2d.py::fit_height_chart ; solvers/contact/surface_chart_3d.py::fit_surface_chart ; solvers/fem/rough_block_decoder.py::train_rough_decoder
+We fit all four charts by minibatch regression onto sampled surface points. The training data are the measured or analytic target $(x_i,z_i)$: the topography map for a height chart, the analytic radius $\rho(\psi_i)$ for the radial chart, and the relief target on the rough face for the decoder. For the two height charts and the decoder the objective is the mean-squared error between the chart's prediction and that target,
+
+\begin{equation}\label{eq:appB-mse}
+\mathcal L(\theta,\mathrm{base})=\frac{1}{\abs{\mathcal B}}\sum_{i\in\mathcal B}
+\big(h_\theta(x_i)-z_i\big)^2,
+\end{equation}
+
+evaluated on a random minibatch $\mathcal B$. The CV-5 radial chart instead minimizes the mean-absolute radius error $\frac{1}{\abs{\mathcal B}}\sum_i\abs{\rho_\theta(\psi_i)-\rho(\psi_i)}$, which is less sensitive to the cusped lobe tips; the remaining choices below are identical for all four families.
+
+\begin{enumerate}
+\item \emph{Input normalization.} We map the raw coordinate affinely to $\tilde x=2(x-x_{\mathrm{lo}})/(x_{\mathrm{hi}}-x_{\mathrm{lo}})-1\in[-1,1]^d$, so that the bank's frequencies mean ``cycles across the domain'' independent of physical units.
+\item \emph{Fixed Fourier bank.} We build the bank $B$ of Eq.~\eqref{eq:appB-fourier} once at construction and register it as a buffer; the optimizer never sees it.
+\item \emph{Network.} A $\tanh$ MLP with Xavier initialization: width 128, depth 4 for the two height charts; width 96, depth 3 for the radial chart; width 64, depth 3 for the volumetric decoder. The input dimension is $2K$.
+\item \emph{Learnable base.} We initialize the scalar $\mathrm{base}$ to the mean of the target and train it jointly with $\theta$, so the network regresses the deviation about a learned offset.
+\item \emph{Optimizer and schedule.} Adam at learning rate $2\times10^{-3}$, with a cosine-annealing schedule that decays the rate to zero over the iteration budget. The minibatch sizes are 4096 (height), 8192 (surface), and 2048 (decoder).
+\item \emph{Precision and seed.} Double precision (float64) on CPU, with \code{torch.manual\_seed(0)}. The networks are small, and double precision yields better-conditioned chart Jacobians and inverses for the downstream pushforward and gap evaluation.
+\end{enumerate}
+
+A plain regression with the fixed encoding suffices: there is no loss curriculum, no adversarial term, and no schedule of weights. The trainers \code{fit\_height\_chart}, \code{fit\_surface\_chart}, the CV-5 radial trainer, and \code{train\_rough\_decoder} are line-for-line analogues and differ only in which bank they construct.
+
+\subsection{Verify-first acceptance thresholds}\label{app:training:verify}
+
+% code: solvers/fem/rough_block_decoder.py::train_rough_decoder ; solvers/fem/rough_block_decoder.py::verify_decoder
+A trained chart is geometry, and a defective chart silently corrupts every downstream solve. We therefore require each chart to pass acceptance checks before we admit it to a contact computation. The surface charts run the reconstruction check. The volumetric decoder runs all three, in the order below. If any check fails, we reject the chart rather than patch it.
+
+\paragraph{(1) Reconstruction fidelity.} The reconstruction RMSE measures how closely the chart reproduces the sampled surface; we report it as a fraction of the surface RMS and require it below a few percent. On the rough decoder target the Fourier decoder reaches $2.2\%$ of RMS. The same network with the bank disabled (\code{plain=True}) plateaus at $48\%$, and an ambient 3-D neural SDF of the same surface reaches $15.7\%$. This measured separation is the quantity that justifies the chart over the level set. The trainer returns this RMSE directly, and the test \code{test\_rough\_decoder\_fem.py} asserts the threshold.
+
+\paragraph{(2) No element foldover, $\det J>0$.} A folded chart has no admissible pushforward, so for the volumetric decoder the chart-Jacobian determinant must be strictly positive on every element of the reference mesh before we attempt any contact. We cap the relief amplitude so that the third column of the Jacobian, $\nbf+\tfrac12\,(\mathrm{relief})\,\hat\nbf$, keeps a positive determinant. The routine \code{verify\_decoder} builds the chart-FEM and asserts both \code{all\_valid} and a positive $\det J_{\min}$ over the mesh.
+
+\paragraph{(3) Discretization convergence (MMS $O(h^2)$).} The trained geometry must not degrade the solver's accuracy, so on the curved decoder geometry a manufactured-solution study must recover the second-order spatial rate of the underlying P1 chart-FEM. The measured rates on the rough geometry are $2.07$ and $1.83$, consistent with the $O(h^2)$ target of the P1 element.
+
+These thresholds make the geometric representation falsifiable. A chart whose cutoff is too low under-resolves the asperities: spectral smoothing returns, and check (1) catches it. A chart whose relief amplitude is too high folds an element, and check (2) catches that. Only a chart that passes all applicable checks enters a contact solve.

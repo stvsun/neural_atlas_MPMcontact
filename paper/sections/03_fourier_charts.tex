@@ -1,0 +1,273 @@
+\section{Fourier-feature coordinate charts}\label{sec:fourier}
+
+The transition map of Section~\ref{sec:tmap} reads contact off the boundary charts $\map{A}$ and
+$\map{B}$. Its accuracy is therefore the accuracy of those charts as representations of the geometry. A
+chart that smooths the asperity slopes returns a smoothed gap and a smoothed normal, and no
+constraint-enforcement scheme downstream can recover the lost detail. This section states how the charts
+are built and trained, and isolates the one ingredient that lets a small network resolve the sharp, rough,
+cusped boundaries that an ambient level set (and a plain coordinate network) smooth away: a fixed
+Fourier-feature encoding of the input. The level set, a neural signed-distance function, appears here only
+as the baseline that the encoding has to beat. We treat it as a fair baseline, not a strawman, because it is
+itself a coordinate network and suffers the same pathology a plain chart does.
+
+\subsection{Spectral bias of a coordinate network}\label{sec:spectral}
+
+A coordinate network is a function $f_\theta:\R^d\!\to\!\R$ given by a stack of affine maps and $\tanh$
+nonlinearities fed the raw coordinate. Two of the objects this paper compares are exactly of this form:
+an ambient neural signed-distance function $\Phi_\theta(\xbf)$ of the spatial point $\xbf\in\R^3$, and a
+boundary chart $h_\theta(x)$ of the surface parameter $x$. Both are trained by regression onto sampled
+data, and both inherit the same defect.
+
+% code: rahaman2019spectral
+A coordinate network learns the low-frequency content of its target first and the high-frequency content
+slowly or not at all. This is the spectral bias of \citet{rahaman2019spectral}: in the
+neural-tangent-kernel description of wide-network training, the kernel of a coordinate network is
+approximately translation invariant and Laplace-like, so its eigenvalues decay with frequency and the
+error in each Fourier mode of the target decays at a rate set by the corresponding eigenvalue. We can
+make this rate explicit. Write the target as $\hat z(k)$ in frequency $k$ and the network output after
+training time $t$ as $\hat f_\theta(k,t)$; the residual in each mode then shrinks geometrically, at its
+own frequency-dependent speed,
+%
+% code: rahaman2019spectral
+\begin{equation}\label{eq:ntk-decay}
+\hat f_\theta(k,t)-\hat z(k)\ \approx\ \big(\hat f_\theta(k,0)-\hat z(k)\big)\,e^{-\eta\,\lambda(k)\,t},
+\qquad \lambda(k)\sim \norm{k}^{-(d+1)},
+\end{equation}
+%
+where $\eta$ is the learning rate and $\lambda(k)$ is the kernel eigenvalue for frequency $k$. The moving
+part is $\lambda(k)$: it sets how fast mode $k$ converges, and because it falls off as a power of
+$\norm{k}$, the high-$\norm{k}$ modes converge at a vanishing rate. At any finite training budget the
+recovered surface is therefore a low-pass-filtered version of the true one. On a rough surface the
+consequence is geometric. The asperities, cusps, and fine relief are filtered out, and what survives
+is a smoothed envelope.
+
+This is the failure mode of the ambient level set, and it is intrinsic rather than incidental. A neural SDF
+cannot represent a boundary sharper than the highest frequency its training has resolved through
+\eqref{eq:ntk-decay}; on a rock joint it flattens the asperity flanks, and through the strength law
+$\muapp=\tan(\phi_b+i)$ of \citet{patton1966multiple} a flattened asperity angle $i$ directly
+under-predicts the friction. The point to make precise, and the basis for the controlled ablation below,
+is that \emph{a boundary chart of the raw coordinate inherits the identical pathology}. Representing the
+geometry as a function on the surface's own parameter, rather than as an ambient field, does not by itself
+buy any high frequencies; it changes the domain of $f_\theta$, not its spectral bias. The chart
+parametrization alone does not beat the level set. The Fourier features do.
+
+\subsection{The Fourier-feature encoding and three banks}\label{sec:banks}
+
+% code: tancik2020fourier
+The remedy of \citet{tancik2020fourier} is to replace the raw coordinate with a fixed (non-trainable) bank
+of sinusoids applied before the network. Let $\tilde x\in[-1,1]^d$ be the input normalized to the unit box,
+%
+\begin{equation}\label{eq:normalize}
+\tilde x = \frac{2(x-x_{\mathrm{lo}})}{x_{\mathrm{hi}}-x_{\mathrm{lo}}}-1,
+\end{equation}
+%
+and let $B\in\R^{K\times d}$ be a bank of $K$ frequency vectors. The encoding and the chart are
+%
+% code: tancik2020fourier
+\begin{equation}\label{eq:gamma}
+\gamma(x)=\big[\cos(2\pi B\tilde x),\ \sin(2\pi B\tilde x)\big]\in\R^{2K},
+\qquad
+h_\theta(x)=\mathtt{base}+\mathrm{MLP}_\theta\!\big(\gamma(x)\big).
+\end{equation}
+%
+The bank $B$ is a registered buffer, fixed for the life of the chart; only the network weights $\theta$ and
+the scalar offset $\mathtt{base}$ (which carries the mean height, so the network learns only the deviation)
+are trained. Prepending $\gamma$ changes the induced kernel from the Laplace-like form of
+\eqref{eq:ntk-decay} to a stationary, band-limited one whose bandwidth is set by $B$. To see the new
+kernel concretely, take the one-dimensional geometric bank below: the kernel becomes a finite sum of
+cosines, one per chosen frequency $f_k$, and it depends only on the separation $\tilde x-\tilde x'$,
+%
+% code: tancik2020fourier
+\begin{equation}\label{eq:kernel}
+\Theta(x,x')=\frac1K\sum_{k=1}^{K}\cos\!\big(2\pi f_k\,(\tilde x-\tilde x')\big),
+\end{equation}
+%
+so the network's similarity measure is built from exactly the frequencies in the bank and no others. For
+the isotropic Gaussian bank the kernel is instead the radial profile $J_0(2\pi\sigma\norm{\tilde{\bm u}-\tilde{\bm
+v}})$, flat out to a cutoff $\sim 2\pi\sigma$. Every frequency below the cutoff is now learned in parallel,
+at a comparable rate, instead of in slow frequency order. The network no longer has to discover the high
+frequencies; they are handed to it, and it learns only their amplitudes and phases. Two properties make
+this the right tool for geometry. First, the cutoff is transparent and tunable. Where the level set's
+smoothing is an intrinsic property of its architecture, the Fourier cutoff is an explicit knob ($f_{\max}$,
+$\sigma$, or the harmonic order $K$), set to just resolve the finest wavelength required. Second, the bank
+is deterministic and frozen, so the encoding is a reproducible preprocessing of the input rather than a
+learned, run-dependent representation.
+
+% code: solvers/contact/profile_chart_2d.py::NeuralHeight1D ; solvers/contact/surface_chart_3d.py::NeuralHeight2D ; solvers/contact/radial_chart_2d.py::NeuralRho2D
+This paper uses three charts, and they differ only in two respects: the domain each one lives on, and
+which bank of frequencies it uses to tile frequency space. The training loop is identical across all
+three. Each bank is matched to its geometry. The geometric bank gives equal coverage on a
+\emph{log}-frequency axis, which suits a profile with asperities spread across many wavelengths; the
+Gaussian bank gives isotropic two-dimensional coverage, which suits a height field over a patch; and the
+harmonic bank is periodic by construction, so a chart wrapped around the circle closes up on itself.
+Table~\ref{tab:banks} collects the three banks, the charts they encode, and their parameters.
+
+\begin{table}
+\centering
+\caption{The three Fourier banks and the charts they encode. The geometric bank gives equal coverage of
+\emph{log}-scale, the Gaussian bank gives isotropic two-dimensional coverage, and the harmonic bank is
+periodic by construction so a chart on the circle closes up. The bank $B$ is fixed; only the network and a
+scalar offset are trained.}
+\label{tab:banks}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Bank & Definition & Chart (file::class) & Parameters \\
+\midrule
+Geometric (deterministic) & $B=\operatorname{geomspace}(0.5,f_{\max},K)$ &
+\code{NeuralHeight1D} ($h(x)$, $x\in\R$) & $K{=}192$, $f_{\max}{=}1500$ \\
+Gaussian random & $B_i\sim\mathcal N(0,\sigma^2 I)$ &
+\code{NeuralHeight2D} ($h(x,y)$) & $K{=}256$, $\sigma{=}8$ \\
+Harmonic (periodic) & $[\cos(k\psi),\sin(k\psi)]_{k=1}^{K}$ &
+\code{NeuralRho2D} ($\rho(\psi)$, $\psi\in\Sph^1$) & $K{=}16$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% code: solvers/contact/profile_chart_2d.py::NeuralHeight1D
+The \emph{geometric} bank, $B=\operatorname{geomspace}(0.5,f_{\max},K)$ with $K=192$ and $f_{\max}=1500$,
+spaces its frequencies equally in $\log$-scale and so resolves a wide range of asperity wavelengths with a
+modest feature count; it carries the one-dimensional height chart $h_\theta(x)$ used for the rock-joint
+profile, where the measured surface requires on the order of $L/\Delta x\approx 3000$ resolvable
+wavelengths.
+% code: solvers/contact/surface_chart_3d.py::NeuralHeight2D
+The \emph{Gaussian random} bank, $B_i\sim\mathcal N(0,\sigma^2 I)$ with $K=256$ and $\sigma=8$, gives the
+isotropic two-dimensional coverage appropriate to a height field $h_\theta(x,y)$ over a patch; its induced
+kernel $J_0(2\pi\sigma\norm{\cdot})$ is flat to $\sim 2\pi\sigma$, the same Gaussian-relief encoding used by
+the boundary-fitted volumetric decoder of Section~\ref{sec:form}.
+% code: solvers/contact/radial_chart_2d.py::NeuralRho2D
+The \emph{harmonic} bank, $[\cos(k\psi),\sin(k\psi)]_{k=1}^{K}$ with $K=16$, is periodic by construction;
+this is mandatory, not a convenience, for the radial chart $\rho_\theta(\psi)$ on the circle
+$\Sph^1$, where the radius must close up at $\psi=0,2\pi$. The radial chart additionally wraps its output in
+a softplus, $\rho=\mathrm{softplus}(\mathtt{base}+\Delta)$, to keep $\rho>0$. Figure~\ref{fig:arch} shows
+the encoding and the network it feeds.
+
+\begin{figure}
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\footnotesize,>={Stealth[length=2.2mm]},
+  box/.style={draw,rounded corners=2pt,align=center,inner sep=4pt,minimum height=12mm,line width=0.7pt},
+  tag/.style={draw,rounded corners=2pt,align=center,inner sep=3pt,font=\scriptsize}]
+  \node[box,fill=gray!8] (in) {input\\ $x$};
+  \node[box,fill=gray!8,right=5mm of in] (nm) {normalize\\ $\tilde x\in[-1,1]$};
+  \node[box,draw=teal!70!black,fill=teal!6,right=5mm of nm] (ff)
+    {Fourier features\\ $\gamma(x)=[\cos 2\pi B\tilde x,\ \sin 2\pi B\tilde x]$};
+  \node[box,draw=blue!70!black,fill=blue!6,right=5mm of ff] (mlp)
+    {$\mathrm{MLP}_\theta$\\ tanh, width 128, depth 4};
+  \node[box,draw=teal!70!black,fill=teal!6,right=5mm of mlp] (out)
+    {$h_\theta(x)=\mathrm{base}+\Delta$};
+  \draw[->] (in) -- (nm);
+  \draw[->] (nm) -- (ff);
+  \draw[->] (ff) -- (mlp);
+  \draw[->] (mlp) -- (out) node[midway,above,font=\scriptsize]{$+\,\mathrm{base}$};
+  \node[tag,draw=orange!80!black,fill=orange!8,below=5mm of ff] (t1) {FIXED: bank $B$ not trained};
+  \node[tag,draw=blue!70!black,fill=blue!6,below=5mm of mlp,xshift=8mm] (t2)
+    {TRAINED: weights $\theta$ + scalar base (Adam, cosine, MSE)};
+  \draw[orange!80!black,->,dashed] (t1) -- (ff);
+  \draw[blue!70!black,->,dashed] (t2) -- (mlp);
+\end{tikzpicture}%
+}
+\caption{The Fourier-feature chart architecture, drawn for the one-dimensional height chart
+\code{NeuralHeight1D}. The coordinate is normalized to $[-1,1]$ via \eqref{eq:normalize} and expanded by
+the \emph{fixed} bank \eqref{eq:gamma} into $2K=384$ cosine/sine features; a plain $\tanh$ network (depth
+$4$, width $128$) maps those to a scalar deviation $\Delta$, offset by the learnable mean $\mathtt{base}$.
+Only the network weights $\theta$ and $\mathtt{base}$ are trained; the bank $B$ is frozen. The
+two-dimensional and three-dimensional charts replace the geometric bank with a Gaussian one and the radial
+chart wraps the output in a softplus, leaving the rest unchanged.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Training and the verify-first protocol}\label{sec:train}
+
+Every chart is trained by the same procedure: normalize the input by \eqref{eq:normalize}, encode with the
+fixed bank \eqref{eq:gamma}, then regress the network onto sampled surface points by minibatch
+mean-squared error,
+%
+\begin{equation}\label{eq:mse}
+\mathcal L(\theta)=\frac{1}{\abs{\mathcal B}}\sum_{i\in\mathcal B}\big(h_\theta(x_i)-z_i\big)^2,
+\end{equation}
+%
+with Adam at learning rate $2\times10^{-3}$ and a cosine annealing schedule that decays the rate to zero
+over the iteration budget. The networks are small and are trained in double precision on CPU, which
+conditions the geometry and the Jacobians used downstream; the random seed is fixed so a run is
+reproducible. There is no adversary, no loss schedule, and no curriculum: a plain MSE regression suffices
+because the Fourier encoding, not the optimizer, carries the high frequencies.
+
+A trained chart \emph{is} geometry, and a corrupted chart silently corrupts every downstream solve, so a
+chart is admitted to a contact computation only after three checks. (i) \emph{Reconstruction fidelity}: the
+RMSE on the sampled surface points, reported as a fraction of the surface RMS, must reach a few percent.
+(ii) \emph{No element foldover}: for the volumetric decoder the chart-Jacobian determinant must satisfy
+$\det J>0$ on every element, since a folded chart has no valid pushforward. (iii) \emph{Discretization
+convergence}: a manufactured-solution study on the curved chart geometry must recover the $O(h^2)$ rate of
+the underlying P1 chart finite-element method, confirming that the trained geometry did not spoil the
+solver. A chart that fails, with relief amplitude too high so $\det J$ folds, or cutoff too low so the
+surface is under-resolved, is rejected, not patched.
+
+% code: solvers/contact/profile_chart_2d.py::NeuralHeight1D
+The clearest measurement of the Fourier contribution is the framework's own ablation, run on the real
+Inada-granite tensile-fracture profile \citep{inada2020digitalrocks}, a self-affine surface with RMS
+$\approx 1.7$~mm. The same network, with identical width, depth, optimizer, and schedule, is trained
+twice on the measured points, once with the Fourier features active and once on the raw coordinate (the
+\code{plain=True} control). Because a measured profile is a deterministic surface to represent, the metric
+is reconstruction RMSE on the measured points, and the bank is band-limited below the sampling Nyquist so
+the fit is well posed rather than an interpolation to zero. Figure~\ref{fig:curves} reports the two
+training curves and the recovered surfaces. With the Fourier features the chart descends through the
+asperity scales to a reconstruction RMSE of $0.003\%$ of the RMS and recovers this ablation window's mean
+slope angle, here $\bar i = 19.9^\circ$ (the full-profile capstone below measures the surface's mean angle
+as $19.4^\circ$). The byte-for-byte identical network on the raw coordinate plateaus at a spectral-bias
+floor of $7.6\%$ of RMS ($136~\mu\mathrm{m}$) and
+low-passes the slopes to $\bar i = 11.5^\circ$. The two networks differ only in the input encoding, and one
+converges to the surface while the other stalls at a smoothed approximation. This is the chart-versus-level-set
+thesis reduced to its mechanism, on a real surface.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{fourier_training_curves_pub}
+\caption{Genuine training on the real Inada-granite profile \citep{inada2020digitalrocks}, both runs using
+the repository's own \code{NeuralHeight1D}. (a) Reconstruction RMSE versus iteration: the Fourier chart
+descends to $0.003\%$ of the surface RMS, while the \emph{identical} network fed the raw coordinate
+plateaus at a $7.6\%$ ($136~\mu$m) spectral-bias floor; only the input encoding differs. (b) The learned
+surfaces: the Fourier chart tracks the asperities and recovers the profile's mean slope angle $\bar i=19.9^\circ$,
+whereas the plain network low-passes them to $\bar i=11.5^\circ$, under-resolving the slopes that set the
+friction angle through $\muapp=\tan(\phi_b+i)$.}
+\label{fig:curves}
+\end{figure}
+
+% code: solvers/fem/rough_block_decoder.py
+The same separation holds for the boundary-fitted volumetric decoder used by the chart finite-element
+method of Section~\ref{sec:form}, where the relief is carried by the Gaussian bank. The Fourier
+decoder reconstructs the rough face to $2.2\%$ of RMS, a vanilla $\tanh$ decoder of equal capacity reaches
+only $48\%$ (the spectral-bias floor again), and an ambient three-dimensional neural SDF of the same surface
+reaches $15.7\%$; the decoder additionally passes $\det J>0$ on every element and the $O(h^2)$
+manufactured-solution check (measured rates $2.07$ and $1.83$). On the one-dimensional Inada profile, the
+production height chart ($K=192$, $f_{\max}=1500$) reconstructs the surface to $2.3~\mu\mathrm{m}$, about
+$0.1\%$ of the $1.7$~mm RMS, while the ambient neural SDF of the same surface reaches only
+$107~\mu\mathrm{m}$, which is $47\times$ worse with \emph{more} parameters, and smooths the mean asperity
+angle from $19.4^\circ$ to $12.5^\circ$. Through the Patton law that smoothing under-predicts the peak shear
+strength by $61\%$; the asperity slopes the chart preserves are precisely the geometry that drives the
+contact mechanics.
+
+\subsection{Why charts beat the level set}\label{sec:why}
+
+The advantage is a property of the kernel, not of the parametrization. The level set is a coordinate
+network of the ambient point and therefore carries the Laplace-like kernel of \eqref{eq:ntk-decay}, whose
+spectral ceiling is an intrinsic, non-tunable consequence of the architecture; on rough or cusped geometry
+it filters away exactly the high frequencies that contact cares about. The Fourier-feature chart carries
+the stationary, band-limited kernel of \eqref{eq:kernel} instead, with a cutoff one sets explicitly to
+resolve the finest wavelength of interest and no spectral ceiling below it. The chart also stores geometry
+as a surface function, so its cost scales with the surface rather than with an ambient volume, but the
+fidelity argument rests on the kernel.
+
+The ablation of Section~\ref{sec:train} is the load-bearing evidence: the Fourier features, not the chart
+parametrization alone, do the work. A chart of the raw coordinate (\code{plain=True}) smooths the Inada
+profile to the same $7.6\%$ floor and the same $11.5^\circ$ angle that the level set produces, because it
+inherits the same spectral bias; only when the fixed sinusoidal bank is prepended does the reconstruction
+fall to $0.003\%$ and the slope angle become exact. We therefore do not claim that reading geometry off a
+boundary chart is, by itself, more accurate than reading it off a level set. On a smooth surface dense
+interpolation is easy for either, and the height RMSE of a well-resolved SDF is not the discriminating
+quantity. The claim is sharper and is the one the measurements support: the level set smooths asperity
+slopes through an intrinsic spectral ceiling and so under-predicts strength and dilatancy, whereas a
+Fourier-feature chart has a transparent, tunable cutoff and resolves those slopes. The scope is that
+the height and surface charts represent single-valued geometry (no overhangs) and that the harmonic radial
+chart requires star-shaped boundaries; the band-limit is a chosen resolution, not an unlimited one. Within
+that scope the encoding is what converts a smoothing approximator into a faithful one, and every downstream
+result in this paper rests on it.

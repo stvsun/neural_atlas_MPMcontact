@@ -1,0 +1,176 @@
+\section{Introduction}\label{sec:intro}
+
+\subsection{Geometry, not the force law, controls contact fidelity}\label{sec:intro-motivation}
+
+A computational contact algorithm must answer two local questions about a query point $\xbf$ near a
+body $X$. First, is $\xbf$ inside $X$, and by how much? This is the gap $\gn$. Second, which way is
+out? This is the normal $\nbf$. We use the sign convention $\gn<0\Leftrightarrow$ penetration throughout.
+Once these two quantities are produced, a mature library of enforcement schemes (penalty, augmented
+Lagrangian, mortar, Nitsche) converts them into nodal forces \citep{wriggers2006computational,
+laursen2002computational,kikuchi1988contact}. On smooth, convex bodies this division of labour is
+benign. The gap and the normal are smooth functions of position, every scheme converges to the same
+answer, and the discussion centres on constraint enforcement.
+
+% code: solvers/contact/gap.py::evaluate_gap
+On geometrically complex bodies the same division of labour breaks down. The gap and the normal are
+no longer smooth, or even single-valued, so the \emph{geometric representation} from which they are read
+becomes the dominant control on accuracy. A rock joint, a cusped cam lobe, a faceted aggregate, or a
+self-similar fractal boundary all carry contact information at length scales an ambient field of fixed
+capacity cannot store. The thesis of this paper is one sentence: \emph{on rough and non-convex
+geometry the representation of the boundary, not the constraint-enforcement scheme, controls contact
+fidelity.} We make this thesis precise and give it a method: contact read from a chart
+\emph{transition map} on a learned coordinate atlas. We then measure it against the incumbent
+representation on a verification ladder that runs from closed-form benchmarks to a real rock joint.
+
+\subsection{The level set and its two intrinsic weaknesses}\label{sec:intro-levelset}
+
+% code: solvers/contact/gap.py::evaluate_gap
+The incumbent representation is the level set. For a body $A$ one stores a signed-distance function
+$\phi_A:\R^d\to\R$, negative inside the body and increasingly represented by a neural network, and reads
+the gap and the normal directly from the field. The gap is the field value at the query point, and the
+outward normal is its normalized gradient:
+\begin{equation}
+  \gn(\xbf)=\phi_A(\xbf),\qquad
+  \nbf(\xbf)=\frac{\grad\phi_A(\xbf)}{\norm{\grad\phi_A(\xbf)}},
+  \label{eq:sdf-gap-intro}
+\end{equation}
+so a single automatic-differentiation call delivers both quantities at once
+\citep{liu2020implicit,kolev2003level}. The economy of \eqref{eq:sdf-gap-intro} is the appeal of the
+representation, and the source of its weaknesses. To make $\phi_A$ a true signed \emph{distance}, one
+trains it with the eikonal penalty, which pushes the gradient toward unit norm everywhere:
+\begin{equation}
+  \mathcal{L}_{\mathrm{eik}}
+  =\mathbb{E}_{\xbf\sim\Omega}\!\left[\big(\norm{\grad\phi_A(\xbf)}-1\big)^2\right],
+  \label{eq:eikonal}
+\end{equation}
+where $\Omega$ is the sampling domain and the expectation averages the unit-gradient residual over it.
+This penalty is combined with surface and normal-alignment losses on a boundary point cloud. We use the
+level set throughout the paper \emph{only as the comparison baseline}. It is a fair and capable baseline,
+not a strawman. On the geometry it can represent, it is exactly as accurate as the chart
+(Section~\ref{sec:verif}).
+
+The level set carries two weaknesses that are intrinsic to the representation rather than artefacts of
+training, and both bear directly on contact:
+\begin{enumerate}
+  \item \textbf{Medial-axis non-smoothness.} The exact Euclidean signed distance is only $C^0$ on the
+        medial axis, the locus equidistant from two or more boundary points, where the closest-point map
+        is multivalued and $\grad\phi$ jumps. In a concavity the medial set reaches close to the
+        surface, so the gradient normal of \eqref{eq:sdf-gap-intro} degrades precisely where a non-convex
+        contact forms.
+  \item \textbf{Spectral bias.} A coordinate multilayer perceptron learns low frequencies first and high
+        frequencies slowly or never; its neural-tangent kernel is Laplace-like, with high-frequency
+        power decaying \citep{rahaman2019spectral}. A fixed-capacity neural $\phi_A$ therefore low-passes
+        cusps, asperities, and fine detail: it cannot represent a boundary sharper than its capacity
+        ceiling, and it smooths the geometry that, on a rough joint, carries the strength.
+\end{enumerate}
+We measure both weaknesses, rather than merely assert them, in Sections~\ref{sec:verif}
+and~\ref{sec:cv7}. The chart introduced next is built to avoid both: it stores one fewer
+dimension, and it hands the network the high frequencies it would otherwise fail to learn.
+
+\subsection{Related work}\label{sec:intro-related}
+
+\paragraph{Signed-distance and closest-point contact.}
+Reading a gap and a normal from an implicit field is established practice. \citet{kolev2003level} treat
+the contact interface as the zero level set of one body's field restricted to the other; the
+implicit-level-set material point method of \citet{liu2020implicit} reads the normal gap and contact
+normal from a per-body signed-distance representation, and our force machinery reuses its normal-gap
+form. The node-to-surface projection of \citet{zavarise1998segment} and \citet{fischer2005frictionless}
+obtains a smooth, differentiable correspondence by closest-point projection without explicit facet
+intersection, the same smoothness the implicit field provides. It returns only a \emph{single} foot,
+however, which is the kinematic limitation the transition map removes (Section~\ref{sec:tmap}).
+
+\paragraph{Neural implicit geometry, spectral bias, and Fourier features.}
+Neural signed-distance and occupancy networks \citep{park2019deepsdf} and periodic-activation networks
+\citep{sitzmann2020implicit} represent geometry implicitly with a fixed-capacity network, and inherit the
+spectral bias characterized by \citet{rahaman2019spectral}: high-frequency detail is learned slowly or
+not at all. The remedy we adopt is Fourier-feature input encoding \citep{tancik2020fourier}, which lifts
+the input through a fixed bank of sinusoids and flattens the neural-tangent kernel to a tunable cutoff;
+the same encoding underlies the positional encoding of neural radiance fields \citep{mildenhall2020nerf}.
+We use Fourier features not to sharpen an ambient field but to sharpen a \emph{boundary} chart, which is
+one dimension lower and therefore far easier to fit to a prescribed cutoff (Section~\ref{sec:fourier}).
+
+\paragraph{Constraint enforcement.}
+The forces that consume the gap and the normal are standard. We use penalty and augmented-Lagrangian
+normal contact with regularized Coulomb friction \citep{wriggers2006computational,alart1991mixed,
+simo1992augmented}, set against the mortar \citep{puso2004mortar} and Nitsche \citep{chouly2013nitsche}
+families and the variational-inequality foundations of \citet{kikuchi1988contact} and
+\citet{laursen2002computational}. These schemes are orthogonal to our contribution. Because every one of
+them consumes only the gap, the normal, and the normal-force magnitude, the chart and the level set are
+interchangeable at the force layer, and the geometry is the only thing we vary.
+
+\paragraph{Rock-joint constitutive laws.}
+The validation problem is the direct shear of a rough rock joint, for which a mature constitutive
+literature supplies the closed-form anchor and the physical interpretation of the measured numbers. The
+bilinear law of \citet{patton1966multiple} gives the apparent friction angle of a regularly serrated
+joint as $\phi_b+i$, with $\phi_b$ the basic friction angle and $i$ the asperity inclination; the
+empirical model of \citet{barton1977shear} and the review of \citet{barton1990review} extend this to
+natural roughness; the asperity-degradation model of \citet{plesha1987constitutive} and the joint element
+of \citet{goodman1976methods} supply the interface kinematics for cyclic shear. In our framework the
+dilatancy and the apparent friction are not imposed through such a law. They \emph{emerge} from the
+resolved asperity geometry, and the Patton law is the reference these emergent quantities are checked
+against.
+
+\subsection{Contributions}\label{sec:intro-contributions}
+
+\begin{enumerate}
+  \item \textbf{A transition-map contact detector.} We read contact from the boundary-to-boundary chart
+        map $\tmap=\map{B}^{-1}\circ\map{A}$ between two bodies of a learned atlas, rather than from an
+        ambient field. The detector returns a matched, conservative gap--normal pair, in which the normal
+        is the gradient of the gap, so the penalty force is the exact gradient of a potential. A
+        boundary scan then enumerates \emph{every} disjoint contact arc, where a closest-point projection
+        returns one foot. This is the paper's central method (Section~\ref{sec:tmap}).
+  \item \textbf{Fourier-feature coordinate charts with a verify-first protocol.} We instantiate the chart
+        in three families: a radial height field $\rho_\theta$ on the sphere of directions, an open
+        graph height field $h_\theta$, and a boundary-fitted decoder $D_\theta$ inverted by Newton
+        iteration. Each is encoded with a Fourier-feature bank sized to the geometry's resolvable
+        bandwidth. We verify every chart against a closed form or a manufactured solution before we use
+        it to drive contact (Section~\ref{sec:fourier}).
+  \item \textbf{A characterization of when the chart beats the level set.} We show that the radial
+        inverse-chart gap is conservative-large but \emph{sign-exact},
+        $g_{\mathrm{rad}}=g_\perp/\cos\alpha+O(g^2)$ with $\alpha$ the ray-to-normal angle, so the
+        chart's active set matches the true level set's on star-shaped bodies; and we give the
+        complementary spectral-bias argument that a $(d{-}1)$-dimensional boundary function fits a
+        prescribed cutoff where a $d$-dimensional ambient field cannot
+        (Sections~\ref{sec:tmap}--\ref{sec:fourier}).
+  \item \textbf{A verification ladder CV-1 through CV-6 and a real-joint validation CV-7.} We place the
+        chart and the level set on the same problems: the convex, superposable closed forms
+        (CV-1 Hertz, CV-2 Cattaneo--Mindlin, CV-3 Brazilian, CV-4 nine-disc), where they are equivalent
+        and the chart buys nothing; the cusped non-convex superformula (CV-5) and the
+        self-similar Koch fractal (CV-6), where the chart measurably wins; and the direct shear of a real
+        Inada-granite fracture (CV-7), where the resolved asperities drive emergent dilatancy and strength
+        (Sections~\ref{sec:verif}--\ref{sec:cv7}).
+  \item \textbf{Embedding in chart-FEM and MPM.} The detector is an opt-in geometric oracle: it composes
+        with the existing chart-based finite-element and material-point solvers without modifying the
+        force laws, the broad-phase culler, or the time integrator (Section~\ref{sec:form}).
+\end{enumerate}
+
+% code: benchmarks/contact/cv_numerical/cv7_transition_map_contact.py
+A handful of measurements anchor these claims. On the cusped superformula (CV-5) the neural radial chart
+attains a gap error of $3.8\times10^{-3}L$ and a $0.42^\circ$ median normal-angle error, against
+$8\times10^{-3}L$ and a degraded normal for the neural level set, and it drives the cam dynamics to a
+$0.04\%$ trajectory match. On the real Inada joint (CV-7) the height chart reconstructs the surface to
+$2.3\,\mu$m where an ambient neural level set reaches only $107\,\mu$m; the level set smooths the mean
+asperity angle from $19.4^\circ$ to $12.5^\circ$ and, through the Patton law, under-predicts peak shear
+strength by $61\%$. On a band-limited surface carried by a trained decoder the level set under-predicts
+emergent dilatancy by $98\%$ and strength by $35\%$, while the transition-map detector in the contact
+loop agrees with the analytic active set $98.9\%$ of the time, against $95.8\%$ for the level set
+(Sections~\ref{sec:verif}--\ref{sec:cv7}).
+
+\subsection{Notation and organization}\label{sec:intro-notation}
+
+Bodies are labelled $A,B,\dots$; the interior of body $X$ is $\Omega_X\subset\R^d$ ($d=2,3$) and its
+boundary $\partial\Omega_X$. A \emph{chart} is a parametrization of a body's boundary,
+$\map{X}:\Theta_X\to\partial\Omega_X$; a \emph{level set} is an ambient scalar field $\phi_X:\R^d\to\R$
+whose zero set is $\partial\Omega_X$. The transition map between two charted bodies is
+$\tmap=\map{B}^{-1}\circ\map{A}$. We write the Macaulay bracket $\pos{z}=\max(0,z)$ and keep the sign
+convention $\gn<0\Leftrightarrow$ penetration. The apparent friction coefficient measured from a contact
+run is $\muapp$, to be compared against the Patton value $\tan(\phi_b+i)$.
+
+The remainder of the paper is organized as follows. Section~\ref{sec:tmap} defines the
+transition map, derives the matched gap--normal pair and the multi-arc enumeration, and states the
+$1/\cos\alpha$ radial-gap bound with its active-set equivalence. Section~\ref{sec:fourier} develops the
+Fourier-feature charts and the spectral-bias argument that they defeat. Section~\ref{sec:form}
+gives the force laws and the embedding in chart-FEM and MPM. Section~\ref{sec:verif} reports the
+closed-form ladder CV-1 through CV-6. Section~\ref{sec:cv7} reports the real-joint validation
+CV-7. Section~\ref{sec:disc} states the scope, preconditions, and limitations, and
+Section~\ref{sec:concl} concludes.
