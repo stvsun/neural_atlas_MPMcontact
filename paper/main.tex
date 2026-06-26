@@ -1163,6 +1163,8 @@ superposition.
 
 \begin{figure}[t]
 \centering
+\begin{minipage}[b]{0.49\linewidth}
+\centering
 \begin{tikzpicture}[>=Stealth, line cap=round]
   % --- geometry ---
   \def\Rd{2.0} % disc radius
@@ -1215,23 +1217,21 @@ superposition.
   \draw[grayStroke, line width=0.4pt] (-\Rd,\Rd) -- (-\Rd-0.78,\Rd);
   \draw[grayStroke, line width=0.4pt] (-\Rd,-\Rd) -- (-\Rd-0.78,-\Rd);
   \node[grayStroke, font=\small, anchor=east] at (-\Rd-0.72,0) {$D$};
-\end{tikzpicture}
-\caption{CV-3 --- a disc of diameter $D$ and thickness $t$ compressed across a
-diameter by load $P$ through flat platens; the centre develops a transverse
-tensile stress $\sigma_{xx}=2P/\pi D t$ and an axial compressive stress
-$\sigma_{yy}=-6P/\pi D t$ (Flamant superposition), with the rim traction-free.
-This is a pure stress boundary-value problem solved on a learned disc geometry,
-with no contact detector engaged.}
-\label{fig:cv3-bvp}
-\end{figure}
-
-\begin{figure}
+\end{tikzpicture}\\[3pt]
+{\footnotesize (a) boundary-value problem}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.49\linewidth}
 \centering
-\includegraphics[width=0.66\linewidth]{liusun_fig23_brazilian_sigma_yy_pub}
-\caption{CV-3, stress-field evidence. The vertical stress $\sigma_{yy}$ across the Brazilian disc,
-recovered on a learned disc geometry by the chart-FEM solver. The compressive load column and the
-transverse tensile field reproduce the Flamant-superposition closed form away from the pole singularity.}
-\label{fig:cv3-brazilian}
+\includegraphics[width=\linewidth]{liusun_fig23_brazilian_sigma_yy_pub}\\[3pt]
+{\footnotesize (b) recovered $\sigma_{yy}$ field}
+\end{minipage}
+\caption{CV-3, the Brazilian disc. (a) The boundary-value problem: a disc of diameter $D$ and thickness $t$
+compressed across a diameter by load $P$ through flat platens; the centre develops a transverse tensile stress
+$\sigma_{xx}=2P/\pi D t$ and an axial compressive stress $\sigma_{yy}=-6P/\pi D t$ (Flamant superposition), with
+the rim traction-free, and no contact detector engaged. (b) The vertical stress $\sigma_{yy}$ recovered on the
+learned disc geometry by the chart-FEM solver: the compressive load column and the transverse tensile field
+reproduce the Flamant-superposition closed form away from the pole singularity.}
+\label{fig:cv3-bvp}\label{fig:cv3-brazilian}
 \end{figure}
 
 \subsubsection{CV-4 (nine-disc unit cell)} A $3\times3$ array of discs under isotropic confinement loads
