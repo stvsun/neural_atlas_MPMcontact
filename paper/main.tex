@@ -23,7 +23,38 @@
 
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,calc,positioning,decorations.markings,fit,backgrounds,
-  patterns,shapes.geometric,shapes.misc,angles,quotes}
+  patterns,shapes.geometric,shapes.misc,angles,quotes,decorations.pathmorphing,
+  decorations.fractals,lindenmayersystems}
+
+%% --- shared figure palette (consistent with the neural-atlas paper) ---------
+\definecolor{coralFill}{HTML}{F0997B}   % chart fill
+\definecolor{coralStroke}{HTML}{993C1D} % chart boundary
+\definecolor{coralDark}{HTML}{4A1B0C}   % highlights, loads
+\definecolor{grayFill}{HTML}{F1EFE8}    % reference / second body
+\definecolor{grayStroke}{HTML}{5F5E5A}  % body outline
+\definecolor{grayMid}{HTML}{888780}     % secondary outline
+\definecolor{cBlue}{HTML}{4C78A8}       % chart A / level set
+\definecolor{cGreen}{HTML}{59A14F}      % chart B
+\definecolor{cOrange}{HTML}{F28E2B}     % accents
+
+%% --- reusable styles for the boundary-value-problem schematics --------------
+\tikzset{
+  body/.style     ={draw=grayStroke, line width=1pt, fill=grayFill},
+  chartA/.style   ={draw=coralStroke, line width=1pt, fill=coralFill!55},
+  chartB/.style   ={draw=cBlue!75!black, line width=1pt, fill=cBlue!18},
+  load/.style     ={-{Stealth[length=2.6mm]}, line width=1.1pt, coralDark},
+  react/.style    ={-{Stealth[length=2.6mm]}, line width=1.1pt, grayStroke},
+  normaln/.style  ={-{Stealth[length=2.2mm]}, line width=1pt, cBlue!70!black},
+  dimen/.style    ={{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, line width=0.6pt, grayStroke},
+  bcnode/.style   ={font=\scriptsize, grayStroke},
+}
+% fixed (clamped) support: a base line with hatch ticks, drawn from (#1) to (#2)
+\newcommand{\fixedbase}[2]{%
+  \draw[line width=1pt, grayStroke] (#1) -- (#2);
+  \fill[pattern=north east lines, pattern color=grayMid]
+    ($(#1)+(0,-0.28)$) rectangle ($(#2)+(0,0)$);
+  \draw[line width=1pt, grayStroke] (#1) -- (#2);
+}
 
 \usepackage{algorithm}
 \usepackage{algpseudocode}
@@ -376,6 +407,75 @@ reference cube $U=[-r,r]^d$ to a general body and is inverted by Newton iteratio
 carries the elasticity of Section~\ref{sec:govern}, while the radial and height charts supply the closed-form
 gaps of Section~\ref{sec:tmap}.
 
+\paragraph{Relation to the neural-atlas method.}
+The construction above is the contact-mechanics instance of the geometry-informed neural atlas
+\citep{sun2026neuralatlas}, whose notation we retain. There, a single body $\Omega$ is covered by an atlas
+$\mathcal A=\{(\widehat\Omega_i,\varphi_i)\}_{i=1}^{M}$ of overlapping volumetric charts
+$\varphi_i:\widehat\Omega_i\to\Omega_i$ with Jacobian $\mathbf J_i=D_{\boldsymbol\zeta}\varphi_i$ and local
+inverse $\pi_i=\varphi_i^{-1}$; neighbouring charts communicate on their overlap
+$\Omega_{ij}=\Omega_i\cap\Omega_j$ through the \emph{intra-body transition map}
+$\psi_{ij}=\pi_j\circ\varphi_i$, which re-expresses a point's chart-$i$ coordinate in chart $j$. The present
+work carries the same composition \emph{across the gap between two bodies}: the contact detector of
+Section~\ref{sec:tmap} reads the gap and the normal from the \emph{inter-body transition map}
+$\tmap=\map{B}^{-1}\circ\map{A}=\pi_B\circ\map{A}$, the boundary-chart analogue of $\psi_{ij}$
+(Figure~\ref{fig:atlas-extension}). The geometry, the governing equations, and the chart-Jacobian pull-back are
+inherited unchanged; what is new is that the transition map now joins the boundaries of two separate atlases,
+turning a coordinate change into a contact-pairing operator.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[>=Stealth, every node/.style={font=\small}]
+% ---------- LEFT: intra-body atlas (neural-atlas paper) ----------
+\begin{scope}
+  \node[font=\small\bfseries, grayStroke] at (0,2.9) {Intra-body atlas};
+  \draw[body] plot[smooth cycle, tension=0.8] coordinates
+     {(-1.8,1.4) (-0.2,2.1) (1.6,1.5) (1.9,0.0) (1.1,-1.5) (-0.6,-1.7) (-1.9,-0.3)};
+  \node[grayStroke] at (1.55,1.75) {$\Omega$};
+  \fill[coralFill!55] (-0.45,0.7) ellipse (1.0 and 0.72);
+  \draw[coralStroke, line width=0.8pt] (-0.45,0.7) ellipse (1.0 and 0.72);
+  \begin{scope}
+    \clip (-0.45,0.7) ellipse (1.0 and 0.72);
+    \fill[cBlue!22] (0.6,-0.25) ellipse (1.05 and 0.78);
+  \end{scope}
+  \draw[cBlue!75!black, line width=0.8pt] (0.6,-0.25) ellipse (1.05 and 0.78);
+  \node[coralStroke] at (-1.05,1.05) {$\Omega_i$};
+  \node[cBlue!70!black] at (1.25,-0.7) {$\Omega_j$};
+  \node[fill=white, inner sep=0.5pt, font=\scriptsize] at (0.05,0.2) {$\Omega_{ij}$};
+  \draw[->, coralDark, line width=0.9pt, bend left=22] (-0.25,0.42)
+     to node[above, font=\scriptsize] {$\psi_{ij}=\pi_j\circ\varphi_i$} (0.5,0.05);
+\end{scope}
+% ---------- RIGHT: inter-body contact (this paper) ----------
+\begin{scope}[shift={(6.4,0)}]
+  \node[font=\small\bfseries, grayStroke] at (0,2.9) {Inter-body transition map};
+  \fill[coralFill!55, draw=coralStroke, line width=1pt]
+     plot[smooth cycle, tension=0.8] coordinates
+     {(-1.9,1.9)(-0.2,2.4)(1.7,2.0)(1.6,1.0)(0.0,0.66)(-1.8,1.0)};
+  \node[coralStroke] at (-1.55,2.05) {$\Omega_A$};
+  \fill[cBlue!18, draw=cBlue!75!black, line width=1pt]
+     plot[smooth cycle, tension=0.8] coordinates
+     {(-1.9,-1.9)(-0.2,-2.4)(1.7,-2.0)(1.6,-1.0)(0.45,-0.5)(-0.3,-0.78)(-1.0,-0.5)(-1.8,-1.0)};
+  \node[cBlue!70!black] at (-1.55,-2.05) {$\Omega_B$};
+  \coordinate (xA) at (0.05,0.68);
+  \coordinate (fB) at (0.15,-0.52);
+  \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, coralDark, line width=0.9pt]
+     (xA) -- (fB) node[midway, left, font=\scriptsize] {$\gn$};
+  \draw[normaln] (fB) -- ($(fB)!1.5!(xA)$) node[right, font=\scriptsize, cBlue!70!black] {$\nbf$};
+  \fill (xA) circle (1.3pt); \fill[cBlue!70!black] (fB) circle (1.3pt);
+  \node[right, font=\scriptsize] at (xA) {$\xbf=\map{A}(\theta_A)$};
+  \node[below right, font=\scriptsize] at (fB) {$\map{B}(\psi_B)$};
+  \node[coralDark, font=\scriptsize] at (0.1,-2.95) {$\tmap=\map{B}^{-1}\circ\map{A}$};
+\end{scope}
+\end{tikzpicture}
+\caption{The contact formulation as an extension of the neural atlas. Left: in the neural-atlas method
+\citep{sun2026neuralatlas} a single body $\Omega$ is covered by overlapping charts, and the intra-body
+transition map $\psi_{ij}=\pi_j\circ\varphi_i$ re-expresses a point in a neighbouring chart on the overlap
+$\Omega_{ij}$. Right: contact between two bodies $\Omega_A,\Omega_B$ uses the same composition across the gap,
+the inter-body transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which maps a boundary point
+$\xbf=\map{A}(\theta_A)$ to its mate $\map{B}(\psi_B)$ and returns the signed gap $\gn$ and the contact normal
+$\nbf$ without a closest-point search.}
+\label{fig:atlas-extension}
+\end{figure}
+
 \subsection{Fourier-feature representation}\label{sec:fourier}
 
 A coordinate network applied to the raw parameter cannot resolve a sharp surface, since its kernel low-passes
@@ -715,6 +815,36 @@ normal of Remark~\ref{prop:matched-normal} the chart interface is thermodynamica
 the cyclic energy ledger of Appendix~\ref{app:supp}.
 \end{remark}
 
+The detection, enforcement, and assembly are collected in Algorithm~\ref{alg:contact-detection}. A boundary scan
+of the slave chart evaluates the transition map at each sample, returns the sign-exact gap and the conservative
+normal, enumerates every penetrating arc rather than the nearest foot, and hands the active nodes to the
+discrete contact element of Section~\ref{sec:discr:element}. The master inversion $\pi_B=\map{B}^{-1}$ is a
+closed-form direction for a radial chart, a vertical offset for a height chart, and a Newton solve
+\eqref{eq:newton-invert} for a decoder chart, so a single detector serves all three families.
+
+\begin{algorithm}[htbp]
+\caption{Transition-map contact detection}
+\label{alg:contact-detection}
+\begin{algorithmic}[1]
+\Statex \textbf{Input:} boundary charts $\map{A},\map{B}$ and the master inverse $\pi_B=\map{B}^{-1}$; a slave
+sample $\{\theta_A^{(q)}\}_{q=1}^{Q}\subset\Theta_A$ of $\partial\Omega_A$; penalty $\varepsilon_n$, friction $\mu$
+\Statex \textbf{Output:} active set $\mathcal I$, contact arcs $\{\mathcal A_k\}$, and per-node pairs
+$(\gn,\nbf,\tbf_{\mathrm{proj}})$
+\For{each slave parameter $\theta_A^{(q)}$}
+  \State $\xbf \gets \map{A}(\theta_A^{(q)})$ \Comment{push the boundary point to physical space, \eqref{eq:tmap-def}}
+  \State $\psi_B^{(q)} \gets \pi_B(\xbf)$ \Comment{master inversion: closed form (radial/height) or Newton \eqref{eq:newton-invert}}
+  \State $(\gn^{(q)},\nbf^{(q)}) \gets$ gap and conservative normal, \eqref{eq:radial-gap}/\eqref{eq:height-gap} and \eqref{eq:matched-normal}
+  \State $\tbf_{\mathrm{proj}}^{(q)} \gets \vbf_T/\norm{\vbf_T}$ from the slip velocity \Comment{tangential slip direction}
+\EndFor
+\State $\mathcal I \gets \{q:\gn^{(q)}<0\}$ \Comment{active set; sign-exact, Remark~\ref{prop:active-set}}
+\State partition $\mathcal I$ into maximal connected arcs $\{\mathcal A_1,\dots,\mathcal A_p\}$ of $\{\gn<0\}$ \Comment{multi-arc scan, Remark~\ref{lemma:multiarc}}
+\For{each active node $a\in\mathcal I$}
+  \State assemble $\fbf^a_{\mathrm{contact}}$ and $\bm K^a_c$, \eqref{eq:contact-residual}--\eqref{eq:contact-block}
+\EndFor
+\State \Return $\mathcal I$, arcs $\{\mathcal A_k\}$, and the contact residual and stiffness contributions
+\end{algorithmic}
+\end{algorithm}
+
 
 \section{Finite element formulation}\label{sec:discr}
 
@@ -822,7 +952,7 @@ four problems are not hard geometry. Their role is to certify the chart-FEM solv
 floor that the transition map must clear before any claim of advantage.
 
 \subsubsection{CV-1 (Hertz line contact)} Two elastic cylinders pressed together along a line form a
-contact patch whose half-width grows with the load. This is the canonical convex contact, and it tests
+contact patch whose half-width grows with the load (Figure~\ref{fig:cv1-bvp}). This is the canonical convex contact, and it tests
 whether the chart-FEM solver and a neural-SDF indenter reproduce the elastic kernel where chart and
 level set agree. The closed form for the half-width under plane strain is
 %
@@ -842,6 +972,56 @@ neural signed-distance indenter matches the exact-SDF baseline rather than impro
 set coincide. The agreement holds at the field level, not only in the
 half-width: Figure~\ref{fig:cv1-hertz} shows the chart-FEM subsurface vertical stress, whose stress bulb
 and off-surface maximum-shear depth $z/a\approx0.48$ reproduce the closed-form Hertz field.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}[x=1cm,y=1cm,>=Stealth]
+    % ---- fixed geometry (cm); block 8 wide x 2.4 tall, top edge at y=2.4 ----
+    % centerline at x=4, indenter radius 1.7, center at (4, 4.1)
+    \coordinate (C)  at (4,4.1);          % indenter center (top + R)
+    \coordinate (Tc) at (4,2.4);          % contact point on block top
+
+    % ---- elastic block (body) ----
+    \draw[body] (0,0) rectangle (8,2.4);
+    \node[align=center, grayStroke] at (1.8,1.05) {$E_2,\ \nu_2$};
+
+    % ---- clamped base along bottom edge ----
+    \fixedbase{0,0}{8,0}
+
+    % ---- cylindrical indenter (chartB circle) ----
+    \draw[chartB] (C) circle (1.7);
+    \node[cBlue!75!black] at (4,4.85) {$E_1,\ \nu_1$};
+
+    % ---- radius line from center to rim ----
+    \coordinate (rim) at ($(C)+({1.7*cos(-32)},{1.7*sin(-32)})$);
+    \draw[line width=0.6pt, cBlue!70!black] (C) -- (rim)
+      node[pos=0.62, above, sloped, font=\small, cBlue!75!black] {$R$};
+    \fill[cBlue!75!black] (C) circle (0.035);
+
+    % ---- applied load per unit length P' on top of indenter ----
+    \foreach \dx in {-0.55,0,0.55}{
+      \draw[load] ($(C)+(\dx,2.65)$) -- ($(C)+(\dx,1.82)$);
+    }
+    \node[coralDark, font=\small] at ($(C)+(1.35,2.32)$) {$P'$};
+
+    % ---- faint dashed vertical centerline ----
+    \draw[dashed, line width=0.5pt, grayMid] (4,-0.55) -- (4,7.15);
+
+    % ---- contact half-width dimension 2a ----
+    \draw[line width=0.4pt, grayMid] (3.45,2.4) -- (3.45,1.95);
+    \draw[line width=0.4pt, grayMid] (4.55,2.4) -- (4.55,1.95);
+    \draw[dimen] (3.45,1.95) -- (4.55,1.95);
+    \node[bcnode, fill=grayFill, inner sep=1pt] at (4,1.95) {$2a$};
+  \end{tikzpicture}
+  \caption{The CV-1 Hertz line-contact benchmark (2D plane strain). A cylinder of
+  radius $R$ and elastic constants $(E_1,\nu_1)$ is pressed by a load per unit length
+  $P'$ onto an elastic block $(E_2,\nu_2)$ whose base is fully clamped, forming a
+  contact patch of half-width $a=2\sqrt{P'R/\pi E^{*}}$ with reduced modulus $E^{*}$
+  given by $1/E^{*}=(1-\nu_1^2)/E_1+(1-\nu_2^2)/E_2$. In the numerical realization the
+  chart-FEM block is driven against a neural-SDF disc indenter under penalty contact,
+  and the recovered $a(P')$ is compared against the closed-form Hertz prediction.}
+  \label{fig:cv1-bvp}
+\end{figure}
 
 \begin{figure}
 \centering
@@ -876,6 +1056,92 @@ shows the recovered contact tractions: the elliptical Hertz normal pressure and 
 tangential traction, whose stick/slip transition at $r=c$ marks the boundary between the locked core and
 the slipping annulus.
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[scale=1.0]
+  % ---- geometry constants ----
+  \def\Wx{4.4}      % half-width of the half-plane block
+  \def\Hy{2.6}      % depth of the half-plane block
+  \def\Rind{1.55}   % indenter radius
+  \def\ahalf{1.15}  % contact half-width a
+  \def\chalf{0.62}  % stick half-width c
+
+  % ---- elastic half-plane (clamped far field) ----
+  \fill[body] (-\Wx,0) rectangle (\Wx,-\Hy);
+  \draw[body] (-\Wx,0) -- (\Wx,0);          % free top surface, redraw crisp
+
+  % clamped base
+  \fixedbase{-\Wx,-\Hy}{\Wx,-\Hy}
+  \node[bcnode, anchor=north] at (0,-\Hy-0.34) {clamped far field $\ubf=\bm{0}$};
+
+  % depth dimension on the right (deep half-plane)
+  \draw[dimen] (\Wx+0.45,0) -- (\Wx+0.45,-\Hy);
+  \node[bcnode, anchor=west, align=left] at (\Wx+0.55,-0.5*\Hy)
+        {deep\\half-plane};
+
+  % material label
+  \node[bcnode, anchor=center] at (-0.55*\Wx,-0.62*\Hy) {elastic half-plane $E^{*},\nu$};
+
+  % ---- contact patch on the surface: slip annulus (light) + stick core (dark) ----
+  % slip annulus c < |r| < a
+  \fill[coralFill!25] (-\ahalf,0) rectangle (-\chalf,-0.16);
+  \fill[coralFill!25] ( \chalf,0) rectangle ( \ahalf,-0.16);
+  % stick core |r| < c
+  \fill[coralFill!70] (-\chalf,0) rectangle (\chalf,-0.16);
+  \draw[coralStroke, line width=0.8pt] (-\ahalf,0) rectangle (\ahalf,-0.16);
+  \draw[coralStroke, line width=0.6pt] (-\chalf,-0.16) -- (-\chalf,0);
+  \draw[coralStroke, line width=0.6pt] ( \chalf,-0.16) -- ( \chalf,0);
+
+  % ---- cylindrical indenter ----
+  \draw[chartB] (0,\Rind) circle (\Rind);
+  \node[bcnode, anchor=center, cBlue!60!black] at (0,\Rind-0.36) {rigid cylinder};
+  % radius marker
+  \draw[dimen] (0,\Rind) -- ($(0,\Rind)+(40:\Rind)$);
+  \node[bcnode, anchor=south west] at ($(0,\Rind)+(40:0.55*\Rind)$) {$R$};
+
+  % ---- applied loads on the indenter ----
+  % normal load P (downward)
+  \draw[load] (0,2*\Rind+0.95) -- (0,2*\Rind+0.12);
+  \node[bcnode, anchor=south, coralDark] at (0,2*\Rind+0.97) {$P$};
+  % tangential load Q (horizontal)
+  \draw[load] (-\Rind-1.05,\Rind) -- (-\Rind-0.16,\Rind);
+  \node[bcnode, anchor=east, coralDark] at (-\Rind-1.08,\Rind) {$Q$};
+  % friction condition
+  \node[bcnode, anchor=center, coralDark] at (-\Rind-0.6,\Rind-0.42) {$Q<\mu P$};
+
+  % ---- stick / slip dimension arrows below the surface ----
+  \def\dlev{-0.62}
+  % a (full half-width)
+  \draw[dimen] (0,\dlev-0.5) -- (\ahalf,\dlev-0.5);
+  \node[bcnode, anchor=north] at (0.5*\ahalf,\dlev-0.52) {$a$};
+  % c (stick half-width)
+  \draw[dimen] (0,\dlev) -- (\chalf,\dlev);
+  \node[bcnode, anchor=north] at (0.5*\chalf,\dlev-0.02) {$c$};
+  % vertical guides
+  \draw[dimen, dashed, line width=0.4pt] (\chalf,-0.16) -- (\chalf,\dlev);
+  \draw[dimen, dashed, line width=0.4pt] (\ahalf,-0.16) -- (\ahalf,\dlev-0.5);
+  \draw[dimen, dashed, line width=0.4pt] (0,-0.16) -- (0,\dlev-0.5);
+
+  % zone legend with little color keys (placed in open space above-right of patch)
+  \def\lx{\ahalf+0.55}
+  \def\ly{0.95}
+  \fill[coralFill!70] (\lx,\ly) rectangle ($(\lx,\ly)+(0.20,0.18)$);
+  \draw[coralStroke,line width=0.4pt] (\lx,\ly) rectangle ($(\lx,\ly)+(0.20,0.18)$);
+  \node[bcnode, anchor=west, coralDark] at ($(\lx,\ly)+(0.30,0.09)$) {stick $\abs{r}<c$};
+  \fill[coralFill!25] (\lx,\ly-0.34) rectangle ($(\lx,\ly-0.34)+(0.20,0.18)$);
+  \draw[coralStroke,line width=0.4pt] (\lx,\ly-0.34) rectangle ($(\lx,\ly-0.34)+(0.20,0.18)$);
+  \node[bcnode, anchor=west, coralDark] at ($(\lx,\ly-0.34)+(0.30,0.09)$) {slip $c<\abs{r}<a$};
+  % thin leader from legend down to the contact patch
+  \draw[dimen, dashed, line width=0.4pt] ($(\lx,\ly)+(0.10,0)$) -- (0.85*\ahalf,-0.08);
+\end{tikzpicture}
+\caption{CV-2 --- a tangential load $Q<\mu P$ applied to the Hertz patch of CV-1 splits the
+contact into a central \emph{stick} zone of radius $c$ and a slipping annulus, with
+$c/a=\sqrt{1-Q/\mu P}$. The test is run on a deep elastic half-plane with the far field
+clamped, exercising the regularized-Coulomb friction layer in the regime where the learned
+chart and the ambient level set still agree.}
+\label{fig:cv2-bvp}
+\end{figure}
+
 \begin{figure}
 \centering
 \includegraphics[width=0.74\linewidth]{liusun_fig14_hertz_traction_pub}
@@ -908,6 +1174,70 @@ shows the recovered $\sigma_{yy}$ field over the disc, with the compressive colu
 diameter and the transverse tensile band that splits the specimen, both following the Flamant
 superposition.
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[>=Stealth, line cap=round]
+  % --- geometry ---
+  \def\Rd{2.0} % disc radius
+  \coordinate (O) at (0,0);
+  \coordinate (Ntop) at (0,\Rd);     % north pole
+  \coordinate (Sbot) at (0,-\Rd);    % south pole
+
+  % --- the disc (learned geometry, chartA) ---
+  \draw[chartA] (O) circle (\Rd);
+
+  % --- top loading platen ---
+  \fill[grayFill, draw=grayStroke, line width=1pt]
+        (-1.05,2.05) rectangle (1.05,2.42);
+  % applied load P pressing DOWN onto the top pole
+  \foreach \x in {-0.6,-0.2,0.2,0.6}{
+     \draw[load] (\x,3.05) -- (\x,2.12);
+  }
+  \node[coralDark, font=\small] at (1.65,2.72) {$P$};
+
+  % --- bottom platen as fixed reaction base ---
+  \fixedbase{-1.05,-2.05}{1.05,-2.05}
+  % upward reaction P
+  \foreach \x in {-0.6,-0.2,0.2,0.6}{
+     \draw[react] (\x,-3.05) -- (\x,-2.12);
+  }
+  \node[grayStroke, font=\small] at (1.65,-2.72) {$P$};
+
+  % --- center stress state ---
+  % compressive sigma_yy : vertical INWARD arrows (toward centre)
+  \draw[normaln] (0,1.20) -- (0,0.42);
+  \draw[normaln] (0,-1.20) -- (0,-0.42);
+  % tensile sigma_xx : horizontal OUTWARD arrows (away from centre)
+  \draw[normaln] (0.32,0) -- (1.10,0);
+  \draw[normaln] (-0.32,0) -- (-1.10,0);
+  % center marker
+  \fill[coralDark] (O) circle (0.8pt);
+  % labels, placed clear of the arrows
+  \node[cBlue!60!black, font=\scriptsize, align=left, anchor=west]
+       at (0.42,0.78) {$\sigma_{xx}>0$\\[-1.5pt]\itshape tensile};
+  \node[cBlue!60!black, font=\scriptsize, align=right, anchor=east]
+       at (-0.42,-0.78) {$\sigma_{yy}<0$\\[-1.5pt]\itshape compressive};
+
+  % --- rim traction-free label ---
+  \coordinate (rim) at (148:\Rd);
+  \draw[grayStroke, line width=0.5pt] (rim) -- ($(rim)+(-0.7,0.35)$);
+  \node[bcnode, anchor=east] at ($(rim)+(-0.78,0.35)$) {traction-free rim};
+
+  % --- diameter dimension D ---
+  \draw[dimen] (-\Rd-0.65,-\Rd) -- (-\Rd-0.65,\Rd);
+  \draw[grayStroke, line width=0.4pt] (-\Rd,\Rd) -- (-\Rd-0.78,\Rd);
+  \draw[grayStroke, line width=0.4pt] (-\Rd,-\Rd) -- (-\Rd-0.78,-\Rd);
+  \node[grayStroke, font=\small, anchor=east] at (-\Rd-0.72,0) {$D$};
+\end{tikzpicture}
+\caption{CV-3 --- a disc of diameter $D$ and thickness $t$ compressed across a
+diameter by load $P$ through flat platens; the centre develops a transverse
+tensile stress $\sigma_{xx}=2P/\pi D t$ and an axial compressive stress
+$\sigma_{yy}=-6P/\pi D t$ (Flamant superposition), with the rim traction-free.
+This is a pure stress boundary-value problem solved on a learned disc geometry,
+with no contact detector engaged.}
+\label{fig:cv3-bvp}
+\end{figure}
+
 \begin{figure}
 \centering
 \includegraphics[width=0.6\linewidth]{liusun_fig23_brazilian_sigma_yy_pub}
@@ -938,6 +1268,83 @@ place the load poles. The charts add by superposition exactly as in CV-3, and ch
 equivalent. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
 fields across the array; the pattern repeats identically from disc to disc and is equibiaxial at each
 center, the spatial signature of the symmetry that the closed form assumes.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % --- grid geometry: discs of radius R=1, centres spaced 2R so poles touch ---
+  \def\R{1.0}
+  \pgfmathsetmacro{\sep}{2*\R}   % centre-to-centre spacing
+
+  % outer field boundary (square bounding the array, poles flush with it)
+  \def\Bx{3.0} % half-extent of the array from centre to outer pole
+  \draw[grayMid, line width=0.4pt, dash pattern=on 1.2pt off 1.2pt]
+        (-\Bx,-\Bx) rectangle (\Bx,\Bx);
+
+  % --- the nine discs on a 3x3 grid (centres at -2R,0,2R) ---
+  \foreach \cx in {-\sep,0,\sep}{
+    \foreach \cy in {-\sep,0,\sep}{
+      \draw[body] (\cx,\cy) circle (\R);
+    }
+  }
+
+  % highlight the centre disc
+  \draw[chartA] (0,0) circle (\R);
+  \node[font=\small, coralDark] at (0,0.0) {disc};
+
+  % --- four equal pole contact loads N on the centre disc (inward) ---
+  \draw[normaln] (0, 1.55) -- (0, 1.05);
+  \node[font=\small, cBlue!70!black, anchor=south] at (0,1.58) {$N$};
+  \draw[normaln] (0,-1.55) -- (0,-1.05);
+  \node[font=\small, cBlue!70!black, anchor=north] at (0,-1.58) {$N$};
+  \draw[normaln] (1.55,0) -- (1.05,0);
+  \node[font=\small, cBlue!70!black, anchor=west] at (1.58,0) {$N$};
+  \draw[normaln] (-1.55,0) -- (-1.05,0);
+  \node[font=\small, cBlue!70!black, anchor=east] at (-1.58,0) {$N$};
+
+  % mark the four contact points
+  \foreach \p in {(0,1),(0,-1),(1,0),(-1,0)}{
+    \fill[cBlue!70!black] \p circle (1.1pt);
+  }
+
+  % --- confining pressure sigma: inward load arrows on all four outer sides ---
+  \def\off{0.55} % arrow start outside the boundary
+  \foreach \px in {-2,0,2}{
+    \draw[load] (\px,{\Bx+\off}) -- (\px,\Bx);
+  }
+  \foreach \px in {-2,0,2}{
+    \draw[load] (\px,{-\Bx-\off}) -- (\px,-\Bx);
+  }
+  \foreach \py in {-2,0,2}{
+    \draw[load] ({-\Bx-\off},\py) -- (-\Bx,\py);
+  }
+  \foreach \py in {-2,0,2}{
+    \draw[load] ({\Bx+\off},\py) -- (\Bx,\py);
+  }
+  \node[font=\small, coralDark, anchor=east] at ({-2-0.18},{\Bx+\off}) {$\sigma$};
+  \node[font=\small, coralDark, anchor=east] at ({-2-0.18},{-\Bx-\off}) {$\sigma$};
+  \node[font=\small, coralDark, anchor=south] at ({-\Bx-\off},{2+0.18}) {$\sigma$};
+  \node[font=\small, coralDark, anchor=south] at ({\Bx+\off},{2+0.18}) {$\sigma$};
+
+  % --- radius dimension on the top-left disc ---
+  \draw[dimen] (-\sep,\sep) -- ($(-\sep,\sep)+(-0.707*\R,0.707*\R)$);
+  \node[bcnode, anchor=south east] at ($(-\sep,\sep)+(-0.35*\R,0.35*\R)$) {$R$};
+
+  % --- diagonal neighbours do NOT touch: 2*sqrt(2)*R > 2R ---
+  \draw[dimen] (0,0) -- (\sep,\sep);
+  \fill[grayStroke] (0,0) circle (1.0pt) (\sep,\sep) circle (1.0pt);
+  \node[bcnode, fill=white, fill opacity=0.85, text opacity=1, inner sep=1.5pt, rotate=45]
+        at (1.0,1.0) {$2\sqrt{2}\,R$};
+\end{tikzpicture}
+\caption{CV-4 --- a $3\times3$ array of equal discs (radius $R$, thickness $t$) under
+isotropic confining pressure $\sigma$ applied along all four outer faces of the periodic packing.
+By the $D_4$ symmetry of the cell, each interior disc is loaded through four equal pole contacts $N$
+at its north, south, east, and west poles with friction inactive, while the diagonal neighbours stay
+clear ($2\sqrt{2}\,R>2R$). The resulting equibiaxial centre stress is
+$\sigma_{xx}=\sigma_{yy}=-2N/(\pi R t)$; the highlighted disc is the per-disc unit cell of the
+packing, the contacts merely placing the load poles.}
+\label{fig:cv4-bvp}
+\end{figure}
 
 \begin{figure}
 \centering
@@ -1005,6 +1412,81 @@ set smooths while reproducing the identical contact dynamics where both detector
 $1/\cos\alpha$ on steep flanks (with $\alpha$ the surface slope angle), and the test is rigid-body
 contact kinematics, not the deformable solver.
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[>=Stealth, scale=1.0]
+
+% ---------- superformula cam (4-lobed) with SHARP outward cusps at the tips ----------
+\def\Rtip{2.70}\def\Rval{1.20}
+\begin{scope}[shift={(0,0)}]
+  \draw[chartA, line width=1pt]
+    (\Rtip,0)
+    .. controls (2.05, 0.95) and (1.05, 0.55) .. (0.848, 0.848)
+    .. controls (0.55,1.05) and (0.95,2.05) .. (0,\Rtip)
+    .. controls (-0.95,2.05) and (-0.55,1.05) .. (-0.848,0.848)
+    .. controls (-1.05,0.55) and (-2.05,0.95) .. (-\Rtip,0)
+    .. controls (-2.05,-0.95) and (-1.05,-0.55) .. (-0.848,-0.848)
+    .. controls (-0.55,-1.05) and (-0.95,-2.05) .. (0,-\Rtip)
+    .. controls (0.95,-2.05) and (0.55,-1.05) .. (0.848,-0.848)
+    .. controls (1.05,-0.55) and (2.05,-0.95) .. (\Rtip,0)
+    -- cycle;
+\end{scope}
+
+\node[coralStroke, font=\footnotesize] at (-0.45,0.55) {$\Omega_{\!A}$};
+\node[coralStroke, font=\scriptsize] at (-0.78,-0.78) {cam $\rho(\theta)$};
+
+% ---------- cam pin / center + rotation BC ----------
+\fill[coralDark] (0,0) circle (1.6pt);
+\node[coralDark, font=\scriptsize, below left=-1pt and 0pt] at (0,0) {$\bm c$};
+\draw[load, line width=1pt]
+  (0.55,0.32) arc[start angle=30, end angle=295, radius=0.63];
+\node[coralDark, font=\footnotesize] at (0.92,0.62) {$\Omega$};
+
+% ---------- free non-convex follower (chartB) resting on the right cusp ----------
+\begin{scope}[shift={(3.45,0)}]
+  \draw[chartB, line join=round]
+    (0.00,-1.45) -- (1.55,-1.45) -- (1.55,1.45) -- (0.00,1.45)
+    -- (0.00,0.55)
+    .. controls (-0.55,0.32) and (-0.55,-0.32) .. (0.00,-0.55)
+    -- cycle;
+  \node[cBlue!60!black, font=\scriptsize] at (0.95,0.95) {$\Omega_{\!B}$};
+  \node[cBlue!60!black, font=\scriptsize] at (0.95,0.55) {(follower)};
+\end{scope}
+
+\coordinate (tip1) at (2.70,0.00);
+\draw[normaln, line width=1pt] (tip1) -- ++(0.95,0.00);
+\node[cBlue!70!black, font=\footnotesize] at (3.30,0.26) {$\nbf$};
+\draw[dimen] (2.70,-0.40) -- (3.45,-0.40);
+\node[grayStroke, font=\scriptsize] at (3.07,-0.66) {$\gn$};
+
+\coordinate (tip2) at (0.00,2.70);
+\begin{scope}
+  \draw[chartB, line join=round]
+    (-0.75,3.35) -- (0.75,3.35) -- (0.75,3.62) -- (-0.75,3.62) -- cycle;
+  \node[cBlue!60!black, font=\scriptsize] at (0.00,3.88) {(2nd face)};
+\end{scope}
+\draw[normaln, line width=1pt] (tip2) -- ++(0.00,0.62);
+\node[cBlue!70!black, font=\footnotesize] at (-0.30,3.10) {$\nbf$};
+\draw[dimen] (0.50,2.70) -- (0.50,3.35);
+\node[grayStroke, font=\scriptsize] at (0.78,3.02) {$\gn$};
+
+\node[grayStroke, font=\scriptsize, align=center, anchor=west] at (3.10,2.55)
+  {two disjoint\\contact arcs};
+\draw[grayStroke, line width=0.5pt, ->]
+  (3.05,2.40) .. controls (2.6,1.6) and (2.9,0.6) .. (2.90,0.10);
+\draw[grayStroke, line width=0.5pt, ->]
+  (3.05,2.78) .. controls (1.9,3.2) and (0.9,3.3) .. (0.30,3.10);
+
+\end{tikzpicture}
+\caption{CV-5 --- a rotating cusped superformula cam $\rho(\theta)$, whose lobe tips
+are cusps (superformula exponent $n_1<1$), is pinned at its center $\bm c$ and rotates
+at angular velocity $\Omega$, driving a free non-convex follower (rigid-body motion only).
+At each cusp the transition-map chart returns a sharp contact normal $\nbf$ and a boundary
+scan enumerates every disjoint contact arc, whereas the ambient level set smooths the cusp
+and a single closest-point projection recovers only one foot.}
+\label{fig:cv5-bvp}
+\end{figure}
+
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{supershape_chart_vs_sdf_pub}
@@ -1030,6 +1512,100 @@ representation costs of chart and level set are asymmetric, and that asymmetry i
 Figure~\ref{fig:cv6-geom} shows the Koch boundary at successive recursion levels; the chart stores the
 single generating rule that produces every level, while a grid or a fixed-capacity field must store the
 rendered detail.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}[font=\small]
+    % ====== Koch L-system: classic triangular generator F -> F-F++F-F ======
+    \pgfdeclarelindenmayersystem{KochGen}{\rule{F -> F-F++F-F}}
+
+    % ================= (A) MATING FACES =================
+    \begin{scope}
+      % ---- LOWER BLOCK (body): solid box up to the Koch top edge ----
+      \begin{scope}
+        \clip (0,-1.7) rectangle (9,0.9);
+        \fill[grayFill]
+          (0,0) [l-system={KochGen, axiom=FFFFFF, order=2, step=0.1667cm, angle=60}]
+          lindenmayer system -- (9,-1.7) -- (0,-1.7) -- cycle;
+      \end{scope}
+      \draw[draw=grayStroke, line width=1pt]
+        (0,0) [l-system={KochGen, axiom=FFFFFF, order=2, step=0.1667cm, angle=60}]
+        lindenmayer system;
+      \draw[draw=grayStroke, line width=1pt] (0,0) -- (0,-1.7) -- (9,-1.7) -- (9,0);
+
+      % ---- UPPER BLOCK (chartA): congruent Koch bottom edge, raised by the gap ----
+      \begin{scope}[shift={(0,0.62)}]
+        \begin{scope}
+          \clip (0,-0.05) rectangle (9,2.1);
+          \fill[coralFill!55]
+            (0,0) [l-system={KochGen, axiom=FFFFFF, order=2, step=0.1667cm, angle=60}]
+            lindenmayer system -- (9,2.1) -- (0,2.1) -- cycle;
+        \end{scope}
+        \draw[draw=coralStroke, line width=1pt]
+          (0,0) [l-system={KochGen, axiom=FFFFFF, order=2, step=0.1667cm, angle=60}]
+          lindenmayer system;
+        \draw[draw=coralStroke, line width=1pt] (0,0) -- (0,2.1) -- (9,2.1) -- (9,0);
+      \end{scope}
+
+      % ---- block labels ----
+      \node[coralDark, font=\small\bfseries] at (1.65,2.20) {upper block $\Omega_A$};
+      \node[grayStroke, font=\small\bfseries] at (1.65,-1.35) {lower block $\Omega_B$};
+
+      % ---- uniform normal gap annotation g_N (leader into the gap) ----
+      \draw[normaln] (7.35,0.20) -- (7.35,0.60);
+      \node[cBlue!70!black, font=\scriptsize, anchor=west] at (7.46,0.40) {$\gn$};
+      \node[coralDark, font=\scriptsize, anchor=east] at (8.55,1.55)
+        {self-similar Koch interface};
+      \draw[coralStroke, line width=0.5pt] (6.5,1.45) .. controls (6.7,1.1) .. (6.65,0.78);
+    \end{scope}
+
+    % ================= (B) GENERATING-RULE INSET =================
+    \begin{scope}[shift={(10.7,0)}]
+      \node[grayStroke, font=\small\bfseries, anchor=south west] at (-0.1,2.55)
+        {generating rule (IFS)};
+
+      % row n=0 : a straight segment
+      \draw[draw=coralStroke, line width=1.1pt] (0,2.05) -- (2.4,2.05);
+      \node[bcnode, anchor=west] at (2.55,2.05) {$n=0$};
+
+      % mapsto arrow  (segment -> generator)
+      \node[font=\large] at (1.2,1.62) {$\mapsto$};
+
+      % row n=1 : the generator (4 sub-segments at scale 1/3, triangular bump)
+      \draw[draw=coralStroke, line width=1.1pt]
+        (0,0.95) [l-system={KochGen, axiom=F, order=1, step=0.8cm, angle=60}]
+        lindenmayer system;
+      \node[bcnode, anchor=west] at (2.55,0.95) {$n=1$};
+      \node[bcnode, anchor=north west, text width=4.5cm] at (0.0,0.70)
+        {one $O(1)$ rule: $1\!\to\!4$ at scale $\tfrac{1}{3}$};
+
+      % row n=2
+      \draw[draw=coralStroke!90, line width=0.95pt]
+        (0,-0.55) [l-system={KochGen, axiom=F, order=2, step=0.2667cm, angle=60}]
+        lindenmayer system;
+      \node[bcnode, anchor=west] at (2.55,-0.55) {$n=2$};
+
+      % row n=3
+      \draw[draw=coralStroke!90, line width=0.8pt]
+        (0,-1.45) [l-system={KochGen, axiom=F, order=3, step=0.0889cm, angle=60}]
+        lindenmayer system;
+      \node[bcnode, anchor=west] at (2.55,-1.45) {$n=3$};
+
+      % recursion-depth arrow down the left
+      \draw[-{Stealth[length=2.0mm]}, grayMid, line width=0.8pt]
+        (-0.45,1.05) -- (-0.45,-1.55);
+      \node[grayStroke, font=\scriptsize, rotate=90, anchor=south] at (-0.62,-0.25)
+        {recursion depth $n$};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{CV-6 --- two mating Koch boundaries generated by a four-contraction
+    iterated-function system at scale $\tfrac{1}{3}$ to recursion depth $n$. The
+    recursive chart stores the single $O(1)$ generating rule and resolves any depth
+    on demand, whereas a fixed-capacity neural field or a uniform grid saturates once
+    the geometric detail falls below its resolution; a representation and storage
+    benchmark rather than a loaded solve.}
+  \label{fig:cv6-bvp}
+\end{figure}
 
 \begin{figure}
 \centering
@@ -1203,6 +1779,95 @@ zero-dilation mode observed when the deformable joint is sheared along the asper
 \citep{barton1977shear,barton1990review}; here $i$ is not fitted but the slope distribution the chart resolves
 directly. Figure~\ref{fig:cv7-surfaces} renders the two mating Inada faces the solver shears, coloured by the
 local gap, the geometry from which the apparent friction and dilation emerge.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,>=Stealth]
+  \def\xL{0}       % left edge
+  \def\xR{8}       % right edge
+  \def\yMid{2.05}  % valley level of the lower face
+  \def\amp{0.5}    % asperity height (valley -> peak)
+  \def\dx{0.26}    % upper block shear shift (rides forward)
+  \def\dy{0.26}    % upper block dilation lift (rides up)
+  \def\hU{2.0}     % upper-block body height above the valley line
+  \def\yBase{-0.5} % clamped base level
+
+  \def\teeth{%
+    (0,\yMid)--(0.5,\yMid+\amp)--(1,\yMid)--(1.5,\yMid+\amp)--%
+    (2,\yMid)--(2.5,\yMid+\amp)--(3,\yMid)--(3.5,\yMid+\amp)--%
+    (4,\yMid)--(4.5,\yMid+\amp)--(5,\yMid)--(5.5,\yMid+\amp)--%
+    (6,\yMid)--(6.5,\yMid+\amp)--(7,\yMid)--(7.5,\yMid+\amp)--(8,\yMid)}
+
+  % LOWER block (body): teeth on top, clamped solid below.
+  \draw[body] (\xL,\yBase) -- (\xL,\yMid) -- \teeth -- (\xR,\yBase) -- cycle;
+  \node[bcnode, anchor=west] at (\xL+0.3,\yMid-1.05) {lower block (clamped)};
+
+  % UPPER block (chartA): identical teeth, translated by (dx,dy).
+  \begin{scope}[shift={(\dx,\dy)}]
+    \draw[chartA]
+      (\xL,\yMid) -- \teeth -- (\xR,\yMid+\hU) -- (\xL,\yMid+\hU) -- cycle;
+    \node[bcnode, coralStroke, anchor=west] at (\xL+0.3,\yMid+\hU-0.55)
+      {upper block};
+  \end{scope}
+
+  \coordinate (UTL) at (\xL+\dx,\yMid+\hU+\dy);
+  \coordinate (UTR) at (\xR+\dx,\yMid+\hU+\dy);
+
+  % (i) constant normal stress sigma_n
+  \def\ytop{\yMid+\hU+\dy}
+  \foreach \xx in {0.6,1.45,2.3,3.15,4.0,4.85,5.7,6.55,7.4} {
+    \draw[load] (\xx+\dx,\ytop+0.95) -- (\xx+\dx,\ytop+0.06);
+  }
+  \draw[grayStroke, line width=0.6pt]
+    (\dx+0.4,\ytop+1.0) -- (\dx+7.6,\ytop+1.0);
+  \node[coralDark, anchor=south, font=\small]
+    at (\dx+4.0,\ytop+1.05) {normal stress $\sigma_n$};
+
+  % (ii) shear
+  \draw[load] ($(UTL)+(-1.55,-0.7)$) -- ($(UTL)+(-0.06,-0.7)$);
+  \node[coralDark, anchor=east, font=\small]
+    at ($(UTL)+(-1.55,-0.7)$) {$\tau,\;u_t$};
+
+  % (iii) clamped base
+  \fixedbase{\xL,\yBase}{\xR,\yBase}
+
+  % emergent dilation u_n
+  \draw[grayStroke, densely dashed, line width=0.5pt]
+    (\xR-0.4,\yMid) -- (\xR+1.4,\yMid);
+  \draw[grayStroke, densely dashed, line width=0.5pt]
+    (\xR+\dx-0.4,\yMid+\dy) -- (\xR+1.4,\yMid+\dy);
+  \draw[dimen] (\xR+1.15,\yMid) -- (\xR+1.15,\yMid+\dy);
+  \node[cBlue!70!black, anchor=west, font=\small]
+    at (\xR+1.25,\yMid+0.5*\dy) {$u_n$};
+  \node[cBlue!70!black, anchor=west, font=\scriptsize]
+    at (\xR+1.25,\yMid+0.5*\dy-0.32) {(dilation)};
+
+  % asperity angle i
+  \coordinate (V) at (4.0,\yMid);
+  \coordinate (P) at (4.5,\yMid+\amp);
+  \coordinate (Hh) at (5.05,\yMid);
+  \draw[grayStroke, line width=0.5pt] (V) -- (Hh);
+  \draw[cGreen!55!black, line width=1.2pt] (V) -- (P);
+  \path pic["$i$", draw=cGreen!55!black, line width=0.8pt,
+            angle radius=0.62cm, angle eccentricity=1.5,
+            text=cGreen!45!black, font=\small]
+    {angle=Hh--V--P};
+
+  \node[bcnode, align=center, anchor=north, text=grayStroke]
+    at (\dx+4.0,\yBase-0.45)
+    {\footnotesize each mating face $=$ learned height chart $h_\theta$};
+\end{tikzpicture}
+\caption{CV-7 --- direct shear of two mating rough faces under constant
+normal stress $\sigma_n$, with the upper face sheared by $u_t$ over the
+clamped lower face. The interlocking asperities of slope $i$ force the
+joint to dilate by $u_n$ as it shears: the upper block must ride up the
+mating flanks to advance. Under plain Coulomb friction $\mu=\tan\phi_b$
+this produces an apparent friction
+$\muapp=\tau/\sigma_n=\tan(\phi_b+i)$ that emerges from the resolved
+asperity geometry rather than from an imposed dilatancy law. Each face
+is carried by a learned height chart $h_\theta$.}
+\label{fig:cv7-bvp}
+\end{figure}
 
 \begin{figure}
 \centering
