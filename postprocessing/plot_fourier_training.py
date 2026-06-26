@@ -217,8 +217,6 @@ def fig_training(iters=2500, n_freq=128, f_max=700.0):
     for s in ax.spines.values():
         s.set_color(MUTE)
 
-    fig.suptitle("Training a Fourier-feature height chart on a real rock joint "
-                 "(solvers/contact/profile_chart_2d.py::NeuralHeight1D)", fontsize=13, y=1.03)
     out = os.path.join(FIG, "fourier_training_curves_pub.png")
     fig.savefig(out, dpi=170, bbox_inches="tight", facecolor=BG)
     plt.close(fig)

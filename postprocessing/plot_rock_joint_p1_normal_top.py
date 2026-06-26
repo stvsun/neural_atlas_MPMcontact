@@ -30,7 +30,7 @@ from plot_rock_joint_p1_refinement_vm import _nodal_average                     
 
 RUN = os.path.join(_ROOT, "runs", "cv7_refinement_p1_time")
 FIG = os.path.join(_ROOT, "figures")
-BG = "#101418"
+BG = "#ffffff"
 torch.set_default_dtype(torch.float64)
 
 
@@ -84,32 +84,29 @@ def main():
     levels_cf = np.linspace(lo, hi, 25)
 
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
-    fg = "#e8eaed"; ncols = len(levels); nrows = len(use_t)
-    fig, axs = plt.subplots(nrows, ncols, figsize=(2.35 * ncols + 0.8, 2.35 * nrows + 0.4))
+    fg = "#1a1a1a"; ncols = len(levels); nrows = len(use_t)
+    fig, axs = plt.subplots(nrows, ncols, figsize=(2.5 * ncols + 0.9, 2.5 * nrows + 0.4))
     fig.patch.set_facecolor(BG); axs = np.atleast_2d(axs)
     cf = None
     for r, ti in enumerate(use_t):
         for c, (nc, _) in enumerate(levels):
             ax = axs[r, c]; dat = cells[nc]
             cf = ax.tricontourf(dat["xy"][:, 0], dat["xy"][:, 1], dat["szz"][ti], levels=levels_cf,
-                                cmap="turbo_r", vmin=lo, vmax=hi, extend="both")
+                                cmap="cividis", vmin=lo, vmax=hi, extend="both")
             ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
-            ax.set_facecolor(BG)
+            ax.set_facecolor("#ffffff")
             for s in ax.spines.values():
-                s.set_color("#3a3f47")
+                s.set_color("0.7")
             if r == 0:
-                ax.set_title(f"$n_{{cells}}$={nc}  ({dat['n_elem']} tets)", fontsize=9.5, color=fg)
+                ax.set_title(f"$n_{{\\mathrm{{cells}}}}={nc}$  ({dat['n_elem']} tets)", fontsize=9.5, color=fg)
             if c == 0:
-                ax.text(-0.16, 0.5, f"$u_x$={times[ti]:.3f} mm", transform=ax.transAxes, rotation=90,
+                ax.text(-0.17, 0.5, f"$u_x={times[ti]:.3f}$ mm", transform=ax.transAxes, rotation=90,
                         va="center", ha="center", fontsize=10, color=fg)
     cb = fig.colorbar(cf, ax=list(axs.ravel()), fraction=0.013, pad=0.01)
-    cb.set_label("normal stress $\\sigma_{zz}$  (− = compression)", fontsize=9, color=fg)
-    cb.ax.tick_params(labelsize=7, colors=fg); cb.outline.set_edgecolor(fg)
-    fig.suptitle("Bottom-block rough contact face — TOP-DOWN normal stress $\\sigma_{zz}$:  mesh size (x) "
-                 "× shear displacement (y ↓).  Recomputed from the saved FEM displacements",
-                 y=1.005, fontsize=10.5, color=fg)
+    cb.set_label(r"normal stress $\sigma_{zz}$  ($-$ = compression)", fontsize=9, color=fg)
+    cb.ax.tick_params(labelsize=7, colors=fg); cb.outline.set_edgecolor("0.6")
     out = os.path.join(FIG, "cv7_refinement_p1_normal_top_pub.png")
-    fig.savefig(out, dpi=160, bbox_inches="tight", facecolor=BG); plt.close(fig)
+    fig.savefig(out, dpi=200, bbox_inches="tight", facecolor=BG); plt.close(fig)
     print(f"  saved {out}  ({ncols} meshes [x] x {nrows} displacements [y])")
 
 

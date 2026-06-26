@@ -22,7 +22,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN = os.path.join(_ROOT, "runs", "cv7_refinement_p1")
 FIG = os.path.join(_ROOT, "figures")
 CMAP = "turbo"
-BG = "#101418"
+BG = "#ffffff"
 
 
 def _nodal_average(elements, vm, n_nodes):
@@ -133,23 +133,18 @@ def main():
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
     import matplotlib.image as mpimg, matplotlib.cm as cm
     from matplotlib.colors import Normalize
-    n = len(frames); fg = "#e8eaed"
-    fig, axs = plt.subplots(1, n, figsize=(2.6 * n + 0.7, 3.0)); fig.patch.set_facecolor(BG)
+    n = len(frames); fg = "#1a1a1a"
+    fig, axs = plt.subplots(1, n, figsize=(2.85 * n + 0.7, 3.3)); fig.patch.set_facecolor(BG)
     for ax, (nc, png) in zip(np.atleast_1d(axs), frames):
         ne = int(np.load(dict(levels)[nc])["n_elem"])
         ax.imshow(mpimg.imread(png)); ax.axis("off")
-        ax.set_title(f"$n_{{cells}}$={nc}  ({ne} tets, ×2 blocks)", fontsize=8.5, color=fg)
+        ax.set_title(f"$n_{{\\mathrm{{cells}}}}={nc}$  ({ne} tets)", fontsize=9.5, color=fg)
     sm = cm.ScalarMappable(norm=Normalize(0, vmax), cmap=cm.get_cmap(CMAP)); sm.set_array([])
     cb = fig.colorbar(sm, ax=list(np.atleast_1d(axs)), fraction=0.018, pad=0.01)
-    cb.set_label("von Mises stress", fontsize=8, color=fg)
-    cb.ax.tick_params(labelsize=7, colors=fg); cb.outline.set_edgecolor(fg)
-    stag = "per-element CST" if args.raw else "nodal-averaged + iso-contours"
-    trimtag = " ; rigid-platen top layer trimmed" if args.trim_platen > 0 else ""
-    fig.suptitle("3-D von Mises contour of the GENUINE TWO-BLOCK rough-joint shear vs mesh refinement "
-                 f"(P1; both faces deformable; {stag}{trimtag}; deform $\\times${args.def_scale:.0f})",
-                 y=1.05, fontsize=8.4, color=fg)
+    cb.set_label("von Mises stress", fontsize=9, color=fg)
+    cb.ax.tick_params(labelsize=8, colors=fg); cb.outline.set_edgecolor("0.6")
     out = os.path.join(FIG, "cv7_refinement_p1_vm_pub.png")
-    fig.savefig(out, dpi=160, bbox_inches="tight", facecolor=BG); plt.close(fig)
+    fig.savefig(out, dpi=200, bbox_inches="tight", facecolor=BG); plt.close(fig)
     print(f"  saved {out}  (levels n_cells={[nc for nc, _ in frames]})")
 
 

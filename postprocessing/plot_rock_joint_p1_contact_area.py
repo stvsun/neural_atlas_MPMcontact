@@ -26,7 +26,7 @@ from benchmarks.contact.cv_numerical.rock_joint_two_block import TwoBlockJointSh
 
 RUN = os.path.join(_ROOT, "runs", "cv7_refinement_p1_time")
 FIG = os.path.join(_ROOT, "figures")
-BG = "#101418"
+BG = "#ffffff"
 
 
 def _levels():
@@ -73,34 +73,32 @@ def main():
     pmax = float(np.percentile(np.concatenate([cells[nc]["press"][use_t].ravel() for nc, _ in levels]),
                                args.clim_pct))
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
-    fg = "#e8eaed"; ncols = len(levels); nrows = len(use_t)
-    fig, axs = plt.subplots(nrows, ncols, figsize=(2.35 * ncols + 0.8, 2.35 * nrows + 0.4))
+    fg = "#1a1a1a"; ncols = len(levels); nrows = len(use_t)
+    fig, axs = plt.subplots(nrows, ncols, figsize=(2.5 * ncols + 0.9, 2.5 * nrows + 0.4))
     fig.patch.set_facecolor(BG); axs = np.atleast_2d(axs)
     cf = None
     for r, ti in enumerate(use_t):
         for c, (nc, _) in enumerate(levels):
             ax = axs[r, c]; dat = cells[nc]
             cf = ax.tricontourf(dat["xy"][:, 0], dat["xy"][:, 1], dat["press"][ti],
-                                levels=np.linspace(0, pmax, 24), cmap="inferno", vmin=0, vmax=pmax,
+                                levels=np.linspace(0, pmax, 24), cmap="magma_r", vmin=0, vmax=pmax,
                                 extend="max")
-            ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([]); ax.set_facecolor("#000000")
+            ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([]); ax.set_facecolor("#ffffff")
             for s in ax.spines.values():
-                s.set_color("#3a3f47")
-            ax.text(0.5, 0.04, f"$A_c/A$ = {100*dat['frac'][ti]:.0f}%", transform=ax.transAxes,
-                    ha="center", va="bottom", fontsize=8, color="#ffffff")
+                s.set_color("0.7")
+            ax.text(0.5, 0.035, f"$A_c/A={100*dat['frac'][ti]:.0f}\\%$", transform=ax.transAxes,
+                    ha="center", va="bottom", fontsize=8, color="#222222",
+                    bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none", alpha=0.7))
             if r == 0:
-                ax.set_title(f"$n_{{cells}}$={nc}  ({dat['n_elem']} tets)", fontsize=9.5, color=fg)
+                ax.set_title(f"$n_{{\\mathrm{{cells}}}}={nc}$  ({dat['n_elem']} tets)", fontsize=9.5, color=fg)
             if c == 0:
-                ax.text(-0.16, 0.5, f"$u_x$={times[ti]:.3f} mm", transform=ax.transAxes, rotation=90,
+                ax.text(-0.17, 0.5, f"$u_x={times[ti]:.3f}$ mm", transform=ax.transAxes, rotation=90,
                         va="center", ha="center", fontsize=10, color=fg)
     cb = fig.colorbar(cf, ax=list(axs.ravel()), fraction=0.013, pad=0.01)
-    cb.set_label("contact pressure (bright = in contact)", fontsize=9, color=fg)
-    cb.ax.tick_params(labelsize=7, colors=fg); cb.outline.set_edgecolor(fg)
-    fig.suptitle("Rough-joint REAL contact area (bottom face, top-down):  mesh size (x) × shear "
-                 "displacement (y ↓).  Bright = bearing asperities; dark = separated; $A_c/A$ annotated",
-                 y=1.005, fontsize=10.3, color=fg)
+    cb.set_label("contact pressure  (dark = bearing asperities)", fontsize=9, color=fg)
+    cb.ax.tick_params(labelsize=7, colors=fg); cb.outline.set_edgecolor("0.6")
     out = os.path.join(FIG, "cv7_refinement_p1_contact_area_pub.png")
-    fig.savefig(out, dpi=160, bbox_inches="tight", facecolor=BG); plt.close(fig)
+    fig.savefig(out, dpi=200, bbox_inches="tight", facecolor=BG); plt.close(fig)
     print(f"  saved {out}  ({ncols} meshes [x] x {nrows} displacements [y])")
 
 
