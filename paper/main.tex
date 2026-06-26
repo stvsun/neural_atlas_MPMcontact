@@ -265,9 +265,10 @@ real Inada-granite joint CV-7. Section~\ref{sec:disc} states the preconditions, 
 \section{The neural coordinate atlas}\label{sec:atlas}
 
 A body is described by charts of its boundary rather than by a field over the space it occupies. Let
-$\Omega_X\subset\R^d$ ($d=2,3$) be the region occupied by body $X$, with boundary $\partial\Omega_X$. The
-classical description is the \emph{ambient level set}, a scalar field $\phi_X:\R^d\to\R$ negative inside the
-body, from which the gap and the outward normal are the value and the normalised gradient,
+$\Omega_X\subset\R^d$, $d\in\{2,3\}$, be the open region occupied by body $X$, with boundary $\partial\Omega_X$
+a compact $(d{-}1)$-dimensional manifold. The classical description is the \emph{ambient level set}, a scalar
+field $\phi_X:\R^d\to\R$ negative inside the body, from which the gap $\gn^X(\xbf)\in\R$ and the outward unit
+normal $\nbf_X(\xbf)\in\Sph^{d-1}$ are the value and the normalised gradient,
 \begin{equation}\label{eq:sdf-gap}
 \gn^X(\xbf)=\phi_X(\xbf),\qquad
 \nbf_X(\xbf)=\frac{\grad\phi_X(\xbf)}{\norm{\grad\phi_X(\xbf)}} .
@@ -284,10 +285,10 @@ terms,
 with $\nbf_{\mathrm{gt}}$ the sampled surface normal; the level set is carried throughout as the comparison
 baseline of Section~\ref{sec:verif}. A \emph{coordinate chart} of the boundary is a map
 \begin{equation}\label{eq:chart}
-\map{X}:\Theta_X\to\partial\Omega_X
+\map{X}:\Theta_X\to\partial\Omega_X,\qquad \Theta_X\subset\R^{d-1},
 \end{equation}
-from a parameter domain $\Theta_X$ onto the surface, and an \emph{atlas} is a collection of charts with the
-transition maps that relate them where they overlap. The chart carries one dimension fewer than the field,
+from a parameter domain $\Theta_X$ onto the surface, and an \emph{atlas} is a collection of such charts with
+the transition maps that relate them where they overlap. The chart carries one dimension fewer than the field,
 models no interior, and has no medial axis (Figure~\ref{fig:atlas-chart}).
 
 \begin{figure}[t]
@@ -300,23 +301,26 @@ only the surface as a function of its own coordinates.}
 \end{figure}
 
 Three chart families are used. The \emph{radial chart} represents a star-shaped body through a radius
-function $\rho_X:\Sph^{d-1}\to\R^{+}$, with centre $c_X$ and orientation $Q_X$,
+function $\rho_X:\Sph^{d-1}\to\R^{+}$, with centre $c_X\in\R^d$ and orientation $Q_X\in SO(d)$, mapping a
+direction $\hat\ubf\in\Sph^{d-1}$ to
 \begin{equation}\label{eq:radial-chart}
 \map{X}(\hat\ubf)=c_X+Q_X\,\rho_X(\hat\ubf)\,\hat\ubf ,\qquad
 \rho(\theta)=\Big(\big\lvert\tfrac1a\cos\tfrac{m\theta}{4}\big\rvert^{n_2}
 +\big\lvert\tfrac1b\sin\tfrac{m\theta}{4}\big\rvert^{n_3}\Big)^{-1/n_1},
 \end{equation}
 the second expression the Gielis superformula, which sharpens into cusps for $n_1<1$ \citep{gielis2003generic}.
-The \emph{height chart} represents a single-valued rough surface as a graph $\map{X}(x)=(x,h_X(x))$, $x\in
-\mathcal D$. The \emph{decoder chart} $D_X:\bm\xi\mapsto\xbf$ maps a reference cube to a general body and is
-inverted by Newton iteration \eqref{eq:newton-invert}; it carries the elasticity of Section~\ref{sec:govern},
-while the radial and height charts supply the closed-form gaps of Section~\ref{sec:tmap}.
+The \emph{height chart} represents a single-valued rough surface as a graph $\map{X}(x)=(x,h_X(x))$ over
+$x\in\mathcal D\subset\R^{d-1}$, with $h_X:\mathcal D\to\R$. The \emph{decoder chart} $D_X:U\to\R^d$ maps the
+reference cube $U=[-r,r]^d$ to a general body and is inverted by Newton iteration \eqref{eq:newton-invert}; it
+carries the elasticity of Section~\ref{sec:govern}, while the radial and height charts supply the closed-form
+gaps of Section~\ref{sec:tmap}.
 
 \subsection{Fourier-feature representation}\label{sec:fourier}
 
 A coordinate network applied to the raw parameter cannot resolve a sharp surface, since its kernel low-passes
 high frequencies. The parameter is therefore encoded through a fixed sinusoidal bank before the network: with
-$\tilde x\in[-1,1]^d$ the normalised parameter and $B\in\R^{K\times d}$ a frequency bank,
+$\tilde x\in[-1,1]^d$ the normalised parameter, $B\in\R^{K\times d}$ a bank of $K$ frequency rows, and the
+feature map $\gamma:[-1,1]^d\to\R^{2K}$,
 \begin{equation}\label{eq:gamma}
 \gamma(x)=\big[\cos(2\pi B\tilde x),\ \sin(2\pi B\tilde x)\big]\in\R^{2K},\qquad
 h_\theta(x)=\mathrm{base}+\mathrm{MLP}_\theta\!\big(\gamma(x)\big),
@@ -355,55 +359,84 @@ Section~\ref{sec:discr}.
 
 \subsection{Strong form}\label{sec:strong:strong}
 
-Two bodies occupy regions $\Omega^A,\Omega^B\subset\R^d$ with boundaries $\partial\Omega^\alpha=
-\overline{\Gamma_u^\alpha}\cup\overline{\Gamma_t^\alpha}\cup\overline{\Gamma_c^\alpha}$. Each body carries a
-displacement $\ubf^\alpha$ with small strain $\bm\varepsilon=\tfrac12(\grad\ubf+\grad^{\!\top}\!\ubf)$, and
-the balance of linear momentum and the boundary conditions read
+Let two bodies occupy open bounded Lipschitz domains $\Omega^A,\Omega^B\subset\R^d$, $d\in\{2,3\}$, indexed by
+$\alpha\in\{A,B\}$, with outward unit normal $\nbf^\alpha\in\Sph^{d-1}$ and boundary partitioned into disjoint,
+relatively open Dirichlet, Neumann, and candidate-contact parts,
+$\partial\Omega^\alpha=\overline{\Gamma_u^\alpha}\cup\overline{\Gamma_t^\alpha}\cup\overline{\Gamma_c^\alpha}$,
+$\Gamma_u^\alpha\neq\varnothing$. The displacement $\ubf^\alpha:\Omega^\alpha\to\R^d$ induces the infinitesimal
+strain and, through a symmetric positive-definite elasticity tensor $\mathbb C^\alpha\in
+\mathrm{Lin}(\R^{d\times d}_{\mathrm{sym}})$, the Cauchy stress,
+\begin{equation}\label{eq:constitutive}
+\bm\varepsilon(\ubf^\alpha)=\tfrac12\big(\grad\ubf^\alpha+\grad^{\!\top}\!\ubf^\alpha\big)\in\R^{d\times d}_{\mathrm{sym}},\qquad
+\bm\sigma^\alpha=\mathbb C^\alpha:\bm\varepsilon(\ubf^\alpha)\in\R^{d\times d}_{\mathrm{sym}} .
+\end{equation}
+Given a body force $\bm b^\alpha\in[L^2(\Omega^\alpha)]^d$, a prescribed boundary displacement
+$\bar\ubf^\alpha\in[H^{1/2}(\Gamma_u^\alpha)]^d$, and a prescribed traction
+$\bar\tbf^\alpha\in[L^2(\Gamma_t^\alpha)]^d$, quasi-static equilibrium is the strong-form boundary-value problem
 \begin{equation}\label{eq:balance}
 \grad\!\cdot\bm\sigma^\alpha+\bm b^\alpha=\bm0\ \ \text{in }\Omega^\alpha;\qquad
 \ubf^\alpha=\bar\ubf^\alpha\ \text{on }\Gamma_u^\alpha,\quad
 \bm\sigma^\alpha\nbf^\alpha=\bar\tbf^\alpha\ \text{on }\Gamma_t^\alpha,
 \end{equation}
-with $\bm\sigma^\alpha$ the stress, $\bm b^\alpha$ the body force, and $\bar\ubf^\alpha,\bar\tbf^\alpha$ the
-prescribed data. The bodies are linear elastic, $\bm\sigma^\alpha=\mathbb C^\alpha:\bm\varepsilon(\ubf^\alpha)$,
-with $\mathbb C^\alpha$ the fourth-order elasticity tensor. On $\Gamma_c$ the bodies satisfy the contact
-conditions of Section~\ref{sec:tmap}, in which the gap and the normal are read from the atlas.
+closed on $\Gamma_c$ by the contact conditions of Section~\ref{sec:tmap}, in which the gap and the normal are
+read from the atlas.
 
 \subsection{Virtual work}\label{sec:weak}
 
-Testing \eqref{eq:balance} with an admissible variation $\delta\ubf^\alpha\in V^\alpha=\{\delta\ubf\in[H^1]^d:
-\delta\ubf=\bm0\ \text{on}\ \Gamma_u^\alpha\}$ and integrating by parts, the internal and external work balance
-the contact work $\delta W_c$ on $\Gamma_c$,
+Define the trial and test spaces
+\begin{equation}\label{eq:spaces}
+\mathcal S^\alpha=\big\{\ubf\in[H^1(\Omega^\alpha)]^d:\ubf=\bar\ubf^\alpha\ \text{on}\ \Gamma_u^\alpha\big\},\qquad
+\mathcal V^\alpha=\big\{\delta\ubf\in[H^1(\Omega^\alpha)]^d:\delta\ubf=\bm0\ \text{on}\ \Gamma_u^\alpha\big\},
+\end{equation}
+and set $\mathcal S=\mathcal S^A\times\mathcal S^B$, $\mathcal V=\mathcal V^A\times\mathcal V^B$. Multiplying the
+balance \eqref{eq:balance} by $\delta\ubf^\alpha\in\mathcal V^\alpha$, integrating over $\Omega^\alpha$, and
+integrating the stress-divergence term by parts through the divergence theorem give the weighted-residual
+identity
+\begin{equation}\label{eq:ibp}
+\int_{\Omega^\alpha}\!\big(\grad\!\cdot\bm\sigma^\alpha+\bm b^\alpha\big)\!\cdot\delta\ubf^\alpha\,dV=0
+\ \Longrightarrow\
+-\!\int_{\Omega^\alpha}\!\bm\sigma^\alpha:\grad\delta\ubf^\alpha\,dV
++\!\int_{\partial\Omega^\alpha}\!(\bm\sigma^\alpha\nbf^\alpha)\!\cdot\delta\ubf^\alpha\,dA
++\!\int_{\Omega^\alpha}\!\bm b^\alpha\!\cdot\delta\ubf^\alpha\,dV=0 ,
+\end{equation}
+in which $\bm\sigma^\alpha:\grad\delta\ubf^\alpha=\bm\sigma^\alpha:\bm\varepsilon(\delta\ubf^\alpha)$ by the
+symmetry of $\bm\sigma^\alpha$. The boundary integral vanishes on $\Gamma_u^\alpha$ where
+$\delta\ubf^\alpha=\bm0$, equals $\int_{\Gamma_t^\alpha}\bar\tbf^\alpha\!\cdot\delta\ubf^\alpha\,dA$ on the
+Neumann part, and contributes the contact traction on $\Gamma_c^\alpha$. Summing over $\alpha$, the variational
+problem reads: find $\ubf\in\mathcal S$ such that, for all $\delta\ubf\in\mathcal V$,
 \begin{equation}\label{eq:weak}
 \sum_{\alpha}\!\int_{\Omega^\alpha}\!\bm\sigma^\alpha:\bm\varepsilon(\delta\ubf^\alpha)\,dV
 -\sum_{\alpha}\Big[\int_{\Omega^\alpha}\!\bm b^\alpha\!\cdot\delta\ubf^\alpha\,dV
 +\int_{\Gamma_t^\alpha}\!\bar\tbf^\alpha\!\cdot\delta\ubf^\alpha\,dA\Big]
 +\delta W_c=0 ,
 \end{equation}
-with $V^\alpha$ the space of admissible variations and $\delta W_c$ the contact virtual work, supplied in
-Section~\ref{sec:tmap}.
+where $\delta W_c$ is the contact virtual work on $\Gamma_c$, supplied in Section~\ref{sec:tmap}.
 
 \subsection{Reduction to the reference chart}\label{sec:govern:chart}
 
-Each body is the image of a reference cube $U=[-r,r]^d$ under the trained chart decoder $\xbf=\map{}(\bm\xi)=
-D_\theta(\bm\xi)$, with Jacobian
+Each body is the diffeomorphic image of a reference cube $U=[-r,r]^d\subset\R^d$ under the trained chart
+decoder $D_\theta:U\to\Omega^\alpha$, $\xbf=D_\theta(\bm\xi)$, with $\det\bm J(\bm\xi)>0$ for $\bm\xi\in U$
+(Section~\ref{sec:fourier}). Its Jacobian, evaluated by automatic differentiation, is
 \begin{equation}\label{eq:chart-jacobian}
-\bm J(\bm\xi)=\frac{\partial D_\theta}{\partial\bm\xi}\in\R^{d\times d},
+\bm J(\bm\xi)=\frac{\partial D_\theta}{\partial\bm\xi}(\bm\xi)\in\R^{d\times d},
 \end{equation}
-computed by automatic differentiation. Fields are represented on $U$, and physical gradients follow from
-reference gradients by the chain rule,
+and fields on $\Omega^\alpha$ are represented on $U$, with physical gradients and the volume element pulling
+back as
 \begin{equation}\label{eq:pushforward}
-\grad_{\xbf}(\cdot)=\grad_{\bm\xi}(\cdot)\,\bm J^{-1}.
+\grad_{\xbf}(\cdot)=\grad_{\bm\xi}(\cdot)\,\bm J^{-1},\qquad dV=\abs{\det\bm J}\,d\bm\xi .
 \end{equation}
-The internal virtual work of \eqref{eq:weak} is then pulled back to the reference cube by the Piola identity
-\citep{sun2026neuralatlas}: with $\bm P$ the first Piola--Kirchhoff stress, equal to $\bm\sigma$ in the
-small-strain regime, and $\bm P_{\mathrm{chart}}=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}$ its Piola transform,
+The internal virtual work of \eqref{eq:weak} is then pulled back to $U$ by the Piola identity
+\citep{sun2026neuralatlas}. Writing $\bm P\in\R^{d\times d}$ for the first Piola--Kirchhoff stress (equal to
+$\bm\sigma$ in the small-strain regime) and using the identity $\bm P:(\bm G\bm J^{-1})=
+(\bm P\bm J^{-\top}):\bm G$, valid for every $\bm G\in\R^{d\times d}$,
 \begin{equation}\label{eq:piola}
-\int_{\Omega^\alpha}\bm P:\grad_{\xbf}\delta\ubf\,dV
-=\int_{U^\alpha}\bm P_{\mathrm{chart}}:\grad_{\bm\xi}\delta\ubf\,d\bm\xi ,
+\int_{\Omega^\alpha}\!\bm P:\grad_{\xbf}\delta\ubf\,dV
+=\int_{U}\!\bm P:\big(\grad_{\bm\xi}\delta\ubf\,\bm J^{-1}\big)\,\abs{\det\bm J}\,d\bm\xi
+=\int_{U}\!\bm P_{\mathrm{chart}}:\grad_{\bm\xi}\delta\ubf\,d\bm\xi ,\qquad
+\bm P_{\mathrm{chart}}:=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}\in\R^{d\times d},
 \end{equation}
-so the elasticity is integrated over the reference cube and the only chart-dependent factors are $\bm J^{-1}$
-and the volume element $dV=\abs{\det\bm J}\,d\bm\xi$. A steep neural chart can make $\bm J$ ill conditioned;
+so the elasticity is integrated over the reference cube $U$, and the Piola transform $\bm P_{\mathrm{chart}}$ is
+the only chart-dependent stress. A steep neural chart can make $\bm J$ ill conditioned;
 $\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value decomposition $\bm J=\bm U
 \bm\Sigma\bm V^{\!\top}$ with the spectrum floored,
 \begin{equation}\label{eq:svd-stab}
@@ -433,16 +466,18 @@ by composing one body's chart with the inverse chart of the other; this composit
 \subsection{Contact kinematics}\label{sec:tmap:kin}
 
 On $\Gamma_c$ the bodies may not interpenetrate, contact pushes but does not pull, and pressure builds only
-where they touch. With $t_N=-\bm\sigma\nbf\cdot\nbf$ the contact pressure, the Signorini--Hertz--Moreau and
-Coulomb conditions are
+where they touch. Let the contact pressure be $t_N=-\bm\sigma\nbf\cdot\nbf\in\R_{\ge0}$, the gap
+$\gn:\Gamma_c\to\R$, the outward unit normal $\nbf\in\Sph^{d-1}$, the tangential traction $\tbf_T$ and slip
+velocity $\vbf_T$ in the tangent plane $\{\vbf\in\R^d:\vbf\cdot\nbf=0\}$, and the friction coefficient
+$\mu\ge0$. The Signorini--Hertz--Moreau and Coulomb conditions read
 \begin{equation}\label{eq:signorini}
 \gn\ge0,\quad t_N\ge0,\quad \gn\,t_N=0;\qquad
 \norm{\tbf_T}\le\mu\,t_N,\quad \tbf_T=-\mu\,t_N\frac{\vbf_T}{\norm{\vbf_T}}\ \text{if}\ \vbf_T\neq\bm0,
 \end{equation}
-with $\tbf_T$ the tangential traction, $\vbf_T$ the slip velocity, $\mu$ the friction coefficient, and the
-sign convention $\gn<0\Leftrightarrow$ penetration.
+with the sign convention $\gn<0\Leftrightarrow$ penetration.
 
-For two charted bodies $A,B$ the transition map carries a boundary parameter of $A$ to its mate on $B$,
+For two charted bodies $A,B$ the transition map carries a parameter $\theta_A\in\Theta_A$ of $A$ to its mate
+$\psi_B\in\Theta_B$ on $B$,
 \begin{equation}\label{eq:tmap-def}
 \tmap:\ \theta_A\longmapsto\psi_B=\big(\map{B}^{-1}\circ\map{A}\big)(\theta_A),
 \end{equation}
@@ -593,9 +628,11 @@ the cyclic energy ledger of Appendix~\ref{app:supp}.
 \section{Finite element formulation}\label{sec:discr}
 
 The weak form \eqref{eq:weak} is discretised by chart-based finite elements, the Galerkin counterpart of the
-Piola pull-back \eqref{eq:piola}: linear tetrahedra on the reference cube $U$. The physical shape-function
-gradients are $\grad_{\xbf}N_a=\grad_{\bm\xi}N_a\,\bm J^{-1}$, from which the small-strain operator $\bm B_e$ is
-assembled. With $\bm\sigma=\mathbb C:\bm\varepsilon$ the element internal force and
+Piola pull-back \eqref{eq:piola}. The reference cube $U$ is meshed by linear ($P_1$) tetrahedra with nodal
+shape functions $\{N_a\}$, and the trial field is sought in the conforming subspace $\mathcal S_h\subset
+\mathcal S$, $\ubf_h(\bm\xi)=\sum_a N_a(\bm\xi)\,\ubf_a$ with nodal values $\ubf_a\in\R^d$. The physical
+shape-function gradients are $\grad_{\xbf}N_a=\grad_{\bm\xi}N_a\,\bm J^{-1}$, from which the Voigt strain
+operator $\bm B_e\in\R^{m\times d n_e}$ ($m=d(d{+}1)/2$, $n_e$ element nodes) is assembled. With $\bm\sigma=\mathbb C:\bm\varepsilon$ the element internal force and
 tangent are integrated on $U$ with the stabilised volume factor,
 \begin{equation}\label{eq:fem-assembly}
 \fbf^{\mathrm{int}}_e=V_e^{\mathrm{phys}}\,\bm B_e^{\!\top}\bm\sigma_e,\qquad
