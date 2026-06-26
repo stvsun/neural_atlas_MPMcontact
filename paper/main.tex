@@ -1477,13 +1477,18 @@ and a single closest-point projection recovers only one foot.}
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{supershape_chart_vs_sdf_pub}
-  \caption{CV-5, chart versus level set on a cusped boundary. A rotating Gielis-superformula cam
-  \eqref{eq:superformula} with cusped lobes ($n_1<1$). The trained Fourier-feature radial chart
-  $\rho_\theta:\Sph^1\to\R^{+}$ (left) reproduces the analytical gap and normal on the lobe tips and
-  in the concave valleys, reaching a gap error of $3.8\times10^{-3}\,L$ and a median normal-angle
-  error of $0.42^{\circ}$. A neural SDF of the same shape (right) degrades on the cusps (gap error
-  $8\times10^{-3}\,L$) and tilts the normal off the surface (median $\lvert n_z\rvert\sim0.5$), the
-  intrinsic spectral-bias ceiling. A boundary scan over the chart enumerates $\ge 2$ disjoint contact
+  \caption{CV-5, chart versus level set on a cusped boundary, evaluated on a Gielis-superformula cam
+  \eqref{eq:superformula} with cusped lobes ($n_1<1$). (a) The gap field $g_B$ of the inverse radial chart
+  $\rho_\theta:\Sph^1\to\R^{+}$ is smooth everywhere, with clean radial iso-contours through both the lobe
+  tips and the concave valleys. (b) The true Euclidean signed distance of the same shape develops a
+  non-smooth medial-axis ridge inside the concavities, where the closest-point projection is multivalued.
+  (c) The angle between the radial-chart normal and the true surface normal: the single-body radial
+  parameterization carries a structured $\sim\!1/\cos\alpha$ bias, largest on the steep flanks and in the
+  re-entrant valleys. The chart trades this small, geometry-aware bias for a globally smooth gap and a
+  guaranteed unique foot; fitting the same cusped distance with a neural level set instead hits the
+  intrinsic spectral-bias ceiling on the cusps --- the trained Fourier-feature chart reaches a gap error of
+  $3.8\times10^{-3}\,L$ and a $0.42^{\circ}$ median normal-angle error, whereas a neural SDF of the same
+  shape degrades to $8\times10^{-3}\,L$. A boundary scan over the chart enumerates $\ge 2$ disjoint contact
   arcs where a single closest-point projection returns one foot.}
   \label{fig:cv5_chart_vs_sdf}
 \end{figure}

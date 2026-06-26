@@ -158,14 +158,14 @@ def chart_vs_sdf(n=300):
     im0 = axs[0].contourf(X, Y, Grad, levels=24, cmap="coolwarm",
                           vmin=-np.nanpercentile(np.abs(Grad), 98), vmax=np.nanpercentile(np.abs(Grad), 98))
     axs[0].contour(X, Y, Grad, levels=[0], colors="k", linewidths=0.6)
-    axs[0].set_title("radial-chart gap $g_B$\n(smooth, radial iso-contours)")
+    axs[0].set_title("(a)", loc="left")
     fig.colorbar(im0, ax=axs[0], shrink=0.7)
     im1 = axs[1].contourf(X, Y, Sdf, levels=24, cmap="coolwarm",
                           vmin=-np.nanpercentile(np.abs(Sdf), 98), vmax=np.nanpercentile(np.abs(Sdf), 98))
-    axs[1].set_title("true Euclidean SDF\n(medial-axis ridge in concavities)")
+    axs[1].set_title("(b)", loc="left")
     fig.colorbar(im1, ax=axs[1], shrink=0.7)
     im2 = axs[2].contourf(X, Y, Ang, levels=24, cmap="magma")
-    axs[2].set_title("angle: radial normal vs\ntrue surface normal (deg)")
+    axs[2].set_title("(c)", loc="left")
     fig.colorbar(im2, ax=axs[2], shrink=0.7)
     fig.tight_layout()
     path = os.path.join(FIG_DIR, "supershape_chart_vs_sdf_pub.png")
