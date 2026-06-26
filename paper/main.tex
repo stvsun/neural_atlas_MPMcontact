@@ -391,10 +391,14 @@ models no interior, and has no medial axis (Figure~\ref{fig:atlas-chart}).
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.9\linewidth]{atlas_levelset_vs_chart_3d}
-\caption{Two descriptions of the same body. Left: the ambient level set $\phi:\R^3\to\R$ fills space and
-carries a medial axis in each concavity. Right: the boundary chart $\map{}:\Theta\to\partial\Omega$ stores
-only the surface as a function of its own coordinates.}
+\includegraphics[width=\linewidth]{levelset_vs_atlas_pub}
+\caption{Two descriptions of the same body. (a) The ambient \emph{level set} $\phi:\R^d\to\R$ is an implicit
+field whose nested contours fill the surrounding space; the body is the sublevel set $\{\phi<0\}$ and its
+boundary is the single level $\phi=0$. (b) The \emph{coordinate chart} $\map{}:\Theta\to\partial\Omega$ maps a
+reference parameter domain $\Theta$ explicitly onto the boundary---the arrows carry reference points to their
+physical images, and the inverse $\pi=\map{}^{-1}$ reads a physical point's chart coordinate---storing only the
+surface as a function of its own coordinates. The chart carries one dimension fewer than the field and has no
+medial axis.}
 \label{fig:atlas-chart}
 \end{figure}
 
@@ -461,15 +465,16 @@ features, either tracks the asperity slopes or low-passes them into a smoothed g
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{fourier_training_curves_pub}
-\caption{The Fourier-feature encoding \eqref{eq:gamma} on a real rough surface (the Inada-granite joint
-profile of Section~\ref{sec:cv7}), with the same network width, depth, and optimiser; only the input encoding
-differs. (a) Reconstruction error versus training iteration: the Fourier-feature chart drives the error to
-$\sim\!0.003\%$ of the surface RMS, while the plain coordinate network plateaus at a spectral-bias floor it
-cannot cross. (b) The learned surface over a representative window: the Fourier chart tracks the asperities and
-recovers the mean asperity angle ($\bar i\approx20^\circ$), whereas the plain network low-passes them into a
-smoothed graph whose under-resolved slope ($\bar i\approx11^\circ$) would mispredict the joint's frictional
-strength through the Patton relation \eqref{eq:patton}.}
+\includegraphics[width=\linewidth]{fourier_mechanism_pub}
+\caption{How the Fourier-feature encoding \eqref{eq:gamma} works, against a plain coordinate network. (a) A
+plain network sees the raw coordinate $x$; the Fourier network first lifts it through a fixed bank of sinusoids
+$\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ before the same MLP. (b) Fitting a sharp one-dimensional target, shown
+as kernel regression in the two induced kernels: the plain, low-pass kernel smooths the sharp feature, while
+the Fourier kernel resolves it. (c) The mechanism: a plain network has a Laplace-like neural-tangent kernel
+whose power decays as $\abs{k}^{-(d+1)}$, so high frequencies are unlearned---the spectral bias of
+Remark~\ref{prop:ntk}---whereas the fixed Fourier bank flattens the spectrum to a tunable cutoff $2\pi\sigma$,
+making those frequencies learnable. On the real granite joint this is the difference between resolving the
+asperity slopes and smoothing them (Section~\ref{sec:cv7}).}
 \label{fig:fourier-spectral}
 \end{figure}
 
@@ -584,7 +589,7 @@ $\bm\sigma$ in the small-strain regime) and using the identity $\bm P:(\bm G\bm 
 \bm P_{\mathrm{chart}}:=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}\in\R^{d\times d},
 \end{equation}
 so the elasticity is integrated over the reference cube $U$, and the Piola transform $\bm P_{\mathrm{chart}}$ is
-the only chart-dependent stress (Figure~\ref{fig:chart-pullback}). A steep neural chart can make $\bm J$ ill conditioned;
+the only chart-dependent stress. A steep neural chart can make $\bm J$ ill conditioned;
 $\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value decomposition $\bm J=\bm U
 \bm\Sigma\bm V^{\!\top}$ with the spectrum floored,
 \begin{equation}\label{eq:svd-stab}
@@ -595,18 +600,6 @@ $\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value 
 and an element is admitted only if no singular value was floored and $\abs{\det\bm J}>\det_f$, with
 $\sigma_{\!f}=10^{-9}$, $\det_f=10^{-12}$. The discrete Galerkin form of \eqref{eq:weak} on the chart is given
 in Section~\ref{sec:discr}.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.94\linewidth]{chart_pullback_3d_pub}
-\caption{Reduction of the governing equations to the reference chart. The trained decoder
-$\xbf=D_\theta(\bm\xi)$ maps the reference cube $U=[-r,r]^d$ to the physical chart $\Omega^\alpha$; the chart
-Jacobian $\bm J=\partial D_\theta/\partial\bm\xi$ carries the reference coordinate frame, and any reference
-element, to its deformed image. The internal virtual work is integrated over $U$ through the Piola transform
-$\bm P_{\mathrm{chart}}=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}$ of \eqref{eq:piola}, so the solver computes on the
-fixed reference cube and never meshes the physical body.}
-\label{fig:chart-pullback}
-\end{figure}
 
 \begin{remark}[Atlas of overlapping charts]\label{rem:schwarz}
 A body of non-trivial topology, or one not covered by a single star-shaped or graph chart, is represented by
