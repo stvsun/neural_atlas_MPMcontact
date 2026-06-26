@@ -351,6 +351,7 @@ $107~\mu$m).
 
 \section{Governing equations and variational formulation on the coordinate chart}\label{sec:govern}\label{sec:strong}
 
+With the geometry of each body fixed by the atlas of Section~\ref{sec:atlas}, attention turns to the mechanics.
 The bodies are linear elastic and quasi-static, posed in the small-strain regime. Each body is the image of a
 reference cube under a trained chart decoder, so the variational problem is integrated on the chart and pulled
 back to the physical body by the Piola identity of the neural atlas \citep{sun2026neuralatlas}. The strong form,
@@ -383,7 +384,9 @@ read from the atlas.
 
 \subsection{Virtual work}\label{sec:weak}
 
-Define the trial and test spaces
+The strong form \eqref{eq:balance} holds pointwise and demands more regularity than a contact solution
+possesses; the variational form relaxes it to an integral statement, one that later admits the contact
+constraint and the chart pull-back without further change. Define the trial and test spaces
 \begin{equation}\label{eq:spaces}
 \mathcal S^\alpha=\big\{\ubf\in[H^1(\Omega^\alpha)]^d:\ubf=\bar\ubf^\alpha\ \text{on}\ \Gamma_u^\alpha\big\},\qquad
 \mathcal V^\alpha=\big\{\delta\ubf\in[H^1(\Omega^\alpha)]^d:\delta\ubf=\bm0\ \text{on}\ \Gamma_u^\alpha\big\},
@@ -414,8 +417,10 @@ where $\delta W_c$ is the contact virtual work on $\Gamma_c$, supplied in Sectio
 
 \subsection{Reduction to the reference chart}\label{sec:govern:chart}
 
-Each body is the diffeomorphic image of a reference cube $U=[-r,r]^d\subset\R^d$ under the trained chart
-decoder $D_\theta:U\to\Omega^\alpha$, $\xbf=D_\theta(\bm\xi)$, with $\det\bm J(\bm\xi)>0$ for $\bm\xi\in U$
+The weak form \eqref{eq:weak} is still posed on the physical bodies $\Omega^\alpha$; to evaluate it on the
+atlas, each integral is pulled back to the reference chart. Each body is the diffeomorphic image of a reference
+cube $U=[-r,r]^d\subset\R^d$ under the trained chart decoder $D_\theta:U\to\Omega^\alpha$,
+$\xbf=D_\theta(\bm\xi)$, with $\det\bm J(\bm\xi)>0$ for $\bm\xi\in U$
 (Section~\ref{sec:fourier}). Its Jacobian, evaluated by automatic differentiation, is
 \begin{equation}\label{eq:chart-jacobian}
 \bm J(\bm\xi)=\frac{\partial D_\theta}{\partial\bm\xi}(\bm\xi)\in\R^{d\times d},
@@ -459,9 +464,25 @@ study.
 
 \section{Formulation of frictional contact by the transition map}\label{sec:tmap}
 
-The contact conditions require, at each candidate point, the gap $\gn$ and the outward normal $\nbf$. The
-level set reads them from the ambient field through \eqref{eq:sdf-gap}. The atlas reads them from the boundary
-by composing one body's chart with the inverse chart of the other; this composition is the transition map.
+Every contact formulation rests on two geometric quantities evaluated at each candidate point: the gap $\gn$,
+which measures how far the surfaces are from touching, and the outward unit normal $\nbf$, which orients the
+pressure. How these two quantities are obtained sets one method apart from another. The classical
+node-to-surface treatment recovers them by \emph{projection}: a point on one body is projected onto the other,
+and the closest-point distance and the surface normal at the foot of that projection are taken as the gap and
+the normal. This projection is the origin of much of the difficulty in computational contact. It is non-unique
+in a concavity, where several feet are equidistant; it is ill-conditioned where the master surface curves
+sharply; and it returns a single foot even when one body touches its neighbour along several disjoint patches.
+The level set inherits the same weakness in another guise: it reads $\gn$ and $\nbf$ from the ambient field
+through \eqref{eq:sdf-gap}, but the field must interpolate a distance function through the whole volume, so its
+accuracy decays exactly where the surface is sharpest.
+
+The atlas takes a different route. Because each body already carries a chart of its own boundary, the gap and
+the normal need not be recovered by a search at all: a surface point of one body is carried directly to its
+mate on the other by \emph{composing} one chart with the inverse of the other. This composition is the
+\emph{transition map}, and it is the organising idea of the formulation that follows. It replaces a
+minimisation with an evaluation, it never leaves the surface, and---as the remainder of this section
+establishes---it returns the gap with the exact sign, the normal as a genuine gap gradient, and \emph{every}
+contact patch rather than only the nearest one.
 
 \subsection{Contact kinematics}\label{sec:tmap:kin}
 
@@ -476,13 +497,17 @@ $\mu\ge0$. The Signorini--Hertz--Moreau and Coulomb conditions read
 \end{equation}
 with the sign convention $\gn<0\Leftrightarrow$ penetration.
 
-For two charted bodies $A,B$ the transition map carries a parameter $\theta_A\in\Theta_A$ of $A$ to its mate
-$\psi_B\in\Theta_B$ on $B$,
+These conditions hold point by point on $\Gamma_c$; what remains is to evaluate the gap and the normal that
+enter them. For two charted bodies $A,B$ the transition map does so in two steps. A boundary parameter
+$\theta_A\in\Theta_A$ of body $A$ is first carried into physical space by its own chart,
+$\xbf=\map{A}(\theta_A)$; the inverse chart of $B$ then returns the parameter $\psi_B\in\Theta_B$ of the mating
+point, so the composition takes one surface coordinate straight to its counterpart on the other body,
 \begin{equation}\label{eq:tmap-def}
 \tmap:\ \theta_A\longmapsto\psi_B=\big(\map{B}^{-1}\circ\map{A}\big)(\theta_A),
 \end{equation}
-by pushing $\theta_A$ into physical space through $\map{A}$ and inverting $\map{B}$ at that point
-(Figure~\ref{fig:tm-concept}). The outward normal follows from the chart tangents
+as drawn in Figure~\ref{fig:tm-concept}. The construction is an evaluation followed by a chart inversion---the
+same operation an atlas uses to pass between two overlapping charts, here applied across the gap between two
+bodies, and requiring no closest-point search. The outward normal follows from the chart tangents
 $\tbf_i=\partial\map{}/\partial\xi^i$: in three dimensions it is their normalised cross product, in two
 dimensions the quarter-turn of the single tangent,
 \begin{equation}\label{eq:jacobian-normal}
@@ -530,6 +555,10 @@ onto the tangent plane of the direction sphere,
 \grad_d F=\dhat-\frac{\grad_S\rho}{r},\qquad
 \nbf=\widehat{\,Q\,\grad_d F\,}.
 \end{equation}
+
+The gap and normal constructed this way carry three properties that a closest-point projection lacks---a
+conservative normal, a sign-exact gap, and completeness across disjoint contact patches. Each is recorded as a
+remark below, and together they are the reason the transition map is preferred to a projection.
 
 \begin{remark}[Energy consistency]\label{prop:matched-normal}
 Differentiating $F$ with $\partial\dhat/\partial(Q^\top\xbf)=r^{-1}(I-\dhat\dhat^\top)$ gives
@@ -627,8 +656,10 @@ the cyclic energy ledger of Appendix~\ref{app:supp}.
 
 \section{Finite element formulation}\label{sec:discr}
 
-The weak form \eqref{eq:weak} is discretised by chart-based finite elements, the Galerkin counterpart of the
-Piola pull-back \eqref{eq:piola}. The reference cube $U$ is meshed by linear ($P_1$) tetrahedra with nodal
+With the strong form, its variational counterpart, the chart pull-back, and the contact contribution all in
+place, the discretisation assembles them into a solvable system. The weak form \eqref{eq:weak} is discretised
+by chart-based finite elements, the Galerkin counterpart of the Piola pull-back \eqref{eq:piola}. The reference
+cube $U$ is meshed by linear ($P_1$) tetrahedra with nodal
 shape functions $\{N_a\}$, and the trial field is sought in the conforming subspace $\mathcal S_h\subset
 \mathcal S$, $\ubf_h(\bm\xi)=\sum_a N_a(\bm\xi)\,\ubf_a$ with nodal values $\ubf_a\in\R^d$. The physical
 shape-function gradients are $\grad_{\xbf}N_a=\grad_{\bm\xi}N_a\,\bm J^{-1}$, from which the Voigt strain
