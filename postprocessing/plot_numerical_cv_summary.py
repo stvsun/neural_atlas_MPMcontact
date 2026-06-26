@@ -46,8 +46,8 @@ def main():
 
     # Panel A: L1 numerical error per benchmark (% vs closed form). Falls back to the
     # documented measured values when runs/*/metrics.json are absent (gitignored).
-    labels = ["CV-1\nHertz $a(F)$", "CV-3\nBrazilian", "CV-4\nnine-disc",
-              "CV-2\nCattaneo $c/a$", "CV-5\ndyn. traj."]
+    labels = ["Hertz\n$a(F)$", "Brazilian", "nine-disc",
+              "Cattaneo\n$c/a$", "superformula\ndyn."]
     vals = [cv1["a_relerr"] * 100 if cv1 else 1.6,
             cv3["center_sxx_relerr"] * 100 if cv3 else 1.6,
             cv4["sxx_relerr"] * 100 if cv4 else 0.2,
