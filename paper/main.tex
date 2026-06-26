@@ -347,10 +347,11 @@ $107~\mu$m).
 
 \section{Governing equations and variational formulation on the coordinate chart}\label{sec:govern}\label{sec:strong}
 
-The deformable bodies are linear elastic and quasi-static, and the boundary-value problem is posed in the
-small-strain regime. Its distinguishing feature is that each body is parametrised by a chart decoder, so the
-balance equations are integrated on a reference cube and pulled back to the physical body by the Piola identity
-of the neural atlas \citep{sun2026neuralatlas}.
+The bodies are linear elastic and quasi-static, posed in the small-strain regime. Each body is the image of a
+reference cube under a trained chart decoder, so the variational problem is integrated on the chart and pulled
+back to the physical body by the Piola identity of the neural atlas \citep{sun2026neuralatlas}. The strong form,
+the virtual-work statement, and the chart pull-back are stated in turn; the discrete Galerkin form follows in
+Section~\ref{sec:discr}.
 
 \subsection{Strong form}\label{sec:strong:strong}
 
@@ -368,38 +369,51 @@ prescribed data. The bodies are linear elastic, $\bm\sigma^\alpha=\mathbb C^\alp
 with $\mathbb C^\alpha$ the fourth-order elasticity tensor. On $\Gamma_c$ the bodies satisfy the contact
 conditions of Section~\ref{sec:tmap}, in which the gap and the normal are read from the atlas.
 
+\subsection{Virtual work}\label{sec:weak}
+
+Testing \eqref{eq:balance} with an admissible variation $\delta\ubf^\alpha\in V^\alpha=\{\delta\ubf\in[H^1]^d:
+\delta\ubf=\bm0\ \text{on}\ \Gamma_u^\alpha\}$ and integrating by parts, the internal and external work balance
+the contact work $\delta W_c$ on $\Gamma_c$,
+\begin{equation}\label{eq:weak}
+\sum_{\alpha}\!\int_{\Omega^\alpha}\!\bm\sigma^\alpha:\bm\varepsilon(\delta\ubf^\alpha)\,dV
+-\sum_{\alpha}\Big[\int_{\Omega^\alpha}\!\bm b^\alpha\!\cdot\delta\ubf^\alpha\,dV
++\int_{\Gamma_t^\alpha}\!\bar\tbf^\alpha\!\cdot\delta\ubf^\alpha\,dA\Big]
++\delta W_c=0 ,
+\end{equation}
+with $V^\alpha$ the space of admissible variations and $\delta W_c$ the contact virtual work, supplied in
+Section~\ref{sec:tmap}.
+
 \subsection{Reduction to the reference chart}\label{sec:govern:chart}
 
-Let the body be the image of a reference cube $U=[-r,r]^d$ under the trained chart decoder, $\xbf=
-\map{}(\bm\xi)=D_\theta(\bm\xi)$, with Jacobian
+Each body is the image of a reference cube $U=[-r,r]^d$ under the trained chart decoder $\xbf=\map{}(\bm\xi)=
+D_\theta(\bm\xi)$, with Jacobian
 \begin{equation}\label{eq:chart-jacobian}
 \bm J(\bm\xi)=\frac{\partial D_\theta}{\partial\bm\xi}\in\R^{d\times d},
 \end{equation}
-computed by automatic differentiation. A field on the body is represented on $U$, and its physical gradient
-follows from the reference gradient by the chain rule,
+computed by automatic differentiation. Fields are represented on $U$, and physical gradients follow from
+reference gradients by the chain rule,
 \begin{equation}\label{eq:pushforward}
-\grad_{\xbf}(\cdot)=\grad_{\bm\xi}(\cdot)\,\bm J^{-1},\qquad
-\bm\varepsilon(\ubf)=\tfrac12\big(\grad_{\xbf}\ubf+\grad_{\xbf}^{\!\top}\ubf\big).
+\grad_{\xbf}(\cdot)=\grad_{\bm\xi}(\cdot)\,\bm J^{-1}.
 \end{equation}
-The internal virtual work is pulled back to the reference cube by the Piola identity \citep{sun2026neuralatlas}:
-with $\bm P$ the first Piola--Kirchhoff stress and $\bm P_{\mathrm{chart}}=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}$
-its Piola transform, the element internal force is
+The internal virtual work of \eqref{eq:weak} is then pulled back to the reference cube by the Piola identity
+\citep{sun2026neuralatlas}: with $\bm P$ the first Piola--Kirchhoff stress, equal to $\bm\sigma$ in the
+small-strain regime, and $\bm P_{\mathrm{chart}}=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}$ its Piola transform,
 \begin{equation}\label{eq:piola}
-\fbf^a_i=\int_{U}P_{ij}\,\frac{\partial N_a}{\partial\xi_k}\,(\bm J^{-1})_{kj}\,\abs{\det\bm J}\,d\bm\xi
-=\int_{U}\bm P_{\mathrm{chart}}:\grad_{\bm\xi}N_a\,d\bm\xi ,
+\int_{\Omega^\alpha}\bm P:\grad_{\xbf}\delta\ubf\,dV
+=\int_{U^\alpha}\bm P_{\mathrm{chart}}:\grad_{\bm\xi}\delta\ubf\,d\bm\xi ,
 \end{equation}
-with $N_a$ the shape functions and the volume element $dV=\abs{\det\bm J}\,d\bm\xi$. A steep neural chart can
-make $\bm J$ ill conditioned; $\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value
-decomposition $\bm J=\bm U\bm\Sigma\bm V^{\!\top}$ with the spectrum floored,
+so the elasticity is integrated over the reference cube and the only chart-dependent factors are $\bm J^{-1}$
+and the volume element $dV=\abs{\det\bm J}\,d\bm\xi$. A steep neural chart can make $\bm J$ ill conditioned;
+$\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value decomposition $\bm J=\bm U
+\bm\Sigma\bm V^{\!\top}$ with the spectrum floored,
 \begin{equation}\label{eq:svd-stab}
 \bm\Sigma_{\!s}=\max(\bm\Sigma,\sigma_{\!f}),\qquad
 \bm J^{-1}=\bm V\,\bm\Sigma_{\!s}^{-1}\,\bm U^{\!\top},\qquad
 \abs{\det\bm J}=\textstyle\prod_i\Sigma_{s,i},
 \end{equation}
 and an element is admitted only if no singular value was floored and $\abs{\det\bm J}>\det_f$, with
-$\sigma_{\!f}=10^{-9}$, $\det_f=10^{-12}$. Equations \eqref{eq:piola}--\eqref{eq:svd-stab} are the sense in
-which the governing equations are solved \emph{in the chart}: the elasticity problem is integrated over the
-reference cube, and the only chart-dependent quantities are $\bm J^{-1}$ and $\abs{\det\bm J}$.
+$\sigma_{\!f}=10^{-9}$, $\det_f=10^{-12}$. The discrete Galerkin form of \eqref{eq:weak} on the chart is given
+in Section~\ref{sec:discr}.
 
 \begin{remark}[Atlas of overlapping charts]\label{rem:schwarz}
 A body of non-trivial topology, or one not covered by a single star-shaped or graph chart, is represented by
@@ -408,25 +422,6 @@ iteration on the overlap graph, with a partition-of-unity blend on the overlaps 
 numerical examples below use one chart per body; the multi-chart coupling is exercised in the companion atlas
 study.
 \end{remark}
-
-\subsection{Virtual work}\label{sec:weak}
-
-The weak form follows by testing \eqref{eq:balance} with an admissible variation $\delta\ubf^\alpha\in
-V^\alpha=\{\delta\ubf\in[H^1]^d:\delta\ubf=\bm0\ \text{on}\ \Gamma_u^\alpha\}$ and integrating by parts. The
-internal and external work balance the contact work $\delta W_c$ on $\Gamma_c$,
-\begin{equation}\label{eq:weak}
-\sum_{\alpha}\!\int_{\Omega^\alpha}\!\bm\sigma^\alpha:\bm\varepsilon(\delta\ubf^\alpha)\,dV
--\sum_{\alpha}\Big[\int_{\Omega^\alpha}\!\bm b^\alpha\!\cdot\delta\ubf^\alpha\,dV
-+\int_{\Gamma_t^\alpha}\!\bar\tbf^\alpha\!\cdot\delta\ubf^\alpha\,dA\Big]
-+\delta W_c=0 ,
-\end{equation}
-where each volume integral is carried to the reference cube by the Piola transform \eqref{eq:piola},
-\begin{equation}\label{eq:weak-chart}
-\int_{\Omega^\alpha}\bm\sigma:\bm\varepsilon(\delta\ubf)\,dV
-=\int_{U^\alpha}\bm\sigma:\bm\varepsilon(\delta\ubf)\,\abs{\det\bm J}\,d\bm\xi .
-\end{equation}
-The contact term $\delta W_c$ is supplied in Section~\ref{sec:tmap}; the discrete form of
-\eqref{eq:weak}--\eqref{eq:weak-chart} is given in Section~\ref{sec:discr}.
 
 
 \section{Formulation of frictional contact by the transition map}\label{sec:tmap}
@@ -597,10 +592,10 @@ the cyclic energy ledger of Appendix~\ref{app:supp}.
 
 \section{Finite element formulation}\label{sec:discr}
 
-The weak form \eqref{eq:weak} is discretised by chart-based finite elements: linear tetrahedra on the
-reference cube $U$, pushed to the physical body by \eqref{eq:pushforward}. The physical shape-function
-gradients are $\grad_{\xbf}N_a=\grad_{\bm\xi}N_a\,\bm J^{-1}$, and the small-strain operator $\bm B_e$ is
-assembled from them in the usual way. With $\bm\sigma=\mathbb C:\bm\varepsilon$ the element internal force and
+The weak form \eqref{eq:weak} is discretised by chart-based finite elements, the Galerkin counterpart of the
+Piola pull-back \eqref{eq:piola}: linear tetrahedra on the reference cube $U$. The physical shape-function
+gradients are $\grad_{\xbf}N_a=\grad_{\bm\xi}N_a\,\bm J^{-1}$, from which the small-strain operator $\bm B_e$ is
+assembled. With $\bm\sigma=\mathbb C:\bm\varepsilon$ the element internal force and
 tangent are integrated on $U$ with the stabilised volume factor,
 \begin{equation}\label{eq:fem-assembly}
 \fbf^{\mathrm{int}}_e=V_e^{\mathrm{phys}}\,\bm B_e^{\!\top}\bm\sigma_e,\qquad
@@ -620,7 +615,8 @@ residual, solved by Newton iteration with a backtracking line search,
 \end{equation}
 to $\norm{\bm R}<10^{-8}$ on the free degrees of freedom, with the contact force $\fbf^{\mathrm{contact}}$ and
 the contact stiffness $\bm K_c$ assembled from the node-to-surface element
-\eqref{eq:contact-residual}--\eqref{eq:contact-block} at the active nodes $\{\gn<0\}$. The geometry enters only through the detector query, which returns the pair
+\eqref{eq:contact-residual}--\eqref{eq:contact-block} at the active nodes $\{\gn<0\}$. The geometry enters only
+through the detector query, which returns the pair
 \begin{equation}\label{eq:detector}
 (\gn,\nbf)=
 \begin{cases}
@@ -628,9 +624,9 @@ the contact stiffness $\bm K_c$ assembled from the node-to-surface element
 \big(\gn^{\mathrm{chart}}(\xbf),\ \nbf^{\mathrm{chart}}(\xbf)\big), & \text{transition map},
 \end{cases}
 \end{equation}
-the chart branch being the radial gap \eqref{eq:radial-gap} or the height gap \eqref{eq:height-gap}. Both
-branches honour the same contract, so substituting one for the other changes a single evaluation and leaves
-the assembly, the Newton solve, and the tolerances untouched. On the boundary-fitted rough geometry the
+the chart branch returning the radial gap \eqref{eq:radial-gap} or the height gap \eqref{eq:height-gap}. Both
+branches return the same pair $(\gn,\nbf)$, so substituting one for the other changes only the geometric input
+and leaves the assembly, the Newton solve, and the tolerances unchanged. On the boundary-fitted rough geometry the
 pushforward passes a patch test and recovers the $O(h^2)$ manufactured-solution rate, so the discretisation
 error is controlled independently of the contact treatment; the two-deformable, moving-master case leaves a
 non-smooth friction residual of a few percent that does not shrink under refinement and calls for a
