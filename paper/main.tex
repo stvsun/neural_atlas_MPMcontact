@@ -128,8 +128,8 @@ throughout as a matched baseline on identical meshes and tolerances. The contact
 classical sequence (strong form, weak form, chart-based Galerkin discretisation), with the gap and a
 conservative, gradient-consistent normal supplied by the transition map, so that the chart and the level set
 are interchangeable at the force layer and the geometry is the only controlled variable. The method is
-verified against six closed-form benchmarks (CV-1 Hertz, CV-2 Cattaneo--Mindlin, CV-3 Brazilian, CV-4
-nine-disc, CV-5 superformula, CV-6 Koch) to a few percent, and validated on a real Inada-granite tensile
+verified against six closed-form benchmarks (Hertz line contact, Cattaneo--Mindlin partial slip, the Brazilian disc, the nine-disc cell, the cusped
+superformula, and the Koch fractal) to a few percent, and validated on a real Inada-granite tensile
 fracture, where dilation and apparent friction emerge from the resolved asperity geometry under plain Coulomb
 friction with no imposed dilatancy law. On the granite profile the level set smooths the mean asperity slope
 from $19.4^\circ$ to $12.5^\circ$, reconstructs the surface to only $107~\mu$m against the chart's
@@ -330,7 +330,7 @@ resolves a prescribed cutoff where a $d$-dimensional ambient field of comparable
 (Sections~\ref{sec:strong}--\ref{sec:discr}) and record two properties of the chart detector: the normal it
 returns is the gradient of the gap, so contact is energy-conservative, and
 the radial gap, though enlarged in magnitude, is sign-exact, so the chart and the level set share an active
-set on star-shaped bodies. We verify the method against a six-problem closed-form ladder, CV-1 through CV-6,
+set on star-shaped bodies. We verify the method against a six-problem closed-form ladder (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc, superformula, and Koch),
 on which the chart and the level set are equivalent for the convex and superposable cases and measurably
 separate on the cusped superformula and the self-similar Koch boundary; and we validate it on the direct
 shear of a real Inada-granite tensile fracture, where the apparent friction $\tan(\phi_b+i)$ and the normal
@@ -355,8 +355,8 @@ governing equations of two-body frictional contact and reduces them to the refer
 Jacobian. Section~\ref{sec:tmap} develops the transition-map contact model: the gap, the conservative normal,
 the chart inversions, the contact contribution to the weak form, and the
 interface constitutive law. Section~\ref{sec:discr} gives the chart-based finite element implementation.
-Section~\ref{sec:verif} reports the numerical examples, from the closed-form ladder CV-1 through CV-6 to the
-real Inada-granite joint CV-7. Section~\ref{sec:disc} states the preconditions, limitations, and conclusions.
+Section~\ref{sec:verif} reports the numerical examples, from the closed-form ladder to the
+real Inada-granite joint. Section~\ref{sec:disc} states the preconditions, limitations, and conclusions.
 
 %% ======================== METHOD (restructured) ========================
 
@@ -993,7 +993,7 @@ and off-surface maximum-shear depth $z/a\approx0.48$ reproduce the closed-form H
     \draw[dimen] (3.45,1.95) -- (4.55,1.95);
     \node[bcnode, fill=grayFill, inner sep=1pt] at (4,1.95) {$2a$};
   \end{tikzpicture}
-  \caption{The CV-1 Hertz line-contact benchmark (2D plane strain). A cylinder of
+  \caption{The Hertz line-contact benchmark (2D plane strain). A cylinder of
   radius $R$ and elastic constants $(E_1,\nu_1)$ is pressed by a load per unit length
   $P'$ onto an elastic block $(E_2,\nu_2)$ whose base is fully clamped, forming a
   contact patch of half-width $a=2\sqrt{P'R/\pi E^{*}}$ with reduced modulus $E^{*}$
@@ -1006,7 +1006,7 @@ and off-surface maximum-shear depth $z/a\approx0.48$ reproduce the closed-form H
 \begin{figure}
 \centering
 \includegraphics[width=0.66\linewidth]{liusun_fig13_hertz_sigma_yy_pub}
-\caption{CV-1, subsurface stress evidence. The vertical stress $\sigma_{yy}$ beneath the Hertzian line
+\caption{Hertz contact, subsurface stress evidence. The vertical stress $\sigma_{yy}$ beneath the Hertzian line
 contact, recovered by the chart-FEM solver against a neural-SDF indenter. The hemispherical stress bulb
 and the depth of maximum shear reproduce the closed-form Hertz field, confirming that the chart and the
 level set coincide on a convex contact.}
@@ -1028,7 +1028,7 @@ two-dimensional line-contact partition obeys
 %
 the planar reduction of the Mindlin compliance law
 \citep{mindlin1949compliance,johnson1985contact}, where $c$ is the radius of the stick zone and $a$ the
-contact half-width of CV-1. We measure $c$ against \eqref{eq:cattaneo} on a deep half-plane, since block
+contact half-width of the Hertz benchmark. We measure $c$ against \eqref{eq:cattaneo} on a deep half-plane, since block
 shear does not reproduce the edge-singular tangential traction. The stick radius matches to $\sim
 5$--$7\%$ at low $Q$, and the error rises to a mean of $\sim 11\%$ as $Q\to\mu P$. Near the friction
 limit the slip boundary sweeps across the contact faster than the node spacing can resolve, so the
@@ -1116,7 +1116,7 @@ the slipping annulus.
   % thin leader from legend down to the contact patch
   \draw[dimen, dashed, line width=0.4pt] ($(\lx,\ly)+(0.10,0)$) -- (0.85*\ahalf,-0.08);
 \end{tikzpicture}
-\caption{CV-2 --- a tangential load $Q<\mu P$ applied to the Hertz patch of CV-1 splits the
+\caption{Cattaneo--Mindlin: a tangential load $Q<\mu P$ applied to the Hertz patch splits the
 contact into a central \emph{stick} zone of radius $c$ and a slipping annulus, with
 $c/a=\sqrt{1-Q/\mu P}$. The test is run on a deep elastic half-plane with the far field
 clamped, exercising the regularized-Coulomb friction layer in the regime where the learned
@@ -1127,7 +1127,7 @@ chart and the ambient level set still agree.}
 \begin{figure}
 \centering
 \includegraphics[width=0.74\linewidth]{liusun_fig14_hertz_traction_pub}
-\caption{CV-2, contact-traction evidence. The normal pressure and the tangential traction of the
+\caption{Cattaneo--Mindlin, contact-traction evidence. The normal pressure and the tangential traction of the
 Cattaneo--Mindlin partial-slip contact recovered by the solver. The tangential traction saturates at the
 Coulomb limit in the slip annulus and falls below it in the inner stick zone, matching the closed-form
 distribution.}
@@ -1227,7 +1227,7 @@ center, the spatial signature of the symmetry that the closed form assumes.
   \node[bcnode, fill=white, fill opacity=0.85, text opacity=1, inner sep=1.5pt, rotate=45]
         at (1.0,1.0) {$2\sqrt{2}\,R$};
 \end{tikzpicture}
-\caption{CV-4 --- a $3\times3$ array of equal discs (radius $R$, thickness $t$) under
+\caption{Nine-disc cell: a $3\times3$ array of equal discs (radius $R$, thickness $t$) under
 isotropic confining pressure $\sigma$ applied along all four outer faces of the periodic packing.
 By the $D_4$ symmetry of the cell, each interior disc is loaded through four equal pole contacts $N$
 at its north, south, east, and west poles with friction inactive, while the diagonal neighbours stay
@@ -1240,16 +1240,17 @@ packing, the contacts merely placing the load poles.}
 \begin{figure}
 \centering
 \includegraphics[width=\linewidth]{liusun_fig16_nine_disc_S1_Sxy_pub}
-\caption{CV-4, packing-field evidence. Maximum-principal stress (left) and shear stress $\sigma_{xy}$
+\caption{Nine-disc cell, packing-field evidence. Maximum-principal stress (left) and shear stress $\sigma_{xy}$
 (right) across the $3\times3$ disc array. The field repeats from cell to cell and is equibiaxial at each
 disc center with negligible shear, confirming the $D_4$-symmetric superposition the closed form predicts.}
 \label{fig:cv4-ninedisc}
 \end{figure}
 
-Across CV-1--CV-4 the learned geometry reproduces the contact-mechanics closed forms to $\sim
-0.15$--$1.6\%$ (CV-1, CV-3, CV-4) and to $\sim 5$--$11\%$ for frictional partial slip (CV-2), with the
-radial chart and the level set equivalent throughout. This is the floor the transition map must clear.
-It clears this floor without buying anything. CV-5 and CV-6 follow.
+Across the equivalence regime the learned geometry reproduces the contact-mechanics closed forms to $\sim
+0.15$--$1.6\%$ (Hertz, Brazilian, nine-disc) and to $\sim 5$--$11\%$ for frictional partial slip
+(Cattaneo--Mindlin), with the radial chart and the level set equivalent throughout. This is the floor the
+transition map must clear without advantage; the cusped superformula and the Koch fractal are where the two
+separate.
 
 \subsection{Cusped superformula cam: holding a sharp normal}\label{sec:verif_cv5}
 
@@ -1370,7 +1371,7 @@ contact kinematics, not the deformable solver.
   (3.05,2.78) .. controls (1.9,3.2) and (0.9,3.3) .. (0.30,3.10);
 
 \end{tikzpicture}
-\caption{CV-5 --- a rotating cusped superformula cam $\rho(\theta)$, whose lobe tips
+\caption{Superformula: a rotating cusped cam $\rho(\theta)$, whose lobe tips
 are cusps (superformula exponent $n_1<1$), is pinned at its center $\bm c$ and rotates
 at angular velocity $\Omega$, driving a free non-convex follower (rigid-body motion only).
 At each cusp the transition-map chart returns a sharp contact normal $\nbf$ and a boundary
@@ -1382,7 +1383,7 @@ and a single closest-point projection recovers only one foot.}
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{supershape_chart_vs_sdf_pub}
-  \caption{CV-5, chart versus level set on a cusped boundary, evaluated on a Gielis-superformula cam
+  \caption{Superformula, chart versus level set on a cusped boundary, evaluated on a Gielis-superformula cam
   \eqref{eq:superformula} with cusped lobes ($n_1<1$). (a) The gap field $g_B$ of the inverse radial chart
   $\rho_\theta:\Sph^1\to\R^{+}$ is smooth everywhere, with clean radial iso-contours through both the lobe
   tips and the concave valleys. (b) The true Euclidean signed distance of the same shape develops a
@@ -1405,7 +1406,7 @@ geometric detail refines without bound, whereas a fixed-capacity neural SDF hits
 It mates two Koch snowflakes, a boundary generated by a four-contraction iterated-function system (IFS, scale
 $1/3$) evaluated to recursion depth $n$ (Figure~\ref{fig:cv6-bvp}), and measures how the storage cost and the
 boundary error of each representation scale as the recursion depth grows. The snowflake is not star-shaped for $n\ge
-2$, so the radial gap of CV-5 no longer applies. Here the chart is the recursive generating rule
+2$, so the radial gap of the superformula no longer applies. Here the chart is the recursive generating rule
 itself, with the IFS doubling as a bounding hierarchy for a pruned recursive descent. The
 representation costs of chart and level set are asymmetric, and that asymmetry is the point.
 Figure~\ref{fig:cv6-geom} shows the Koch boundary at successive recursion levels; the chart stores the
@@ -1497,7 +1498,7 @@ rendered detail.
         {recursion depth $n$};
     \end{scope}
   \end{tikzpicture}
-  \caption{CV-6 --- two mating Koch boundaries generated by a four-contraction
+  \caption{Koch interface: two mating Koch boundaries generated by a four-contraction
     iterated-function system at scale $\tfrac{1}{3}$ to recursion depth $n$. The
     recursive chart stores the single $O(1)$ generating rule and resolves any depth
     on demand, whereas a fixed-capacity neural field or a uniform grid saturates once
@@ -1509,7 +1510,7 @@ rendered detail.
 \begin{figure}
 \centering
 \includegraphics[width=\linewidth]{koch_geometry_pub}
-\caption{CV-6 geometry. The Koch boundary at increasing recursion depth $n$. The recursive chart
+\caption{Koch geometry. The Koch boundary at increasing recursion depth $n$. The recursive chart
 represents every level with one $O(1)$ generating rule, whereas a uniform grid or a fixed-capacity neural
 field must store the rendered geometry and saturates once the detail falls below its resolution.}
 \label{fig:cv6-geom}
@@ -1529,7 +1530,7 @@ speed.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{koch_cost_scaling_pub}
-  \caption{CV-6 cost decomposition. (a) Storage: the recursive IFS chart stores the Koch boundary in $O(1)$
+  \caption{Koch cost decomposition. (a) Storage: the recursive IFS chart stores the Koch boundary in $O(1)$
   (four contraction maps), while a uniform SDF grid costs $O(9^n)$ cells and an adaptive narrow-band SDF
   $O(4^n)$ boundary cells, both exponential in depth and capped at their finest resolution. (b) Per-query cost:
   the chart detects contact at $O(\text{depth})\approx21$ visited nodes, bounded for $n$ up to $12$, so it
@@ -1552,7 +1553,7 @@ hard ceiling.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{koch_neural_ceiling_pub}
-  \caption{CV-6, the measured level-set ceiling. A fixed-capacity neural SDF (12{,}801 parameters)
+  \caption{Koch fractal, the measured level-set ceiling. A fixed-capacity neural SDF (12{,}801 parameters)
   trained on the exact Koch signed distance at fractal levels $n=1\ldots5$: (a) the zero-level-set deviation
   (boundary error per $L$), (b) the Eikonal residual, and (c) the median normal-angle error. All three jump off
   the $n=1$ floor and plateau at a capacity ceiling, saturating for $n\ge2$: the network cannot keep resolving
@@ -1561,38 +1562,45 @@ hard ceiling.
   \label{fig:koch_ceiling}
 \end{figure}
 
-\subsection{Verification summary}\label{sec:verif_summary}
+\subsection{Performance summary across the benchmark ladder}\label{sec:verif_summary}
 
-Table~\ref{tab:cv_summary} collects the closed-form hierarchy. CV-1--CV-4 verify the chart-FEM solver
-on learned geometry in the superposition regime, where the chart and the level set are equivalent and
-the measured errors track the closed forms to $\sim0.15$--$1.6\%$ (with frictional partial slip at
-$\sim5$--$11\%$). CV-5 and CV-6 are where the transition map is exercised: the radial chart resolves a
-cusped non-convex boundary the SDF smooths and drives identical contact dynamics, and the recursive IFS
-chart resolves a fractal at any depth while a fixed-capacity SDF hits a measured refinement ceiling.
-Figure~\ref{fig:cv_summary} plots the per-benchmark L1 errors against the closed forms alongside the
-CV-5 chart-over-SDF separation. The chart and the level set are equivalent on convex geometry; they separate only on the cusps and fractals
-of CV-5 and CV-6, which a single neural SDF cannot represent.
+Table~\ref{tab:cv_summary} consolidates the measured performance. The equivalence-regime benchmarks---Hertz
+line contact, Cattaneo--Mindlin partial slip, and the nine-disc unit cell, together with the Brazilian disc of
+Appendix~\ref{app:brazilian}---verify the chart-FEM solver on learned geometry where the chart and the level set
+are equivalent, tracking the closed forms to $\sim0.15$--$1.6\%$ (frictional partial slip at $\sim5$--$11\%$).
+The cusped superformula and the Koch fractal are where the transition map is exercised: the radial chart resolves
+a cusped non-convex boundary the SDF smooths and drives identical contact dynamics, and the recursive IFS chart
+resolves a fractal at any depth while a fixed-capacity SDF hits a measured refinement ceiling. The rock joint of
+Section~\ref{sec:cv7} carries the same separation to a problem with no closed form. Figure~\ref{fig:cv_summary}
+plots the per-benchmark L1 errors against the closed forms alongside the chart-over-SDF separation on the
+superformula; the two representations coincide on convex geometry and separate only on the cusps, fractals, and
+rough asperities a single neural SDF cannot represent.
 
-\begin{table}
+\begin{table}[t]
   \centering
-  \caption{Closed-form verification hierarchy CV-1--CV-6. Errors are the L1 deviation of the numerical
-  solve on learned geometry from the analytical reference of Appendix~A. ``Chart vs.\ level set'' states
-  whether the radial chart and the neural signed-distance function differ on the benchmark; the final column
-  marks whether the transition-map detector is active. Sign convention: $\gn<0$ is penetration.}
+  \caption{Consolidated performance across the benchmark ladder. ``Measured result'' is the L1 deviation of the
+  numerical solve on learned geometry from the analytical reference (Appendix~\ref{app:closedforms}) and, where
+  the transition map is exercised, the measured separation between the boundary chart and the neural
+  signed-distance function on identical meshes, loads, and tolerances. Every value is measured, not a target. The
+  Brazilian disc, a pure stress problem with no contact detector, is verified in Appendix~\ref{app:brazilian}.
+  Sign convention: $\gn<0$ is penetration.}
   \label{tab:cv_summary}
   \small
-  \begin{tabular}{@{}llllc@{}}
+  \begin{tabular}{@{}p{2.6cm}p{2.7cm}p{2.5cm}p{4.6cm}@{}}
     \toprule
-    Benchmark & Closed-form target & Measured & Chart vs.\ level set & Transition map \\
+    Benchmark & Property tested & Closed form & Measured result and chart-vs-level-set separation \\
     \midrule
-    CV-1 Hertz line contact      & $a=2\sqrt{P'R/\pi E^{*}}$        & $1.6\%$ ($a$--$E^{*}$)        & equivalent      & no  \\
-    CV-2 Cattaneo--Mindlin       & $c/a=\sqrt{1-Q/\mu P}$           & $5$--$11\%$ ($c/a$)           & equivalent      & no  \\
-    CV-3 Brazilian disc          & $\pm2P/\pi Dt,\,-6P/\pi Dt$      & $1.62\%/0.58\%$              & equivalent      & no  \\
-    CV-4 Nine-disc unit cell     & $-2N/\pi Rt$ (equibiaxial)      & $0.15\%/0.01\%$              & equivalent      & no  \\
+    \multicolumn{4}{@{}l}{\emph{Equivalence regime}---convex or superposable; the radial chart reduces to the level set} \\
+    \addlinespace
+    Hertz line contact & convex normal contact & $a=2\sqrt{P'R/\pi E^{*}}$ & $1.6\%$ on $a$--$E^{*}$; chart $\equiv$ level set \\
+    Cattaneo--Mindlin & frictional stick/slip & $c/a=\sqrt{1-Q/\mu P}$ & $5$--$11\%$ on $c/a$; chart $\equiv$ level set \\
+    Nine-disc cell & multi-contact superposition & $\sigma_{xx}{=}\sigma_{yy}{=}-\tfrac{2N}{\pi Rt}$ & $0.15\%/0.01\%$; anisotropy $0.16\%$; chart $\equiv$ level set \\
     \midrule
-    CV-5 SDF (superformula)      & analytic radial gap/normal      & gap $8\times10^{-3}L$, normal degraded & ---    & ---  \\
-    CV-5 chart (superformula)    & analytic radial gap/normal      & gap $3.8\times10^{-3}L$, $0.42^{\circ}$; dyn.\ $0.04\%$ & \textbf{chart wins} & \textbf{yes} \\
-    CV-6 Koch fractal            & exact Koch SDF, rising level    & SDF ceiling $7.8^{\circ}\!\to\!45^{\circ}$; chart $O(1)$ & \textbf{chart wins} & \textbf{yes} \\
+    \multicolumn{4}{@{}l}{\emph{Separation regime}---the transition map and the level set diverge} \\
+    \addlinespace
+    Superformula cam & sharp normal at a cusp & analytic radial gap / normal & chart gap $3.8{\times}10^{-3}L$, $0.42^{\circ}$ vs.\ SDF $8{\times}10^{-3}L$ (normal degraded); dynamics $0.04\%$; $\ge2$ arcs vs.\ $1$ foot \\
+    Koch fractal & resolution independence & exact Koch SDF, $n{=}1\ldots5$ & chart $O(1)$ storage, exact at any depth; SDF normal $7.8^{\circ}{\to}45^{\circ}$ ceiling ($n{\ge}2$) \\
+    Rock joint (val.) & asperity slope $\to$ strength & Patton $\muapp{=}\tan(\phi_b{+}i)$ ($0.00\%$) & chart recon $2.3\,\mu$m vs.\ SDF $107\,\mu$m; SDF under-predicts peak strength $61\%$ \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -1600,11 +1608,11 @@ of CV-5 and CV-6, which a single neural SDF cannot represent.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{numerical_cv_summary_pub}
-  \caption{The numerical CV suite in one view. (a) Each benchmark's L1 error against the closed form,
-  with CV-1/CV-3/CV-4 at $\le\!\sim\!1.6\%$ and CV-2 at $\sim11\%$ on the coarse mesh. (b) The CV-5
-  chart-over-SDF separation. The trained neural radial chart ($3.8\times10^{-3}L$, $0.42^{\circ}$) separates from the
-  neural SDF ($8\times10^{-3}L$, degraded normal) on the cusped superformula, the first benchmark on
-  which the transition map and the level set are not equivalent.}
+  \caption{The numerical verification suite in one view. (a) Each benchmark's L1 error against its closed form,
+  with the Hertz, Brazilian, and nine-disc cases at $\le\!\sim\!1.6\%$ and Cattaneo--Mindlin at $\sim11\%$ on the
+  coarse mesh. (b) The chart-over-SDF separation on the cusped superformula: the trained neural radial chart
+  ($3.8\times10^{-3}L$, $0.42^{\circ}$) separates from the neural SDF ($8\times10^{-3}L$, degraded normal), the
+  first benchmark on which the transition map and the level set are not equivalent.}
   \label{fig:cv_summary}
 \end{figure}
 
@@ -1758,7 +1766,7 @@ local gap, the geometry from which the apparent friction and dilation emerge.
     at (\dx+4.0,\yBase-0.45)
     {\footnotesize each mating face $=$ learned height chart $h_\theta$};
 \end{tikzpicture}
-\caption{CV-7 --- direct shear of two mating rough faces under constant
+\caption{Rock joint: direct shear of two mating rough faces under constant
 normal stress $\sigma_n$, with the upper face sheared by $u_t$ over the
 clamped lower face. The interlocking asperities of slope $i$ force the
 joint to dilate by $u_n$ as it shears: the upper block must ride up the
@@ -1800,7 +1808,7 @@ Height reconstruction error is not the relevant metric for contact. Friction and
   \label{fig:cv7-capstone}
 \end{figure}
 
-The defensible claim is narrow and stated as such. It is \emph{not} that the chart has a lower height RMSE than the SDF on a well-sampled single-valued profile, since dense interpolation of heights is easy for both. It is that the SDF smooths the asperity \emph{slopes}, and that the smoothing under-predicts strength through \eqref{eq:patton}, together with the storage scaling: the chart is $O(N_{\rm surface})$ with $O(1)$ queries and, with Fourier features, no spectral-bias ceiling, whereas the ambient SDF must represent a 2-D field whose zero set is the surface. This is the same scaling argument as the Koch ceiling (CV-6), here on a real surface spanning roughly $3.5$ decades of scale, from $23.4~\mu$m asperities over a $73$~mm joint. Single profiles are single-asperity noisy in their peak, so the reported strength uses the steady or ensemble response. The surfaces are single-valued, so the argument rests on the spectral-bias ceiling and storage, not on overhangs.
+The defensible claim is narrow and stated as such. It is \emph{not} that the chart has a lower height RMSE than the SDF on a well-sampled single-valued profile, since dense interpolation of heights is easy for both. It is that the SDF smooths the asperity \emph{slopes}, and that the smoothing under-predicts strength through \eqref{eq:patton}, together with the storage scaling: the chart is $O(N_{\rm surface})$ with $O(1)$ queries and, with Fourier features, no spectral-bias ceiling, whereas the ambient SDF must represent a 2-D field whose zero set is the surface. This is the same scaling argument as the Koch ceiling, here on a real surface spanning roughly $3.5$ decades of scale, from $23.4~\mu$m asperities over a $73$~mm joint. Single profiles are single-asperity noisy in their peak, so the reported strength uses the steady or ensemble response. The surfaces are single-valued, so the argument rests on the spectral-bias ceiling and storage, not on overhangs.
 
 \subsubsection{Phase 1: two mutually deformable decoder blocks}\label{sec:cv7-p1}
 
@@ -1931,7 +1939,7 @@ The result holds on real data, not only the synthetic band-limited surface. On a
 
 Three further studies carry the program beyond this headline and are reported in the supplementary appendix (Appendix~\ref{app:supp}): the transition-map height-chart detector routed as the FEM $(\text{gap},\text{normal})$ contract (active-set agreement $98.9\%$ for the chart against $95.8\%$ for the ambient SDF on $10^5$ query points, at $1.47\times$ the per-query cost), a cyclic stick/slip energy ledger that closes per cycle, and an explicit ChartMPM cross-check that reproduces the Coulomb friction floor.
 
-The scope of CV-7 is stated plainly. The blocks here are one deformable face on a rigid mating surface, or two single-realization deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength ($61\%$ Inada, $35\%$ synthetic) and dilatancy ($98\%$ synthetic frictionless).
+This validation has a deliberately narrow scope. The blocks here are one deformable face on a rigid mating surface, or two single-realization deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength ($61\%$ Inada, $35\%$ synthetic) and dilatancy ($98\%$ synthetic frictionless).
 
 %% ======================== 08_discussion_conclusions ========================
 \section{Discussion, limitations, and conclusions}\label{sec:disc}
@@ -1945,22 +1953,22 @@ preconditions and limitations that bound the method, and concludes.
 
 \subsection{When the chart improves on the level set}\label{sec:disc:regime}
 
-The closed-form suite CV-1 through CV-4 is not built to flatter the chart. Each problem is convex, collinear,
+The closed-form suite of the equivalence regime is not built to flatter the chart. Each problem is convex, collinear,
 or superposable, so the boundary-to-boundary correspondence never comes into play: there is no non-convex
 multi-arc contact to enumerate, no cusp to resolve, and no curved-surface correspondence to invert. On all
 four the radial inverse-chart gap reduces to the level-set gap (Remark~\ref{prop:active-set} with
 $\cos\alpha\to1$), the two representations are interchangeable, and the neural geometry merely reproduces the
-closed forms. The discriminating evidence lives in CV-5 through CV-7, where the geometry is cusped, fractal, or
-rough. Reporting the equivalence regime is what makes the wins attributable to representation rather than to an
+closed forms. The discriminating evidence lives in the cusped superformula, the Koch fractal, and the rock joint, where the
+geometry is cusped, fractal, or rough. Reporting the equivalence regime is what makes the wins attributable to representation rather than to an
 incidental difference in the solver; Table~\ref{tab:comparison} collects the measured separation across the
 two regimes.
 
 \begin{table*}
 \centering
 \caption{Measured chart-versus-level-set comparison across the verification and validation suite, keyed to the
-geometric regime. CV-1 through CV-4 are the equivalence regime: convex, collinear, or superposable geometry on
-which the radial chart reduces to the level set. CV-5 through CV-7 are the discrimination regime, where the
-geometry is cusped, self-similar, or rough. Errors are relative to the surface RMS where a percentage is
+geometric regime. The equivalence regime (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc) is convex, collinear, or superposable
+geometry on which the radial chart reduces to the level set; the discrimination regime (superformula, Koch, rock
+joint) is cusped, self-similar, or rough. Errors are relative to the surface RMS where a percentage is
 given; all numbers are measured, not targets.}
 \label{tab:comparison}
 \small
@@ -1968,14 +1976,14 @@ given; all numbers are measured, not targets.}
 \toprule
 Benchmark & Geometry class & Chart (measured) & Level set (measured) \\
 \midrule
-CV-1 Hertz line contact & convex indenter        & FEM $a(F)$--$E^{*}$ to $1.6\%$ & equivalent \\
-CV-2 Cattaneo--Mindlin  & convex $+$ friction     & $c/a$ to $5$--$11\%$            & equivalent \\
-CV-3 Brazilian disc     & stress BVP, no detector & centre stress $1.62\%/0.58\%$  & equivalent \\
-CV-4 nine-disc cell     & superposable packing    & equibiaxial centre $0.15\%$    & equivalent \\
+Hertz line contact & convex indenter        & FEM $a(F)$--$E^{*}$ to $1.6\%$ & equivalent \\
+Cattaneo--Mindlin  & convex $+$ friction     & $c/a$ to $5$--$11\%$            & equivalent \\
+Brazilian disc     & stress BVP, no detector & centre stress $1.62\%/0.58\%$  & equivalent \\
+Nine-disc cell     & superposable packing    & equibiaxial centre $0.15\%$    & equivalent \\
 \midrule
-CV-5 superformula       & cusped non-convex       & gap $3.8{\times}10^{-3}L$, $0.42^{\circ}$; dyn.\ $0.04\%$ & gap $8{\times}10^{-3}L$, normal degraded \\
-CV-6 Koch fractal       & self-similar            & $O(1)$ storage, exact          & $O(9^{n})$ storage, $7.8^{\circ}\!\to\!45^{\circ}$ ceiling \\
-CV-7 rock joint         & rough self-affine       & active set $98.9\%$, gap $4.2\%$ & $95.8\%$, $44.7\%$; strength $-35$ to $-61\%$, dilatancy $-98\%$ \\
+Superformula cam        & cusped non-convex       & gap $3.8{\times}10^{-3}L$, $0.42^{\circ}$; dyn.\ $0.04\%$ & gap $8{\times}10^{-3}L$, normal degraded \\
+Koch fractal            & self-similar            & $O(1)$ storage, exact          & $O(9^{n})$ storage, $7.8^{\circ}\!\to\!45^{\circ}$ ceiling \\
+Rock joint              & rough self-affine       & active set $98.9\%$, gap $4.2\%$ & $95.8\%$, $44.7\%$; strength $-35$ to $-61\%$, dilatancy $-98\%$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1995,10 +2003,10 @@ sign-exact, so the chart and the level-set active sets coincide on star-shaped b
 enlarged by $1/\cos\alpha$ and its gradient is not of unit length: $\norm{\grad g}$ can reach $\sim10^{4}$ in deep
 concave valleys. A perpendicular-foot refinement recovers the normal-projected distance but is reserved for
 verification, since that foot jumps across the medial axis and would violate Remark~\ref{cor:second-law}.
-\emph{Storage versus query cost.} The recursive chart of CV-6 stores the generating rule in $O(1)$ and answers a
+\emph{Storage versus query cost.} The recursive chart of the Koch benchmark stores the generating rule in $O(1)$ and answers a
 query in $O(\text{depth})$ work, whereas a uniform level set must discretise the ambient field at its finest scale,
 $O(9^{n})$ storage; the level set answers each query more cheaply, by an $O(1)$ lookup, but its fixed capacity
-caps the geometry it can represent, and that ceiling is what CV-6 measures.
+caps the geometry it can represent, and that ceiling is what the Koch benchmark measures.
 
 One trade-off is worth isolating, because it is the most carefully measured. Routing the height-chart detector
 into the contact loop on the real rough joint, the chart's active set agrees with the analytic reference $98.9\%$
@@ -2026,11 +2034,11 @@ surface realisation in small-strain elasticity; a single realisation is statisti
 of Section~\ref{sec:cv7} reports the trend, not any absolute value. Finite strain, asperity-tip plasticity, and
 asperity damage lie outside the present model.
 \emph{The contact gap is a small-slope proxy.} On the height-chart joint the gap is the vertical offset
-\eqref{eq:height-gap}, exact in sign and accurate to $O(\text{slope}^2)$ in magnitude, which is why the CV-7 fidelity
+\eqref{eq:height-gap}, exact in sign and accurate to $O(\text{slope}^2)$ in magnitude, which is why the rock-joint fidelity
 story is told in slopes and normals rather than gap magnitude; the Inada head-to-head shows that this is exactly
 where the level set fails.
 \emph{The dynamic path is opt-in.} The production material-point oracle still computes the gap from the
-signed-distance gradient, and the chart detector drives CV-5 analytically and CV-7 numerically as an opt-in path
+signed-distance gradient, and the chart detector drives the superformula analytically and the rock joint numerically as an opt-in path
 rather than the default everywhere. The explicit cross-check reproduces the Coulomb floor
 ($\muapp\approx0.34$ against base $\mu=0.4$); what makes the eventual replacement conservative is the
 energy-consistency of Remark~\ref{prop:matched-normal}, confirmed by the cyclic ledger of
@@ -2048,8 +2056,8 @@ ambient field cannot. Posed as a transition map on a learned atlas, the detector
 normal (Remark~\ref{prop:matched-normal}) and a sign-exact active set (Remark~\ref{prop:active-set}),
 and it inherits the variational-inequality and frictional-dissipation structure of Section~\ref{sec:govern}
 unchanged. The closed-form ladder confirms the chart and the level set are equivalent on convex and superposable
-geometry (CV-1 through CV-4) and separate measurably on cusps (CV-5) and self-similar refinement (CV-6); the real
-Inada-granite joint (CV-7) shows that the apparent friction $\tan(\phi_b+i)$ and the normal dilation emerge from
+geometry (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc) and separate measurably on cusps (superformula) and
+self-similar refinement (Koch); the real Inada-granite joint shows that the apparent friction $\tan(\phi_b+i)$ and the normal dilation emerge from
 the resolved asperity geometry under plain Coulomb friction (Remarks~\ref{prop:patton}
 and~\ref{prop:dilatancy}), and that the level set, by smoothing the slopes, under-predicts strength by $61\%$ on
 the granite profile and dilatancy by $98\%$ on the synthetic block.
@@ -2072,7 +2080,7 @@ to resolve, and the transition map resolves what the level set smooths.
 \section{Closed-form benchmark solutions}\label{app:closedforms}
 
 This appendix collects the closed forms that serve as acceptance targets for the
-code-verification benchmarks CV-1--CV-4. Each solution is small-strain, linear-elastic,
+code-verification benchmarks (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc). Each solution is small-strain, linear-elastic,
 and quasi-static. Each is also the limit a finite-deformation contact solve must reproduce
 once the loading and material parameters enter the appropriate regime, so a numerical
 result that misses these targets signals a coding error rather than a modelling choice. Each
@@ -2082,8 +2090,8 @@ compressive stress is negative.
 
 The three-dimensional axisymmetric forms below are the canonical reference, and the
 numerical study restricts itself to their two-dimensional reductions. The verification in
-Section~\ref{sec:verif} exercises the line-contact limit of CV-1, namely the contact
-half-width, and the planar reduction of CV-2, whose stick-radius exponent is $1/2$ rather
+Section~\ref{sec:verif} exercises the line-contact limit of the Hertz benchmark, namely the contact
+half-width, and the planar reduction of Cattaneo--Mindlin, whose stick-radius exponent is $1/2$ rather
 than the axisymmetric $1/3$. The plane-strain solver reaches these regimes; we leave full
 three-dimensional Hertz to future work.
 
@@ -2329,7 +2337,7 @@ caveats with each numerical comparison.
 
 \begin{table}
 \centering
-\caption{Closed-form acceptance targets for the code-verification benchmarks CV-1--CV-4,
+\caption{Closed-form acceptance targets for the code-verification benchmarks (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc),
 with the tolerance applied to each quantity in the numerical comparison.}
 \label{tab:closedforms}
 \begin{tabular}{@{}lll@{}}
@@ -2407,7 +2415,7 @@ We fit all four charts by minibatch regression onto sampled surface points. The 
 \big(h_\theta(x_i)-z_i\big)^2,
 \end{equation}
 
-evaluated on a random minibatch $\mathcal B$. The CV-5 radial chart instead minimizes the mean-absolute radius error $\frac{1}{\abs{\mathcal B}}\sum_i\abs{\rho_\theta(\psi_i)-\rho(\psi_i)}$, which is less sensitive to the cusped lobe tips; the remaining choices below are identical for all four families.
+evaluated on a random minibatch $\mathcal B$. The superformula radial chart instead minimizes the mean-absolute radius error $\frac{1}{\abs{\mathcal B}}\sum_i\abs{\rho_\theta(\psi_i)-\rho(\psi_i)}$, which is less sensitive to the cusped lobe tips; the remaining choices below are identical for all four families.
 
 \begin{enumerate}
 \item \emph{Input normalization.} We map the raw coordinate affinely to $\tilde x=2(x-x_{\mathrm{lo}})/(x_{\mathrm{hi}}-x_{\mathrm{lo}})-1\in[-1,1]^d$, so that the bank's frequencies mean ``cycles across the domain'' independent of physical units.
