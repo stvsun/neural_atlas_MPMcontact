@@ -135,8 +135,6 @@ def hero_figure(R):
         ax.text(0.98, y, val, fontsize=7, ha="right", fontweight="bold", transform=ax.transAxes,
                 color=CHART_C if "chart" in lab else (SDF_C if "SDF" in lab else "#000"))
 
-    fig.suptitle("Direct shear of a real fractal rock joint: the chart resolves the asperities the "
-                 "level set smooths away", y=1.01, fontsize=10)
     fig.tight_layout()
     os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, "rock_joint_capstone_pub.png")

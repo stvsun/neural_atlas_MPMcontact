@@ -435,10 +435,10 @@ turning a coordinate change into a contact-pairing operator.
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.96\linewidth]{atlas_extension_3d_pub}
-\caption{The contact formulation as an extension of the neural atlas. Left: in the neural-atlas method
+\caption{The contact formulation as an extension of the neural atlas. (a) In the neural-atlas method
 \citep{sun2026neuralatlas} a single body $\Omega$ is covered by overlapping charts, and the intra-body
 transition map $\psi_{ij}=\pi_j\circ\varphi_i$ re-expresses a point in a neighbouring chart on the overlap
-$\Omega_{ij}$. Right: contact between two bodies $\Omega_A,\Omega_B$ uses the same composition across the gap,
+$\Omega_{ij}$. (b) Contact between two bodies $\Omega_A,\Omega_B$ uses the same composition across the gap,
 the inter-body transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which maps a boundary point
 $\xbf=\map{A}(\theta_A)$ to its mate $\map{B}(\psi_B)$ and returns the signed gap $\gn$ and the contact normal
 $\nbf$ without a closest-point search.}
@@ -1617,11 +1617,11 @@ speed.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{koch_cost_scaling_pub}
-  \caption{CV-6 cost decomposition. The recursive IFS chart stores the Koch boundary in $O(1)$ (four
-  contraction maps) and detects contact at $O(\text{depth})\approx21$ visited nodes, bounded for $n$ up
-  to $12$. A uniform SDF grid costs $O(9^n)$ cells and an adaptive narrow-band SDF $O(4^n)$ boundary
-  cells, both exponential in depth and capped at their finest resolution. The chart trades a cheaper
-  per-query lookup for unbounded resolution on demand.}
+  \caption{CV-6 cost decomposition. (a) Storage: the recursive IFS chart stores the Koch boundary in $O(1)$
+  (four contraction maps), while a uniform SDF grid costs $O(9^n)$ cells and an adaptive narrow-band SDF
+  $O(4^n)$ boundary cells, both exponential in depth and capped at their finest resolution. (b) Per-query cost:
+  the chart detects contact at $O(\text{depth})\approx21$ visited nodes, bounded for $n$ up to $12$, so it
+  trades a cheaper precomputed-SDF lookup for unbounded resolution on demand.}
   \label{fig:koch_cost}
 \end{figure}
 
@@ -1641,11 +1641,11 @@ hard ceiling.
   \centering
   \includegraphics[width=\linewidth]{koch_neural_ceiling_pub}
   \caption{CV-6, the measured level-set ceiling. A fixed-capacity neural SDF (12{,}801 parameters)
-  trained on the exact Koch signed distance at fractal levels $n=1\ldots5$. The zero-level-set
-  deviation and the median normal-angle error jump off the $n=1$ floor (normal error $7.8^{\circ}$) and
-  plateau at a capacity ceiling ($\to\sim45^{\circ}$), saturating for $n\ge2$: the network cannot keep
-  resolving self-similar detail without growing its parameters. The recursive chart stores the IFS rule
-  in $O(1)$ and remains exact at any finite level.}
+  trained on the exact Koch signed distance at fractal levels $n=1\ldots5$: (a) the zero-level-set deviation
+  (boundary error per $L$), (b) the Eikonal residual, and (c) the median normal-angle error. All three jump off
+  the $n=1$ floor and plateau at a capacity ceiling, saturating for $n\ge2$: the network cannot keep resolving
+  self-similar detail without growing its parameters. The recursive chart stores the IFS rule in $O(1)$ and
+  remains exact at any finite level.}
   \label{fig:koch_ceiling}
 \end{figure}
 
@@ -1688,8 +1688,8 @@ of CV-5 and CV-6, which a single neural SDF cannot represent.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{numerical_cv_summary_pub}
-  \caption{The numerical CV suite in one view. Left: each benchmark's L1 error against the closed form,
-  with CV-1/CV-3/CV-4 at $\le\!\sim\!1.6\%$ and CV-2 at $\sim11\%$ on the coarse mesh. Right: the CV-5
+  \caption{The numerical CV suite in one view. (a) Each benchmark's L1 error against the closed form,
+  with CV-1/CV-3/CV-4 at $\le\!\sim\!1.6\%$ and CV-2 at $\sim11\%$ on the coarse mesh. (b) The CV-5
   chart-over-SDF separation. The trained neural radial chart ($3.8\times10^{-3}L$, $0.42^{\circ}$) separates from the
   neural SDF ($8\times10^{-3}L$, degraded normal) on the cusped superformula, the first benchmark on
   which the transition map and the level set are not equivalent.}

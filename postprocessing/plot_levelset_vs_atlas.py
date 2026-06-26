@@ -68,8 +68,8 @@ def build():
     axL.contour(X, Y, phi, levels=[0.0], colors="black", linewidths=2.2)   # the boundary phi=0
     axL.set_aspect("equal"); axL.set_xlim(-2.1, 2.1); axL.set_ylim(-2.1, 2.1)
     axL.set_xticks([]); axL.set_yticks([])
-    axL.set_title(r"(a) Level set: implicit field $\phi:\mathbb{R}^d\!\to\!\mathbb{R}$",
-                  fontsize=11, fontweight="bold", pad=8)
+    axL.set_title("(a)",
+                  fontsize=11, fontweight="bold", loc="left", pad=4)
     axL.text(0.0, 0.0, r"$\phi<0$", ha="center", va="center", fontsize=9.5, color="#1c3a57",
              bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.75))
     axL.annotate(r"$\partial\Omega=\{\phi=0\}$", xy=(0.60, 1.02), xytext=(1.18, 1.74),
@@ -77,7 +77,7 @@ def build():
                  arrowprops=dict(arrowstyle="->", color="black", lw=0.9),
                  bbox=dict(boxstyle="round,pad=0.16", fc="white", ec="none", alpha=0.82))
     axL.text(-1.55, 1.70, r"$\phi>0$", ha="center", va="center", fontsize=9.5, color=INK)
-    axL.text(0.5, -0.085, "one field over all space; the boundary is a single level",
+    axL.text(0.5, -0.085, "",
              transform=axL.transAxes, ha="center", va="top", fontsize=8.0, color="0.3")
     cb = fig.colorbar(cf, ax=axL, fraction=0.046, pad=0.03)
     cb.set_label(r"$\phi$ (signed distance)", fontsize=8); cb.ax.tick_params(labelsize=7)
@@ -116,9 +116,8 @@ def build():
     axR.set_xticks([]); axR.set_yticks([])
     for s in axR.spines.values():
         s.set_visible(False)
-    axR.set_title(r"(b) Coordinate chart: boundary map $\varphi:\Theta\!\to\!\partial\Omega$",
-                  fontsize=11, fontweight="bold")
-    axR.text(0.5, -0.085, "only the surface, parametrised by its own coordinates",
+    axR.set_title("(b)", fontsize=11, fontweight="bold", loc="left")
+    axR.text(0.5, -0.085, "",
              transform=axR.transAxes, ha="center", va="top", fontsize=8.0, color="0.3")
 
     fig.tight_layout()

@@ -161,8 +161,6 @@ def energy_ledger_figure(tag="_genuine", mode="in_plane",
     Wf0 = float(np.asarray(H["W_fric"])[0]); g_ef = float(np.asarray(H["W_ext"])[-1] / (np.asarray(H["W_fric"])[-1] + 1e-30))
     axs[2].annotate(f"per-cycle $\\to$ {ratios[-1]:.3f}\n(cumulative {g_ef:.2f}: seating $W_{{fric}}[0]$={Wf0:.2f})",
                     xy=(0.5, 0.08), xycoords="axes fraction", ha="center", fontsize=6, color="#1b5e20")
-    fig.suptitle("Genuine rough-joint cyclic shear — energy ledger CLOSES per cycle ($W_{ext}/W_{fric}\\to1$ "
-                 "to ~1%); cumulative offset = initial asperity seating (§11.12 Phase 4)", y=1.02, fontsize=8)
     fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, out_name)
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)
@@ -278,8 +276,6 @@ def roughness_law_figure():
     axs[2].set_title("(c) spectral cutoff: strength + recon", fontsize=8)
     axs[2].set_xlabel("spectral cutoff $k_{max}$"); axs[2].set_ylabel("peak $\\mu_{app}$", color=ck)
     ax2b.set_ylabel("decoder recon (% RMS)", color="#444", fontsize=7); ax2b.tick_params(labelsize=6)
-    fig.suptitle("Emergent dilatancy-vs-roughness law (genuine rough geometry, decoder-FEM + Coulomb)",
-                 y=1.02, fontsize=9)
     fig.tight_layout(); os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, "cv7_roughness_law_pub.png")
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig); print("  saved", out)

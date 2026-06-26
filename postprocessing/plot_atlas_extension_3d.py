@@ -127,7 +127,7 @@ def build():
 
     # ---- (a) intra-body atlas ----
     axL.imshow(imA)
-    axL.set_title("(a) intra-body atlas", fontsize=11, fontweight="bold", pad=4)
+    axL.set_title("(a)", fontsize=11, fontweight="bold", pad=4)
     def Lt(fx, fy, s, **kw):
         axL.text(fx, fy, s, transform=axL.transAxes, ha="center", va="center", **kw)
     Lt(0.86, 0.90, r"$\Omega$", fontsize=13, color="#6c6757")
@@ -142,7 +142,7 @@ def build():
 
     # ---- (b) inter-body transition map ----
     axR.imshow(imB)
-    axR.set_title("(b) inter-body transition map (contact)", fontsize=11, fontweight="bold", pad=4)
+    axR.set_title("(b)", fontsize=11, fontweight="bold", pad=4)
     def Rt(fx, fy, s, **kw):
         axR.text(fx, fy, s, transform=axR.transAxes, ha="center", va="center", **kw)
     Rt(0.20, 0.86, r"$\Omega_A$", fontsize=13, color=CORAL)

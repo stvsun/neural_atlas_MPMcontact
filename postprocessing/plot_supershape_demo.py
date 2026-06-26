@@ -167,7 +167,6 @@ def chart_vs_sdf(n=300):
     im2 = axs[2].contourf(X, Y, Ang, levels=24, cmap="magma")
     axs[2].set_title("angle: radial normal vs\ntrue surface normal (deg)")
     fig.colorbar(im2, ax=axs[2], shrink=0.7)
-    fig.suptitle("Chart radial gap vs true SDF: smoothness advantage AND radial bias")
     fig.tight_layout()
     path = os.path.join(FIG_DIR, "supershape_chart_vs_sdf_pub.png")
     fig.savefig(path); plt.close(fig)

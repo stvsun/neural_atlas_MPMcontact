@@ -65,7 +65,7 @@ def figure_cost_scaling():
     axL.semilogy(levels, [4] * len(levels), "o-", color=C_CHART, mfc=C_CHART,
                  label=r"IFS chart, $\mathcal{O}(1)$ (4 maps)")
     axL.set_xlabel(r"fractal level $n$"); axL.set_ylabel(r"storage (cells, log scale)")
-    axL.set_title("(a) Storage / build cost", loc="left", fontweight="bold")
+    axL.set_title("(a)", loc="left", fontweight="bold")
     axL.set_xlim(0.5, 12.5); axL.set_xticks(range(2, 13, 2))
     axL.legend(loc="upper left", fontsize=8)
     axL.grid(True, which="both", axis="y", ls=":", lw=0.4, alpha=0.5)
@@ -77,7 +77,7 @@ def figure_cost_scaling():
     axR.set_ylim(0, max(chart_q) * 1.45)
     axR.set_xlim(0.5, 12.5); axR.set_xticks(range(2, 13, 2))
     axR.set_xlabel(r"fractal level $n$"); axR.set_ylabel(r"per-query work (nodes visited)")
-    axR.set_title("(b) Per-query cost", loc="left", fontweight="bold")
+    axR.set_title("(b)", loc="left", fontweight="bold")
     axR.legend(loc="center right", fontsize=8)
     axR.grid(True, axis="y", ls=":", lw=0.4, alpha=0.5)
 
@@ -107,7 +107,6 @@ def figure_geometry():
         ax.plot([-1.15, 1.15], [gv, gv], color="0.7", lw=0.3)
     ax.set_aspect("equal"); ax.axis("off")
     ax.set_title(f"level 5 vs {ng}×{ng} SDF grid\n(grid misses the fine spikes)", fontsize=8)
-    fig.suptitle("Exact recursive chart (any depth, O(1) storage) vs grid-limited SDF", y=1.02)
     fig.tight_layout()
     p = os.path.join(FIG, "koch_geometry_pub.png")
     fig.savefig(p); plt.close(fig)

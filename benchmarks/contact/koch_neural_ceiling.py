@@ -368,7 +368,7 @@ def plot_results(report: Dict, out_path: str) -> str:
     axA.axhline(bnd_rel[0], ls=":", lw=0.9, color=PUB_COLORS[0],
                 label=f"$\\tau_g$ floor (n=1)={bnd_rel[0]:.1e}")
     axA.set_xlabel("fractal level $n$"); axA.set_ylabel("boundary error $/\\,L$")
-    axA.set_title("Magnitude error"); axA.set_xticks(levels)
+    axA.set_title("(a)", loc="left"); axA.set_xticks(levels)
     axA.legend(loc="lower right", fontsize=5.6)
     axA.spines["top"].set_visible(False); axA.spines["right"].set_visible(False)
 
@@ -377,7 +377,7 @@ def plot_results(report: Dict, out_path: str) -> str:
                  label="$\\langle(|\\nabla\\phi|-1)^2\\rangle$")
     axB.axhline(eik[0], ls=":", lw=0.9, color=PUB_COLORS[0], label=f"floor (n=1)={eik[0]:.1e}")
     axB.set_xlabel("fractal level $n$"); axB.set_ylabel("Eikonal residual (near boundary)")
-    axB.set_title("Eikonal residual"); axB.set_xticks(levels)
+    axB.set_title("(b)", loc="left"); axB.set_xticks(levels)
     axB.legend(loc="lower right", fontsize=5.8)
     axB.spines["top"].set_visible(False); axB.spines["right"].set_visible(False)
 
@@ -385,7 +385,7 @@ def plot_results(report: Dict, out_path: str) -> str:
     axC.plot(levels, ang, "^-", color=PUB_COLORS[3], label="median normal angle")
     axC.axhline(ang[0], ls=":", lw=0.9, color=PUB_COLORS[0], label=f"floor (n=1)={ang[0]:.0f}$^\\circ$")
     axC.set_xlabel("fractal level $n$"); axC.set_ylabel("normal-angle error (deg)")
-    axC.set_title("Normal orientation"); axC.set_xticks(levels)
+    axC.set_title("(c)", loc="left"); axC.set_xticks(levels)
     axC.set_ylim(0, max(ang) * 1.25)
     axC.legend(loc="lower right", fontsize=5.8)
     axC.spines["top"].set_visible(False); axC.spines["right"].set_visible(False)
@@ -393,8 +393,7 @@ def plot_results(report: Dict, out_path: str) -> str:
     cap = f"width={hp['width']}, depth={hp['depth']}"
     if n_params:
         cap += f" ({n_params:,} params, FIXED)"
-    fig.suptitle("CV-6 refinement ceiling: ONE fixed-capacity neural SDF, rising Koch level — "
-                 f"error jumps off the n=1 floor and plateaus [{cap}]", y=1.04, fontsize=7.5)
+    # (descriptive sup-title removed; identification moved to the LaTeX caption)
     fig.tight_layout()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path)

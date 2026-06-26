@@ -61,7 +61,7 @@ def main():
         axA.text(i, v + max(vals) * 0.02, f"{v:.1f}%", ha="center", va="bottom", fontsize=8)
     axA.set_xticks(range(len(vals))); axA.set_xticklabels(labels, fontsize=7)
     axA.set_ylabel("numerical error vs. closed form (%)")
-    axA.set_title("(a) Verification ladder, CV-1\u2013CV-5", loc="left", fontweight="bold")
+    axA.set_title("(a)", loc="left", fontweight="bold")
     axA.set_ylim(0, max(vals) * 1.28 + 0.6)
     axA.legend(loc="upper center", fontsize=8)
     axA.grid(True, axis="y", ls=":", lw=0.4, alpha=0.5)
@@ -84,7 +84,7 @@ def main():
         axB.text(xi + w / 2, r + max(sdf_vals) * 0.02, f"{r:.2f}", ha="center", va="bottom", fontsize=8)
     axB.set_xticks(x); axB.set_xticklabels(groups, fontsize=8)
     axB.set_ylim(0, max(sdf_vals) * 1.28)
-    axB.set_title("(b) CV-5 chart vs. SDF (cusped superformula)", loc="left", fontweight="bold")
+    axB.set_title("(b)", loc="left", fontweight="bold")
     axB.legend(loc="upper right", fontsize=8)
     axB.grid(True, axis="y", ls=":", lw=0.4, alpha=0.5)
 

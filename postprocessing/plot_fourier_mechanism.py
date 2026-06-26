@@ -48,7 +48,7 @@ def build():
 
     # ============ (a) the encoding pipeline ============
     ax = fig.add_subplot(gs[0, 0]); ax.set_xlim(0, 10); ax.set_ylim(0, 10); ax.axis("off")
-    ax.set_title("(a) input encoding", fontsize=9.5, fontweight="bold", loc="left")
+    ax.set_title("(a)", fontsize=9.5, fontweight="bold", loc="left")
 
     def box(x, y, w, h, text, fc, ec, fs=8.5):
         ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.08",
@@ -99,7 +99,7 @@ def build():
     ax.plot(xte, fp, color=PLAIN, lw=1.8, ls=(0, (5, 2)), label="plain (low-pass)")
     ax.plot(xte, ff, color=FOUR, lw=1.6, label="Fourier features")
     ax.plot(xtr, ytr, "o", ms=2.4, color="0.45", alpha=0.6)
-    ax.set_title("(b) sharp-target fit", fontsize=9.5, fontweight="bold", loc="left")
+    ax.set_title("(b)", fontsize=9.5, fontweight="bold", loc="left")
     ax.set_xlabel(r"$x$"); ax.set_ylabel(r"$h(x)$")
     ax.set_xticks([0, 0.5, 1]); ax.legend(loc="lower center", fontsize=7.2, ncol=1,
                                           framealpha=0.95, handlelength=1.4)
@@ -123,7 +123,7 @@ def build():
                     color=PLAIN, alpha=0.07)
     ax.text(40, 6e-3, "high frequencies\nunlearned\n(spectral bias)", fontsize=7.0,
             color=PLAIN, ha="center")
-    ax.set_title("(c) kernel spectrum", fontsize=9.5, fontweight="bold", loc="left")
+    ax.set_title("(c)", fontsize=9.5, fontweight="bold", loc="left")
     ax.set_xlabel(r"frequency $k$"); ax.set_ylabel("kernel power (norm.)")
     ax.set_ylim(1e-4, 2.0); ax.legend(loc="upper right", fontsize=7.2, framealpha=0.95)
 
