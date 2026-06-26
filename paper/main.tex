@@ -215,8 +215,8 @@ law define a constrained problem whose well-posedness was established by \citet{
 whose finite element approximation is analysed by \citet{kikuchi1988contact}, \citet{glowinski1981numerical},
 and \citet{haslinger1996numerical}, and surveyed in the variationally consistent setting by
 \citet{wohlmuth2011variational}. The constraint is enforced numerically by penalty, augmented-Lagrangian, or
-Nitsche regularisation \citep{wriggers2006computational,alart1991mixed,simo1992augmented,laursen2002computational,
-chouly2013nitsche,chouly2015symmetric} and by mortar or dual-multiplier discretisation
+Nitsche regularisation \citep{wriggers2006computational,alart1991mixed,simo1992augmented,laursen1993continuum,
+laursen2002computational,chouly2013nitsche,chouly2015symmetric} and by mortar or dual-multiplier discretisation
 \citep{puso2004mortar,fischer2005frictionless,wohlmuth2011variational}. Much of this layer is independent of the
 present contribution: penalty, augmented-Lagrangian, and Nitsche enforcement consume a gap, a normal, and a
 pressure, and are indifferent to how the first two are produced. We change the geometric operator that produces
@@ -226,8 +226,8 @@ them and leave the enforcement theory intact.
 In the dominant node-to-segment tradition \citep{hallquist1985sliding,wriggers2006computational} the gap and
 the normal are read from a closest-point projection of a slave point onto a master surface. The projection is
 the source of a well-documented fragility: it is non-unique in concavities, its normal jumps across facet
-edges, it can fail the contact patch test, and it returns a single foot even where a body touches along several
-disjoint arcs \citep{zavarise2009nts,zavarise2009patchtest}. The
+edges, it can fail the contact patch test \citep{taylor1991patch}, and it returns a single foot even where a
+body touches along several disjoint arcs \citep{zavarise2009nts,zavarise2009patchtest}. The
 transition map $\tmap=\map{B}^{-1}\circ\map{A}$ replaces this projection by a composition of charts: it is
 single-valued, edge-continuous, two-sided (no designated master), and recovers every contact arc at once
 (Section~\ref{sec:tmap}). The implicit-level-set material point method of \citet{liu2020implicit}, whose
@@ -257,11 +257,11 @@ survey of the detection machinery this replaces is given by \citet{yastrebov2013
 A parallel tradition keeps the geometry implicit. Level-set and signed-distance representations
 \citep{osher1988fronts,sethian1999levelset,osher2003levelset} carry a surface as the zero set of an ambient
 field; unfitted and cut finite element methods \citep{hansbo2002unfitted,hansbo2004strongweak,burman2015cutfem,
-burman2025cutfemreview}, the finite cell method \citep{parvizian2007finitecell}, trace finite elements for
-surface partial differential equations \citep{olshanskii2009tracefem,burman2015laplacebeltrami}, and
-level-set/X-FEM contact \citep{moes1999xfem,sukumar2001holesinclusions,dolbow2001frictionalcontact} let the
+burman2025cutfemreview}, the finite cell method \citep{parvizian2007finitecell,schillinger2015finitecell}, trace
+finite elements for surface partial differential equations \citep{olshanskii2009tracefem,burman2015laplacebeltrami},
+and level-set/X-FEM contact \citep{moes1999xfem,sukumar2001holesinclusions,dolbow2001frictionalcontact} let the
 surface cut through a background mesh and repair the discretisation with Nitsche coupling and ghost-penalty
-stabilisation. These methods buy freedom from body-fitted meshing; they pay with cut-cell quadrature, small-cut
+stabilisation \citep{burman2010ghostpenalty}. These methods buy freedom from body-fitted meshing; they pay with cut-cell quadrature, small-cut
 conditioning, and a geometry whose accuracy is tied to the ambient field, which interpolates a distance through
 the whole volume and so rounds sharp features and carries a non-differentiable medial axis in every concavity.
 The boundary chart is the opposite design choice: explicit and one dimension lower, it carries no interior, no
@@ -284,16 +284,22 @@ $O((L/\ell)^{d})$ for a volumetric field (Section~\ref{sec:fourier}; the neural-
 \paragraph{Neural atlases and learning-informed mechanics.}
 Representing a surface by learned charts originates in computer vision: AtlasNet
 \citep{groueix2018atlasnet} represents a surface as a collection of learned parametric patches, and the chart
-autoencoders of \citet{schonsheck2019chart} learn chart-like maps of a data manifold; both learn the charts for
-representation but carry neither governing equations nor a transition structure between them. The atlas here instead serves as the computational domain of a contact boundary-value problem, with the
+autoencoders of \citet{schonsheck2019chart} learn chart-like maps of a data manifold; the data-driven atlases
+of \citet{floryan2022charts} go further and stitch overlapping charts by explicit transition maps, but for
+dynamical systems on manifolds rather than geometry, and none of these carries governing equations. The atlas
+here instead serves as the computational domain of a contact boundary-value problem, with the
 elasticity pulled back through the chart Jacobian and overlapping charts coupled by multiplicative Schwarz
 \citep{sun2026neuralatlas}. This places the work within a broader programme of learning- and geometry-informed
 computational mechanics---data-driven and physics-informed solvers \citep{kirchdoerfer2016datadriven,raissi2019pinn},
 learned constitutive manifolds and graph embeddings \citep{wang2018multiscale,vlassis2020geometric,
 xiao2022geometric,bahmani2022manifold,heider2020so3}, and discovered interface laws
 \citep{wang2019metamodeling}---in which mechanics is carried on a learned geometric object rather than a
-hand-built mesh or a curve-fit law. The network here plays the role of the geometry, not of the solution field
-as in a physics-informed network.
+hand-built mesh or a curve-fit law. This inverts the usual dichotomy: in a physics-informed network the unknown
+solution field is the network and the geometry is given \citep{raissi2019pinn}, and in a geometry-informed
+neural operator the network is the solution map over a geometry supplied as an ambient signed-distance field
+\citep{li2023gino}; here the network is the \emph{geometry itself}---a learned diffeomorphism onto the
+boundary---while the mechanics is solved classically on top of it, so accuracy is governed by the geometric
+approximation rather than by the optimisation of a residual.
 
 \paragraph{Meshfree contact and rock-joint mechanics.}
 The validation problem, direct shear of a rough joint, connects two further literatures. In the material point
