@@ -49,34 +49,41 @@ def figure_cost_scaling():
     per-query speed -- and a fixed-capacity neural SDF cannot keep refining at all (prose).
     """
     plt = _mpl()
+    # palette matched to the manuscript's TikZ figures: coral = chart, blue = level set/SDF
+    C_CHART, C_SDF, C_ADAPT = "#993C1D", "#4C78A8", "#E69F00"
     levels = list(range(1, 13))
     near = np.array([1.03 * v for v in koch.snowflake_vertices(2)[:-1]])
     chart_q = [np.mean([koch.inside_cost(x, n)[1] for x in near]) for n in levels]   # measured
     uniform = [koch.sdf_grid_cells(n) for n in levels]                # 9^n
     adaptive = [float(koch.n_segments(n)) for n in levels]            # ~boundary cells O(4^n)
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.34))
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.46))
 
-    axL.semilogy(levels, uniform, "s-", color=PUB_COLORS[1], label="uniform SDF grid  $9^n$")
-    axL.semilogy(levels, adaptive, "^-", color=PUB_COLORS[3], label="adaptive/narrow-band SDF  $\\sim\\!4^n$")
-    axL.semilogy(levels, [4] * len(levels), "o-", color=PUB_COLORS[0], label="IFS chart  $O(1)$ (4 maps)")
-    axL.set_xlabel("fractal level $n$"); axL.set_ylabel("storage (cells, log scale)")
-    axL.set_title("Storage / build cost")
-    axL.legend(loc="center left", fontsize=6.5)
-    axL.spines["top"].set_visible(False); axL.spines["right"].set_visible(False)
+    axL.semilogy(levels, uniform, "s-", color=C_SDF, mfc="white", mew=1.2,
+                 label=r"uniform SDF grid, $\mathcal{O}(9^{n})$")
+    axL.semilogy(levels, adaptive, "^-", color=C_ADAPT, mfc="white", mew=1.2,
+                 label=r"narrow-band SDF, $\mathcal{O}(4^{n})$")
+    axL.semilogy(levels, [4] * len(levels), "o-", color=C_CHART, mfc=C_CHART,
+                 label=r"IFS chart, $\mathcal{O}(1)$ (4 maps)")
+    axL.set_xlabel(r"fractal level $n$"); axL.set_ylabel(r"storage (cells, log scale)")
+    axL.set_title("(a) Storage / build cost", loc="left", fontweight="bold")
+    axL.set_xlim(0.5, 12.5); axL.set_xticks(range(2, 13, 2))
+    axL.legend(loc="upper left", fontsize=8)
+    axL.grid(True, which="both", axis="y", ls=":", lw=0.4, alpha=0.5)
 
-    axR.plot(levels, chart_q, "o-", color=PUB_COLORS[0], label="recursive chart (nodes/query)")
-    axR.plot(levels, [1] * len(levels), "s--", color=PUB_COLORS[1], label="precomputed SDF (O(1) lookup)")
-    axR.set_ylim(0, max(chart_q) * 1.4)
-    axR.set_xlabel("fractal level $n$"); axR.set_ylabel("per-query work (ops)")
-    axR.set_title("Per-query cost (bounded, $\\approx\\!21$ nodes)")
-    axR.legend(loc="upper left", fontsize=6.5)
-    axR.spines["top"].set_visible(False); axR.spines["right"].set_visible(False)
+    axR.plot(levels, chart_q, "o-", color=C_CHART, mfc=C_CHART,
+             label=r"recursive chart ($\approx\!21$ nodes/query)")
+    axR.plot(levels, [1] * len(levels), "s--", color=C_SDF, mfc="white", mew=1.2,
+             label=r"precomputed SDF ($\mathcal{O}(1)$ lookup)")
+    axR.set_ylim(0, max(chart_q) * 1.45)
+    axR.set_xlim(0.5, 12.5); axR.set_xticks(range(2, 13, 2))
+    axR.set_xlabel(r"fractal level $n$"); axR.set_ylabel(r"per-query work (nodes visited)")
+    axR.set_title("(b) Per-query cost", loc="left", fontweight="bold")
+    axR.legend(loc="center right", fontsize=8)
+    axR.grid(True, axis="y", ls=":", lw=0.4, alpha=0.5)
 
-    fig.suptitle("Chart wins on STORAGE + resolution-independence (any depth on demand); "
-                 "SDF wins per-query but is grid-capped", y=1.04, fontsize=8)
     fig.tight_layout()
     p = os.path.join(FIG, "koch_cost_scaling_pub.png")
-    fig.savefig(p); fig.savefig(p.replace(".png", ".pdf")); plt.close(fig)
+    fig.savefig(p, dpi=400); fig.savefig(p.replace(".png", ".pdf")); plt.close(fig)
     return p
 
 

@@ -1654,12 +1654,15 @@ hard ceiling.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{koch_neural_ceiling_pub}
-  \caption{CV-6, the measured level-set ceiling. A fixed-capacity neural SDF (12{,}801 parameters)
-  trained on the exact Koch signed distance at fractal levels $n=1\ldots5$. The zero-level-set
-  deviation and the median normal-angle error jump off the $n=1$ floor (normal error $7.8^{\circ}$) and
-  plateau at a capacity ceiling ($\to\sim45^{\circ}$), saturating for $n\ge2$: the network cannot keep
-  resolving self-similar detail without growing its parameters. The recursive chart stores the IFS rule
-  in $O(1)$ and remains exact at any finite level.}
+  \caption{CV-6, the measured level-set ceiling, rendered in three dimensions. For each Koch fractal level
+  $n$ a fixed-capacity neural SDF (12{,}801 parameters) is trained on the exact signed distance of the
+  level-$n$ Koch prism; each panel renders, with physical lighting, the network's reconstructed boundary
+  wall---every true boundary point displaced by the neural signed distance along its outward
+  normal---coloured by the reconstruction error $\abs{\phi_{\mathrm{nn}}}/L$, with the sharp true Koch outline
+  overlaid in black. The median normal-angle error jumps off the $n=1$ floor ($\approx 8^{\circ}$) and
+  saturates near $50$--$57^{\circ}$ for $n\ge2$: the fixed-capacity network rounds off the self-similar spikes
+  and cannot keep resolving detail without growing its parameters, while the true outline stays sharp at every
+  level. The recursive chart stores the IFS generating rule in $O(1)$ and remains exact at any finite level.}
   \label{fig:koch_ceiling}
 \end{figure}
 
