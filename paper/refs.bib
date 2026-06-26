@@ -327,3 +327,621 @@
   note         = {DOI: 10.17612/QXSA-TK92},
   year         = {2020}
 }
+
+%% ============================================================================
+%%  EXTENDED LITERATURE (in-depth related-work survey)
+%%  Verified against publisher/arXiv sources; "% CHECK" flags specifics still
+%%  to be confirmed at proof.
+%% ============================================================================
+
+%% ---- Variational-inequality foundations & contact theory -------------------
+@book{duvaut1976inequalities,
+  author    = {Duvaut, Georges and Lions, Jacques-Louis},
+  title     = {Inequalities in Mechanics and Physics},
+  series    = {Grundlehren der mathematischen Wissenschaften},
+  volume    = {219},
+  publisher = {Springer-Verlag},
+  address   = {Berlin},
+  year      = {1976}
+}
+
+@book{glowinski1981numerical,
+  author    = {Glowinski, Roland and Lions, Jacques-Louis and Tr{\'e}moli{\`e}res, Raymond},
+  title     = {Numerical Analysis of Variational Inequalities},
+  series    = {Studies in Mathematics and its Applications},
+  volume    = {8},
+  publisher = {North-Holland},
+  address   = {Amsterdam},
+  year      = {1981}
+}
+
+@incollection{haslinger1996numerical,
+  author    = {Haslinger, Jaroslav and Hlav{\'a}{\v{c}}ek, Ivan and Ne{\v{c}}as, Ji{\v{r}}{\'\i}},
+  title     = {Numerical methods for unilateral problems in solid mechanics},
+  booktitle = {Handbook of Numerical Analysis, Vol. IV},
+  editor    = {Ciarlet, P. G. and Lions, J. L.},
+  pages     = {313--485},
+  publisher = {North-Holland},
+  address   = {Amsterdam},
+  year      = {1996}
+}
+
+@article{wohlmuth2011variational,
+  author  = {Wohlmuth, Barbara I.},
+  title   = {Variationally consistent discretization schemes and numerical algorithms for contact problems},
+  journal = {Acta Numerica},
+  volume  = {20},
+  pages   = {569--734},
+  year    = {2011}
+}
+
+%% ---- Node-to-segment / closest-point projection ----------------------------
+@article{hallquist1985sliding,
+  author  = {Hallquist, John O. and Goudreau, G. L. and Benson, D. J.},
+  title   = {Sliding interfaces with contact-impact in large-scale {Lagrangian} computations},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {51},
+  number  = {1--3},
+  pages   = {107--137},
+  year    = {1985}
+}
+
+@article{simo1985perturbed,
+  author  = {Simo, J. C. and Wriggers, P. and Taylor, R. L.},
+  title   = {A perturbed {Lagrangian} formulation for the finite element solution of contact problems},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {50},
+  number  = {2},
+  pages   = {163--180},
+  year    = {1985}
+}
+
+@article{zavarise2009nts,
+  author  = {Zavarise, Giorgio and De Lorenzis, Laura},
+  title   = {The node-to-segment algorithm for {2D} frictionless contact: classical formulation and special cases},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {198},
+  number  = {41--44},
+  pages   = {3428--3451},
+  year    = {2009}
+}
+
+@article{zavarise2009patchtest,
+  author  = {Zavarise, Giorgio and De Lorenzis, Laura},
+  title   = {A modified node-to-segment algorithm passing the contact patch test},
+  journal = {International Journal for Numerical Methods in Engineering},
+  volume  = {79},
+  number  = {4},
+  pages   = {379--416},
+  year    = {2009}
+}
+
+%% ---- Surface smoothing & isogeometric contact ------------------------------
+@article{wriggers2001smooth,
+  author  = {Wriggers, P. and Krstulovi{\'c}-Opara, L. and Korelc, J.},
+  title   = {Smooth {$C^1$}-interpolations for two-dimensional frictional contact problems},
+  journal = {International Journal for Numerical Methods in Engineering},
+  volume  = {51},
+  number  = {12},
+  pages   = {1469--1495},
+  year    = {2001}
+}
+
+@article{temizer2011contact,
+  author  = {Temizer, {\.I}. and Wriggers, P. and Hughes, T. J. R.},
+  title   = {Contact treatment in isogeometric analysis with {NURBS}},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {200},
+  number  = {9--12},
+  pages   = {1100--1112},
+  year    = {2011}
+}
+
+@article{delorenzis2014review,
+  author  = {De Lorenzis, Laura and Wriggers, Peter and Hughes, Thomas J. R.},
+  title   = {Isogeometric contact: a review},
+  journal = {GAMM-Mitteilungen},
+  volume  = {37},
+  number  = {1},
+  pages   = {85--123},
+  year    = {2014}
+}
+
+%% ---- Mortar / dual-multiplier / unbiased / geometrically exact -------------
+@article{puso2004segment,
+  author  = {Puso, Michael A. and Laursen, Tod A.},
+  title   = {A mortar segment-to-segment frictional contact method for large deformations},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {193},
+  number  = {45--47},
+  pages   = {4891--4913},
+  year    = {2004}
+}
+
+@article{hueber2005primaldual,
+  author  = {H{\"u}eber, Stefan and Wohlmuth, Barbara I.},
+  title   = {A primal-dual active set strategy for non-linear multibody contact problems},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {194},
+  number  = {27--29},
+  pages   = {3147--3166},
+  year    = {2005}
+}
+
+@article{popp2009finite,
+  author  = {Popp, Alexander and Gee, Michael W. and Wall, Wolfgang A.},
+  title   = {A finite deformation mortar contact formulation using a primal-dual active set strategy},
+  journal = {International Journal for Numerical Methods in Engineering},
+  volume  = {79},
+  number  = {11},
+  pages   = {1354--1391},
+  year    = {2009}
+}
+
+@article{chouly2015symmetric,
+  author  = {Chouly, Franz and Hild, Patrick and Renard, Yves},
+  title   = {Symmetric and non-symmetric variants of {Nitsche}'s method for contact problems in elasticity: theory and numerical experiments},
+  journal = {Mathematics of Computation},
+  volume  = {84},
+  number  = {293},
+  pages   = {1089--1117},
+  year    = {2015}
+}
+
+@article{mlika2017unbiased,
+  author  = {Mlika, Rabii and Renard, Yves and Chouly, Franz},
+  title   = {An unbiased {Nitsche}'s formulation of large deformation frictional contact and self-contact},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {325},
+  pages   = {265--288},
+  year    = {2017}
+}
+
+@book{yastrebov2013numerical,
+  author    = {Yastrebov, Vladislav A.},
+  title     = {Numerical Methods in Contact Mechanics},
+  publisher = {ISTE/Wiley},
+  address   = {London},
+  year      = {2013}
+}
+
+@book{konyukhov2013computational,
+  author    = {Konyukhov, Alexander and Schweizerhof, Karl},
+  title     = {Computational Contact Mechanics: Geometrically Exact Theory for Arbitrary Shaped Bodies},
+  series    = {Lecture Notes in Applied and Computational Mechanics},
+  volume    = {67},
+  publisher = {Springer},
+  address   = {Berlin},
+  year      = {2013}
+}
+
+%% ---- Unfitted / CutFEM / trace / finite-cell FEM (Larson) ------------------
+@book{larson2013fem,
+  author    = {Larson, Mats G. and Bengzon, Fredrik},
+  title     = {The Finite Element Method: Theory, Implementation, and Applications},
+  series    = {Texts in Computational Science and Engineering},
+  volume    = {10},
+  publisher = {Springer},
+  address   = {Berlin, Heidelberg},
+  year      = {2013},
+  doi       = {10.1007/978-3-642-33287-6}
+}
+
+@article{hansbo2002unfitted,
+  author  = {Hansbo, Anita and Hansbo, Peter},
+  title   = {An unfitted finite element method, based on {N}itsche's method, for elliptic interface problems},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {191},
+  number  = {47--48},
+  pages   = {5537--5552},
+  year    = {2002},
+  doi     = {10.1016/S0045-7825(02)00524-8}
+}
+
+@article{hansbo2004strongweak,
+  author  = {Hansbo, Anita and Hansbo, Peter},
+  title   = {A finite element method for the simulation of strong and weak discontinuities in solid mechanics},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {193},
+  number  = {33--35},
+  pages   = {3523--3540},
+  year    = {2004},
+  doi     = {10.1016/j.cma.2003.12.041}
+}
+
+@article{burman2015cutfem,
+  author  = {Burman, Erik and Claus, Susanne and Hansbo, Peter and Larson, Mats G. and Massing, Andr\'e},
+  title   = {{CutFEM}: discretizing geometry and partial differential equations},
+  journal = {International Journal for Numerical Methods in Engineering},
+  volume  = {104},
+  number  = {7},
+  pages   = {472--501},
+  year    = {2015},
+  doi     = {10.1002/nme.4823}
+}
+
+@article{burman2015laplacebeltrami,
+  author  = {Burman, Erik and Hansbo, Peter and Larson, Mats G.},
+  title   = {A stabilized cut finite element method for partial differential equations on surfaces: the {L}aplace--{B}eltrami operator},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {285},
+  pages   = {188--207},
+  year    = {2015},
+  doi     = {10.1016/j.cma.2014.10.044}
+}
+
+@article{burman2016bulksurface,
+  author  = {Burman, Erik and Hansbo, Peter and Larson, Mats G. and Zahedi, Sara},
+  title   = {Cut finite element methods for coupled bulk--surface problems},
+  journal = {Numerische Mathematik},
+  volume  = {133},
+  number  = {2},
+  pages   = {203--231},
+  year    = {2016},
+  doi     = {10.1007/s00211-015-0744-3}
+}
+
+@article{burman2025cutfemreview,
+  author  = {Burman, Erik and Hansbo, Peter and Larson, Mats G. and Massing, Andr\'e and Zahedi, Sara},
+  title   = {Cut finite element methods},
+  journal = {Acta Numerica},
+  volume  = {34},
+  year    = {2025},
+  doi     = {10.1017/S0962492925000017}
+}
+
+@article{burman2010fictitious1,
+  author  = {Burman, Erik and Hansbo, Peter},
+  title   = {Fictitious domain finite element methods using cut elements: {I}. A stabilized {L}agrange multiplier method},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {199},
+  number  = {41--44},
+  pages   = {2680--2686},
+  year    = {2010},
+  doi     = {10.1016/j.cma.2010.05.011}
+}
+
+@article{parvizian2007finitecell,
+  author  = {Parvizian, Jamshid and D\"uster, Alexander and Rank, Ernst},
+  title   = {Finite cell method: $h$- and $p$-extension for embedded domain problems in solid mechanics},
+  journal = {Computational Mechanics},
+  volume  = {41},
+  number  = {1},
+  pages   = {121--133},
+  year    = {2007},
+  doi     = {10.1007/s00466-007-0173-y}
+}
+
+@article{olshanskii2009tracefem,
+  author  = {Olshanskii, Maxim A. and Reusken, Arnold and Grande, J\"org},
+  title   = {A finite element method for elliptic equations on surfaces},
+  journal = {SIAM Journal on Numerical Analysis},
+  volume  = {47},
+  number  = {5},
+  pages   = {3339--3358},
+  year    = {2009},
+  doi     = {10.1137/080717602}
+}
+
+%% ---- Level set / implicit surfaces / X-FEM --------------------------------
+@article{osher1988fronts,
+  author  = {Osher, Stanley and Sethian, James A.},
+  title   = {Fronts propagating with curvature-dependent speed: algorithms based on {H}amilton--{J}acobi formulations},
+  journal = {Journal of Computational Physics},
+  volume  = {79},
+  number  = {1},
+  pages   = {12--49},
+  year    = {1988},
+  doi     = {10.1016/0021-9991(88)90002-2}
+}
+
+@book{sethian1999levelset,
+  author    = {Sethian, James A.},
+  title     = {Level Set Methods and Fast Marching Methods},
+  edition   = {2nd},
+  series    = {Cambridge Monographs on Applied and Computational Mathematics},
+  volume    = {3},
+  publisher = {Cambridge University Press},
+  year      = {1999}
+}
+
+@book{osher2003levelset,
+  author    = {Osher, Stanley and Fedkiw, Ronald},
+  title     = {Level Set Methods and Dynamic Implicit Surfaces},
+  series    = {Applied Mathematical Sciences},
+  volume    = {153},
+  publisher = {Springer},
+  address   = {New York},
+  year      = {2003},
+  doi       = {10.1007/b98879}
+}
+
+@article{moes1999xfem,
+  author  = {Mo\"es, Nicolas and Dolbow, John and Belytschko, Ted},
+  title   = {A finite element method for crack growth without remeshing},
+  journal = {International Journal for Numerical Methods in Engineering},
+  volume  = {46},
+  number  = {1},
+  pages   = {131--150},
+  year    = {1999}
+}
+
+@article{sukumar2001holesinclusions,
+  author  = {Sukumar, N. and Chopp, D. L. and Mo\"es, N. and Belytschko, T.},
+  title   = {Modeling holes and inclusions by level sets in the extended finite-element method},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {190},
+  number  = {46--47},
+  pages   = {6183--6200},
+  year    = {2001},
+  doi     = {10.1016/S0045-7825(01)00215-8}
+}
+
+@article{dolbow2001frictionalcontact,
+  author  = {Dolbow, John and Mo\"es, Nicolas and Belytschko, Ted},
+  title   = {An extended finite element method for modeling crack growth with frictional contact},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {190},
+  number  = {51--52},
+  pages   = {6825--6846},
+  year    = {2001},
+  doi     = {10.1016/S0045-7825(01)00260-2}
+}
+
+%% ---- Neural implicit geometry & coordinate networks -----------------------
+@inproceedings{mescheder2019occupancy,
+  title     = {Occupancy Networks: Learning {3D} Reconstruction in Function Space},
+  author    = {Mescheder, Lars and Oechsle, Michael and Niemeyer, Michael and Nowozin, Sebastian and Geiger, Andreas},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {4455--4465},
+  year      = {2019}
+}
+
+@inproceedings{chen2019imnet,
+  title     = {Learning Implicit Fields for Generative Shape Modeling},
+  author    = {Chen, Zhiqin and Zhang, Hao},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {5939--5948},
+  year      = {2019}
+}
+
+@inproceedings{gropp2020igr,
+  title     = {Implicit Geometric Regularization for Learning Shapes},
+  author    = {Gropp, Amos and Yariv, Lior and Haim, Niv and Atzmon, Matan and Lipman, Yaron},
+  booktitle = {Proceedings of the 37th International Conference on Machine Learning (ICML)},
+  series    = {PMLR},
+  volume    = {119},
+  pages     = {3789--3799},
+  year      = {2020}
+}
+
+@inproceedings{takikawa2021nglod,
+  title     = {Neural Geometric Level of Detail: Real-Time Rendering with Implicit {3D} Shapes},
+  author    = {Takikawa, Towaki and Litalien, Joey and Yin, Kangxue and Kreis, Karsten and Loop, Charles and Nowrouzezahrai, Derek and Jacobson, Alec and McGuire, Morgan and Fidler, Sanja},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2021}
+}
+
+@inproceedings{jacot2018ntk,
+  title     = {Neural Tangent Kernel: Convergence and Generalization in Neural Networks},
+  author    = {Jacot, Arthur and Gabriel, Franck and Hongler, Cl{\'e}ment},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {31},
+  year      = {2018}
+}
+
+@article{xu2020frequency,
+  title   = {Frequency Principle: {Fourier} Analysis Sheds Light on Deep Neural Networks},
+  author  = {Xu, Zhi-Qin John and Zhang, Yaoyu and Luo, Tao and Xiao, Yanyang and Ma, Zheng},
+  journal = {Communications in Computational Physics},
+  volume  = {28},
+  number  = {5},
+  pages   = {1746--1767},
+  year    = {2020}
+}
+
+@article{xie2022neuralfields,
+  title   = {Neural Fields in Visual Computing and Beyond},
+  author  = {Xie, Yiheng and Takikawa, Towaki and Saito, Shunsuke and Litany, Or and Yan, Shiqin and Khan, Numair and Tombari, Federico and Tompkin, James and Sitzmann, Vincent and Sridhar, Srinath},
+  journal = {Computer Graphics Forum},
+  volume  = {41},
+  number  = {2},
+  pages   = {641--676},
+  year    = {2022}
+}
+
+%% ---- Neural atlases / chart learning --------------------------------------
+@inproceedings{groueix2018atlasnet,
+  title     = {{AtlasNet}: A Papier-M{\^a}ch{\'e} Approach to Learning {3D} Surface Generation},
+  author    = {Groueix, Thibault and Fisher, Matthew and Kim, Vladimir G. and Russell, Bryan C. and Aubry, Mathieu},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {216--224},
+  year      = {2018}
+}
+
+@article{schonsheck2019chart,
+  title   = {Chart Auto-Encoders for Manifold Structured Data},
+  author  = {Schonsheck, Stefan C. and Chen, Jie and Lai, Rongjie},
+  journal = {arXiv preprint arXiv:1912.10094},
+  year    = {2019}
+}
+
+%% ---- Learning-informed computational mechanics (incl. Sun group) ----------
+@article{raissi2019pinn,
+  title   = {Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations},
+  author  = {Raissi, Maziar and Perdikaris, Paris and Karniadakis, George E.},
+  journal = {Journal of Computational Physics},
+  volume  = {378},
+  pages   = {686--707},
+  year    = {2019},
+  doi     = {10.1016/j.jcp.2018.10.045}
+}
+
+@article{kirchdoerfer2016datadriven,
+  title   = {Data-driven computational mechanics},
+  author  = {Kirchdoerfer, Trenton and Ortiz, Michael},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {304},
+  pages   = {81--101},
+  year    = {2016},
+  doi     = {10.1016/j.cma.2016.02.001}
+}
+
+@article{wang2018multiscale,
+  title   = {A multiscale multi-permeability poroplasticity model linked by recursive homogenizations and deep learning},
+  author  = {Wang, Kun and Sun, WaiChing},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {334},
+  pages   = {337--380},
+  year    = {2018},
+  doi     = {10.1016/j.cma.2018.01.036}
+}
+
+@article{wang2019metamodeling,
+  title   = {Meta-modeling game for deriving theory-consistent, micro-structure-based traction-separation laws via deep reinforcement learning},
+  author  = {Wang, Kun and Sun, WaiChing},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {346},
+  pages   = {216--241},
+  year    = {2019},
+  doi     = {10.1016/j.cma.2018.11.026}
+}
+
+@article{vlassis2020geometric,
+  title   = {Geometric deep learning for computational mechanics {Part I}: Anisotropic hyperelasticity},
+  author  = {Vlassis, Nikolaos N. and Ma, Ran and Sun, WaiChing},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {371},
+  pages   = {113299},
+  year    = {2020},
+  doi     = {10.1016/j.cma.2020.113299}
+}
+
+@article{vlassis2021sobolev,
+  title   = {Sobolev training of thermodynamic-informed neural network for interpretable elasto-plasticity models with level set hardening},
+  author  = {Vlassis, Nikolaos N. and Sun, WaiChing},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {377},
+  pages   = {113695},
+  year    = {2021},
+  doi     = {10.1016/j.cma.2021.113695}
+}
+
+@article{xiao2022geometric,
+  title   = {Geometric prior of multi-resolution yielding manifolds and the local closest point projection for nearly non-smooth plasticity},
+  author  = {Xiao, Mian and Sun, WaiChing},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {400},
+  pages   = {115469},
+  year    = {2022},
+  doi     = {10.1016/j.cma.2022.115469}
+}
+
+@article{heider2020so3,
+  title   = {{SO(3)}-invariance of informed-graph-based deep neural network for anisotropic elastoplastic materials},
+  author  = {Heider, Yousef and Wang, Kun and Sun, WaiChing},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {363},
+  pages   = {112875},
+  year    = {2020},
+  doi     = {10.1016/j.cma.2020.112875}
+}
+
+@article{bahmani2022manifold,
+  title   = {Manifold embedding data-driven mechanics},
+  author  = {Bahmani, Bahador and Sun, WaiChing},
+  journal = {Journal of the Mechanics and Physics of Solids},
+  volume  = {166},
+  pages   = {104927},
+  year    = {2022},
+  doi     = {10.1016/j.jmps.2022.104927}
+}
+
+%% ---- MPM / meshfree contact -----------------------------------------------
+@article{sulsky1994particle,
+  title   = {A particle method for history-dependent materials},
+  author  = {Sulsky, Deborah and Chen, Zhen and Schreyer, Howard L.},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {118},
+  number  = {1-2},
+  pages   = {179--196},
+  year    = {1994},
+  doi     = {10.1016/0045-7825(94)90112-0}
+}
+
+@article{bardenhagen2000granular,
+  title   = {The material-point method for granular materials},
+  author  = {Bardenhagen, S. G. and Brackbill, J. U. and Sulsky, D.},
+  journal = {Computer Methods in Applied Mechanics and Engineering},
+  volume  = {187},
+  number  = {3-4},
+  pages   = {529--541},
+  year    = {2000},
+  doi     = {10.1016/S0045-7825(99)00338-2}
+}
+
+@article{bardenhagen2001contact,
+  title   = {An improved contact algorithm for the material point method and application to stress propagation in granular material},
+  author  = {Bardenhagen, S. G. and Guilkey, J. E. and Roessig, K. M. and Brackbill, J. U. and Witzel, W. M. and Foster, J. C.},
+  journal = {Computer Modeling in Engineering \& Sciences},
+  volume  = {2},
+  number  = {4},
+  pages   = {509--522},
+  year    = {2001}
+}
+
+%% ---- Rock-joint constitutive & roughness ----------------------------------
+@article{saeb1992modelling,
+  title   = {Modelling rock joints under shear and normal loading},
+  author  = {Saeb, S. and Amadei, B.},
+  journal = {International Journal of Rock Mechanics and Mining Sciences \& Geomechanics Abstracts},
+  volume  = {29},
+  number  = {3},
+  pages   = {267--278},
+  year    = {1992},
+  doi     = {10.1016/0148-9062(92)93660-C}
+}
+
+@article{grasselli2003constitutive,
+  title   = {Constitutive law for the shear strength of rock joints based on three-dimensional surface parameters},
+  author  = {Grasselli, Giovanni and Egger, Peter},
+  journal = {International Journal of Rock Mechanics and Mining Sciences},
+  volume  = {40},
+  number  = {1},
+  pages   = {25--40},
+  year    = {2003},
+  doi     = {10.1016/S1365-1609(02)00101-6}
+}
+
+@article{brown1985broad,
+  title   = {Broad bandwidth study of the topography of natural rock surfaces},
+  author  = {Brown, Stephen R. and Scholz, Christopher H.},
+  journal = {Journal of Geophysical Research: Solid Earth},
+  volume  = {90},
+  number  = {B14},
+  pages   = {12575--12582},
+  year    = {1985},
+  doi     = {10.1029/JB090iB14p12575}
+}
+
+@article{power1991euclidean,
+  title   = {Euclidean and fractal models for the description of rock surface roughness},
+  author  = {Power, William L. and Tullis, Terry E.},
+  journal = {Journal of Geophysical Research: Solid Earth},
+  volume  = {96},
+  number  = {B1},
+  pages   = {415--424},
+  year    = {1991},
+  doi     = {10.1029/90JB02107}
+}
+
+@article{candela2012roughness,
+  title   = {Roughness of fault surfaces over nine decades of length scales},
+  author  = {Candela, Thibault and Renard, Fran{\c{c}}ois and Klinger, Yann and Mair, Karen and Schmittbuhl, Jean and Brodsky, Emily E.},
+  journal = {Journal of Geophysical Research: Solid Earth},
+  volume  = {117},
+  number  = {B8},
+  pages   = {B08409},
+  year    = {2012},
+  doi     = {10.1029/2011JB009041}
+}
