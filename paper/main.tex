@@ -60,6 +60,10 @@
 \newcommand{\muapp}{\mu_{\mathrm{app}}}
 \newcommand{\grad}{\nabla}
 \newcommand{\code}[1]{\texttt{#1}}
+%% Placeholder for figures pending the dedicated 3D figure pass (Asymptote/PyVista).
+%% Replace each \pendingfig call with \includegraphics once the artwork exists.
+\newcommand{\pendingfig}[2]{\fbox{\begin{minipage}[c][#2][c]{0.9\linewidth}\centering
+  \itshape\small[\,3D figure pending\,]\end{minipage}}}
 
 \graphicspath{{../figures/}{figures/}}
 
@@ -89,15 +93,17 @@ contact detection as a boundary-to-boundary transition map, $\tmap=\map{B}^{-1}\
 coordinate atlas, from which the gap, a conservative surface normal, and every disjoint contact arc follow
 without an ambient field. The charts are Fourier-feature coordinate networks whose random-feature embedding
 defeats the spectral bias that low-passes a neural signed-distance function; the level set is retained
-throughout as a matched baseline on identical meshes and tolerances. We cast the formulation as a
-variational inequality with a frictional dissipation principle, and prove that the chart returns a normal
-equal to the gradient of the gap, hence energy-conservative contact, together with a sign-exact active set.
-The method is verified against six closed-form benchmarks (CV-1 Hertz, CV-2 Cattaneo--Mindlin, CV-3
-Brazilian, CV-4 nine-disc, CV-5 superformula, CV-6 Koch) to a few percent, and validated on a real
-Inada-granite tensile fracture, where dilation and apparent friction emerge from the resolved asperity
-geometry under plain Coulomb friction with no imposed dilatancy law. The level set smooths the mean
-asperity slope from $19.4^\circ$ to $12.5^\circ$ and under-predicts peak shear strength by $61\%$ and
-emergent dilatancy by $98\%$, while the chart reconstructs the surface to $2.3~\mu$m against $107~\mu$m.
+throughout as a matched baseline on identical meshes and tolerances. The contact problem is formulated in the
+classical sequence (strong form, weak form, chart-based Galerkin discretisation), with the gap and a
+conservative, gradient-consistent normal supplied by the transition map, so that the chart and the level set
+are interchangeable at the force layer and the geometry is the only controlled variable. The method is
+verified against six closed-form benchmarks (CV-1 Hertz, CV-2 Cattaneo--Mindlin, CV-3 Brazilian, CV-4
+nine-disc, CV-5 superformula, CV-6 Koch) to a few percent, and validated on a real Inada-granite tensile
+fracture, where dilation and apparent friction emerge from the resolved asperity geometry under plain Coulomb
+friction with no imposed dilatancy law. On the granite profile the level set smooths the mean asperity slope
+from $19.4^\circ$ to $12.5^\circ$, reconstructs the surface to only $107~\mu$m against the chart's
+$2.3~\mu$m, and under-predicts the peak shear strength by $61\%$; on a synthetic band-limited rough block it
+under-predicts the emergent dilatancy by $98\%$.
 \keywords{computational contact mechanics \and coordinate atlas \and transition map \and
 neural signed-distance function \and Fourier-feature charts \and rock-joint dilatancy}
 \end{abstract}
@@ -111,9 +117,9 @@ The shear strength of a rough rock joint is stored in its geometry. When the two
 fracture are pressed together and sheared, the load is carried on the interlocking asperities, and the
 joint cannot slide without riding up their flanks; the climb dilates the interface and raises its
 resistance above that of a flat sawcut. The strength an engineer designs with is therefore set by the
-distribution of asperity slopes, a property of the boundary, and not by any material constant. This is the
-setting in which the present paper makes a single claim: \emph{on rough and non-convex geometry the
-representation of the boundary, not the constraint-enforcement scheme, controls contact fidelity.} We will
+distribution of asperity slopes, a property of the boundary, and not by any material constant. The paper makes a single claim: \emph{on rough and
+non-convex geometry the representation of the boundary, not the constraint-enforcement scheme, controls contact
+fidelity.} We will
 show that a fixed-capacity ambient signed-distance field smooths the mean asperity slope of a real
 Inada-granite joint from $19.4^\circ$ to $12.5^\circ$ and, through the consequence that this entails for
 the shear-strength law, under-predicts the peak strength by $61\%$ and the emergent dilatancy by $98\%$,
@@ -122,17 +128,16 @@ whereas a boundary chart of the same surface resolves the slopes and recovers th
 A computational contact algorithm reduces, at each query point $\xbf$ near a body $X$, to two local
 questions. Is $\xbf$ inside $X$, and by how much? This is the gap $\gn$, with the sign convention
 $\gn<0\Leftrightarrow$ penetration used throughout. Along which direction is the surface? This is the
-outward normal $\nbf$. Given the pair $(\gn,\nbf)$, a mature library of enforcement schemes---penalty,
-augmented Lagrangian, mortar, Nitsche---converts it into nodal forces \citep{wriggers2006computational,
-laursen2002computational,kikuchi1988contact}. On smooth, convex bodies this division of labour is benign:
-the gap and the normal are smooth functions of position, every scheme converges to the same answer, and the
-discussion centres on enforcement. On geometrically complex bodies it breaks down. The gap and the normal
+outward normal $\nbf$. Given the pair $(\gn,\nbf)$, the standard enforcement schemes---penalty,
+augmented Lagrangian, mortar, Nitsche---convert it into nodal forces \citep{wriggers2006computational,
+laursen2002computational,kikuchi1988contact}. On smooth, convex bodies the gap and the normal are smooth functions of position, every scheme converges to the
+same answer, and accuracy is set by the enforcement. On geometrically complex bodies it breaks down. The gap and the normal
 cease to be smooth, or even single-valued, and the geometric representation from which they are read becomes
 the dominant control on accuracy. A rock joint, a cusped cam lobe, a faceted aggregate, or a self-similar
 fractal boundary carries contact information at length scales that an ambient field of fixed capacity cannot
-store. We make the claim precise and give it a method: contact read from a chart \emph{transition map} on a
-learned coordinate atlas, measured against the incumbent representation on a verification ladder that runs
-from closed-form benchmarks to a real rock joint.
+store. We realise the claim through contact read from a chart \emph{transition map} on a learned coordinate
+atlas, measured against the level set on a verification ladder that runs from closed-form benchmarks to a real
+rock joint.
 
 \subsection{The level set and its two intrinsic weaknesses}\label{sec:intro-levelset}
 
@@ -152,11 +157,10 @@ which drives the gradient toward unit norm,
   =\mathbb{E}_{\xbf\sim\Omega}\!\left[\big(\norm{\grad\phi_A(\xbf)}-1\big)^2\right],
   \label{eq:eikonal}
 \end{equation}
-combined with surface and normal-alignment losses on a boundary point cloud. The economy of
-\eqref{eq:sdf-gap-intro} is the appeal of the representation and also the source of its weaknesses. We
-retain the level set throughout the paper as the comparison baseline. It is a fair and capable baseline,
-not a strawman: on the geometry it can represent it is exactly as accurate as the chart
-(Section~\ref{sec:verif}).
+combined with surface and normal-alignment losses on a boundary point cloud. Equation~\eqref{eq:sdf-gap-intro}
+is both the principal advantage of the representation and the source of its weaknesses. The level set is
+retained throughout as the comparison baseline: on the geometry it can represent it is exactly as accurate as
+the chart (Section~\ref{sec:verif}).
 
 Two weaknesses are intrinsic to the level set rather than artefacts of training, and both bear directly on
 contact. The first is \emph{medial-axis non-smoothness}. The exact Euclidean signed distance is only $C^0$
@@ -167,8 +171,8 @@ is \emph{spectral bias}. A coordinate multilayer perceptron learns low frequenci
 frequencies slowly or never; its neural-tangent kernel is Laplace-like, with high-frequency power decaying
 with frequency \citep{rahaman2019spectral}. A fixed-capacity neural $\phi_A$ therefore low-passes cusps,
 asperities, and fine detail: it cannot represent a boundary sharper than its capacity ceiling, and it
-smooths the geometry that, on a rough joint, carries the strength. We measure both weaknesses, rather than
-assert them, in Sections~\ref{sec:verif} and~\ref{sec:cv7}. The chart introduced next is built to avoid
+smooths the geometry that, on a rough joint, carries the strength. Both weaknesses are measured in
+Sections~\ref{sec:verif} and~\ref{sec:cv7}. The chart introduced next is built to avoid
 both: it stores one fewer dimension, and it supplies the network the high frequencies it would otherwise
 fail to learn.
 
@@ -217,26 +221,26 @@ asperity geometry, and the Patton law is the reference against which the emergen
 
 \subsection{Contributions and organisation}\label{sec:intro-contributions}
 
-The contributions of this work are the following. We pose contact detection as a boundary-to-boundary
-transition map $\tmap=\map{B}^{-1}\circ\map{A}$ on a learned coordinate atlas, and place it within a
-variational-inequality formulation of frictional contact whose dissipation principle the chart-driven solver
-inherits unchanged (Sections~\ref{sec:govern}--\ref{sec:tmap}). We establish two analytical properties of the
-chart detector: the normal it returns is the gradient of the gap, so the penalty traction is the exact
-gradient of a potential and contact is energy-conservative; and the radial inverse-chart gap, though enlarged
-in magnitude, is sign-exact, so the chart and the level set share an active set on star-shaped bodies
-(Section~\ref{sec:tmap}). We instantiate the atlas through Fourier-feature coordinate charts and show, by a
-kernel argument and a controlled ablation, that their random-feature embedding defeats the spectral bias that
-ceilings a neural signed-distance function, so a $(d{-}1)$-dimensional boundary function resolves a prescribed
-cutoff where a $d$-dimensional ambient field at fixed capacity cannot (Section~\ref{sec:fourier}). We verify
-the method against a six-problem closed-form ladder, CV-1 through CV-6, on which the chart and the level set
-are equivalent for the convex and superposable cases and measurably separate on the cusped superformula and
-the self-similar Koch boundary (Section~\ref{sec:verif}). Finally, we validate it on the direct shear of a
-real Inada-granite tensile fracture, where the apparent friction $\tan(\phi_b+i)$ and the normal dilation
-emerge from the resolved asperity geometry under plain Coulomb friction, and where the level set, by smoothing
-the asperity slopes, under-predicts strength and dilatancy on the quantity an engineer would design with
-(Section~\ref{sec:cv7}). The detector composes with chart-based finite-element and material-point solvers
-without modifying the force laws, so the measured accuracy gap is charged to the geometric representation
-alone (Section~\ref{sec:discr}).
+The contributions of this work are the following. We represent each body by a learned coordinate atlas of its
+boundary and pose contact detection as a boundary-to-boundary transition map
+$\tmap=\map{B}^{-1}\circ\map{A}$ between two such atlases, from which the gap, the contact normal, and every
+disjoint contact arc follow without an ambient field (Sections~\ref{sec:atlas} and~\ref{sec:tmap}). We
+instantiate the atlas through Fourier-feature charts, whose random-feature embedding defeats the spectral
+bias that low-passes a neural signed-distance function, so that a $(d{-}1)$-dimensional boundary function
+resolves a prescribed cutoff where a $d$-dimensional ambient field of comparable capacity cannot
+(Section~\ref{sec:atlas}). We develop the contact model in the classical strong--weak--Galerkin sequence
+(Sections~\ref{sec:strong}--\ref{sec:discr}) and record two properties of the chart detector: the normal it
+returns is the gradient of the gap, so contact is energy-conservative, and
+the radial gap, though enlarged in magnitude, is sign-exact, so the chart and the level set share an active
+set on star-shaped bodies. We verify the method against a six-problem closed-form ladder, CV-1 through CV-6,
+on which the chart and the level set are equivalent for the convex and superposable cases and measurably
+separate on the cusped superformula and the self-similar Koch boundary; and we validate it on the direct
+shear of a real Inada-granite tensile fracture, where the apparent friction $\tan(\phi_b+i)$ and the normal
+dilation emerge from the resolved asperity geometry under plain Coulomb friction, and where the level set, by
+smoothing the asperity slopes, under-predicts strength and dilatancy on the quantity an engineer would design
+with (Section~\ref{sec:verif}). Because the detector enters the solver only through the gap--normal pair, the
+chart and the level set are interchangeable at the force layer, and the measured accuracy gap is charged to
+the geometric representation alone.
 
 \paragraph{Notation.}
 Bodies are labelled $A,B,\dots$; the interior of body $X$ is $\Omega_X\subset\R^d$ ($d=2,3$) and its boundary
@@ -247,1162 +251,427 @@ the Macaulay bracket $\pos{z}=\max(0,z)$, bold symbols for vectors and tensors, 
 $\gn<0\Leftrightarrow$ penetration. The apparent friction coefficient measured from a contact run is $\muapp$,
 compared against the Patton value $\tan(\phi_b+i)$.
 
-The remainder of the paper is organised as follows. Section~\ref{sec:govern} states the strong and weak forms
-of two-body frictional contact, casts equilibrium as a variational inequality, derives the frictional
-dissipation principle, and adopts the regularised enforcement we take from the established literature.
-Section~\ref{sec:tmap} develops the transition map on a coordinate atlas and proves the conservative matched
-normal, the sign-exact active set, and the multi-arc enumeration. Section~\ref{sec:fourier} constructs the
-Fourier-feature charts and bounds the resolvable asperity slope through the network kernel.
-Section~\ref{sec:discr} discretises the regularised problem in chart-based finite-element and material-point
-settings. Section~\ref{sec:verif} verifies the method against the closed-form ladder CV-1 through CV-6, and
-Section~\ref{sec:cv7} validates it on the real Inada-granite joint. Section~\ref{sec:disc} states the
-preconditions, limitations, and conclusions.
+The remainder of the paper is organised as follows. Section~\ref{sec:atlas} introduces the neural coordinate
+atlas, the three chart families, and their Fourier-feature representation. Section~\ref{sec:govern} states the
+governing equations of two-body frictional contact and reduces them to the reference chart through the decoder
+Jacobian. Section~\ref{sec:tmap} develops the transition-map contact model: the gap, the conservative normal,
+the chart inversions, the contact contribution to the weak form, and the
+interface constitutive law. Section~\ref{sec:discr} gives the chart-based finite element implementation.
+Section~\ref{sec:verif} reports the numerical examples, from the closed-form ladder CV-1 through CV-6 to the
+real Inada-granite joint CV-7. Section~\ref{sec:disc} states the preconditions, limitations, and conclusions.
 
-%% ======================== 02_governing_equations ========================
-\section{Governing equations and the variational inequality of frictional contact}\label{sec:govern}
+%% ======================== METHOD (restructured) ========================
 
-We pose frictional contact as a constrained minimisation of the total energy, derive the Signorini
-conditions as its optimality conditions, and state the dissipation principle that the tangential law obeys.
-The constraint enforcement that follows---penalty and augmented Lagrangian for the normal pressure,
-regularised Coulomb for friction---is classical and is recalled here only to fix notation. The single point
-this section establishes for the remainder of the paper is that the enforcement consumes the geometry solely
-through the pair $(\gn,\nbf)$. Force assembly, the contact tangent, the broad phase, and the well-posedness
-estimate are identical whether $(\gn,\nbf)$ comes from a learned atlas or from a level set, so the accuracy
-gap reported in Sections~\ref{sec:verif}--\ref{sec:cv7} is attributable to the geometric representation
-alone.
+\section{The neural coordinate atlas}\label{sec:atlas}
 
-We consider two deformable bodies $\Omega^A,\Omega^B\subset\R^d$ undergoing displacements
-$\ubf^A,\ubf^B$ in the space $V$ of admissible fields, meeting along a candidate contact surface $\Gamma_c$
-in the deformed configuration. The normal gap $\gn(\xbf)$ is the signed distance from a candidate contact
-point to the obstacle surface, with $\gn<0$ in penetration; the outward unit normal $\nbf$ points away from
-the obstacle, so the contact traction $-t_N\nbf$ with pressure $t_N\ge0$ restores a penetrating point.
-
-\subsection{Constrained minimisation, the variational inequality, and the Signorini conditions}
-\label{sec:govern-vi}
-
-Let each body carry a polyconvex stored-energy density $W(\bm F)$ with the usual coercivity and growth
-bounds; the Neo-Hookean and small-strain models used in this paper qualify \citep{ball1977convexity,
-ciarlet1988mathematical}. The total energy is the stored elastic energy less the work of the external loads,
-\begin{equation}\label{eq:energy}
-E(\vbf)=\sum_{\alpha\in\{A,B\}}\int_{\Omega^\alpha}W\!\big(\bm I+\grad\vbf^\alpha\big)\,dV
-\;-\;\sum_{\alpha\in\{A,B\}}L^\alpha(\vbf^\alpha),
-\qquad \vbf=(\vbf^A,\vbf^B),
-\end{equation}
-and non-penetration confines the admissible displacements to the closed convex cone
-\begin{equation}\label{eq:cone}
-\mathcal K=\big\{\,\vbf\in V:\ \gn(\vbf)\ge 0\ \text{on }\Gamma_c\,\big\}.
-\end{equation}
-Equilibrium is the constrained minimisation $\ubf=\arg\min_{\vbf\in\mathcal K}E(\vbf)$. Because $E$ is convex
-and coercive on $\mathcal K$ and $\mathcal K$ is a closed convex cone, the minimiser is characterised by a
-variational inequality: the directional derivative of $E$ is non-negative into every admissible direction,
-\begin{equation}\label{eq:vi}
-\ubf\in\mathcal K:\qquad
-\big\langle E'(\ubf),\,\vbf-\ubf\big\rangle\;\ge\;0\qquad\forall\,\vbf\in\mathcal K .
-\end{equation}
-The unilateral constraint makes \eqref{eq:vi} an inequality rather than the equation $E'(\ubf)=0$, and the
-active contact set is itself an unknown of the problem \citep{kikuchi1988contact,laursen2002computational}.
-Introducing the Lagrange multiplier $t_N\ge0$ conjugate to the gap recovers the pointwise contact
-conditions.
-
-\begin{proposition}[Variational inequality and the Signorini conditions]\label{prop:vi-kkt}
-The variational inequality \eqref{eq:vi} is equivalent to the existence of a pressure multiplier $t_N\ge0$,
-supported on $\Gamma_c$, such that the stationarity and the Signorini--Hertz--Moreau (Karush--Kuhn--Tucker)
-conditions hold,
-\begin{equation}\label{eq:weak-contact}
-\sum_{\alpha\in\{A,B\}}\!\Big[a^\alpha(\ubf^\alpha,\delta\ubf^\alpha)-L^\alpha(\delta\ubf^\alpha)\Big]
-+\int_{\Gamma_c} t_N\,\delta\gn\,dA=0\quad\forall\,\delta\ubf\in V,
-\end{equation}
-\begin{equation}\label{eq:signorini}
-\gn\ \ge\ 0,\qquad t_N\ \ge\ 0,\qquad \gn\,t_N\ =\ 0\qquad\text{on }\Gamma_c,
-\end{equation}
-where $a^\alpha(\ubf^\alpha,\delta\ubf^\alpha)=\int_{\Omega^\alpha}\bm P(\bm F^\alpha):\grad\delta\ubf^\alpha\,dV$
-is the internal virtual work, $\bm P$ the first Piola--Kirchhoff stress, and the first variation of the gap is
-\begin{equation}\label{eq:gap-variation}
-\delta\gn=\nbf\cdot(\delta\ubf^B-\delta\ubf^A).
-\end{equation}
-\end{proposition}
-
-\begin{proof}
-Convexity of $E$ on the convex set $\mathcal K$ makes $\ubf$ a minimiser if and only if the variational
-inequality \eqref{eq:vi} holds. The constraint $\gn\ge0$ is a cone constraint; Lagrangian duality on
-$\Gamma_c$ produces a multiplier $t_N\ge0$ with stationarity of
-$\mathcal L(\vbf,t_N)=E(\vbf)-\int_{\Gamma_c}t_N\,\gn(\vbf)\,dA$, which is \eqref{eq:weak-contact} once
-$\delta\gn$ is taken from \eqref{eq:gap-variation}, together with primal feasibility $\gn\ge0$, dual
-feasibility $t_N\ge0$, and complementary slackness $\gn t_N=0$, that is \eqref{eq:signorini}. The gap
-variation \eqref{eq:gap-variation} follows because the gap is measured along $\nbf$, so to first order it
-responds only to the relative motion projected onto the normal, irrespective of how the surface is
-represented.
-\end{proof}
-
-Equation~\eqref{eq:gap-variation} is the hinge of the entire comparison: the contact virtual work depends on
-the geometry through the normal $\nbf$ alone, so once the representation supplies $(\gn,\nbf)$, nothing in
-the variational statement distinguishes a chart from a level set.
-
-\subsection{Frictional dissipation and the principle of maximum dissipation}\label{sec:govern-friction}
-
-Friction resists tangential sliding and is the only dissipative mechanism in the interface. Writing
-$\vbf_T=(\bm I-\nbf\otimes\nbf)\vbf$ for the tangential slip velocity and $\tbf_T$ for the tangential
-traction, the mechanical dissipation rate is
-\begin{equation}\label{eq:dissipation}
-\mathcal D=-\,\tbf_T\cdot\vbf_T\ \ge\ 0,
-\end{equation}
-and thermodynamic admissibility requires $\mathcal D\ge0$ pointwise. The Coulomb law confines $\tbf_T$ to the
-friction disk $\mathcal C(t_N)=\{\bm\sigma_T:\norm{\bm\sigma_T}\le\mu\,t_N\}$, with $\mu$ the friction
-coefficient, and selects the traction by a maximum-dissipation principle analogous to that of
-rate-independent plasticity \citep{simo1998computational}.
-
-\begin{proposition}[Maximum frictional dissipation and a thermodynamically consistent regularisation]
-\label{prop:maxdiss}
-Among all admissible tractions $\bm\sigma_T\in\mathcal C(t_N)$, the one that maximises the dissipation
-$-\bm\sigma_T\cdot\vbf_T$ is the Coulomb slip traction,
-\begin{equation}\label{eq:maxdiss}
-\tbf_T=\arg\max_{\bm\sigma_T\in\mathcal C(t_N)}\big(-\bm\sigma_T\cdot\vbf_T\big)
-=-\mu\,t_N\,\frac{\vbf_T}{\norm{\vbf_T}}\quad(\vbf_T\neq\bm 0),
-\end{equation}
-and it dissipates $\mathcal D=\mu\,t_N\norm{\vbf_T}\ge0$. The smooth regularisation derived from the convex
-dissipation pseudo-potential
-\begin{equation}\label{eq:friction-potential}
-\Psi_T(\vbf_T)=\mu\,t_N\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2},\qquad
-\tbf_T=-\frac{\partial\Psi_T}{\partial\vbf_T}
-=-\mu\,t_N\,\frac{\vbf_T}{\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}},
-\end{equation}
-is itself dissipative,
-$\mathcal D=\mu\,t_N\,\norm{\vbf_T}^2/\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}\ge0$, with equality only at
-$\vbf_T=\bm 0$.
-\end{proposition}
-
-\begin{proof}
-The objective $-\bm\sigma_T\cdot\vbf_T$ is linear in $\bm\sigma_T$ over the disk $\mathcal C(t_N)$, so its
-maximum is attained on the boundary, anti-parallel to $\vbf_T$; the Karush--Kuhn--Tucker conditions of the
-constrained maximisation give \eqref{eq:maxdiss} and the associated normality $\vbf_T\in
-N_{\mathcal C}(\tbf_T)$. For the regularisation, $\Psi_T$ is convex in $\vbf_T$, so
-$\tbf_T=-\partial\Psi_T/\partial\vbf_T$ defines a generalised standard material; contracting $\tbf_T$ with
-$\vbf_T$ yields the stated non-negative dissipation.
-\end{proof}
-
-\begin{corollary}[Second-law consistency of the interface]\label{cor:second-law}
-The total interfacial dissipation is non-negative,
-$\dot{\mathcal D}_{\mathrm{tot}}=-\int_{\Gamma_c}\tbf_T\cdot\vbf_T\,dA\ge0$, whichever representation supplies
-the normal $\nbf$. Consequently a chart-driven contact solve is thermodynamically consistent, a property
-confirmed numerically by the closure of the cyclic energy ledger in Section~\ref{sec:cv7}.
-\end{corollary}
-
-The parameter $\varepsilon_T$ is a small slip-velocity scale that rounds the corner of the Coulomb law at
-$\vbf_T=\bm 0$: for $\norm{\vbf_T}\gg\varepsilon_T$ the traction approaches the cone bound $\mu t_N$ and the
-law behaves as sharp slip, while for $\norm{\vbf_T}\ll\varepsilon_T$ it grows linearly through zero, so stick
-is approximated by a stiff tangential spring. Because the law of \eqref{eq:friction-potential} reads only the
-scalar normal pressure $t_N$, it composes unchanged with either normal enforcement below.
-
-\subsection{Regularised enforcement of the variational inequality}\label{sec:govern-enforce}
-
-The pressure multiplier $t_N$ of Proposition~\ref{prop:vi-kkt} is supplied by a regularisation of the
-non-penetration constraint. The penalty method replaces the indicator of $\mathcal K$ by a one-sided
-quadratic potential active only on penetration,
-\begin{equation}\label{eq:penalty-potential}
-\Pi_c(\gn)=\tfrac12\,\varepsilon_n\,\pos{-\gn}^2,\qquad
-t_N=\frac{\partial\Pi_c}{\partial(-\gn)}=\varepsilon_n\,\pos{-\gn},
-\end{equation}
-with penalty stiffness $\varepsilon_n>0$. The augmented-Lagrangian method of \citet{alart1991mixed} and
-\citet{simo1992augmented} adds a persistent multiplier $\lambda\ge0$ updated by an Uzawa iteration,
-\begin{equation}\label{eq:al-pressure}
-t_N=\pos{\lambda-\varepsilon_n\,\gn},\qquad
-\lambda^{k+1}=\pos{\lambda^{k}-\varepsilon_n\,\gn(\ubf^{k+1})},
-\end{equation}
-so that at convergence the multiplier recovers the exact pressure, $\lambda\to t_N^\star$, and the penetration
-vanishes without $\varepsilon_n\to\infty$. The plain penalty \eqref{eq:penalty-potential} is the special case
-$\lambda\equiv0$. Both regularisations are instances of the same variational relaxation.
-
-\begin{proposition}[Penalty and augmented Lagrangian as relaxations of the variational inequality]
-\label{prop:moreau}
-The penalty potential \eqref{eq:penalty-potential} is the Moreau--Yosida regularisation, with parameter
-$\varepsilon_n^{-1}$, of the indicator of the admissible half-line $\{\gn\ge0\}$,
-\begin{equation}\label{eq:moreau}
-\Pi_c(\gn)=\min_{s\ge0}\Big\{\tfrac{\varepsilon_n}{2}(\gn-s)^2\Big\}=\tfrac12\,\varepsilon_n\,\pos{-\gn}^2 ,
-\end{equation}
-so the penalised energy $E+\int_{\Gamma_c}\Pi_c\,dA$ is the Moreau envelope of $E+\chi_{\mathcal K}$, whose
-minimiser $\ubf_\varepsilon$ converges to the variational-inequality solution $\ubf^\star$ as
-$\varepsilon_n\to\infty$, with the rate of \eqref{eq:penalty-estimate} below. The augmented-Lagrangian update
-\eqref{eq:al-pressure} is the proximal-point (Uzawa) iteration on the dual of the same Lagrangian and
-contracts, $\norm{\lambda^{k+1}-\lambda^\star}\le\rho\,\norm{\lambda^{k}-\lambda^\star}$ with $\rho<1$, for
-every fixed $\varepsilon_n>0$.
-\end{proposition}
-
-\begin{proof}
-The minimisation in \eqref{eq:moreau} over $s\ge0$ is attained at $s=\max(0,\gn)$, giving $\tfrac{\varepsilon_n}{2}\pos{-\gn}^2$, which is by definition the Moreau--Yosida envelope of the indicator
-$\chi_{[0,\infty)}$; epi-convergence of the Moreau envelope as $\varepsilon_n\to\infty$ delivers convergence
-of minimisers. The Uzawa update is the proximal-point map of the dual functional; firm non-expansiveness of
-the projection $\pos{\cdot}$ yields the contraction with $\rho<1$ \citep{laursen2002computational}.
-\end{proof}
-
-We close with the standard stability statement, which carries over unchanged because the contact treatment is
-classical and the chart alters only how $\gn$ is evaluated. Under the polyconvexity and coercivity hypotheses
-on $W$, the energy $E$ attains a minimiser on $\mathcal K$ by the direct method, and adding the non-negative
-convex penalty $\Pi_c$ preserves both weak lower semicontinuity and coercivity, so the penalised problem is
-well posed for every $\varepsilon_n>0$. The penalty solution $\ubf_\varepsilon$ approaches the multiplier
-solution $\ubf^\star$ at the rate of \citet{kikuchi1988contact},
-\begin{equation}\label{eq:penalty-estimate}
-\norm{\ubf_\varepsilon-\ubf^\star}_{H^1}\le\frac{C}{\sqrt{\varepsilon_n}},\qquad
-\norm{t_{N,\varepsilon}-t_N^\star}_{H^{-1/2}(\Gamma_c)}\le C\sqrt{\varepsilon_n},
-\end{equation}
-so balancing the penalty error against the $O(h)$ discretisation error fixes the stiffness at
-$\varepsilon_n\sim E/h$, while the augmented Lagrangian removes the trade-off through Proposition~\ref{prop:moreau}. Collecting the contributions, the contact-pressure error splits as
-$\norm{t_{N,h}-t_N^\star}\le C_1 h + C_2\,\varepsilon_n^{-1/2}+C_3\,\epsilon_{\mathrm{geom}}$, in which the
-first two terms are common to both representations and the third, the geometric approximation error
-$\epsilon_{\mathrm{geom}}$ of the oracle, is the term that Sections~\ref{sec:verif} and~\ref{sec:cv7} measure
-and on which the atlas and the level set part company.
-
-%% ======================== 03_transition_map ========================
-\section{Contact as a transition map on a coordinate atlas}\label{sec:tmap}
-
-The pair $(\gn,\nbf)$ that drives the formulation of Section~\ref{sec:govern} is read from a model of the
-boundary, and two such models are available. A \emph{level set} stores an ambient scalar field
-$\phi_X:\R^d\to\R$ whose zero set is $\partial\Omega_X$, with the interior $\Omega_X\subset\R^d$ open and
-$\gn<0$ in penetration. A \emph{chart} parametrises the boundary directly, $\map{X}:\Theta_X\to
-\partial\Omega_X$. This section develops the chart description and the boundary-to-boundary transition map
-that reads contact from it, and establishes the two analytical properties on which the chart's advantage
-rests: the normal it returns is the gradient of the gap, so the contact force is conservative
-(Proposition~\ref{prop:matched-normal}); and the radial gap it returns is sign-exact, so its active set
-coincides with the level set's on star-shaped bodies (Proposition~\ref{prop:active-set}). The level set
-enters only as the comparison baseline.
-
-\subsection{Boundary-chart and ambient level-set representations}\label{sec:tmap:two}
-
-\subsubsection{The ambient level set}
-
-The level set stores a signed-distance function, a scalar field over all of space whose value is the distance
-to the surface, negative inside and positive outside. For body $A$ a neural network $\phi_A:\R^d\to\R$
-approximates this field, and the gap and the outward normal follow from the field and its normalised gradient,
-%
+A body is described by charts of its boundary rather than by a field over the space it occupies. Let
+$\Omega_X\subset\R^d$ ($d=2,3$) be the region occupied by body $X$, with boundary $\partial\Omega_X$. The
+classical description is the \emph{ambient level set}, a scalar field $\phi_X:\R^d\to\R$ negative inside the
+body, from which the gap and the outward normal are the value and the normalised gradient,
 \begin{equation}\label{eq:sdf-gap}
-\gn^A(\xbf)=\phi_A(\xbf),\qquad
-\nbf_A(\xbf)=\frac{\grad\phi_A(\xbf)}{\norm{\grad\phi_A(\xbf)}}.
+\gn^X(\xbf)=\phi_X(\xbf),\qquad
+\nbf_X(\xbf)=\frac{\grad\phi_X(\xbf)}{\norm{\grad\phi_X(\xbf)}} .
 \end{equation}
-%
-so both quantities follow from a single automatic-differentiation call \citep{liu2020implicit,
-kolev2003level}. As a fair baseline the network is trained as a genuine signed distance, minimising the
-eikonal residual together with surface, normal-alignment, and sign-anchor terms on a boundary point cloud,
+A neural $\phi_X$ is trained as a signed distance by the eikonal objective with surface, normal, and sign
+terms,
 \begin{equation}\label{eq:sdf-objective}
 \mathcal L_{\mathrm{SDF}}
-=\underbrace{\mathbb E_{\Omega}\big[(\norm{\grad\phi}-1)^2\big]}_{\text{eikonal}}
-+\lambda_s\underbrace{\mathbb E_{\partial\Omega}\,\abs{\phi}}_{\text{surface}}
-+\lambda_n\underbrace{\mathbb E_{\partial\Omega}\big[1-\widehat{\grad\phi}\cdot\nbf_{\mathrm{gt}}\big]}_{\text{normal alignment}}
-+\lambda_e\underbrace{\mathbb E_{\Omega\setminus\partial\Omega}\,e^{-\beta\abs{\phi}}}_{\text{sign / far field}},
+=\mathbb E_{\Omega}\big[(\norm{\grad\phi}-1)^2\big]
++\lambda_s\,\mathbb E_{\partial\Omega}\,\abs{\phi}
++\lambda_n\,\mathbb E_{\partial\Omega}\big[1-\widehat{\grad\phi}\cdot\nbf_{\mathrm{gt}}\big]
++\lambda_e\,\mathbb E_{\Omega\setminus\partial\Omega}\,e^{-\beta\abs{\phi}} ,
 \end{equation}
-with $\nbf_{\mathrm{gt}}$ the sampled surface normal and a $\tanh$ multilayer-perceptron architecture
-\citep{park2019deepsdf}. The two intrinsic weaknesses of this representation---medial-axis non-smoothness in
-concavities and the spectral-bias ceiling of a fixed-capacity coordinate network
-\citep{rahaman2019spectral}---are those identified in Section~\ref{sec:intro-levelset}; both are properties of
-the description rather than of the training, and Section~\ref{sec:fourier} makes the second quantitative.
+with $\nbf_{\mathrm{gt}}$ the sampled surface normal; the level set is carried throughout as the comparison
+baseline of Section~\ref{sec:verif}. A \emph{coordinate chart} of the boundary is a map
+\begin{equation}\label{eq:chart}
+\map{X}:\Theta_X\to\partial\Omega_X
+\end{equation}
+from a parameter domain $\Theta_X$ onto the surface, and an \emph{atlas} is a collection of charts with the
+transition maps that relate them where they overlap. The chart carries one dimension fewer than the field,
+models no interior, and has no medial axis (Figure~\ref{fig:atlas-chart}).
 
-\subsubsection{The boundary chart}
-
-The chart stores only the boundary, as a function of the boundary's own parameter. Three chart families
-appear in this work, in order of increasing generality. The \emph{radial chart}
-$\rho_X:\Sph^{d-1}\to\R^+$ is a height field on the sphere of directions, recording for each unit direction
-the distance from the centre to the surface; it represents star-shaped bodies, those visible in their entirety
-from one interior point. With centre $c_X$ and orientation $Q_X$ (the body axes as columns), the boundary
-point in direction $\hat\ubf$ is $\map{X}(\hat\ubf)=c_X+Q_X\,\rho_X(\hat\ubf)\,\hat\ubf$. The \emph{height
-chart} $h_X:\mathcal D\to\R$ over an open parameter domain $\mathcal D$ is the graph $z=h(x)$ of a
-single-valued rough surface, such as one face of a rock joint. The \emph{decoder chart}
-$D_X:\bm\xi\mapsto\xbf$ is a boundary-fitted volumetric map for general, possibly non-star-shaped geometry,
-inverted by Newton iteration.
-
-A chart is cheaper to fit than a level set because its radius or height function lives one dimension below the
-ambient field, models no interior, and carries no medial axis. The cost is a precondition on the body
-geometry---star-shapedness for radial charts, single-valuedness for height charts---and a gap measured along a
-ray rather than perpendicular to the surface, examined in Section~\ref{sec:tmap:bias}. The benefit is
-fidelity: a $(d{-}1)$-dimensional boundary function is far easier to resolve to a prescribed cutoff than a
-$d$-dimensional ambient field at fixed capacity, as Section~\ref{sec:fourier} quantifies.
-Figure~\ref{fig:tm-levelset-vs-chart} contrasts the two descriptions.
-
-\begin{figure}
+\begin{figure}[t]
 \centering
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[font=\footnotesize,>=Stealth,line join=round,
-  starpts/.style={}]
-
-  % ===== reusable star coordinates (concave notches) =====
-  % defined relative to each panel origin via shifts
-
-  %% ---------------------------------------------------------------
-  %% PANEL (a): level set
-  %% ---------------------------------------------------------------
-  \begin{scope}[shift={(0,0)}]
-    % nested OUTER level-set contours (fainter)
-    \draw[gray!35,line width=0.4pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:1.55)(45:0.95)(90:1.55)(135:0.95)(180:1.55)(225:0.95)(270:1.55)(315:0.95)};
-    \draw[gray!50,line width=0.4pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:1.4)(45:0.82)(90:1.4)(135:0.82)(180:1.4)(225:0.82)(270:1.4)(315:0.82)};
-    % the body boundary (zero level set)
-    \draw[black,line width=0.9pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:1.25)(45:0.68)(90:1.25)(135:0.68)(180:1.25)(225:0.68)(270:1.25)(315:0.68)};
-    % nested INNER contours (fainter)
-    \draw[gray!50,line width=0.4pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:1.05)(45:0.52)(90:1.05)(135:0.52)(180:1.05)(225:0.52)(270:1.05)(315:0.52)};
-    \draw[gray!35,line width=0.4pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:0.82)(45:0.38)(90:0.82)(135:0.38)(180:0.82)(225:0.38)(270:0.82)(315:0.38)};
-    % medial axis: dashed line from a concave notch toward interior
-    \draw[red!70,dashed,line width=0.7pt] (45:0.68) -- (0,0);
-    \node[red!75,font=\scriptsize,anchor=west] at (0.18,0.62) {medial axis};
-    % title
-    \node[anchor=north,text width=3.2cm,align=center] at (0,-1.75)
-      {(a) level set $\phi:\mathbb{R}^d\!\to\!\mathbb{R}$};
-  \end{scope}
-
-  %% ---------------------------------------------------------------
-  %% PANEL (b): radial chart
-  %% ---------------------------------------------------------------
-  \begin{scope}[shift={(4.0,0)}]
-    % body boundary in teal
-    \draw[teal,line width=0.9pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:1.25)(45:0.68)(90:1.25)(135:0.68)(180:1.25)(225:0.68)(270:1.25)(315:0.68)};
-    % 8 thin rays center -> boundary
-    \draw[teal!70,line width=0.4pt] (0,0)--(0:1.25);
-    \draw[teal!70,line width=0.4pt] (0,0)--(45:0.68);
-    \draw[teal!70,line width=0.4pt] (0,0)--(90:1.25);
-    \draw[teal!70,line width=0.4pt] (0,0)--(135:0.68);
-    \draw[teal!70,line width=0.4pt] (0,0)--(180:1.25);
-    \draw[teal!70,line width=0.4pt] (0,0)--(225:0.68);
-    \draw[teal!70,line width=0.4pt] (0,0)--(270:1.25);
-    \draw[teal!70,line width=0.4pt] (0,0)--(315:0.68);
-    % center dot
-    \fill[teal] (0,0) circle (1.6pt);
-    \node[teal!80,font=\scriptsize,anchor=north east] at (-0.04,-0.04) {$c$};
-    % a sample angle label
-    \node[teal!80,font=\scriptsize] at (0:1.0) [above] {$\rho(\theta)$};
-    % title
-    \node[anchor=north,text width=3.2cm,align=center] at (0,-1.75)
-      {(b) radial chart $\rho:\mathbb{S}^1\!\to\!\mathbb{R}^{+}$};
-  \end{scope}
-
-  %% ---------------------------------------------------------------
-  %% PANEL (c): the radial gap
-  %% ---------------------------------------------------------------
-  \begin{scope}[shift={(8.0,0)}]
-    % body boundary
-    \draw[teal,line width=0.9pt] plot[smooth cycle,tension=0.7]
-      coordinates {(0:1.25)(45:0.68)(90:1.25)(135:0.68)(180:1.25)(225:0.68)(270:1.25)(315:0.68)};
-    % center dot c
-    \fill[black] (0,0) circle (1.6pt);
-    \node[font=\scriptsize,anchor=north east] at (-0.04,-0.04) {$c$};
-    % exterior point p along ~20 deg ray, beyond boundary
-    \coordinate (P) at (20:1.95);
-    % foot where ray meets boundary (green) ~ rho at 20deg
-    \coordinate (F) at (20:1.15);
-    % the ray c -> p
-    \draw[gray!70,line width=0.5pt,dashed] (0,0)--(P);
-    % unit direction marker hat d
-    \node[font=\scriptsize,anchor=south] at (20:0.7) {$\hat{d}$};
-    % foot dot (green)
-    \fill[teal!60!black] (F) circle (1.8pt);
-    % exterior point p
-    \fill[orange] (P) circle (1.8pt);
-    \node[font=\scriptsize,anchor=west] at ($(P)+(0.06,0.02)$) {$p$};
-    % violet double arrow foot -> p  (the gap)
-    \draw[violet,line width=0.9pt,<->] ($(F)+(20:0.02)$) -- ($(P)-(20:0.02)$);
-    \node[violet,font=\scriptsize,anchor=south west] at ($(F)!0.5!(P)+(0,0.08)$)
-      {$g=r-\rho(\hat{d})$};
-    % title
-    \node[anchor=north,text width=3.2cm,align=center] at (0,-1.75)
-      {(c) the radial gap};
-  \end{scope}
-
-\end{tikzpicture}%
-}
-\caption{Two representations of the same star-shaped body. (a) The ambient level set
-$\phi:\R^d\to\R$ fills all of space; its zero set is the boundary, but it carries a medial axis in the
-interior where $\grad\phi$ is non-smooth, and a fixed-capacity neural $\phi$ low-passes sharp features.
-(b) The radial boundary chart $\rho:\Sph^{1}\to\R^+$ stores only the boundary as a height field on the
-circle of directions, with no ambient field and no medial axis. (c) The gap is read along the ray from
-the center, $\gn=r-\rho(\dhat)$, with the matched normal $\grad_d F=\dhat-\grad_S\rho/r$.}
-\label{fig:tm-levelset-vs-chart}
+\includegraphics[width=0.9\linewidth]{atlas_levelset_vs_chart_3d}
+\caption{Two descriptions of the same body. Left: the ambient level set $\phi:\R^3\to\R$ fills space and
+carries a medial axis in each concavity. Right: the boundary chart $\map{}:\Theta\to\partial\Omega$ stores
+only the surface as a function of its own coordinates.}
+\label{fig:atlas-chart}
 \end{figure}
 
-\subsection{The transition map}\label{sec:tmap:def}
-
-Let $\map{A}:\Theta_A\to\partial\Omega_A$ and $\map{B}:\Theta_B\to\partial\Omega_B$ be boundary charts of two
-bodies. The \emph{transition map} carries a boundary point of $A$ to the boundary parameter of $B$ with which
-it coincides in physical space,
-\begin{equation}\label{eq:tmap-def}
-\tmap:\ \theta_A\ \longmapsto\ \psi_B=\big(\map{B}^{-1}\circ\map{A}\big)(\theta_A).
-\end{equation}
-In \eqref{eq:tmap-def}, $\map{A}$ maps the parameter $\theta_A$ to the physical point $\xbf=\map{A}(\theta_A)$
-on $\partial\Omega_A$, and $\map{B}^{-1}$ returns the boundary parameter $\psi_B$ on $\partial\Omega_B$ that
-the same point projects to. The construction is the transition map of differential geometry, the change of
-coordinates $\map{B}^{-1}\circ\map{A}$ between two charts of an atlas, applied here across two bodies to read
-their contact correspondence (Figure~\ref{fig:tm-concept}).
-
-The contact normal follows from the chart geometry rather than from a signed-distance gradient. In three
-dimensions two surface tangents span the contact point, and their normalised cross product is the outward unit
-normal,
-\begin{equation}\label{eq:jacobian-normal}
-\nbf=\frac{\tbf_1\times\tbf_2}{\norm{\tbf_1\times\tbf_2}},\qquad
-\tbf_\alpha=\frac{\partial\map{A}}{\partial\xi^\alpha}.
-\end{equation}
-The normal is objective: under a rigid-body motion $\xbf\mapsto Q\xbf+\bm c$ the chart and its tangents rotate
-with $Q$, so $\nbf(Q\xbf+\bm c)=Q\,\nbf(\xbf)$, as a contact normal must transform. The undeformed normal gap
-is then the chart form of the implicit level-set normal gap \citep{liu2020implicit},
-$g_{n0}=(\map{}^{(j)}-\map{}^{(i)})\cdot\nbf$, the surface-to-surface offset projected onto $\nbf$.
-
-\begin{figure}
-\centering
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[font=\footnotesize,>={Stealth[length=2.4mm]}]
-  \fill[blue!12,draw=blue!70,line width=0.8pt]
-    plot[smooth cycle,tension=0.8] coordinates
-    {(-1.7,1.5) (-0.4,1.85) (0.95,1.0) (1.25,0.0) (0.95,-1.25)
-     (-0.4,-1.7) (-1.7,-1.25) (-2.25,0.0) (-1.95,0.95)};
-  \fill[orange!14,draw=orange!85!black,line width=0.8pt]
-    plot[smooth cycle,tension=0.8] coordinates
-    {(4.5,1.55) (5.85,1.9) (7.0,1.05) (7.35,0.0) (6.9,-1.3)
-     (5.55,-1.7) (4.35,-1.2) (3.95,0.0) (4.15,1.0)};
-  \coordinate (cA) at (-0.55,0.05);
-  \coordinate (cB) at (5.55,0.0);
-  \fill (cA) circle (1.3pt) node[below=1pt]{$c_A$};
-  \fill (cB) circle (1.3pt) node[below=1pt]{$c_B$};
-  \coordinate (x) at (1.1,0.2);
-  \coordinate (foot) at (3.95,0.1);
-  % rays
-  \draw[blue!70,dashed,line width=0.7pt] (cA) -- (x) node[pos=0.45,above,sloped]{$\theta_A$};
-  \draw[orange!85!black,dashed,line width=0.7pt] (cB) -- (foot) node[pos=0.55,below,sloped]{$\psi_B$};
-  \fill (x) circle (1.6pt);
-  \fill[orange!85!black] ($(foot)+(-0.07,-0.07)$) rectangle ($(foot)+(0.07,0.07)$);
-  % gap arrow (long, between separated bodies)
-  \draw[violet,line width=1pt,<->] (x) -- (foot);
-  % spread labels: x-label up-left, gap formula high, foot-label down-right
-  \node[anchor=east] at ($(x)+(-0.05,0.45)$) {$x=\varphi_A(\theta_A)$};
-  \draw[gray,line width=0.3pt] ($(x)+(-0.05,0.40)$) -- (x);
-  \node[violet,anchor=south] at (2.5,1.15) {$g_B(x)=\|x-c_B\|-\rho_B(\psi_B)$};
-  \draw[violet,line width=0.3pt] (2.5,1.12) -- ($(x)!0.5!(foot)+(0,0.06)$);
-  \node[anchor=north west] at ($(foot)+(0.02,-0.18)$) {$\varphi_B(\psi_B)$};
-  % body labels + boxed map
-  \node[font=\small\bfseries,blue!70!black] at (-0.55,-2.05) {body $A$};
-  \node[font=\small\bfseries,orange!75!black] at (5.55,-2.05) {body $B$};
-  \node[draw=black,line width=0.7pt,rounded corners=2pt,inner sep=5pt,font=\small]
-    at (2.5,-2.95) {$\tau_{AB}:\ \theta_A\mapsto\psi_B=(\varphi_B^{-1}\circ\varphi_A)(\theta_A)$};
-\end{tikzpicture}%
-}
-\caption{The transition map $\tmap=\map{B}^{-1}\circ\map{A}$. A boundary point $\xbf=\map{A}(\theta_A)$ of
-body $A$ is taken into physical space, then $B$'s chart is inverted along the ray from $c_B$ to give
-$\psi_B$ and the foot $\map{B}(\psi_B)$. The signed gap $\gn^B(\xbf)=\norm{\xbf-c_B}-\rho_B(\psi_B)$ falls
-out of the inversion; no ambient field is evaluated.}
-\label{fig:tm-concept}
-\end{figure}
-
-\subsubsection{The inverse-chart gap}\label{sec:tmap:invgap}
-
-Detection requires only a signed gap and an outward normal at a query point, and on a star-shaped body the
-transition map supplies both in closed form. Expressing the query point in the body frame of $B$,
-$\bm d=Q_B^\top(\xbf-c_B)$, and splitting it into a direction and a length gives the inverse-chart gap as a
-single radius subtraction,
-\begin{equation}\label{eq:radial-gap}
-\dhat=\frac{Q_B^\top(\xbf-c_B)}{\norm{Q_B^\top(\xbf-c_B)}},\qquad
-\gn^B(\xbf)=\underbrace{\norm{Q_B^\top(\xbf-c_B)}}_{r}-\rho_B(\dhat),
-\end{equation}
-where $\dhat$ is the unit direction from the centre of $B$ to the query point, $r$ the radial distance, and
-$\rho_B(\dhat)$ the chart radius in that direction; the gap is negative exactly when the point lies inside,
-and it is globally single-valued and $C^1$ wherever $\rho_B$ is. Equation~\eqref{eq:radial-gap} inverts the
-roles of field and boundary that the level set assumes: where the signed-distance function stores a field
-over $\R^d$ and reports the distance to the nearest surface in any direction, the transition map stores only
-$\partial\Omega_B$ and reports, by inversion, which boundary point the query corresponds to and whether it
-lies inside. On star-shaped and single-valued geometry the latter is both cheaper to store and sharper to
-fit.
-
-In two dimensions the radial chart can carry an analytic radius, the Gielis superformula, which generates a
-wide family of closed boundaries from a few parameters,
-\begin{equation}\label{eq:superformula-chart}
+Three chart families are used. The \emph{radial chart} represents a star-shaped body through a radius
+function $\rho_X:\Sph^{d-1}\to\R^{+}$, with centre $c_X$ and orientation $Q_X$,
+\begin{equation}\label{eq:radial-chart}
+\map{X}(\hat\ubf)=c_X+Q_X\,\rho_X(\hat\ubf)\,\hat\ubf ,\qquad
 \rho(\theta)=\Big(\big\lvert\tfrac1a\cos\tfrac{m\theta}{4}\big\rvert^{n_2}
 +\big\lvert\tfrac1b\sin\tfrac{m\theta}{4}\big\rvert^{n_3}\Big)^{-1/n_1},
 \end{equation}
-in which $\theta$ is the polar angle, $m$ sets the number of lobes, and $a,b,n_1,n_2,n_3$ shape them; the
-inverse chart is the angle $\theta=\angle\,Q_B^\top(\xbf-c_B)$ of the body-frame offset
-\citep{gielis2003generic}. The analytic radius and a trained neural radius feed the identical gap
-\eqref{eq:radial-gap}: the evaluator reproduces the closed-form gap to $10^{-10}$, and the trained neural
-radius reproduces the analytic gap to $3.8\times10^{-3}L$ on the cusped superformula
-(Section~\ref{sec:verif}), so the neural chart is a drop-in replacement for the analytic one.
+the second expression the Gielis superformula, which sharpens into cusps for $n_1<1$ \citep{gielis2003generic}.
+The \emph{height chart} represents a single-valued rough surface as a graph $\map{X}(x)=(x,h_X(x))$, $x\in
+\mathcal D$. The \emph{decoder chart} $D_X:\bm\xi\mapsto\xbf$ maps a reference cube to a general body and is
+inverted by Newton iteration \eqref{eq:newton-invert}; it carries the elasticity of Section~\ref{sec:govern},
+while the radial and height charts supply the closed-form gaps of Section~\ref{sec:tmap}.
 
-\subsection{The matched conservative normal}\label{sec:tmap:matched}
+\subsection{Fourier-feature representation}\label{sec:fourier}
 
-The normal returned with the gap must equal the gradient of the gap, or the penalty force fails to be the
-gradient of a potential and contact dissipates energy spuriously, contradicting
-Corollary~\ref{cor:second-law}. The radial gap $F(\xbf)=r-\rho(\dhat)$ depends on $\xbf$ through a unit
-direction, so the raw direction gradient $\grad_{\hat d}\rho$ carries a spurious radial component to which
-$\rho$ is insensitive; projecting it onto the tangent plane of the direction sphere removes that component,
-\begin{equation}\label{eq:tangential-proj}
-\grad_S\rho=(I-\dhat\dhat^\top)\,\grad_{\hat d}\rho.
+A coordinate network applied to the raw parameter cannot resolve a sharp surface, since its kernel low-passes
+high frequencies. The parameter is therefore encoded through a fixed sinusoidal bank before the network: with
+$\tilde x\in[-1,1]^d$ the normalised parameter and $B\in\R^{K\times d}$ a frequency bank,
+\begin{equation}\label{eq:gamma}
+\gamma(x)=\big[\cos(2\pi B\tilde x),\ \sin(2\pi B\tilde x)\big]\in\R^{2K},\qquad
+h_\theta(x)=\mathrm{base}+\mathrm{MLP}_\theta\!\big(\gamma(x)\big),
 \end{equation}
+the bank $B$ fixed and only $\theta$ and the offset trained \citep{tancik2020fourier,rahimi2007random}. The
+banks are log-spaced (1-D height), Gaussian (2-D height and decoder relief), and integer-harmonic (radial,
+periodic). A chart enters a computation only after it passes three checks: reconstruction RMSE below a few
+percent of the surface RMS, a positive chart-Jacobian determinant on every element, and recovery of the
+$O(h^2)$ rate in a manufactured-solution study.
 
-\begin{proposition}[Conservative matched normal]\label{prop:matched-normal}
-With the tangential projection \eqref{eq:tangential-proj}, the body-frame gap gradient and the world-frame
-normal are
-\begin{equation}\label{eq:matched-normal}
-\grad_d F=\dhat-\frac{\grad_S\rho}{r},\qquad
-\nbf=\widehat{\,Q\,\grad_d F\,},
+\begin{remark}[Spectral bias and the band-limited kernel]\label{prop:ntk}
+A raw-parameter network has a Laplace-like neural-tangent kernel with spectrum $\lambda(k)\sim
+\norm{k}^{-(d+1)}$, so each mode of the target relaxes as $\exp(-\eta\lambda(k)t)$ and high frequencies are
+unlearned at finite budget. The encoding \eqref{eq:gamma} replaces this kernel by the stationary
+$\sum_j\cos(2\pi b_j\!\cdot\!(\tilde x-\tilde x'))$, which for $b_j\sim\mathcal N(0,\sigma^2 I)$ has, by
+Bochner's theorem, expectation $\exp(-2\pi^2\sigma^2\norm{\tilde x-\tilde x'}^2)$, flat to the tunable cutoff
+$2\pi\sigma$ \citep{rahaman2019spectral}.
+\end{remark}
+
+\begin{remark}[Capacity]\label{cor:capacity}
+To resolve a wavelength $\ell$ over a domain of size $L$, a $(d{-}1)$-dimensional boundary chart needs
+$K\sim(L/\ell)^{d-1}$ features against $(L/\ell)^{d}$ for a uniform field. The margin narrows against an
+adaptive narrow-band level set; the claim of Section~\ref{sec:verif} is that, at fixed capacity, the chart
+resolves slopes the \emph{neural} field of comparable size smooths (granite joint: $2.3~\mu$m against
+$107~\mu$m).
+\end{remark}
+
+
+\section{Governing equations and variational formulation on the coordinate chart}\label{sec:govern}\label{sec:strong}
+
+The deformable bodies are linear elastic and quasi-static, and the boundary-value problem is posed in the
+small-strain regime. Its distinguishing feature is that each body is parametrised by a chart decoder, so the
+balance equations are integrated on a reference cube and pulled back to the physical body by the Piola identity
+of the neural atlas \citep{sun2026neuralatlas}.
+
+\subsection{Strong form}\label{sec:strong:strong}
+
+Two bodies occupy regions $\Omega^A,\Omega^B\subset\R^d$ with boundaries $\partial\Omega^\alpha=
+\overline{\Gamma_u^\alpha}\cup\overline{\Gamma_t^\alpha}\cup\overline{\Gamma_c^\alpha}$. Each body carries a
+displacement $\ubf^\alpha$ with small strain $\bm\varepsilon=\tfrac12(\grad\ubf+\grad^{\!\top}\!\ubf)$, and
+the balance of linear momentum and the boundary conditions read
+\begin{equation}\label{eq:balance}
+\grad\!\cdot\bm\sigma^\alpha+\bm b^\alpha=\bm0\ \ \text{in }\Omega^\alpha;\qquad
+\ubf^\alpha=\bar\ubf^\alpha\ \text{on }\Gamma_u^\alpha,\quad
+\bm\sigma^\alpha\nbf^\alpha=\bar\tbf^\alpha\ \text{on }\Gamma_t^\alpha,
 \end{equation}
-and the returned normal is the unit gap gradient, $\grad_{\xbf}F=\norm{\grad_d F}\,\nbf$. Consequently the
-penalty traction over a tributary volume $V$ is the exact gradient of the penalty potential of
-\eqref{eq:penalty-potential},
-\begin{equation}\label{eq:conservative-force}
-\fbf=-\grad_{\xbf}\!\Big(\tfrac12\varepsilon_n\pos{-F}^2 V\Big)
-=\varepsilon_n\pos{-F}\,V\,\norm{\grad_d F}\,\nbf,
+with $\bm\sigma^\alpha$ the stress, $\bm b^\alpha$ the body force, and $\bar\ubf^\alpha,\bar\tbf^\alpha$ the
+prescribed data. The bodies are linear elastic, $\bm\sigma^\alpha=\mathbb C^\alpha:\bm\varepsilon(\ubf^\alpha)$,
+with $\mathbb C^\alpha$ the fourth-order elasticity tensor. On $\Gamma_c$ the bodies satisfy the contact
+conditions of Section~\ref{sec:tmap}, in which the gap and the normal are read from the atlas.
+
+\subsection{Reduction to the reference chart}\label{sec:govern:chart}
+
+Let the body be the image of a reference cube $U=[-r,r]^d$ under the trained chart decoder, $\xbf=
+\map{}(\bm\xi)=D_\theta(\bm\xi)$, with Jacobian
+\begin{equation}\label{eq:chart-jacobian}
+\bm J(\bm\xi)=\frac{\partial D_\theta}{\partial\bm\xi}\in\R^{d\times d},
 \end{equation}
-so chart-driven normal contact is energy-conservative. Using the un-projected gradient $\grad_{\hat d}\rho$
-in place of \eqref{eq:tangential-proj} gives $\nbf\neq\widehat{\grad_{\xbf}F}$, and the resulting force field
-has non-zero curl, so its circulation around a closed path does not vanish.
-\end{proposition}
+computed by automatic differentiation. A field on the body is represented on $U$, and its physical gradient
+follows from the reference gradient by the chain rule,
+\begin{equation}\label{eq:pushforward}
+\grad_{\xbf}(\cdot)=\grad_{\bm\xi}(\cdot)\,\bm J^{-1},\qquad
+\bm\varepsilon(\ubf)=\tfrac12\big(\grad_{\xbf}\ubf+\grad_{\xbf}^{\!\top}\ubf\big).
+\end{equation}
+The internal virtual work is pulled back to the reference cube by the Piola identity \citep{sun2026neuralatlas}:
+with $\bm P$ the first Piola--Kirchhoff stress and $\bm P_{\mathrm{chart}}=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}$
+its Piola transform, the element internal force is
+\begin{equation}\label{eq:piola}
+\fbf^a_i=\int_{U}P_{ij}\,\frac{\partial N_a}{\partial\xi_k}\,(\bm J^{-1})_{kj}\,\abs{\det\bm J}\,d\bm\xi
+=\int_{U}\bm P_{\mathrm{chart}}:\grad_{\bm\xi}N_a\,d\bm\xi ,
+\end{equation}
+with $N_a$ the shape functions and the volume element $dV=\abs{\det\bm J}\,d\bm\xi$. A steep neural chart can
+make $\bm J$ ill conditioned; $\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value
+decomposition $\bm J=\bm U\bm\Sigma\bm V^{\!\top}$ with the spectrum floored,
+\begin{equation}\label{eq:svd-stab}
+\bm\Sigma_{\!s}=\max(\bm\Sigma,\sigma_{\!f}),\qquad
+\bm J^{-1}=\bm V\,\bm\Sigma_{\!s}^{-1}\,\bm U^{\!\top},\qquad
+\abs{\det\bm J}=\textstyle\prod_i\Sigma_{s,i},
+\end{equation}
+and an element is admitted only if no singular value was floored and $\abs{\det\bm J}>\det_f$, with
+$\sigma_{\!f}=10^{-9}$, $\det_f=10^{-12}$. Equations \eqref{eq:piola}--\eqref{eq:svd-stab} are the sense in
+which the governing equations are solved \emph{in the chart}: the elasticity problem is integrated over the
+reference cube, and the only chart-dependent quantities are $\bm J^{-1}$ and $\abs{\det\bm J}$.
 
-\begin{proof}
-Differentiate $F=r-\rho(\dhat)$ with $r=\norm{Q^\top(\xbf-c)}$. The radial term gives $\grad r=Q\dhat$, and
-since $\partial\dhat/\partial(Q^\top\xbf)=r^{-1}(I-\dhat\dhat^\top)$ the chain rule gives
-$\grad[\rho(\dhat)]=r^{-1}Q(I-\dhat\dhat^\top)\grad_{\hat d}\rho=r^{-1}Q\,\grad_S\rho$. Collecting terms,
-$\grad_{\xbf}F=Q(\dhat-\grad_S\rho/r)=Q\,\grad_d F$, hence $\nbf=\widehat{\grad_{\xbf}F}$. Because the penalty
-potential depends on $\xbf$ only through $F$, the chain rule yields \eqref{eq:conservative-force}. Replacing
-$\grad_S\rho$ by the un-projected $\grad_{\hat d}\rho$ breaks the identity $\nbf=\widehat{\grad F}$, so the
-force is not a gradient and its circulation is generically non-zero.
-\end{proof}
+\begin{remark}[Atlas of overlapping charts]\label{rem:schwarz}
+A body of non-trivial topology, or one not covered by a single star-shaped or graph chart, is represented by
+several \emph{overlapping} charts whose chart-local solutions are reconciled by a multiplicative Schwarz
+iteration on the overlap graph, with a partition-of-unity blend on the overlaps \citep{sun2026neuralatlas}. The
+numerical examples below use one chart per body; the multi-chart coupling is exercised in the companion atlas
+study.
+\end{remark}
 
-The projection \eqref{eq:tangential-proj} is load-bearing for every non-spherical body, where
-$\grad_S\rho\neq\bm 0$. The forces that consume the matched triple $(\gn,\nbf,\norm{\fbf_N})$ are exactly
-those of Section~\ref{sec:govern}, so the chart and the level set are interchangeable at the force layer and
-only the geometry changes. On geometry both representations capture, this interchangeability is exact: on a
-sphere the radial chart reproduces the signed distance, gap and normal, to machine precision at every depth
-and orientation, and substituting the chart detector into a live two-sphere material-point collision is
-bit-identical in velocity, impulse, and penetration. The chart never does worse than the level set where both
-apply; it separates only where the level set degrades.
+\subsection{Virtual work}\label{sec:weak}
 
-\subsection{Multi-arc enumeration}\label{sec:tmap:multiarc}
+The weak form follows by testing \eqref{eq:balance} with an admissible variation $\delta\ubf^\alpha\in
+V^\alpha=\{\delta\ubf\in[H^1]^d:\delta\ubf=\bm0\ \text{on}\ \Gamma_u^\alpha\}$ and integrating by parts. The
+internal and external work balance the contact work $\delta W_c$ on $\Gamma_c$,
+\begin{equation}\label{eq:weak}
+\sum_{\alpha}\!\int_{\Omega^\alpha}\!\bm\sigma^\alpha:\bm\varepsilon(\delta\ubf^\alpha)\,dV
+-\sum_{\alpha}\Big[\int_{\Omega^\alpha}\!\bm b^\alpha\!\cdot\delta\ubf^\alpha\,dV
++\int_{\Gamma_t^\alpha}\!\bar\tbf^\alpha\!\cdot\delta\ubf^\alpha\,dA\Big]
++\delta W_c=0 ,
+\end{equation}
+where each volume integral is carried to the reference cube by the Piola transform \eqref{eq:piola},
+\begin{equation}\label{eq:weak-chart}
+\int_{\Omega^\alpha}\bm\sigma:\bm\varepsilon(\delta\ubf)\,dV
+=\int_{U^\alpha}\bm\sigma:\bm\varepsilon(\delta\ubf)\,\abs{\det\bm J}\,d\bm\xi .
+\end{equation}
+The contact term $\delta W_c$ is supplied in Section~\ref{sec:tmap}; the discrete form of
+\eqref{eq:weak}--\eqref{eq:weak-chart} is given in Section~\ref{sec:discr}.
 
-A boundary scan over $\map{A}$ enumerates every contact patch, a kinematic property the single foot of a
-closest-point projection cannot reproduce.
 
-\begin{lemma}[Completeness of the boundary scan]\label{lem:multiarc}
-Let $A$ carry a boundary chart $\map{A}:\Theta_A\to\partial\Omega_A$ and let $B$ be star-shaped with radial
-gap $\gn^B$. The chart active set $\mathcal A=\{\theta_A\in\Theta_A:\gn^B(\map{A}(\theta_A))<0\}$ is open, and
-the boundary scan recovers every connected component of $\mathcal A$: if $\mathcal A=\bigsqcup_{k=1}^{m}
-\mathcal A_k$ is a union of $m$ disjoint arcs, the scan returns all $m$. A single closest-point projection
-returns the global minimiser $\arg\min_{\theta_A}\gn^B$ and hence at most one component.
-\end{lemma}
+\section{Formulation of frictional contact by the transition map}\label{sec:tmap}
 
-\begin{proof}
-The composition $\gn^B\circ\map{A}$ is continuous, being the $C^1$ chart composed with the continuous radial
-gap \eqref{eq:radial-gap}; $\mathcal A$ is its open sublevel set $\{\,\cdot<0\}$, and an open subset of the
-parameter circle (in $d=2$) is a countable disjoint union of open arcs, each a contact patch. Evaluating
-$\gn^B$ on a dense sweep marks at least one sample in every arc, so all $m$ components are detected.
-Closest-point projection solves a single global minimisation and returns one point, in the lowest-valued
-component only.
-\end{proof}
+The contact conditions require, at each candidate point, the gap $\gn$ and the outward normal $\nbf$. The
+level set reads them from the ambient field through \eqref{eq:sdf-gap}. The atlas reads them from the boundary
+by composing one body's chart with the inverse chart of the other; this composition is the transition map.
 
-The scan evaluates the inverse-chart gap \eqref{eq:radial-gap} at each $\theta_A$ and marks the parameters with
-$\gn^B<0$, a one-dimensional sweep over $\theta$ in two dimensions or a geodesic cap scan in three.
-Figure~\ref{fig:tm-multiarc} shows the consequence on a non-convex pair: the scan reports two disjoint contact
-arcs where a single closest-point projection returns only the globally nearest foot and misses the second
-contact, which matters for cams, gears, and any geometry that touches in more than one place. On the cusped
-superformula of Section~\ref{sec:verif} the chart scan reports $\ge2$ arcs against the projection's one.
-Conventional node-to-surface and mortar schemes recover disjoint patches by segment search instead
-\citep{zavarise1998segment,puso2004mortar,fischer2005frictionless}.
+\subsection{Contact kinematics}\label{sec:tmap:kin}
 
-\begin{figure}
+On $\Gamma_c$ the bodies may not interpenetrate, contact pushes but does not pull, and pressure builds only
+where they touch. With $t_N=-\bm\sigma\nbf\cdot\nbf$ the contact pressure, the Signorini--Hertz--Moreau and
+Coulomb conditions are
+\begin{equation}\label{eq:signorini}
+\gn\ge0,\quad t_N\ge0,\quad \gn\,t_N=0;\qquad
+\norm{\tbf_T}\le\mu\,t_N,\quad \tbf_T=-\mu\,t_N\frac{\vbf_T}{\norm{\vbf_T}}\ \text{if}\ \vbf_T\neq\bm0,
+\end{equation}
+with $\tbf_T$ the tangential traction, $\vbf_T$ the slip velocity, $\mu$ the friction coefficient, and the
+sign convention $\gn<0\Leftrightarrow$ penetration.
+
+For two charted bodies $A,B$ the transition map carries a boundary parameter of $A$ to its mate on $B$,
+\begin{equation}\label{eq:tmap-def}
+\tmap:\ \theta_A\longmapsto\psi_B=\big(\map{B}^{-1}\circ\map{A}\big)(\theta_A),
+\end{equation}
+by pushing $\theta_A$ into physical space through $\map{A}$ and inverting $\map{B}$ at that point
+(Figure~\ref{fig:tm-concept}). The outward normal follows from the chart tangents
+$\tbf_i=\partial\map{}/\partial\xi^i$: in three dimensions it is their normalised cross product, in two
+dimensions the quarter-turn of the single tangent,
+\begin{equation}\label{eq:jacobian-normal}
+\nbf=\frac{\tbf_1\times\tbf_2}{\norm{\tbf_1\times\tbf_2}}\ \ (d{=}3),\qquad
+\nbf=\frac{\bm R_{90}\,\tbf}{\norm{\tbf}}\ \ (d{=}2),\qquad
+\tbf_i=\frac{\partial\map{}}{\partial\xi^i},
+\end{equation}
+with $\bm R_{90}$ the in-plane quarter rotation; the normal is objective, $\nbf(Q\xbf+\bm c)=Q\nbf(\xbf)$. The
+two single-valued chart families return the gap and normal in closed form, derived below. For a star-shaped
+obstacle the gap is a radius subtraction in the body frame: with $\bm d=Q_B^\top(\xbf-c_B)$, $r=\norm{\bm d}$,
+$\dhat=\bm d/r$,
+\begin{equation}\label{eq:radial-gap}
+\gn^B(\xbf)=r-\rho_B(\dhat) ,
+\end{equation}
+negative exactly when the point lies inside.
+
+\begin{figure}[t]
 \centering
-\resizebox{0.9\linewidth}{!}{%
-\begin{tikzpicture}[font=\footnotesize,>=Stealth,line join=round]
-  % ---------- body B (gently wavy top, filled below) ----------
-  \def\wavetop{
-    (-4.2,0.45)
-    .. controls (-3.3,0.95) and (-2.6,0.05) .. (-1.8,0.55)
-    .. controls (-1.0,1.0)  and (-0.4,0.35) .. (0.3,0.6)
-    .. controls (1.0,0.85)  and (1.7,0.15)  .. (2.4,0.5)
-    .. controls (3.1,0.85)  and (3.6,0.25)  .. (4.2,0.55)
-  }
-  \fill[orange!18]
-    \wavetop -- (4.2,-1.6) -- (-4.2,-1.6) -- cycle;
-  \draw[orange!85!black,thick] \wavetop;
-  \node[orange!60!black,font=\small\bfseries] at (3.3,-1.15) {body $B$};
-
-  % ---------- follower A: two-footed staple ----------
-  % circle centres
-  \coordinate (cL) at (-1.2,1.35);
-  \coordinate (cR) at ( 1.2,1.35);
-  \def\rr{0.55}
-  % top connecting bar
-  \draw[blue!70!black,thick,fill=blue!10]
-    (-1.2,1.95) -- (1.2,1.95) -- (1.2,2.25) -- (-1.2,2.25) -- cycle;
-  % the two circular feet
-  \fill[blue!10] (cL) circle (\rr);
-  \fill[blue!10] (cR) circle (\rr);
-  \draw[blue!70!black,thick] (cL) circle (\rr);
-  \draw[blue!70!black,thick] (cR) circle (\rr);
-  \node[blue!60!black,font=\small\bfseries] at (0,2.7) {follower $A$};
-
-  % ---------- contact arcs dipping below the curve ----------
-  % left foot: lower arc below curve (shallower contact)
-  \draw[red,line width=1.4pt] ([shift=(232:\rr)]cL) arc (232:308:\rr);
-  \node[red] at (-1.2,0.45) {arc 1};
-  % right foot: lower arc below curve (deeper contact)
-  \draw[red,line width=1.4pt] ([shift=(225:\rr)]cR) arc (225:315:\rr);
-  \node[red] at (1.2,0.5) {arc 2};
-
-  % ---------- single CPP on the deeper (right) contact ----------
-  \coordinate (lp) at (1.2,0.8);              % lowest point of right foot
-  \draw[teal!70!black,thick] (lp) circle (0.16);
-  \node[teal!60!black,anchor=west] at (2.05,0.05)
-    {single CPP: 1 foot};
-  \draw[teal!70!black,->] (3.0,0.2) .. controls (2.2,0.4) .. (lp);
-\end{tikzpicture}%
-}
-\caption{A boundary scan over body $A$'s chart evaluates the inverse-chart gap~\eqref{eq:radial-gap} at
-every $\theta_A$ and marks the parameters with $\gn^B<0$. On a nonconvex pair these form two disjoint
-contact arcs; a single closest-point projection returns only the globally nearest foot, missing the
-second contact.}
-\label{fig:tm-multiarc}
+\includegraphics[width=0.62\linewidth]{transition_map_3d_concept}
+\caption{The transition map $\tmap=\map{B}^{-1}\circ\map{A}$. A boundary point $\xbf=\map{A}(\theta_A)$ of body
+$A$ is located on body $B$ by inverting $B$'s chart, giving the mating parameter $\psi_B$, the foot
+$\map{B}(\psi_B)$, and the signed gap along the contact normal.}
+\label{fig:tm-concept}
 \end{figure}
 
-\subsection{Inverting the chart}\label{sec:tmap:invert}
-
-The cost of the transition map is dominated by the inverse chart $\map{B}^{-1}$, which takes three forms of
-increasing work. For a \emph{radial chart} the inverse is closed form: the boundary parameter is the
-direction $\psi=\angle\,Q_B^\top(\xbf-c_B)$ in two dimensions, or the normalised body-frame offset in three,
-at $O(1)$ cost per query. For a \emph{height chart} there is nothing to invert. The boundary is the graph
-$\map{}(x)=(x,h(x))$, so the domain coordinate $x$ is already the inverse-chart coordinate and the gap is a
-single height comparison,
+The inverse chart $\map{B}^{-1}$ takes three forms. For a radial chart it is the closed-form direction
+$\psi=\angle\,Q_B^\top(\xbf-c_B)$. For a height chart there is nothing to invert; the gap and normal are
 \begin{equation}\label{eq:height-gap}
 g_{\mathrm{vert}}(x,z)=z-h_\theta(x),\qquad
 \nbf=\frac{(-h_\theta'(x),\,1)}{\sqrt{1+h_\theta'^2(x)}},
 \end{equation}
-with the normal tilting from vertical in proportion to the surface slope $h_\theta'(x)$; the
-three-dimensional analogue is $\nbf=(-h_x,-h_y,1)/\sqrt{1+\norm{\grad h}^2}$. This is the form used by the
-rough rock-joint detector of Section~\ref{sec:cv7}, which therefore costs $O(1)$ per query with no Newton
-solve. For a general \emph{decoder chart} $D_B(\bm\xi)$ no closed form exists, and the inverse is the
-parameter whose image equals the query point, found by Newton iteration on the residual $D_B(\bm\xi)-\xbf$,
+with three-dimensional analogue $\nbf=(-h_x,-h_y,1)/\sqrt{1+\norm{\grad h}^2}$. For a decoder chart the
+inverse solves $D_B(\bm\xi)=\xbf$ by Newton iteration,
 \begin{equation}\label{eq:newton-invert}
-\bm\xi^{(k+1)}=\bm\xi^{(k)}-J^{-1}\big(D_B(\bm\xi^{(k)})-\xbf\big),\qquad
-J=\frac{\partial D_B}{\partial\bm\xi},
+\bm\xi^{(k+1)}=\bm\xi^{(k)}-\bm J^{-1}\big(D_B(\bm\xi^{(k)})-\xbf\big),\qquad
+\bm J=\frac{\partial D_B}{\partial\bm\xi},
 \end{equation}
-with $J$ the decoder Jacobian assembled by automatic differentiation. The solve is stabilised by flooring the
-singular values of $J$ and keeping its determinant consistent with the clamped spectrum, which guards against
-a near-folded chart; the iteration starts from the linear local-coordinate projection and terminates at
-$\norm{D_B(\bm\xi)-\xbf}<10^{-8}$.
+to the residual tolerance $10^{-8}$, with $\bm J^{-1}$ stabilised as in \eqref{eq:svd-stab}.
 
-\subsection{A conservative-large but sign-exact gap}\label{sec:tmap:bias}
-
-The radial gap is cheaper than a Euclidean distance because it is measured along the ray from the centre
-rather than perpendicular to the surface, and that choice enlarges its magnitude on tilted flanks. The
-following proposition makes the enlargement precise and shows that, despite it, the chart and the level set
-share an active set on star-shaped bodies.
-
-\begin{proposition}[Sign-exact radial gap and active-set equivalence]\label{prop:active-set}
-Let $\Omega_B$ be star-shaped about $c_B$ with $C^1$ radial chart $\rho_B$. For a query point $\xbf$ let
-$g_{\mathrm{rad}}=r-\rho_B(\dhat)$ be the radial gap \eqref{eq:radial-gap} and $g_\perp$ the signed
-perpendicular (Euclidean) gap, and let $\alpha$ be the angle between the ray $\dhat$ and the outward normal
-$\nbf$ at the radial foot. Then $\cos\alpha=\dhat\cdot\nbf>0$ and
-\begin{equation}\label{eq:radial-bias}
-g_{\mathrm{rad}}=\frac{g_\perp}{\cos\alpha}+O\!\big(g_\perp^2\big)
-\quad\Longrightarrow\quad
-\abs{g_{\mathrm{rad}}}\ge\abs{g_\perp},
+The normal returned with the radial gap must be its gradient, or the contact force is non-conservative. Since
+$F(\xbf)=r-\rho(\dhat)$ depends on $\xbf$ through a unit direction, the raw direction gradient is projected
+onto the tangent plane of the direction sphere,
+\begin{equation}\label{eq:matched-normal}
+\grad_S\rho=(I-\dhat\dhat^\top)\,\grad_{\hat d}\rho,\qquad
+\grad_d F=\dhat-\frac{\grad_S\rho}{r},\qquad
+\nbf=\widehat{\,Q\,\grad_d F\,}.
 \end{equation}
-and, because the multiplier $1/\cos\alpha$ is positive, $\operatorname{sign}g_{\mathrm{rad}}=
-\operatorname{sign}g_\perp$. Hence the chart and the level-set active sets coincide,
-\begin{equation}\label{eq:active-set}
-\{\xbf:g_{\mathrm{rad}}(\xbf)<0\}=\{\xbf:g_\perp(\xbf)<0\}=\Omega_B .
-\end{equation}
-\end{proposition}
 
-\begin{proof}
-Star-shapedness about $c_B$ means every ray from $c_B$ meets $\partial\Omega_B$ exactly once, so the outward
-normal at the foot cannot be orthogonal to the inward ray and $\cos\alpha=\dhat\cdot\nbf>0$, i.e.\
-$\alpha\in[0,\pi/2)$. Dropping a perpendicular from $\xbf$ to the tangent plane at the radial foot forms a
-right triangle whose hypotenuse is the along-ray segment of length $\abs{g_{\mathrm{rad}}}$ and whose leg
-along $\nbf$ is $\abs{g_\perp}$, with included angle $\alpha$; to first order $g_\perp=g_{\mathrm{rad}}
-\cos\alpha$, the surface curvature entering at $O(g_\perp^2)$. Since $\cos\alpha\in(0,1]$, multiplication by
-$1/\cos\alpha$ enlarges the magnitude and preserves the sign, and sign preservation gives \eqref{eq:active-set}.
-\end{proof}
+\begin{remark}[Energy consistency]\label{prop:matched-normal}
+Differentiating $F$ with $\partial\dhat/\partial(Q^\top\xbf)=r^{-1}(I-\dhat\dhat^\top)$ gives
+$\grad_{\xbf}F=Q\,\grad_d F=\norm{\grad_d F}\nbf$, so the normal of \eqref{eq:matched-normal} is the unit gap
+gradient and the penalty traction is the exact gradient of the penalty potential of \eqref{eq:penalty}. The
+un-projected gradient gives $\nbf\neq\widehat{\grad F}$, a force field with non-zero circulation.
+\end{remark}
 
-The enlargement is benign. The sign is exact, so the penalty activates over precisely the true penetrating set
-(Figure~\ref{fig:tm-radial-bias}); the magnitude is conservative-large, so an exterior point reads a
-marginally larger gap and a penetrating point a marginally deeper penetration, and the penalty is at worst
-slightly stiffer, never softer. The value equals the Euclidean distance only on the sphere and in the limit
-$g\to0$. The radial field is $C^1$ but not eikonal: $\norm{\grad g}$ can reach $\sim10^4$ in deep concave
-valleys, where the radial normal rotates rapidly. A perpendicular-foot refinement recovers the normal-projected
-distance but is used only for verification, since that foot jumps across the medial axis and would violate
-Corollary~\ref{cor:second-law} inside the integrator. The chart detector is thus an opt-in geometric input that
-leaves the force laws, the broad phase, and the discretisations of Section~\ref{sec:discr} untouched; floors
-and half-spaces, not star-shaped about any finite centre, remain on the signed-distance path. For height charts
-the analogous statement is that \eqref{eq:height-gap} is the small-slope-exact normal-projected gap rather than
-the closest-point distance, so the fidelity there lives in the asperity slopes, not the gap magnitude, as
-Section~\ref{sec:cv7} measures.
+\begin{remark}[Sign-exact gap]\label{prop:active-set}
+For a star-shaped body the radial gap and the perpendicular gap satisfy $g_{\mathrm{rad}}=g_\perp/\cos\alpha+
+O(g_\perp^2)$ with $\cos\alpha=\dhat\cdot\nbf>0$, so $\abs{g_{\mathrm{rad}}}\ge\abs{g_\perp}$ and the signs
+agree. The chart and level-set active sets therefore coincide, $\{g_{\mathrm{rad}}<0\}=\{g_\perp<0\}=\Omega_B$;
+the penalty is at worst slightly stiffer, never softer.
+\end{remark}
 
-\begin{figure}
+\begin{remark}[Multi-arc completeness]\label{lemma:multiarc}
+The chart active set $\{\theta_A:\gn^B(\map{A}(\theta_A))<0\}$ is the open sublevel set of a continuous
+function, hence a disjoint union of arcs. A sweep of $\map{A}$ marks every arc and recovers all contact
+patches (Figure~\ref{fig:tm-multiarc}), whereas a single closest-point projection returns at most one.
+\end{remark}
+
+\begin{figure}[t]
 \centering
-\resizebox{0.62\linewidth}{!}{%
-\begin{tikzpicture}[font=\footnotesize,>=Latex,line join=round]
-  % ---- geometry ----------------------------------------------------------
-  % wall inclined ~20 deg from vertical: direction (sin20, cos20)
-  \coordinate (W1) at (1.30,-2.20);   % wall bottom
-  \coordinate (W2) at (3.45, 3.70);   % wall top
-  % interior point c (lower-left)
-  \coordinate (c)  at (-0.70,-0.60);
-  % radial foot on the wall (ray crossing)
-  \coordinate (F)  at (1.85,-0.50);
-  % exterior point p along the ray c->F, beyond the wall
-  \coordinate (p)  at (3.55, 0.62);
-
-  % ---- shaded interior side of the wall ----------------------------------
-  \begin{scope}
-    \clip (-1.6,-2.4) rectangle (4.6,4.0);
-    \fill[teal!12]
-      ($(W1)!1!(W2)$) -- (W1) -- (-1.6,-2.4) -- (-1.6,4.0) --
-      ($ (W2) + (-1.6,0) $) -- (W2) -- cycle;
-  \end{scope}
-  % cleaner: just fill the half-plane left of the wall
-  \begin{scope}
-    \clip (-1.6,-2.4) rectangle (4.6,4.0);
-    \fill[teal!12] (W1) -- (W2) -- (-1.6,4.0) -- (-1.6,-2.4) -- cycle;
-  \end{scope}
-
-  % ---- the wall (body boundary) ------------------------------------------
-  \draw[teal,line width=1.6pt] (W1) -- (W2)
-        node[pos=0.93,right=2pt,teal] {wall $\partial\Omega$};
-
-  % ---- outward unit normal n at the radial foot --------------------------
-  % outward = to the right of the wall; normal dir (cos20, -sin20) rotated:
-  \coordinate (N) at ($(F)+(0.94,-0.34)$);
-  \draw[->,black,line width=0.9pt] (F) -- (N) node[above right=-1pt,black] {$n$};
-
-  % ---- radial ray  c -> foot -> p ----------------------------------------
-  \draw[violet,line width=1.0pt,->] (c) -- (p);
-  % along-ray gap segment foot->p (drawn in green over the ray)
-  \draw[teal!70!black] (F) -- (p);
-
-  % ---- perpendicular drop from p to the wall -----------------------------
-  % foot of perpendicular from p onto line (W1)-(W2)
-  \coordinate (Q) at ($(W1)!(p)!(W2)$);
-  \draw[red,line width=1.0pt] (p) -- (Q);
-  \draw[red,fill=red] ($(Q)+(-0.06,-0.06)$) rectangle ($(Q)+(0.06,0.06)$);
-  \node[red,below left=1pt and 0pt of Q,align=center] {perpendicular\\ foot};
-
-  % ---- angle alpha between normal and ray --------------------------------
-  \pic[draw=black,angle radius=0.95cm,angle eccentricity=1.28,
-       "$\alpha$"black] {angle = N--F--p};
-
-  % ---- points ------------------------------------------------------------
-  \fill[black] (c) circle (2.2pt) node[below left=0pt,black] {$c$};
-  \fill[black] (p) circle (2.2pt) node[above right=0pt,black] {$p$};
-  \fill[teal!70!black] (F) circle (2.2pt);
-  \node[teal!70!black,below=10pt,align=center] at ($(F)+(-0.15,-0.05)$)
-       {radial foot\\ $\rho(\hat d)$};
-
-  % ---- segment labels ----------------------------------------------------
-  \node[teal!70!black] at ($(F)!0.5!(p)+(0.18,0.30)$) {$g_{\mathrm{rad}}$};
-  \node[red] at ($(p)!0.5!(Q)+(0.34,0.02)$) {$g_\perp$};
-
-  % ---- boxed identity ----------------------------------------------------
-  \node[draw,rounded corners,inner sep=5pt,fill=gray!6,align=center,
-        font=\small] at (1.2,-3.15)
-       {$g_{\mathrm{rad}}=g_\perp/\cos\alpha
-         \ \Rightarrow\ |g_{\mathrm{rad}}|\ge|g_\perp|$};
-\end{tikzpicture}%
-}
-\caption{On an inclined flank the ray from the center meets the surface at angle $\alpha$ to the true
-normal, so the radial foot and the perpendicular foot differ and
-$g_{\mathrm{rad}}=g_\perp/\cos\alpha\ge g_\perp$. The sign is exact, which yields the active-set
-equivalence with the level set; the magnitude is conservative-large.}
-\label{fig:tm-radial-bias}
+\includegraphics[width=0.82\linewidth]{transition_map_multiarc_3d}
+\caption{Multi-arc contact. A two-footed follower meets a wavy obstacle along two disjoint patches; the
+boundary scan of Remark~\ref{lemma:multiarc} marks both, where a closest-point projection returns only the
+nearest foot.}
+\label{fig:tm-multiarc}
 \end{figure}
 
-%% ======================== 04_fourier_charts ========================
-\section{Fourier-feature charts and the resolution of asperity geometry}\label{sec:fourier}
+\subsection{Contact contribution to the weak form}\label{sec:weak:contact}
 
-The transition map of Section~\ref{sec:tmap} reads contact off the boundary charts, so its accuracy is the
-accuracy of those charts as representations of the geometry. A chart that smooths the asperity slopes returns
-a smoothed gap and a smoothed normal, and by the variational structure of Section~\ref{sec:govern} no
-downstream enforcement scheme can recover the lost detail. This section constructs the charts and isolates the
-single ingredient that lets a small network resolve sharp, rough, cusped boundaries that an ambient level set
-and a plain coordinate network alike smooth away: a fixed Fourier-feature encoding of the input. The level set
-is retained as a fair baseline, since it too is a coordinate network and inherits the same spectral bias as a
-plain chart.
-
-\subsection{Spectral bias as a kernel statement}\label{sec:spectral}
-
-A coordinate network is a function $f_\theta:\R^d\to\R$ of affine maps and $\tanh$ nonlinearities applied to
-the raw coordinate. Both objects this paper compares are of this form: an ambient neural signed-distance
-function $\phi_\theta(\xbf)$ of the spatial point, and a boundary chart $h_\theta(x)$ of the surface
-parameter. Both regress onto sampled data, and both inherit the spectral bias of \citet{rahaman2019spectral}.
-
-\begin{proposition}[Spectral bias of a coordinate network]\label{prop:ntk}
-Under gradient flow on the mean-squared loss, a wide coordinate multilayer perceptron has a
-translation-invariant, Laplace-like neural-tangent kernel whose spectrum decays as
-$\lambda(k)\sim\norm{k}^{-(d+1)}$. Diagonalising training in the Fourier basis, each mode of the residual
-relaxes independently,
-\begin{equation}\label{eq:ntk-decay}
-\hat f_\theta(k,t)-\hat z(k)\ \approx\ \big(\hat f_\theta(k,0)-\hat z(k)\big)\,e^{-\eta\,\lambda(k)\,t},
-\qquad \lambda(k)\sim \norm{k}^{-(d+1)},
+The contact term in \eqref{eq:weak} collects the normal pressure and the tangential traction against the
+variations of the normal gap $\gn$ and the tangential slip $\bm g_T$,
+\begin{equation}\label{eq:contact-vw}
+\delta W_c=\int_{\Gamma_c}\big(t_N\,\delta\gn+\tbf_T\!\cdot\delta\bm g_T\big)\,dA ,\qquad
+\delta\gn=\nbf\cdot(\delta\ubf^B-\delta\ubf^A),
 \end{equation}
-with $\eta$ the learning rate. Hence at any finite training budget $t$ the recovered field is low-pass: modes
-with $\norm{k}\gtrsim(\eta t)^{1/(d+1)}$ are essentially unlearned, and a fixed-capacity network cannot
-represent a boundary sharper than that cutoff.
-\end{proposition}
-
-\begin{proof}
-In the neural-tangent-kernel regime, training is kernel regression with the network kernel. A stationary
-kernel is diagonalised by the Fourier modes $e^{2\pi\mathrm{i}k\cdot x}$ with eigenvalues $\lambda(k)$, so the
-modes decouple and each relaxes as $e^{-\eta\lambda(k)t}$. The arccosine kernel of a $\tanh$ or ReLU network
-has the power-law spectrum $\lambda(k)\sim\norm{k}^{-(d+1)}$, so high $\norm{k}$ relaxes arbitrarily slowly.
-\end{proof}
-
-Proposition~\ref{prop:ntk} is the failure mode of the ambient level set, and it carries a mechanical
-consequence. A neural signed-distance function flattens the asperity flanks of a rock joint; through the
-strength law $\muapp=\tan(\phi_b+i)$ of \citet{patton1966multiple} a flattened mean asperity angle $i$
-under-predicts the apparent friction, so the kernel cutoff of \eqref{eq:ntk-decay} imposes a ceiling on the
-representable joint strength, derived in Section~\ref{sec:cv7}. A boundary chart of the \emph{raw} coordinate
-inherits the identical pathology: changing the domain of $f_\theta$ from the ambient field to the surface
-parameter does not change its spectral bias. The chart parametrisation alone does not beat the level set; the
-Fourier features do.
-
-\subsection{The Fourier-feature encoding and its kernel}\label{sec:banks}
-
-The remedy of \citet{tancik2020fourier} and \citet{rahimi2007random} replaces the raw coordinate by a fixed,
-non-trainable bank of sinusoids applied before the network. With the input normalised to the unit box,
-\begin{equation}\label{eq:normalize}
-\tilde x = \frac{2(x-x_{\mathrm{lo}})}{x_{\mathrm{hi}}-x_{\mathrm{lo}}}-1\in[-1,1]^d,
-\end{equation}
-and a bank $B\in\R^{K\times d}$ of $K$ frequency vectors, the encoding and the chart are
-\begin{equation}\label{eq:gamma}
-\gamma(x)=\big[\cos(2\pi B\tilde x),\ \sin(2\pi B\tilde x)\big]\in\R^{2K},
-\qquad
-h_\theta(x)=\mathrm{base}+\mathrm{MLP}_\theta\!\big(\gamma(x)\big).
-\end{equation}
-The bank $B$ is fixed for the life of the chart; only the network weights $\theta$ and the scalar offset
-$\mathrm{base}$, which carries the mean height so the network regresses only the deviation, are trained.
-Prepending $\gamma$ replaces the power-law kernel of \eqref{eq:ntk-decay} by a stationary, band-limited one.
-
-\begin{proposition}[Stationary Fourier-feature kernel and band limit]\label{prop:rff}
-The feature map \eqref{eq:gamma} induces the stationary kernel
-\begin{equation}\label{eq:kernel}
-k(\tilde x,\tilde x')=\gamma(\tilde x)\cdot\gamma(\tilde x')
-=\sum_{j=1}^{K}\cos\!\big(2\pi\,b_j\cdot(\tilde x-\tilde x')\big),
-\end{equation}
-depending only on the separation $\tilde x-\tilde x'$. For the deterministic geometric bank $\{f_k\}$ it is
-the band-limited sum $\tfrac1K\sum_k\cos(2\pi f_k(\tilde x-\tilde x'))$, flat to the cutoff $f_{\max}$. For the
-Gaussian bank $b_j\sim\mathcal N(0,\sigma^2 I_d)$ the expected kernel is, by Bochner's theorem, the isotropic
-\begin{equation}\label{eq:gauss-kernel}
-\mathbb E_B\big[k(\tilde{\bm u},\tilde{\bm v})\big]
-=\exp\!\big(-2\pi^2\sigma^2\norm{\tilde{\bm u}-\tilde{\bm v}}^2\big)
-\;\xrightarrow{\;d=2,\ \text{radial}\;}\;
-J_0\!\big(2\pi\sigma\norm{\tilde{\bm u}-\tilde{\bm v}}\big),
-\end{equation}
-flat to the cutoff $\sim 2\pi\sigma$. The induced kernel thus has a flat passband below an explicit, tunable
-cutoff, so every mode below cutoff is learned at a comparable rate.
-\end{proposition}
-
-\begin{proof}
-The identity $\cos a\cos a'+\sin a\sin a'=\cos(a-a')$ gives \eqref{eq:kernel} term by term. For the Gaussian
-bank, Bochner's theorem identifies the expected kernel with the Fourier transform of the spectral measure; for
-$b\sim\mathcal N(0,\sigma^2 I)$ the Gaussian characteristic function gives
-$\mathbb E[\cos(2\pi b\cdot\bm\Delta)]=e^{-2\pi^2\sigma^2\norm{\bm\Delta}^2}$, whose two-dimensional radial
-profile is $J_0(2\pi\sigma\norm{\bm\Delta})$.
-\end{proof}
-
-\begin{corollary}[Dimensional capacity advantage]\label{cor:capacity}
-To resolve a finest wavelength $\ell$ over a domain of size $L$ with a flat passband, a $(d{-}1)$-dimensional
-boundary chart tiles a $(d{-}1)$-cube of frequency space, needing $K\sim(L/\ell)^{d-1}$ features, whereas a
-$d$-dimensional ambient field tiles a $d$-cube and needs $K\sim(L/\ell)^{d}$. The boundary function meets a
-prescribed cutoff with a factor $L/\ell$ fewer features, and at fixed capacity resolves geometry the ambient
-field cannot.
-\end{corollary}
-
-Two properties make the encoding the right tool for geometry. The cutoff is explicit and tunable through
-$f_{\max}$, $\sigma$, or the harmonic order $K$, where the level set's smoothing is an intrinsic property of
-its architecture; and the bank is deterministic and frozen, so the encoding is a reproducible preprocessing
-of the input rather than a learned, run-dependent representation. Corollary~\ref{cor:capacity} is borne out
-by the measured Inada reconstruction---$2.3~\mu$m for the chart against $107~\mu$m for the ambient
-signed-distance function at more parameters (Section~\ref{sec:cv7}).
-
-This paper uses three charts, differing only in the domain each occupies and the bank it uses to tile
-frequency space; the training loop is identical across all three. The geometric bank gives equal coverage on
-a logarithmic frequency axis, suited to a profile with asperities spread across many wavelengths; the
-Gaussian bank gives isotropic two-dimensional coverage, suited to a height field over a patch; and the
-harmonic bank is periodic by construction, so a chart wrapped around the circle closes on itself.
-Table~\ref{tab:banks} collects the three banks, the charts they encode, and their parameters.
-
-\begin{table}
-\centering
-\caption{The three Fourier banks and the charts they encode. The geometric bank gives equal coverage on a
-logarithmic scale, the Gaussian bank isotropic two-dimensional coverage, and the harmonic bank is periodic so
-a chart on the circle closes up. The bank $B$ is fixed; only the network and a scalar offset are trained.}
-\label{tab:banks}
-\begin{tabular}{@{}llll@{}}
-\toprule
-Bank & Definition & Chart & Parameters \\
-\midrule
-Geometric (deterministic) & $B=\operatorname{geomspace}(0.5,f_{\max},K)$ &
-$h_\theta(x)$, $x\in\R$ & $K{=}192$, $f_{\max}{=}1500$ \\
-Gaussian random & $B_i\sim\mathcal N(0,\sigma^2 I)$ &
-$h_\theta(x,y)$ & $K{=}256$, $\sigma{=}8$ \\
-Harmonic (periodic) & $[\cos(k\psi),\sin(k\psi)]_{k=1}^{K}$ &
-$\rho_\theta(\psi)$, $\psi\in\Sph^1$ & $K{=}16$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The \emph{geometric} bank, $B=\operatorname{geomspace}(0.5,f_{\max},K)$ with $K=192$ and $f_{\max}=1500$,
-spaces its frequencies equally on a logarithmic scale and resolves a wide range of asperity wavelengths with a
-modest feature count; it carries the one-dimensional height chart $h_\theta(x)$ used for the rock-joint
-profile, whose measured surface requires of order $L/\Delta x\approx 3000$ resolvable wavelengths. The
-\emph{Gaussian random} bank, $B_i\sim\mathcal N(0,\sigma^2 I)$ with $K=256$ and $\sigma=8$, gives the isotropic
-two-dimensional coverage appropriate to a height field $h_\theta(x,y)$ over a patch, with the kernel
-$J_0(2\pi\sigma\norm{\cdot})$ of \eqref{eq:gauss-kernel} flat to $\sim 2\pi\sigma$; it is the same
-Gaussian-relief encoding carried by the boundary-fitted volumetric decoder of Section~\ref{sec:discr}. The
-\emph{harmonic} bank, $[\cos(k\psi),\sin(k\psi)]_{k=1}^{K}$ with $K=16$, is periodic by construction, which is
-mandatory for the radial chart $\rho_\theta(\psi)$ on the circle $\Sph^1$, where the radius must close up at
-$\psi=0,2\pi$; the radial chart additionally wraps its output in a softplus, $\rho=\mathrm{softplus}
-(\mathrm{base}+\Delta)$, to keep $\rho>0$. Figure~\ref{fig:arch} shows the encoding and the network it feeds.
-
-\begin{figure}
-\centering
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[font=\footnotesize,>={Stealth[length=2.2mm]},
-  box/.style={draw,rounded corners=2pt,align=center,inner sep=4pt,minimum height=12mm,line width=0.7pt},
-  tag/.style={draw,rounded corners=2pt,align=center,inner sep=3pt,font=\scriptsize}]
-  \node[box,fill=gray!8] (in) {input\\ $x$};
-  \node[box,fill=gray!8,right=5mm of in] (nm) {normalize\\ $\tilde x\in[-1,1]$};
-  \node[box,draw=teal!70!black,fill=teal!6,right=5mm of nm] (ff)
-    {Fourier features\\ $\gamma(x)=[\cos 2\pi B\tilde x,\ \sin 2\pi B\tilde x]$};
-  \node[box,draw=blue!70!black,fill=blue!6,right=5mm of ff] (mlp)
-    {$\mathrm{MLP}_\theta$\\ tanh, width 128, depth 4};
-  \node[box,draw=teal!70!black,fill=teal!6,right=5mm of mlp] (out)
-    {$h_\theta(x)=\mathrm{base}+\Delta$};
-  \draw[->] (in) -- (nm);
-  \draw[->] (nm) -- (ff);
-  \draw[->] (ff) -- (mlp);
-  \draw[->] (mlp) -- (out) node[midway,above,font=\scriptsize]{$+\,\mathrm{base}$};
-  \node[tag,draw=orange!80!black,fill=orange!8,below=5mm of ff] (t1) {FIXED: bank $B$ not trained};
-  \node[tag,draw=blue!70!black,fill=blue!6,below=5mm of mlp,xshift=8mm] (t2)
-    {TRAINED: weights $\theta$ + scalar base (Adam, cosine, MSE)};
-  \draw[orange!80!black,->,dashed] (t1) -- (ff);
-  \draw[blue!70!black,->,dashed] (t2) -- (mlp);
-\end{tikzpicture}%
-}
-\caption{The Fourier-feature chart architecture, drawn for the one-dimensional height chart. The coordinate is
-normalised to $[-1,1]$ by \eqref{eq:normalize} and expanded by the \emph{fixed} bank \eqref{eq:gamma} into
-$2K=384$ cosine/sine features; a $\tanh$ network (depth $4$, width $128$) maps those to a scalar deviation
-$\Delta$, offset by the learnable mean. Only the network weights $\theta$ and the offset are trained; the bank
-$B$ is frozen. The two- and three-dimensional charts replace the geometric bank with a Gaussian one, and the
-radial chart wraps the output in a softplus, leaving the rest unchanged.}
-\label{fig:arch}
-\end{figure}
-
-\subsection{Training and the verify-first protocol}\label{sec:train}
-
-Every chart is trained by the same procedure: normalize the input by \eqref{eq:normalize}, encode with the
-fixed bank \eqref{eq:gamma}, then regress the network onto sampled surface points by minibatch
-mean-squared error,
-%
-\begin{equation}\label{eq:mse}
-\mathcal L(\theta)=\frac{1}{\abs{\mathcal B}}\sum_{i\in\mathcal B}\big(h_\theta(x_i)-z_i\big)^2,
-\end{equation}
-%
-with Adam at learning rate $2\times10^{-3}$ and a cosine-annealing schedule. The networks are small and are
-trained in double precision, which conditions the geometry and the Jacobians used downstream, with a fixed
-random seed for reproducibility. Training uses only mean-squared-error regression, without curriculum or loss
-weighting, because the Fourier encoding rather than the optimiser carries the high frequencies.
-
-A trained chart \emph{is} geometry, and a corrupted chart silently corrupts every downstream solve, so a
-chart is admitted to a contact computation only after three checks. (i) \emph{Reconstruction fidelity}: the
-RMSE on the sampled surface points, reported as a fraction of the surface RMS, must reach a few percent.
-(ii) \emph{No element foldover}: for the volumetric decoder the chart-Jacobian determinant must satisfy
-$\det J>0$ on every element, since a folded chart has no valid pushforward. (iii) \emph{Discretization
-convergence}: a manufactured-solution study on the curved chart geometry must recover the $O(h^2)$ rate of
-the underlying P1 chart finite-element method, confirming that the trained geometry did not spoil the
-solver. A chart that fails, with relief amplitude too high so $\det J$ folds, or cutoff too low so the
-surface is under-resolved, is rejected, not patched.
-
-The Fourier contribution is isolated by a controlled ablation on the real Inada-granite tensile-fracture
-profile \citep{inada2020digitalrocks}, a self-affine surface with RMS $\approx 1.7$~mm. The same network, of
-identical width, depth, optimiser, and schedule, is trained twice on the measured points: once with the
-Fourier features active and once on the raw coordinate, the latter serving as the spectral-bias control.
-Because the profile is a deterministic surface, the metric is the reconstruction RMSE on the measured points,
-and the bank is band-limited below the sampling Nyquist so the fit is well posed.
-Figure~\ref{fig:curves} reports the two training curves and the recovered surfaces. With the Fourier features
-the chart descends through the asperity scales to a reconstruction RMSE of $0.003\%$ of the RMS and recovers
-the ablation window's mean slope angle $\bar i = 19.9^\circ$ (the full-profile capstone of
-Section~\ref{sec:cv7} measures the surface mean as $19.4^\circ$). The identical network on the raw coordinate
-plateaus at a spectral-bias floor of $7.6\%$ of RMS ($136~\mu$m) and low-passes the slopes to
-$\bar i = 11.5^\circ$. The two networks differ only in the input encoding, yet one converges to the surface
-while the other stalls at a smoothed approximation: the representation thesis reduced to its mechanism, on a
-real surface.
-
-\begin{figure}
-\centering
-\includegraphics[width=\linewidth]{fourier_training_curves_pub}
-\caption{Controlled ablation on the real Inada-granite profile \citep{inada2020digitalrocks}, one network
-trained twice. (a) Reconstruction RMSE versus iteration: the Fourier chart descends to $0.003\%$ of the
-surface RMS, while the \emph{identical} network fed the raw coordinate plateaus at a $7.6\%$ ($136~\mu$m)
-spectral-bias floor; only the input encoding differs. (b) The learned surfaces: the Fourier chart tracks the
-asperities and recovers the profile's mean slope angle $\bar i=19.9^\circ$, whereas the raw-coordinate network
-low-passes them to $\bar i=11.5^\circ$, under-resolving the slopes that set the friction angle through
-$\muapp=\tan(\phi_b+i)$.}
-\label{fig:curves}
-\end{figure}
-
-The same separation holds for the boundary-fitted volumetric decoder used by the chart finite-element method
-of Section~\ref{sec:discr}, where the relief is carried by the Gaussian bank. The Fourier decoder reconstructs
-the rough face to $2.2\%$ of RMS, a vanilla $\tanh$ decoder of equal capacity reaches only $48\%$, and an
-ambient three-dimensional neural signed-distance function of the same surface reaches $15.7\%$; the decoder
-additionally passes $\det J>0$ on every element and the $O(h^2)$ manufactured-solution check (measured rates
-$2.07$ and $1.83$). On the one-dimensional Inada profile the production height chart ($K=192$, $f_{\max}=1500$)
-reconstructs the surface to $2.3~\mu$m, about $0.1\%$ of the $1.7$~mm RMS, while the ambient neural
-signed-distance function reaches only $107~\mu$m---$47\times$ worse with \emph{more} parameters---and smooths
-the mean asperity angle from $19.4^\circ$ to $12.5^\circ$. Through the Patton law (Section~\ref{sec:cv7}) this
-smoothing under-predicts the peak shear strength by $61\%$: the asperity slopes the chart preserves are
-precisely the geometry that drives the contact mechanics.
-
-\subsection{Why charts resolve what the level set smooths}\label{sec:why}
-
-The advantage is a property of the kernel, not of the parametrisation. The level set is a coordinate network
-of the ambient point and carries the Laplace-like kernel of Proposition~\ref{prop:ntk}, whose spectral ceiling
-is an intrinsic, non-tunable consequence of the architecture; on rough or cusped geometry it filters away
-exactly the high frequencies that contact requires. The Fourier-feature chart carries the stationary,
-band-limited kernel of Proposition~\ref{prop:rff}, with a cutoff set explicitly to resolve the finest
-wavelength of interest and no spectral ceiling below it, and by Corollary~\ref{cor:capacity} it does so with a
-factor $L/\ell$ fewer features than the ambient field. The chart also stores geometry as a surface function,
-so its cost scales with the surface rather than the ambient volume, but the fidelity argument rests on the
-kernel.
-
-The ablation above is the load-bearing evidence that the Fourier features, not the chart parametrisation
-alone, do the work: a chart of the raw coordinate smooths the Inada profile to the same $7.6\%$ floor and the
-same $11.5^\circ$ angle as the level set, because it inherits the same spectral bias, and only the prepended
-bank brings the reconstruction to $0.003\%$ and the slope angle to its true value. The claim is therefore
-narrow and exactly what the measurements support. We do not assert that a boundary chart has a lower height
-RMSE than a level set on a well-sampled, single-valued surface; dense interpolation is easy for both. We
-assert that the level set smooths the asperity \emph{slopes} through an intrinsic spectral ceiling and thereby
-under-predicts strength and dilatancy, while a Fourier-feature chart with a tunable cutoff resolves those
-slopes. The scope is that height and surface charts represent single-valued geometry, the harmonic radial
-chart requires star-shaped boundaries, and the band limit is a chosen resolution. Within that scope the
-encoding converts a smoothing approximator into a faithful one, and every downstream result in this paper
-rests upon it.
-
-%% ======================== 05_discretization ========================
-\section{Discretisation in chart-based finite-element and material-point settings}\label{sec:discr}
-
-The regularised problem of Section~\ref{sec:govern} is discretised on two settings that share the same force
-expressions and the same $(\gn,\nbf)$ oracle: a chart-based finite-element method and a chart-based material
-point method. They differ only in how they carry the geometry of the chart, and the contrast isolates a
-bookkeeping subtlety in each. Throughout, the geometric input enters at a single place, which is what makes the
-atlas-versus-level-set comparison controlled.
-
-\subsection{Chart-finite-element pushforward and the consistent contact tangent}\label{sec:discr-fem}
-
-The chart finite-element method solves the elasticity problem on a reference parametric cube $U_i=[-r,r]^d$ and
-maps it to the curved physical body through the chart decoder $\map{i}$, whose Jacobian
-$\bm J_i=\partial\map{i}/\partial\bm\xi$ relates reference and physical gradients. Gradients on the cube push
-forward to physical gradients by the chain rule,
-\begin{equation}\label{eq:fem-pushforward}
-\grad_{\xbf}\ubf=\grad_{\bm\xi}\ubf\,\bm J_i^{-1},\qquad
-\bm F=\bm I+\grad_{\bm\xi}\ubf\,\bm J_i^{-1},
-\end{equation}
-and the change-of-variables factor $\abs{\det\bm J_i}$ turns the cube integral into the physical stiffness,
-\begin{equation}\label{eq:fem-assembly}
-\bm K_{ab}=\int_{U_i}\big(\grad_{\bm\xi}N_a\,\bm J_i^{-1}\big)^{\!\top}
-:\mathbb C:\big(\grad_{\bm\xi}N_b\,\bm J_i^{-1}\big)\,\abs{\det\bm J_i}\,d\bm\xi,
-\end{equation}
-with $N_a$ the shape functions and $\mathbb C$ the elasticity tensor. A steep neural chart can render $\bm J_i$
-nearly singular; the inverse and determinant are therefore formed through a singular-value-clamped operator that
-floors the singular values, while $\det\bm J_i>0$ (no fold-over) is monitored on every element. On the
-boundary-fitted rough geometry the pushforward passes a patch test and recovers the manufactured-solution rate
-$O(h^2)$ (measured exponents $2.07$ and $1.83$), so the discretisation error is controlled independently of the
-contact treatment. The penalty force $\fbf^{\,\mathrm N}=\varepsilon_n\pos{-\gn}A\,\nbf$ of
-Section~\ref{sec:govern} enters the chart residual work-conjugately, with $A$ the physical tributary area.
-
-A Newton solve requires the derivative of the contact force with respect to the displacement. At an active node
-the contact tangent gathers a normal stiffness, a friction--normal coupling, and a curvature term,
+the gap variation following from $\gn$ being measured along $\nbf$. The linearisation of $\delta W_c$ supplies
+the contact tangent at an active node,
 \begin{equation}\label{eq:contact-tangent}
-\bm K_c=\frac{\partial\fbf_{\mathrm{contact}}}{\partial\ubf}
-=\underbrace{\varepsilon_n A\,(\nbf\otimes\nbf)}_{\text{normal stiffness}}
-+\underbrace{\varepsilon_n A\,\mu\,(\tbf_{\mathrm{proj}}\otimes\nbf)}_{\text{friction--normal coupling}}
-+\underbrace{t_N A\,\frac{\partial\nbf}{\partial\ubf}}_{\text{curvature}} .
+\bm K_c=\varepsilon_n A\,(\nbf\otimes\nbf)
++\varepsilon_n A\,\mu\,(\tbf_{\mathrm{proj}}\otimes\nbf)
++t_N A\,\frac{\partial\nbf}{\partial\ubf},
 \end{equation}
-Because $\nbf$ tilts with the asperity slope, the rank-one block $\nbf\otimes\nbf$ couples the normal and
-tangential directions on a tilted asperity, where a flat-interface model would couple none; the
-friction--normal block is non-symmetric, the structural signature of a non-associative friction law. The
-curvature term carries the rotation of $\nbf$ as the surface deforms, the shape operator (Weingarten map) of
-the contact surface, supplied by the surface description through its second derivative. For the level set it is
-the SDF Hessian, and for the height chart it is the graph curvature,
+a normal stiffness, a non-symmetric friction--normal coupling with $\tbf_{\mathrm{proj}}=\vbf_T/\norm{\vbf_T}$
+the unit slip direction, and a curvature term $t_N A\,\partial\nbf/\partial\ubf$. The implementation assembles
+only the first two blocks and drops the curvature term, which costs quadratic convergence but not consistency,
+since the residual \eqref{eq:newton} carries the full geometry; the dropped term is the shape operator of the
+surface, the signed-distance Hessian for the level set and the graph curvature for the height chart,
 \begin{equation}\label{eq:shape-operator}
 \frac{\partial n_i}{\partial x_j}\bigg|_{\mathrm{SDF}}
-=\frac{1}{\norm{\grad\phi}}\big(\delta_{ik}-n_i n_k\big)\frac{\partial^2\phi}{\partial x_k\partial x_j},
+=\frac{\delta_{ik}-n_i n_k}{\norm{\grad\phi}}\frac{\partial^2\phi}{\partial x_k\partial x_j},
 \qquad
 \frac{\partial\nbf}{\partial\ubf}\bigg|_{\mathrm{chart}}
-=-\frac{h_\theta''(x)}{(1+h_\theta'^2)^{3/2}}\,(\tbf\otimes\tbf).
+=-\frac{h_\theta''(x)}{(1+h_\theta'^2)^{3/2}}(\tbf\otimes\tbf).
 \end{equation}
-On the smooth single-asperity benchmarks the curvature term is small, and the rank-one normal and
-friction--normal blocks with an Armijo line search drive the frictional Newton residual to $\sim10^{-9}$. The
-exception is the two-deformable, moving-master node-to-surface problem, where the contact point itself moves and
-the active set is non-smooth; there the residual settles at $1.5$--$6\%$ and does not shrink under refinement,
-a non-smoothness to be cured by a semismooth-Newton, augmented, or mortar treatment
-\citep{alart1991mixed,puso2004mortar,chouly2013nitsche} rather than a finer mesh.
+Equation~\eqref{eq:contact-vw} shows that $\delta W_c$ depends on the geometry through $(\gn,\nbf)$ alone, so a
+chart and a level set are interchangeable in the weak form.
 
-\subsection{Material-point coupling in physical space}\label{sec:discr-mpm}
+\subsection{Constitutive law for the contact interface}\label{sec:weak:enforce}
 
-The chart material point method stores particle velocity, gravity, and stress directly in physical space. The
-\emph{contact} force therefore needs no Jacobian pull-back: it scatters to the grid through the same
-particle-to-grid channel as gravity,
-\begin{equation}\label{eq:mpm-p2g}
-\fbf_I^{\mathrm{ext}}\ \mathrel{+}=\ \sum_p \fbf_p^{\,\mathrm{contact}}\,N_I(\bm\xi_p),
-\qquad
-\fbf_p^{\,\mathrm{contact}}=\varepsilon_n\,\pos{-\gn(\xbf_p)}\,V_p\,\nbf_p+\tbf_T\,V_p,
+The pressure $t_N$ is supplied by regularising the unilateral constraint. The penalty law is a one-sided
+spring active on penetration,
+\begin{equation}\label{eq:penalty}
+\Pi_c(\gn)=\tfrac12\varepsilon_n\pos{-\gn}^2,\quad
+t_N=\varepsilon_n\pos{-\gn},\quad
+\fbf^{\mathrm N}=\varepsilon_n\pos{-\gn}\,A\,\nbf ,
 \end{equation}
-with $N_I$ the grid shape function, $V_p$ the particle volume, and $\xbf_p=\map{i}(\bm\xi_p)+\ubf_p$ the
-particle position; forces and grid velocities already live in the same physical space, so the contact force is
-added verbatim. The \emph{constitutive} update on a curved chart, by contrast, does require the chart Jacobian.
-The reference velocity gradient must be pulled back to physical space, and the internal force scattered through
-the physical shape-function gradient,
-\begin{equation}\label{eq:mpm-pullback}
-\widetilde{\bm L}_p=\sum_I \vbf_I^{\mathrm{phys}}\,(\grad_{\bm\xi}N_I)(\bm\xi_p),\qquad
-\bm L_p=\widetilde{\bm L}_p\,\bm J_p^{-1},\qquad
-\fbf_I^{\mathrm{int}}=-\sum_p V_p\,\bm\sigma_p\,\big(\bm J_p^{-\top}\grad_{\bm\xi}N_I\big),
+with $\varepsilon_n$ the penalty stiffness, $\fbf^{\mathrm N}$ and $\fbf^{\mathrm T}$ the per-point normal and
+tangential contact forces, and $A$ a tributary area (or a particle volume in the material-point coupling). The augmented-Lagrangian law adds a persistent multiplier updated by Uzawa
+iteration,
+\begin{equation}\label{eq:al-pressure}
+t_N=\pos{\lambda-\varepsilon_n\gn},\qquad
+\lambda^{k+1}=\pos{\lambda^{k}-\varepsilon_n\gn(\ubf^{k+1})},
 \end{equation}
-with $\bm J_p=\partial\map{i}/\partial\bm\xi$. The contact channel of \eqref{eq:mpm-p2g} is exempt precisely
-because $\fbf_p^{\,\mathrm{contact}}$ is already a physical vector scattered by $N_I$, not by its gradient. The
-penalty spring adds a stability bound to the explicit step, $\Delta t_{\mathrm{contact}}\le0.5\sqrt{m_{\min}/
-\varepsilon_n}$, so the effective step is $\min(\Delta t_{\mathrm{CFL}},\Delta t_{\mathrm{contact}})$. The
-explicit path reproduces the Coulomb floor, returning $\muapp\approx0.34$ against an imposed $\mu=0.4$, but a
-mated rough-on-rough block is unstable in explicit penalty dynamics, so the material point method serves as a
-dynamic cross-check rather than the primary rough-joint solver (Section~\ref{sec:cv7}).
+recovering the exact pressure without $\varepsilon_n\to\infty$ \citep{alart1991mixed,simo1992augmented,
+laursen2002computational}. The Coulomb law is regularised by a slip-velocity scale $\varepsilon_T$,
+\begin{equation}\label{eq:friction-reg}
+\tbf_T=-\mu\,t_N\,\frac{\vbf_T}{\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}},\qquad
+\vbf_T=(\bm I-\nbf\otimes\nbf)\,\vbf ,\qquad
+\fbf^{\mathrm T}=\tbf_T\,A ,
+\end{equation}
+approaching the cone bound $\mu\,t_N$ for $\norm{\vbf_T}\gg\varepsilon_T$ and a stiff stick
+spring for $\norm{\vbf_T}\ll\varepsilon_T$.
 
-\subsection{The geometry as the single controlled variable}\label{sec:discr-dispatch}
+\begin{remark}[Dissipation]\label{cor:second-law}
+The law \eqref{eq:friction-reg} derives from the pseudo-potential $\Psi_T=\mu t_N\sqrt{\norm{\vbf_T}^2+
+\varepsilon_T^2}$ as $\tbf_T=-\partial\Psi_T/\partial\vbf_T$, and dissipates,
+$-\tbf_T\!\cdot\vbf_T=\mu t_N\norm{\vbf_T}^2/\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}\ge0$. With the conservative
+normal of Remark~\ref{prop:matched-normal} the chart interface is thermodynamically consistent, confirmed by
+the cyclic energy ledger of Appendix~\ref{app:supp}.
+\end{remark}
 
-The geometry enters the solver at exactly one place. A query of a batch of physical points returns the pair
-$(\gn,\nbf)$ from one of two evaluators,
+
+\section{Finite element formulation}\label{sec:discr}
+
+The weak form \eqref{eq:weak} is discretised by chart-based finite elements: linear tetrahedra on the
+reference cube $U$, pushed to the physical body by \eqref{eq:pushforward}. The physical shape-function
+gradients are $\grad_{\xbf}N_a=\grad_{\bm\xi}N_a\,\bm J^{-1}$, and the small-strain operator $\bm B_e$ is
+assembled from them in the usual way. With $\bm\sigma=\mathbb C:\bm\varepsilon$ the element internal force and
+tangent are integrated on $U$ with the stabilised volume factor,
+\begin{equation}\label{eq:fem-assembly}
+\fbf^{\mathrm{int}}_e=V_e^{\mathrm{phys}}\,\bm B_e^{\!\top}\bm\sigma_e,\qquad
+\bm K_e=V_e^{\mathrm{phys}}\,\bm B_e^{\!\top}\mathbb C\,\bm B_e,\qquad
+V_e^{\mathrm{phys}}=\abs{\det\bm J_e}\,V_e^{\mathrm{ref}} ,
+\end{equation}
+where $\bm J_e$ and $V_e^{\mathrm{phys}}$ use the SVD-floored operators of \eqref{eq:svd-stab} so an
+ill-conditioned chart cannot corrupt the assembly. (For a compressible Neo-Hookean response the same
+machinery uses the first Piola--Kirchhoff stress $\bm P=\mu(\bm F-\bm F^{-\top})+K\ln J\,\bm F^{-\top}$, with
+$\bm F=\bm I+\grad_{\xbf}\ubf$.)
+
+The discrete equilibrium gathers the internal force, the external force, and the contact force into the
+residual, solved by Newton iteration with a backtracking line search,
+\begin{equation}\label{eq:newton}
+\bm R(\ubf)=\fbf^{\mathrm{int}}(\ubf)-\fbf^{\mathrm{ext}}-\fbf^{\mathrm{contact}}(\ubf)=\bm0,\qquad
+(\bm K+\bm K_c)\,\Delta\ubf=-\bm R,\qquad \ubf\leftarrow\ubf+s\,\Delta\ubf,
+\end{equation}
+to $\norm{\bm R}<10^{-8}$ on the free degrees of freedom, with the contact force $\fbf^{\mathrm{contact}}$ and
+the contact stiffness $\bm K_c$ assembled from the node-to-surface element
+\eqref{eq:contact-residual}--\eqref{eq:contact-block} at the active nodes $\{\gn<0\}$. The geometry enters only through the detector query, which returns the pair
 \begin{equation}\label{eq:detector}
 (\gn,\nbf)=
 \begin{cases}
-\big(\phi_A(\xbf),\ \grad\phi_A/\norm{\grad\phi_A}\big), & \text{level set},\\[4pt]
+\big(\phi_A(\xbf),\ \grad\phi_A/\norm{\grad\phi_A}\big), & \text{level set},\\[3pt]
 \big(\gn^{\mathrm{chart}}(\xbf),\ \nbf^{\mathrm{chart}}(\xbf)\big), & \text{transition map},
 \end{cases}
 \end{equation}
-the second being the radial detector of Section~\ref{sec:tmap} for star-shaped bodies, or the height-chart gap
-$\gn=z-h_\theta(x)$ with normal $(-h_\theta',1)/\sqrt{1+h_\theta'^2}$ for single-valued joints. Both honour the
-same contract: a signed gap with $\gn<0$ in penetration and a unit outward normal. Everything downstream---the
-broad-phase cull, the active-set selection $\{\gn<0\}$, the penalty and augmented-Lagrangian forces, the
-friction law, the consistent tangent \eqref{eq:contact-tangent}, and both discretisations---reads only
-$(\gn,\nbf)$ and cannot tell which branch produced it. Substituting the atlas for the level set therefore
-changes one branch of \eqref{eq:detector} and nothing else, so the same solver, loading, and tolerances are
-applied to two geometries and the measured accuracy gap is charged to the geometry alone. On the real
-Inada-granite joint the chart returns a contact gap with $4.2\%$ RMS error against the analytic surface where
-the ambient signed-distance function returns $44.7\%$, a factor of $10.5$ on the quantity that drives contact,
-at $1.47\times$ the per-query cost and with no ambient field to store; Section~\ref{sec:cv7} traces this
-difference into the predicted strength and dilatancy.
+the chart branch being the radial gap \eqref{eq:radial-gap} or the height gap \eqref{eq:height-gap}. Both
+branches honour the same contract, so substituting one for the other changes a single evaluation and leaves
+the assembly, the Newton solve, and the tolerances untouched. On the boundary-fitted rough geometry the
+pushforward passes a patch test and recovers the $O(h^2)$ manufactured-solution rate, so the discretisation
+error is controlled independently of the contact treatment; the two-deformable, moving-master case leaves a
+non-smooth friction residual of a few percent that does not shrink under refinement and calls for a
+semismooth-Newton or mortar treatment.
+
+\subsection{Discrete contact element}\label{sec:discr:element}
+
+Contact is enforced node-to-surface. An active node $a$ in contact with the mating surface contributes the
+penalty normal force and the friction force to the residual, the discrete counterpart of the interface
+constitutive law \eqref{eq:penalty}--\eqref{eq:friction-reg},
+\begin{equation}\label{eq:contact-residual}
+\fbf^a_{\mathrm{contact}}=\varepsilon_n A\pos{-\gn}\,\nbf+\mu\,\varepsilon_n A\pos{-\gn}\,\tbf_{\mathrm{proj}},
+\end{equation}
+with $A$ the tributary area of the node, $\nbf$ the mating-surface normal, and $\tbf_{\mathrm{proj}}$ the unit
+slip direction. Linearising \eqref{eq:contact-residual} gives the $3\times3$ contact stiffness block scattered
+to the node,
+\begin{equation}\label{eq:contact-block}
+\bm K^a_c=\varepsilon_n A\,\big(\nbf\otimes\nbf+\mu\,\tbf_{\mathrm{proj}}\otimes\nbf\big),
+\end{equation}
+a symmetric normal stiffness and a non-symmetric friction--normal coupling. Where a Lagrange-multiplier element
+enforces the constraint exactly, the penalty element \eqref{eq:contact-residual}--\eqref{eq:contact-block}
+carries a finite stiffness $\varepsilon_n$ and a residual penetration $O(\varepsilon_n^{-1})$. The
+implementation assembles these two blocks and drops the curvature term $t_N A\,\partial\nbf/\partial\ubf$ of the
+full linearisation, derived in Appendix~\ref{app:linearization}.
 
 %% ======================== 06_verification ========================
-\section{Verification: closed-form hierarchy (CV-1--CV-6)}\label{sec:verif}
+\section{Numerical examples}\label{sec:examples}\label{sec:verif}
 
-We verify the method against six closed-form benchmarks, ordered as an ablation of geometric
-difficulty. The first four problems, CV-1 through CV-4, are convex, collinear, or superposable: their
-closed forms are linear combinations of known elastic kernels, and on them the radial chart of
-\S\ref{sec:tmap} reduces to the ambient level set. The last two, CV-5 and CV-6, break that
-equivalence. A cusped non-convex superformula and a self-similar fractal force the transition map and
-the neural signed-distance function (SDF) apart, and we measure the separation. We report both regimes
-with equal weight. The cases in which the chart buys nothing are not a weakness to hide; they fix the
-baseline, so that the CV-5 and CV-6 separation cannot be read as a tuned advantage.
+The method is exercised on a hierarchy of problems of increasing geometric difficulty. A verification ladder
+of six closed-form solutions (CV-1 through CV-6) is followed by validation on a real rough rock joint with no
+closed form (CV-7). Throughout, the chart detector of Section~\ref{sec:tmap} and the ambient neural
+signed-distance baseline are run on identical meshes, loads, and tolerances, so that any measured difference
+is charged to the geometric representation alone.
+
+We open with the closed-form ladder, ordered as an ablation of geometric difficulty. The first four problems,
+CV-1 through CV-4, are convex, collinear, or superposable: their closed forms are linear combinations of known
+elastic kernels, and on them the radial chart of \S\ref{sec:tmap} reduces to the ambient level set. The last
+two, CV-5 and CV-6, break that equivalence---a cusped non-convex superformula and a self-similar fractal force
+the transition map and the neural signed-distance function (SDF) apart, and we measure the separation. The
+cases in which the chart buys nothing fix the baseline, so the CV-5 and CV-6 separation cannot be read as a
+tuned advantage.
 
 Two conventions hold throughout. We write $\gn<0$ for penetration, where $\gn$ is the normal gap of
 \S\ref{sec:tmap}. Each benchmark is solved on a learned geometry---a trained neural signed-distance function,
@@ -1556,12 +825,11 @@ disc center with negligible shear, confirming the $D_4$-symmetric superposition 
 Across CV-1--CV-4 the learned geometry reproduces the contact-mechanics closed forms to $\sim
 0.15$--$1.6\%$ (CV-1, CV-3, CV-4) and to $\sim 5$--$11\%$ for frictional partial slip (CV-2), with the
 radial chart and the level set equivalent throughout. This is the floor the transition map must clear.
-It clears the floor here without buying anything, by construction. The next two benchmarks are where it
-starts to earn its place.
+It clears this floor without buying anything. CV-5 and CV-6 follow.
 
-\subsection{CV-5: the cusped non-convex superformula, the discriminating test}\label{sec:verif_cv5}
+\subsection{CV-5: the cusped non-convex superformula}\label{sec:verif_cv5}
 
-CV-5 is the first benchmark the transition map is built for. A rotating Gielis-superformula cam drives a
+CV-5 is the first benchmark on which the transition map and the level set differ. A rotating Gielis-superformula cam drives a
 free non-convex follower, and the cam's lobe tips are cusps. The problem tests whether the chart can
 hold a sharp normal where the ambient SDF cannot. The cam boundary is the superformula radius
 \citep{gielis2003generic}
@@ -1598,7 +866,7 @@ radial component from the raw gradient, so the penalty force is exactly the grad
 \paragraph{Measured separation.} On the cusped superformula the neural SDF reaches a gap error of
 $8\times10^{-3}\,L$ ($L$ the cam length scale) with a degraded normal: the median out-of-plane
 component is $\lvert n_z\rvert\sim 0.5$, tilting the normal off the two-dimensional surface. This is the
-spectral-bias ceiling, reached by design. The neural radial chart reaches a gap error of
+spectral-bias ceiling. The neural radial chart reaches a gap error of
 $3.8\times10^{-3}\,L$ and a median normal-angle error of $0.42^{\circ}$, roughly halving the gap error
 and recovering an in-plane normal. The chart also resolves a kinematic property the level set's single
 closest-point projection cannot: a boundary scan evaluates \eqref{eq:radial_gap_cv5} at every $\theta$
@@ -1614,7 +882,7 @@ contact kinematics, not the deformable solver.
 \begin{figure}
   \centering
   \includegraphics[width=\linewidth]{supershape_chart_vs_sdf_pub}
-  \caption{CV-5, the discriminating test. A rotating Gielis-superformula cam
+  \caption{CV-5, chart versus level set on a cusped boundary. A rotating Gielis-superformula cam
   \eqref{eq:superformula} with cusped lobes ($n_1<1$). The trained Fourier-feature radial chart
   $\rho_\theta:\Sph^1\to\R^{+}$ (left) reproduces the analytical gap and normal on the lobe tips and
   in the concave valleys, reaching a gap error of $3.8\times10^{-3}\,L$ and a median normal-angle
@@ -1701,8 +969,8 @@ $\sim5$--$11\%$). CV-5 and CV-6 are where the transition map is exercised: the r
 cusped non-convex boundary the SDF smooths and drives identical contact dynamics, and the recursive IFS
 chart resolves a fractal at any depth while a fixed-capacity SDF hits a measured refinement ceiling.
 Figure~\ref{fig:cv_summary} plots the per-benchmark L1 errors against the closed forms alongside the
-CV-5 chart-over-SDF separation. The distinctive value is not beating a level set on a sphere, where
-they are equivalent, but representing geometry, cusps and fractals, that a single neural SDF cannot.
+CV-5 chart-over-SDF separation. The chart and the level set are equivalent on convex geometry; they separate only on the cusps and fractals
+of CV-5 and CV-6, which a single neural SDF cannot represent.
 
 \begin{table}
   \centering
@@ -1733,21 +1001,20 @@ they are equivalent, but representing geometry, cusps and fractals, that a singl
   \includegraphics[width=\linewidth]{numerical_cv_summary_pub}
   \caption{The numerical CV suite in one view. Left: each benchmark's L1 error against the closed form,
   with CV-1/CV-3/CV-4 at $\le\!\sim\!1.6\%$ and CV-2 at $\sim11\%$ on the coarse mesh. Right: the CV-5
-  headline. The trained neural radial chart ($3.8\times10^{-3}L$, $0.42^{\circ}$) separates from the
+  chart-over-SDF separation. The trained neural radial chart ($3.8\times10^{-3}L$, $0.42^{\circ}$) separates from the
   neural SDF ($8\times10^{-3}L$, degraded normal) on the cusped superformula, the first benchmark on
   which the transition map and the level set are not equivalent.}
   \label{fig:cv_summary}
 \end{figure}
 
 %% ======================== 07_validation_cv7 ========================
-\section{Validation: emergent dilatancy on a real rock joint (CV-7)}\label{sec:cv7}
+\subsection{Validation: emergent dilatancy on a real rock joint (CV-7)}\label{sec:cv7}
 
 The closed-form hierarchy of Section~\ref{sec:verif} verifies the solver against problems whose answer is
 known, where the transition map's gains remain abstract: a sharper gap, a cheaper representation. This section
 closes the argument on a problem with no closed form and direct engineering stakes, the direct shear of a
 natural rock joint, where resolving or smoothing the asperity geometry changes the \emph{predicted shear
-strength} of the interface. The quantity on which the chart and the level set disagree is the one an engineer
-would design with.
+strength} of the interface. This is the quantity on which the chart and the level set disagree.
 
 \paragraph{What a direct-shear test of a rock joint measures.} A rock joint is a fracture surface inside rock: the two faces left behind when the rock splits. The faces are rough, and their bumps, the \emph{asperities}, interlock like two meshed sawteeth. In a direct-shear test, a press holds the two faces together under a fixed normal stress $\sigma_n$ and then slides the top face sideways over the bottom one while recording the shear stress $\tau$ needed to keep it moving. Because the asperities interlock, the top face cannot slide horizontally without also riding up the flanks of the bumps, and the joint opens vertically as it shears. That climbing is \emph{dilatancy}, and it makes the joint stronger than a flat sawcut would be, because part of the applied shear now does work lifting the normal load. Engineers summarize the measured resistance by the \emph{apparent friction}, the stress ratio $\muapp=\tau/\sigma_n$, and read it as an \emph{apparent friction angle} $\arctan\muapp$ that combines the material's base friction with the geometric climb. The asperity geometry, not a material constant, sets how much extra strength the climb supplies, so a method's accuracy on this test is decided by how faithfully it represents the bumps.
 
@@ -1758,12 +1025,12 @@ the real Inada profile (Section~\ref{sec:cv7-headline}), carry the machinery thr
 blocks (Section~\ref{sec:cv7-p1}) and a dilatancy-versus-roughness law (Section~\ref{sec:cv7-p2}), and close
 with the atlas-versus-level-set comparison on identical shear (Section~\ref{sec:cv7-payoff}). Three further
 studies---the transition-map detector inside the contact loop, a cyclic energy ledger that verifies
-Corollary~\ref{cor:second-law}, and an explicit material-point cross-check---are reported in
+Remark~\ref{cor:second-law}, and an explicit material-point cross-check---are reported in
 Appendix~\ref{app:supp}.
 
-\subsection{Problem, data, and the Patton anchor}\label{sec:cv7-data}
+\subsubsection{Problem, data, and the Patton anchor}\label{sec:cv7-data}
 
-The specimen is a real surface, not an idealised one: a tensile fracture in Inada granite (Digital Rocks Portal \#273, DOI~10.17612/QXSA-TK92; \citealp{inada2020digitalrocks}), scanned as a height map $z(x,y)$ that gives the surface elevation $z$ over the in-plane coordinates $(x,y)$. The scan is sampled at $23.4~\mu$m, and the surface is self-affine: its roughness repeats statistically across scales, with Hurst exponent $H\approx0.78$ and fractal dimension $D\approx2.2$, so asperities exist from the micron sampling up to the joint length. The root-mean-square roughness is $1.70$~mm, matching the published value. The point of using this specimen is that no equation predicts its shear response; geometric fidelity is the only thing standing between a method and the right answer.
+The specimen is a real surface, not an idealised one: a tensile fracture in Inada granite (Digital Rocks Portal \#273, DOI~10.17612/QXSA-TK92; \citealp{inada2020digitalrocks}), scanned as a height map $z(x,y)$ that gives the surface elevation $z$ over the in-plane coordinates $(x,y)$. The scan is sampled at $23.4~\mu$m, and the surface is self-affine: its roughness repeats statistically across scales, with Hurst exponent $H\approx0.78$ and fractal dimension $D\approx2.2$, so asperities exist from the micron sampling up to the joint length. The root-mean-square roughness is $1.70$~mm, matching the published value. No closed form predicts its shear response, so geometric fidelity alone determines the accuracy of a method on this test.
 
 Each of the two mating faces is carried by a learned height chart $h_\theta:\mathcal D\to\R$ (Section~\ref{sec:fourier}), a random-Fourier-feature MLP with weights $\theta$ that stores the surface as a graph $z=h_\theta(x)$ rather than as a field in the surrounding space. Because the surface is single-valued, with one height per in-plane point, the chart is already its own inverse coordinate. The transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which composes one face's boundary chart with the inverse of the other's, then needs no numerical inversion, and the signed gap reduces to a vertical offset. The next equation states that gap and the surface normal it carries.
 %
@@ -1774,7 +1041,7 @@ Each of the two mating faces is carried by a learned height chart $h_\theta:\mat
 %
 Here $\gn$ is the signed normal gap (negative when the point lies below the surface, i.e.\ in penetration), $\nbf$ is the unit outward normal built from the surface slope $h_\theta'(x)$, and the equation says simply that the gap is how far a point sits above or below the height graph. The slope $h_\theta'(x)$ is the moving part: it sets the normal direction, and through it the tilt of every contact force. The solver receives the small-slope vertical proxy of the gap, and the true foot point is recovered only for verification.
 
-The two faces are sheared under constant normal stress, with the normal degree of freedom solved to equilibrium at each shear increment, so the test is quasi-static direct shear. Friction is \emph{plain Coulomb}: the local coefficient $\mu=\tan\phi_b$ is held constant, where $\phi_b$ is the base friction angle of the rock material. There is \emph{no imposed dilatancy law}. The dilation and the apparent friction angle are therefore emergent outputs of the resolved asperity geometry, which is precisely what makes geometric fidelity the entire story. We report the apparent friction as the stress ratio $\muapp=\tau/\sigma_n$.
+The two faces are sheared under constant normal stress, with the normal degree of freedom solved to equilibrium at each shear increment, so the test is quasi-static direct shear. Friction is \emph{plain Coulomb}: the local coefficient $\mu=\tan\phi_b$ is held constant, where $\phi_b$ is the base friction angle of the rock material. There is \emph{no imposed dilatancy law}. The dilation and the apparent friction angle are therefore emergent outputs of the resolved asperity geometry. We report the apparent friction as the stress ratio $\muapp=\tau/\sigma_n$.
 
 The validation has one closed-form anchor, derived from the simplest interlocking surface. Patton
 \citep{patton1966multiple} idealised a joint as two mating sawtooth faces whose flanks rise at a single
@@ -1782,33 +1049,26 @@ asperity angle $i$. The following proposition derives the apparent friction of t
 on the resolved, tilted face, so that the Patton law is a consequence of plain Coulomb friction rather than an
 imposed constitutive rule.
 
-\begin{proposition}[Emergent Patton law and its anti-plane companion]\label{prop:patton}
+\begin{remark}[Emergent Patton law and its anti-plane companion]\label{prop:patton}
 Let a sawtooth flank rise at angle $i$, so the resolved contact normal is $\nbf=(-\sin i,\cos i)$ in the
 (shear, normal) frame, and let plain Coulomb friction $\norm{\tbf_T}=\mu t_N$ with $\mu=\tan\phi_b$ act on that
-face. Resolving the contact reaction onto the macroscopic axes, the apparent friction for shear \emph{across}
-the ridges is
+face. The contact reaction $\fbf=t_N\nbf+\mu t_N\tbf$, with $\tbf=(\cos i,\sin i)$ the up-flank tangent at the
+cone bound, resolves onto the macroscopic axes as $T=t_N(\sin i+\mu\cos i)$ and $N=t_N(\cos i-\mu\sin i)$, so
+the apparent friction for shear \emph{across} the ridges is
 \begin{equation}\label{eq:patton}
 \muapp=\frac{T}{N}=\tan(\phi_b+i)=\frac{\tan i+\mu}{1-\mu\tan i},
 \end{equation}
-with dilation rate $\dot u_n/\dot u_t=\tan i$, whereas for shear \emph{along} the ridges (anti-plane) it is
+with dilation rate $\dot u_n/\dot u_t=\tan i$ (the block climbs the flank). For shear \emph{along} the ridges
+(anti-plane) the slip is parallel to the ridge, the friction $\mu t_N$ acts on a facet inflated by $1/\cos i$
+with no climb, and
 \begin{equation}\label{eq:patton-along}
 \muapp=\frac{\mu}{\cos i},\qquad \text{dilation}=0 .
 \end{equation}
-A representation that smooths the slope $i\mapsto i'<i$ under-predicts the across-ridge strength by
+A representation that smooths the slope $i\mapsto i'<i$ thus under-predicts the across-ridge strength by
 $\Delta\muapp\approx\sec^2(\phi_b+i)\,(i-i')$.
-\end{proposition}
+\end{remark}
 
-\begin{proof}
-On the flank the contact reaction is $\fbf=t_N\nbf+\mu t_N\tbf$, with $\tbf=(\cos i,\sin i)$ the up-flank
-tangent at the cone bound. Projecting onto the macroscopic shear and normal axes gives
-$T=t_N(\sin i+\mu\cos i)$ and $N=t_N(\cos i-\mu\sin i)$, whose ratio is
-$(\tan i+\mu)/(1-\mu\tan i)=\tan(\phi_b+i)$; climbing $\mathrm d u_t$ along the flank raises the block by
-$\mathrm d u_n=\mathrm d u_t\tan i$. For slip along the ridge axis the velocity is parallel to the ridge, so
-the friction $\mu t_N$ acts on a facet inflated by $1/\cos i$ with no climb, giving $\muapp=\mu/\cos i$ and zero
-dilation. Linearising \eqref{eq:patton} in $i$ yields the strength loss.
-\end{proof}
-
-Proposition~\ref{prop:patton} ties strength directly to the resolved slope $i$, the quantity on which the chart
+Remark~\ref{prop:patton} ties strength directly to the resolved slope $i$, the quantity on which the chart
 and the level set disagree. The law is not imposed: plain Coulomb friction and the resolved tilt are supplied
 to the solver, and on a mating sawtooth the framework reproduces \eqref{eq:patton} to $0.00\%$, with the
 dilation rate equal to $\tan i$ to within $1\%$; the anti-plane response \eqref{eq:patton-along} is the
@@ -1827,13 +1087,13 @@ joint's strength and dilation under shear.}
 \label{fig:cv7-surfaces}
 \end{figure}
 
-\subsection{Chart versus level set on the real Inada profile}\label{sec:cv7-headline}
+\subsubsection{Chart versus level set on the real Inada profile}\label{sec:cv7-headline}
 
-The head-to-head fits two representations to the same Inada profile and then shears them. The first is the height chart $h_\theta$. The second is the comparison baseline: an ambient 2-D neural SDF $\phi(x,z)$, a plain coordinate MLP that learns the signed distance to the surface as a field in the plane, from whose zero level set we extract a reconstructed surface $h_{\rm SDF}(x)$. We compare the two on three things in turn: how well each reconstructs the surface, how well each captures the asperity slope, and what shear strength each then predicts.
+We fit two representations to the same Inada profile and then shear them. The first is the height chart $h_\theta$. The second is the comparison baseline: an ambient 2-D neural SDF $\phi(x,z)$, a plain coordinate MLP that learns the signed distance to the surface as a field in the plane, from whose zero level set we extract a reconstructed surface $h_{\rm SDF}(x)$. We compare the two on three things in turn: how well each reconstructs the surface, how well each captures the asperity slope, and what shear strength each then predicts.
 
 The reconstruction gap is large and one-signed. The height chart reproduced the measured surface to $2.3~\mu$m with 66k parameters; the ambient SDF reached only $107~\mu$m, $47\times$ worse, and did so with \emph{more} parameters (83k). The level set spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well. The mechanism is the spectral bias of a fixed-capacity coordinate MLP \citep{rahaman2019spectral}: such a network learns smooth, low-frequency content first and starves the sharp high-frequency detail. The Fourier-feature encoding of the chart defeats that bias \citep{tancik2020fourier}, whereas the plain SDF carries it intrinsically.
 
-Reconstruction error in heights is the wrong metric for contact. Friction and dilation depend on the asperity \emph{angle} $i=\arctan\abs{h'}$, the local slope of the surface, not on the height itself. On slope the two representations separate. The chart reproduced the mean asperity angle, $19.8^\circ$ against $19.4^\circ$ for the true surface, while the SDF's spectral bias smoothed it to $12.5^\circ$. Through the Patton law \eqref{eq:patton}, a smoothed slope is a softer joint: shearing the two representations, the level set under-predicted the peak shear strength by $61\%$. The total dilation, by contrast, was barely affected ($0.5\%$). The split is itself diagnostic. Dilation is set by the large-scale waviness the SDF does capture, while strength is controlled by the asperity slope the SDF smooths, so a strongly affected strength beside a barely affected dilation is the physical signature of where the level set fails, not a tuned outcome. Figure~\ref{fig:cv7-capstone} collects the results.
+Height reconstruction error is not the relevant metric for contact. Friction and dilation depend on the asperity \emph{angle} $i=\arctan\abs{h'}$, the local slope of the surface, not on the height itself. On slope the two representations separate. The chart reproduced the mean asperity angle, $19.8^\circ$ against $19.4^\circ$ for the true surface, while the SDF's spectral bias smoothed it to $12.5^\circ$. Through the Patton law \eqref{eq:patton} the smoothed slope yields a lower strength: shearing the two representations, the level set under-predicted the peak shear strength by $61\%$. The total dilation, by contrast, was barely affected ($0.5\%$). Dilation is set by the large-scale waviness the SDF captures, while strength is controlled by the asperity slope the SDF smooths; the strongly affected strength beside the barely affected dilation is consistent with this mechanism. Figure~\ref{fig:cv7-capstone} collects the results.
 
 \begin{figure}
   \centering
@@ -1843,14 +1103,14 @@ Reconstruction error in heights is the wrong metric for contact. Friction and di
   Coulomb friction on the resolved tilt; (c) the height chart resolves the asperities the ambient neural
   SDF smooths away (shaded); (d) the chart reconstructs the surface to $2.3~\mu$m and the SDF to
   $107~\mu$m, smoothing the mean asperity angle $19.4^\circ\!\to\!12.5^\circ$; (e) through the Patton law
-  this under-predicts the peak shear strength by $61\%$; (f) the headline numbers. The dilation, set by the
+  this under-predicts the peak shear strength by $61\%$; (f) the summary numbers. The dilation, set by the
   large-scale waviness the SDF does capture, is barely affected ($0.5\%$).}
   \label{fig:cv7-capstone}
 \end{figure}
 
 The defensible claim is narrow and stated as such. It is \emph{not} that the chart has a lower height RMSE than the SDF on a well-sampled single-valued profile, since dense interpolation of heights is easy for both. It is that the SDF smooths the asperity \emph{slopes}, and that the smoothing under-predicts strength through \eqref{eq:patton}, together with the storage scaling: the chart is $O(N_{\rm surface})$ with $O(1)$ queries and, with Fourier features, no spectral-bias ceiling, whereas the ambient SDF must represent a 2-D field whose zero set is the surface. This is the same scaling argument as the Koch ceiling (CV-6), here on a real surface spanning roughly $3.5$ decades of scale, from $23.4~\mu$m asperities over a $73$~mm joint. Single profiles are single-asperity noisy in their peak, so the reported strength uses the steady or ensemble response. The surfaces are single-valued, so the argument rests on the spectral-bias ceiling and storage, not on overhangs.
 
-\subsection{Phase 1: two mutually deformable decoder blocks}\label{sec:cv7-p1}
+\subsubsection{Phase 1: two mutually deformable decoder blocks}\label{sec:cv7-p1}
 
 The Inada result treats the blocks as rigid. Phase 1 makes both faces deformable. Two elastic blocks, each carried by a boundary-fitted Fourier chart decoder $D_X:\boldsymbol\xi\mapsto\xbf$ that maps a reference coordinate $\boldsymbol\xi$ to the deformed position $\xbf$ (Section~\ref{sec:fourier}), meet at a fully rough mating interface and exchange node-to-surface penalty and regularised Coulomb forces through the chart-FEM solver. Both faces are rough; neither is a flat platen; the contact is mutual. The roughness lives in the decoder geometry, not in an interface constitutive law, so dilation and strength again emerge from the resolved bumps rather than from a calibrated rule.
 
@@ -1909,7 +1169,7 @@ flanks (top to bottom), the spatial signature of the resolved roughness.}
 \label{fig:cv7-normal}
 \end{figure}
 
-\subsection{Phase 2: the dilatancy-versus-roughness law}\label{sec:cv7-p2}
+\subsubsection{Phase 2: the dilatancy-versus-roughness law}\label{sec:cv7-p2}
 
 Phase 2 asks how strength depends on roughness, and builds the dilatancy law from the geometry rather than calibrating one. Holding the friction coefficient and the loading protocol fixed and varying only the root-mean-square roughness of the decoder surface, the peak apparent friction rose monotonically from $0.61$ to $1.20$ as the surface RMS rose from $0.022$ to $0.066$~mm, with the emergent dilation tracking it ($0.018\to0.059$~mm). The trend is the expected one, in which a rougher joint mobilizes a higher apparent friction angle and dilates more. It is recovered here as an output of resolved geometry under plain Coulomb, in the direction of the empirical Barton trend \citep{barton1977shear,barton1990review}. The same monotone law appears when the spectral cutoff of the decoder is swept instead of the amplitude ($0.68\to1.21$), which isolates the resolved frequency content as the control. Across the entire sweep the decoder reconstruction stayed under $8\%$ of RMS, so the strength variation is geometry the chart resolves, not a reconstruction artifact. Figure~\ref{fig:cv7-roughness} plots the law.
 
@@ -1923,30 +1183,25 @@ Phase 2 asks how strength depends on roughness, and builds the dilatancy law fro
   \label{fig:cv7-roughness}
 \end{figure}
 
-\subsection{Atlas versus level set on identical shear: the payoff}\label{sec:cv7-payoff}
+\subsubsection{Atlas versus level set on identical shear}\label{sec:cv7-payoff}
 
-The two preceding subsections establish that strength and dilatancy are emergent properties of the resolved geometry. The payoff runs the \emph{identical} shear twice: once on the geometry from the atlas (the true rough surface) and once on the geometry from the ambient signed-distance function's smoothed zero level set, reading off the difference in the predicted mechanics. A band-limited rough surface is carried by a trained three-dimensional chart decoder, verified first: the Fourier decoder reconstructs the surface to $2.2\%$ of RMS, against $48\%$ for a vanilla $\tanh$ decoder and $\sim16\%$ for the ambient neural signed-distance function, with no element foldover and $O(h^2)$ chart-FEM convergence (Section~\ref{sec:fourier}). The same band-limited surface is then sheared under chart-FEM Coulomb friction.
+The two preceding subsections establish that strength and dilatancy are emergent properties of the resolved geometry. We run the \emph{identical} shear twice: once on the geometry from the atlas (the true rough surface) and once on the geometry from the ambient signed-distance function's smoothed zero level set, and read off the difference in the predicted mechanics. A band-limited rough surface is carried by a trained three-dimensional chart decoder, verified first: the Fourier decoder reconstructs the surface to $2.2\%$ of RMS, against $48\%$ for a vanilla $\tanh$ decoder and $\sim16\%$ for the ambient neural signed-distance function, with no element foldover and $O(h^2)$ chart-FEM convergence (Section~\ref{sec:fourier}). The same band-limited surface is then sheared under chart-FEM Coulomb friction.
 
-The emergent dilatancy is a geometric consequence of the resolved normal, made precise by the following proposition, which is the central claim the validation confirms.
+The emergent dilatancy is a geometric consequence of the resolved normal, made precise by the following
+remark.
 
-\begin{proposition}[Emergent dilatancy from resolved geometry]\label{prop:dilatancy}
+\begin{remark}[Emergent dilatancy from resolved geometry]\label{prop:dilatancy}
 Let a single-valued rough face $z=h(x)$ be carried by a height chart with resolved normal
 $\nbf=(-h',1)/\sqrt{1+h'^2}$ (eq.~\eqref{eq:cv7-gap}), and let plain Coulomb friction act with no constitutive
-dilation law. Wherever $h'\neq0$ the normal contact force $t_N\nbf$ has a non-zero shear-plane component, so a
-horizontal shear increment produces an emergent vertical opening with apparent dilation angle
+dilation law. The contact force $t_N\nbf$ tilts with $h'$, and the friction-projected slip rides the surface
+tangent, whose vertical component is $\abs{h'}/\sqrt{1+h'^2}$; integrating the climbing motion over the
+bearing asperities gives a non-zero apparent dilation angle wherever the slopes are resolved,
 \begin{equation}\label{eq:emergent-dilatancy}
 \tan\psi_{\mathrm{dil}}=\big\langle\,\abs{h'(x)}\,\big\rangle_{\text{bearing asperities}}=\langle\tan i\rangle,
 \end{equation}
 the slope-weighted asperity angle over the contacting set. Smoothing the surface drives $h'\to0$ and hence
 $\psi_{\mathrm{dil}}\to0$, so a representation that low-passes the slopes under-predicts the dilatancy.
-\end{proposition}
-
-\begin{proof}
-The contact force tilts with $\nbf$, which tilts with $h'$; the friction-projected slip rides the surface
-tangent, whose vertical component is $\abs{h'}/\sqrt{1+h'^2}$. Integrating the climbing motion over the bearing
-asperities gives the apparent dilation angle \eqref{eq:emergent-dilatancy}. When $h'\equiv0$ the force is
-purely normal, there is no climb, and $\psi_{\mathrm{dil}}=0$.
-\end{proof}
+\end{remark}
 
 On the atlas geometry the dilatancy emerges from the asperities with no effective angle imposed. With friction switched off, the apparent friction rises from $0$ to $0.171$, a pure geometric dilatancy with dilation angle $\approx9.7^\circ$ produced by interlocking alone, and with $\mu=0.3$ it rises from an initial $0.24$ to a peak of $0.467$, the dilatant strengthening of \eqref{eq:patton} read off the real geometry. On the SDF-smoothed geometry the same shear under-predicts the emergent dilatancy by $98\%$ (frictionless: $0.004$ against $0.171$, because the smoothed surface has almost no asperity slope and hence almost no dilatancy) and the shear strength by $35\%$ (with friction: $0.306$ against $0.467$). Table~\ref{tab:cv7-atlas-sdf} collects the comparison and Figure~\ref{fig:cv7-atlas-sdf} shows it. No dilation angle is supplied to either run; the geometry produces it, and the level set, by smoothing the geometry, fails to.
 
@@ -1984,7 +1239,7 @@ The result holds on real data, not only the synthetic band-limited surface. On a
 
 Three further studies carry the program beyond this headline and are reported in the supplementary appendix (Appendix~\ref{app:supp}): the transition-map height-chart detector routed as the FEM $(\text{gap},\text{normal})$ contract (active-set agreement $98.9\%$ for the chart against $95.8\%$ for the ambient SDF on $10^5$ query points, at $1.47\times$ the per-query cost), a cyclic stick/slip energy ledger that closes per cycle, and an explicit ChartMPM cross-check that reproduces the Coulomb friction floor.
 
-The scope of CV-7 is stated plainly. The blocks here are one deformable face on a rigid mating surface, or two single-realization deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the measured thesis is firm: the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength ($61\%$ Inada, $35\%$ synthetic) and dilatancy ($98\%$ synthetic frictionless) on a problem an engineer would design with.
+The scope of CV-7 is stated plainly. The blocks here are one deformable face on a rigid mating surface, or two single-realization deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength ($61\%$ Inada, $35\%$ synthetic) and dilatancy ($98\%$ synthetic frictionless).
 
 %% ======================== 08_discussion_conclusions ========================
 \section{Discussion, limitations, and conclusions}\label{sec:disc}
@@ -2001,7 +1256,7 @@ preconditions and limitations that bound the method, and concludes.
 The closed-form suite CV-1 through CV-4 is not built to flatter the chart. Each problem is convex, collinear,
 or superposable, so the boundary-to-boundary correspondence never comes into play: there is no non-convex
 multi-arc contact to enumerate, no cusp to resolve, and no curved-surface correspondence to invert. On all
-four the radial inverse-chart gap reduces to the level-set gap (Proposition~\ref{prop:active-set} with
+four the radial inverse-chart gap reduces to the level-set gap (Remark~\ref{prop:active-set} with
 $\cos\alpha\to1$), the two representations are interchangeable, and the neural geometry merely reproduces the
 closed forms. The discriminating evidence lives in CV-5 through CV-7, where the geometry is cusped, fractal, or
 rough. Reporting the equivalence regime is what makes the wins attributable to representation rather than to an
@@ -2043,11 +1298,11 @@ centre, so floors and rigid platens remain on the signed-distance path while the
 star-shaped obstacles. A height chart relaxes the need for a centre but represents the surface as a graph, so it
 admits no overhangs and no re-entrant detail; a genuinely re-entrant surface requires the full decoder atlas with
 Newton inversion at chart overlaps \eqref{eq:newton-invert}, the generalisation outlined below.
-\emph{Conservative-large, sign-exact, not eikonal.} By Proposition~\ref{prop:active-set} the radial gap is
+\emph{Conservative-large, sign-exact, not eikonal.} By Remark~\ref{prop:active-set} the radial gap is
 sign-exact, so the chart and the level-set active sets coincide on star-shaped bodies, but its magnitude is
 enlarged by $1/\cos\alpha$ and its gradient is not of unit length: $\norm{\grad g}$ can reach $\sim10^{4}$ in deep
 concave valleys. A perpendicular-foot refinement recovers the normal-projected distance but is reserved for
-verification, since that foot jumps across the medial axis and would violate Corollary~\ref{cor:second-law}.
+verification, since that foot jumps across the medial axis and would violate Remark~\ref{cor:second-law}.
 \emph{Storage versus query cost.} The recursive chart of CV-6 stores the generating rule in $O(1)$ and answers a
 query in $O(\text{depth})$ work, whereas a uniform level set must discretise the ambient field at its finest scale,
 $O(9^{n})$ storage; the level set answers each query more cheaply, by an $O(1)$ lookup, but its fixed capacity
@@ -2072,7 +1327,7 @@ the residual holding at $3.8$--$4.8\%$ and not shrinking under refinement. Its m
 the non-smoothness of moving-master node-to-surface contact, not a discretisation error, to be cured by a
 semismooth-Newton, augmented-Lagrangian, or mortar treatment of the tangential complementarity
 \citep{alart1991mixed,simo1992augmented,puso2004mortar,chouly2013nitsche}---a constraint-enforcement upgrade
-orthogonal to the geometric representation argued for here. It does not threaten the headline result, because the
+orthogonal to the geometric representation argued for here. It does not threaten the main result, because the
 emergent quantities are mesh-converged ($\muapp\to0.53\pm2\%$, dilation $\to0.063$~mm).
 \emph{A single band-limited realisation in small strain.} The rough-geometry validation rests on one band-limited
 surface realisation in small-strain elasticity; a single realisation is statistically spiky and the roughness sweep
@@ -2086,24 +1341,24 @@ where the level set fails.
 signed-distance gradient, and the chart detector drives CV-5 analytically and CV-7 numerically as an opt-in path
 rather than the default everywhere. The explicit cross-check reproduces the Coulomb floor
 ($\muapp\approx0.34$ against base $\mu=0.4$); what makes the eventual replacement conservative is the
-energy-consistency of Proposition~\ref{prop:matched-normal}, confirmed by the cyclic ledger of
+energy-consistency of Remark~\ref{prop:matched-normal}, confirmed by the cyclic ledger of
 Appendix~\ref{app:supp}, whose per-cycle balance closes from $1.09$ to $1.01$ on the deformable joint.
 
 \subsection{Conclusions and outlook}\label{sec:disc:concl}
 
 The geometric representation of the boundary, not the constraint-enforcement scheme, controls contact fidelity on
 geometrically hard contact. A fixed-capacity ambient signed-distance field learns low spatial frequencies first
-and high frequencies slowly or never (Proposition~\ref{prop:ntk}), so it smooths cusps, asperities, and fine
+and high frequencies slowly or never (Remark~\ref{prop:ntk}), so it smooths cusps, asperities, and fine
 relief and carries a non-smooth medial axis in any concavity; a boundary chart stores the same body as a function
 one dimension lower, with no interior and no medial axis, and a random-Fourier-feature input removes the spectral
-ceiling (Proposition~\ref{prop:rff}, Corollary~\ref{cor:capacity}), so the chart resolves the boundary where the
+ceiling (Remarks~\ref{prop:ntk} and~\ref{cor:capacity}), so the chart resolves the boundary where the
 ambient field cannot. Posed as a transition map on a learned atlas, the detector returns a conservative matched
-normal (Proposition~\ref{prop:matched-normal}) and a sign-exact active set (Proposition~\ref{prop:active-set}),
+normal (Remark~\ref{prop:matched-normal}) and a sign-exact active set (Remark~\ref{prop:active-set}),
 and it inherits the variational-inequality and frictional-dissipation structure of Section~\ref{sec:govern}
 unchanged. The closed-form ladder confirms the chart and the level set are equivalent on convex and superposable
 geometry (CV-1 through CV-4) and separate measurably on cusps (CV-5) and self-similar refinement (CV-6); the real
 Inada-granite joint (CV-7) shows that the apparent friction $\tan(\phi_b+i)$ and the normal dilation emerge from
-the resolved asperity geometry under plain Coulomb friction (Propositions~\ref{prop:patton}
+the resolved asperity geometry under plain Coulomb friction (Remarks~\ref{prop:patton}
 and~\ref{prop:dilatancy}), and that the level set, by smoothing the slopes, under-predicts strength by $61\%$ on
 the granite profile and dilatancy by $98\%$ on the synthetic block.
 
@@ -2676,6 +1931,40 @@ than hide it: the explicit MPM is a consistent check of the Coulomb response, an
 of Section~\ref{sec:cv7} rests instead on the quasi-static implicit chart-FEM, whose consistent tangent
 drives the contact Newton residual to $\sim10^{-9}$. An implicit or mortar contact treatment for the
 mated MPM case is the documented path to a full dynamic cross-check of dilatancy.
+
+\section{Linearisation of the contact contribution}\label{app:linearization}
+
+The consistent tangent of the contact virtual work \eqref{eq:contact-vw} follows from linearising the contact
+pressure and the gap variation. The penalty pressure and the gap variation linearise as
+\begin{equation}\label{eq:lin-pressure}
+\Delta t_N=\varepsilon_n\,\Delta\gn,\qquad
+\Delta\gn=\nbf\cdot(\Delta\ubf^B-\Delta\ubf^A),
+\end{equation}
+and the variation of the gap carries the rotation of the normal,
+\begin{equation}\label{eq:lin-gapvar}
+\Delta(\delta\gn)=(\delta\ubf^B-\delta\ubf^A)\cdot\Delta\nbf
+=(\delta\ubf^B-\delta\ubf^A)\cdot\frac{\partial\nbf}{\partial\ubf}\,(\Delta\ubf^B-\Delta\ubf^A).
+\end{equation}
+The normal contribution $\Delta t_N\,\delta\gn+t_N\,\Delta(\delta\gn)$ yields a penalty normal stiffness and a
+curvature term,
+\begin{equation}\label{eq:lin-normal}
+\bm K_N=\varepsilon_n A\,(\nbf\otimes\nbf)+t_N A\,\frac{\partial\nbf}{\partial\ubf},
+\end{equation}
+in which $\partial\nbf/\partial\ubf$ is the shape operator of \eqref{eq:shape-operator}. Linearising the
+regularised friction traction \eqref{eq:friction-reg} at the cone bound gives a friction--normal coupling and a
+friction--tangent term,
+\begin{equation}\label{eq:lin-friction}
+\bm K_T=\mu\,\varepsilon_n A\,(\tbf_{\mathrm{proj}}\otimes\nbf)
++\mu\,t_N A\,\frac{\partial\tbf_{\mathrm{proj}}}{\partial\ubf},
+\end{equation}
+the first block non-symmetric, the structural signature of the non-associative friction law. The
+implementation assembles the penalty normal stiffness and the friction--normal coupling,
+$\bm K^a_c=\varepsilon_n A(\nbf\otimes\nbf+\mu\,\tbf_{\mathrm{proj}}\otimes\nbf)$ of \eqref{eq:contact-block},
+and drops the curvature term $t_N A\,\partial\nbf/\partial\ubf$ and the friction--tangent term
+$\mu\,t_N A\,\partial\tbf_{\mathrm{proj}}/\partial\ubf$. On the smooth single-asperity benchmarks these terms
+are small and the frictional Newton residual still reaches $\sim10^{-9}$; on the two-deformable moving-master
+problem their omission, with the non-smoothness of the moving contact point, leaves the few-percent residual
+reported in Section~\ref{sec:discr}.
 
 \end{appendix}
 
