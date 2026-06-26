@@ -186,9 +186,10 @@ and \citet{haslinger1996numerical}, and surveyed in the variationally consistent
 \citet{wohlmuth2011variational}. The constraint is enforced numerically by penalty, augmented-Lagrangian, or
 Nitsche regularisation \citep{wriggers2006computational,alart1991mixed,simo1992augmented,laursen2002computational,
 chouly2013nitsche,chouly2015symmetric} and by mortar or dual-multiplier discretisation
-\citep{puso2004mortar,fischer2005frictionless,wohlmuth2011variational}. This entire layer is orthogonal to the
-present contribution: each scheme consumes a gap, a normal, and a pressure, and is indifferent to how the first
-two are produced. We change the geometric operator that produces them and leave the enforcement theory intact.
+\citep{puso2004mortar,fischer2005frictionless,wohlmuth2011variational}. Much of this layer is independent of the
+present contribution: penalty, augmented-Lagrangian, and Nitsche enforcement consume a gap, a normal, and a
+pressure, and are indifferent to how the first two are produced. We change the geometric operator that produces
+them and leave the enforcement theory intact.
 
 \paragraph{Closest-point projection and its deficiencies.}
 In the dominant node-to-segment tradition \citep{hallquist1985sliding,wriggers2006computational} the gap and
@@ -199,8 +200,8 @@ disjoint arcs \citep{zavarise2009nts,zavarise2009patchtest}. The
 transition map $\tmap=\map{B}^{-1}\circ\map{A}$ replaces this projection by a composition of charts: it is
 single-valued, edge-continuous, two-sided (no designated master), and recovers every contact arc at once
 (Section~\ref{sec:tmap}). The implicit-level-set material point method of \citet{liu2020implicit}, whose
-normal-gap form our force machinery reuses, and the level-set interface of \citet{kolev2003level} read the gap
-from a per-body field and so share the single-foot reading the transition map removes.
+normal-gap form our force machinery reuses, reads the gap from a per-body field and so shares the single-foot
+reading the transition map removes.
 
 \paragraph{Smoothing the master surface, and geometrically exact contact.}
 Much subsequent work repaired the projection by smoothing the surface it acts on: $C^1$ B\'ezier, Hermite, and
@@ -240,8 +241,8 @@ background mesh.
 Neural signed-distance and occupancy networks \citep{park2019deepsdf,mescheder2019occupancy,chen2019imnet} and
 periodic-activation networks \citep{sitzmann2020implicit} represent geometry implicitly and are trained by the
 eikonal regularisation of \citet{gropp2020igr}. They inherit the spectral bias of coordinate networks---the
-band-limited neural-tangent kernel \citep{jacot2018ntk,rahaman2019spectral,xu2020frequency} that low-passes
-high frequencies---so a network of fixed capacity smooths sharp detail. Fourier-feature input encoding
+neural-tangent kernel \citep{jacot2018ntk} whose spectral bias low-passes high frequencies
+\citep{rahaman2019spectral,xu2020frequency}---so a network of fixed capacity smooths sharp detail. Fourier-feature input encoding
 \citep{tancik2020fourier,rahimi2007random}, which underlies the positional encoding of neural radiance fields
 \citep{mildenhall2020nerf}, reshapes that kernel to a tunable cutoff; feature-grid level of detail
 \citep{takikawa2021nglod} is the spatial alternative. We apply the encoding not to an ambient field but to a
@@ -250,10 +251,10 @@ $O((L/\ell)^{d})$ for a volumetric field (Section~\ref{sec:fourier}; the neural-
 \citet{xie2022neuralfields}).
 
 \paragraph{Neural atlases and learning-informed mechanics.}
-Representing a surface by an atlas of learned charts originates in computer vision with AtlasNet
-\citep{groueix2018atlasnet} and the chart autoencoders of \citet{schonsheck2019chart}, which learn overlapping
-charts of a manifold for reconstruction but carry neither governing equations nor a transition structure between
-charts. The atlas here instead serves as the computational domain of a contact boundary-value problem, with the
+Representing a surface by learned charts originates in computer vision: AtlasNet
+\citep{groueix2018atlasnet} represents a surface as a collection of learned parametric patches, and the chart
+autoencoders of \citet{schonsheck2019chart} learn chart-like maps of a data manifold; both learn the charts for
+representation but carry neither governing equations nor a transition structure between them. The atlas here instead serves as the computational domain of a contact boundary-value problem, with the
 elasticity pulled back through the chart Jacobian and overlapping charts coupled by multiplicative Schwarz
 \citep{sun2026neuralatlas}. This places the work within a broader programme of learning- and geometry-informed
 computational mechanics---data-driven and physics-informed solvers \citep{kirchdoerfer2016datadriven,raissi2019pinn},
