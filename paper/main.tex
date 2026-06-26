@@ -563,7 +563,7 @@ problem reads: find $\ubf\in\mathcal S$ such that, for all $\delta\ubf\in\mathca
 \end{equation}
 where $\delta W_c$ is the contact virtual work on $\Gamma_c$, supplied in Section~\ref{sec:tmap}.
 
-\subsection{Reduction to the reference chart}\label{sec:govern:chart}
+\subsection{Pull-back to the reference chart by the Piola transform}\label{sec:govern:chart}
 
 The weak form \eqref{eq:weak} is still posed on the physical bodies $\Omega^\alpha$; to evaluate it on the
 atlas, each integral is pulled back to the reference chart. Each body is the diffeomorphic image of a reference
@@ -901,19 +901,19 @@ full linearisation, derived in Appendix~\ref{app:linearization}.
 %% ======================== 06_verification ========================
 \section{Numerical examples}\label{sec:examples}\label{sec:verif}
 
-The method is exercised on a hierarchy of problems of increasing geometric difficulty. A verification ladder
-of six closed-form solutions (CV-1 through CV-6) is followed by validation on a real rough rock joint with no
-closed form (CV-7). Throughout, the chart detector of Section~\ref{sec:tmap} and the ambient neural
-signed-distance baseline are run on identical meshes, loads, and tolerances, so that any measured difference
-is charged to the geometric representation alone.
+The method is exercised on a hierarchy of problems of increasing geometric difficulty, run as an ablation on a
+shared protocol: the chart detector of Section~\ref{sec:tmap} and the ambient neural signed-distance baseline
+are evaluated on identical meshes, loads, and tolerances, so any measured difference is charged to the
+geometric representation alone.
 
-We open with the closed-form ladder, ordered as an ablation of geometric difficulty. The first four problems,
-CV-1 through CV-4, are convex, collinear, or superposable: their closed forms are linear combinations of known
-elastic kernels, and on them the radial chart of \S\ref{sec:tmap} reduces to the ambient level set. The last
-two, CV-5 and CV-6, break that equivalence---a cusped non-convex superformula and a self-similar fractal force
-the transition map and the neural signed-distance function (SDF) apart, and we measure the separation. The
-cases in which the chart buys nothing fix the baseline, so the CV-5 and CV-6 separation cannot be read as a
-tuned advantage.
+The first group---Hertz line contact, Cattaneo--Mindlin partial slip, the Brazilian disc
+(Appendix~\ref{app:brazilian}), and the nine-disc unit cell---is convex, collinear, or superposable, and on it
+the radial chart reduces to the ambient level set; these cases fix the floor the transition map must clear and
+certify the chart-FEM solver before any claim of advantage. The cusped superformula and the self-similar Koch
+boundary break that equivalence and force the transition map and the neural signed-distance function (SDF)
+apart, and the rough rock joint of Section~\ref{sec:cv7} carries the separation to a problem with no closed
+form. Because the equivalence cases buy nothing, the separation measured on the hard geometries cannot be read
+as a tuned advantage.
 
 Two conventions hold throughout. We write $\gn<0$ for penetration, where $\gn$ is the normal gap of
 \S\ref{sec:tmap}. Each benchmark is solved on a learned geometry---a trained neural signed-distance function,
@@ -926,19 +926,13 @@ Each subsection states the physical problem, names the detector property it test
 acceptance target, describes the solve, and reports the measured result with its consequence for the
 chart-versus-level-set comparison.
 
-\subsection{The equivalence regime: CV-1--CV-4 (convex / superposable)}\label{sec:verif_equiv}
+\subsection{Hertz line contact: the convex baseline}\label{sec:ex_hertz}
 
-The first four benchmarks are the elastic and packing baselines, and they share one feature: each
-reduces to the superposition of known closed forms \citep{johnson1985contact,timoshenko1970elasticity}.
-None presents a non-convex, non-collinear, or curved-surface correspondence to compute, so none
-exercises the transition-map machinery. On a convex indenter the radial inverse-chart gap reduces to
-the SDF gap, and the two representations are interchangeable at the detector. We state this plainly
-because it bounds the claim of the paper: the chart's advantage is specific to hard geometry, and these
-four problems are not hard geometry. Their role is to certify the chart-FEM solver and to pin down the
-floor that the transition map must clear before any claim of advantage.
-
-\subsubsection{CV-1 (Hertz line contact)} Two elastic cylinders pressed together along a line form a
-contact patch whose half-width grows with the load (Figure~\ref{fig:cv1-bvp}). This is the canonical convex contact, and it tests
+This benchmark verifies that the chart-FEM solver and a neural-SDF indenter reproduce the elastic contact
+kernel on a convex geometry where the radial chart and the ambient level set are interchangeable at the
+detector, fixing the accuracy floor the transition map must clear. Two elastic cylinders pressed together along
+a line form a contact patch whose half-width grows with the load (Figure~\ref{fig:cv1-bvp}). This is the
+canonical convex contact, and it tests
 whether the chart-FEM solver and a neural-SDF indenter reproduce the elastic kernel where chart and
 level set agree. The closed form for the half-width under plane strain is
 %
@@ -1019,12 +1013,13 @@ level set coincide on a convex contact.}
 \label{fig:cv1-hertz}
 \end{figure}
 
-\subsubsection{CV-2 (Cattaneo--Mindlin partial slip)} A tangential load below the friction limit, applied
-to a Hertz patch, splits the contact into a central zone that sticks and an outer annulus that slips
-(Figure~\ref{fig:cv2-bvp}).
-This is the simplest frictional contact, and it tests whether the friction layer reproduces the
-stick/slip partition on a geometry where chart and level set still agree. With a tangential load
-$Q<\mu P$ (where $\mu$ is the friction coefficient and $P$ the normal load) on the CV-1 contact, the
+\subsection{Cattaneo--Mindlin partial slip: the frictional baseline}\label{sec:ex_cattaneo}
+
+This benchmark verifies that the regularized-friction layer recovers the stick/slip partition of a tangentially
+loaded Hertz patch on a geometry where chart and level set still coincide, isolating the friction model from any
+geometric effect. A tangential load below the friction limit, applied to a Hertz patch, splits the contact into
+a central zone that sticks and an outer annulus that slips (Figure~\ref{fig:cv2-bvp}). With a tangential load
+$Q<\mu P$ (where $\mu$ is the friction coefficient and $P$ the normal load) on the Hertz contact above, the
 two-dimensional line-contact partition obeys
 %
 \begin{equation}\label{eq:cattaneo}
@@ -1037,8 +1032,8 @@ contact half-width of CV-1. We measure $c$ against \eqref{eq:cattaneo} on a deep
 shear does not reproduce the edge-singular tangential traction. The stick radius matches to $\sim
 5$--$7\%$ at low $Q$, and the error rises to a mean of $\sim 11\%$ as $Q\to\mu P$. Near the friction
 limit the slip boundary sweeps across the contact faster than the node spacing can resolve, so the
-discrete stick radius coarsens. CV-2 inherits the CV-1 contact and adds only a friction layer, so the
-transition map stays dormant and the two representations remain equivalent. Figure~\ref{fig:cv2-traction}
+discrete stick radius coarsens. This benchmark inherits the Hertz contact above and adds only a friction layer,
+so the transition map stays dormant and the two representations remain equivalent. Figure~\ref{fig:cv2-traction}
 shows the recovered contact tractions: the elliptical Hertz normal pressure and the Cattaneo--Mindlin
 tangential traction, whose stick/slip transition at $r=c$ marks the boundary between the locked core and
 the slipping annulus.
@@ -1139,104 +1134,13 @@ distribution.}
 \label{fig:cv2-traction}
 \end{figure}
 
-\subsubsection{CV-3 (Brazilian disc)} A disc compressed across a diameter develops a tensile stress
-transverse to the load and a compressive stress along it (Figure~\ref{fig:cv3-bvp}). This is a pure stress boundary-value problem
-with no contact detector engaged, and it tests the chart-FEM stress recovery on a learned disc
-geometry. For a disc of diameter $D$ and thickness $t$ under pole load $P$, the center stress state is
-%
-\begin{equation}\label{eq:brazilian}
-\sigma_{xx} = +\frac{2P}{\pi D t}\quad\text{(tensile)},\qquad
-\sigma_{yy} = -\frac{6P}{\pi D t}\quad\text{(compressive)},
-\end{equation}
-%
-with $\sigma_{xx}$ the stress transverse to the load and $\sigma_{yy}$ the stress along it. This state
-follows from superposing two Flamant load-point fields and a uniform biaxial tension that restores a
-traction-free rim \citep{hondros1959evaluation,timoshenko1970elasticity}. The chart-FEM solve
-reproduces the center stresses of \eqref{eq:brazilian} to $1.62\%$ in $\sigma_{xx}$ and $0.58\%$ in
-$\sigma_{yy}$ against the exact closed form. The constant-strain triangulation leaves a $\sim 1.6\%$
-center floor that plateaus under mesh refinement, a discretization error rather than a modeling error,
-and we exclude the pole singularity from the comparison. With no detector engaged, the chart contributes only
-the domain map, and chart and level set are again interchangeable. Figure~\ref{fig:cv3-brazilian}
-shows the recovered $\sigma_{yy}$ field over the disc, with the compressive column under the loaded
-diameter and the transverse tensile band that splits the specimen, both following the Flamant
-superposition.
+\subsection{Nine-disc unit cell: superposable multi-contact packing}\label{sec:ex_ninedisc}
 
-\begin{figure}[t]
-\centering
-\begin{minipage}[b]{0.49\linewidth}
-\centering
-\begin{tikzpicture}[>=Stealth, line cap=round]
-  % --- geometry ---
-  \def\Rd{2.0} % disc radius
-  \coordinate (O) at (0,0);
-  \coordinate (Ntop) at (0,\Rd);     % north pole
-  \coordinate (Sbot) at (0,-\Rd);    % south pole
-
-  % --- the disc (learned geometry, chartA) ---
-  \draw[chartA] (O) circle (\Rd);
-
-  % --- top loading platen ---
-  \fill[grayFill, draw=grayStroke, line width=1pt]
-        (-1.05,2.05) rectangle (1.05,2.42);
-  % applied load P pressing DOWN onto the top pole
-  \foreach \x in {-0.6,-0.2,0.2,0.6}{
-     \draw[load] (\x,3.05) -- (\x,2.12);
-  }
-  \node[coralDark, font=\small] at (1.65,2.72) {$P$};
-
-  % --- bottom platen as fixed reaction base ---
-  \fixedbase{-1.05,-2.05}{1.05,-2.05}
-  % upward reaction P
-  \foreach \x in {-0.6,-0.2,0.2,0.6}{
-     \draw[react] (\x,-3.05) -- (\x,-2.12);
-  }
-  \node[grayStroke, font=\small] at (1.65,-2.72) {$P$};
-
-  % --- center stress state ---
-  % compressive sigma_yy : vertical INWARD arrows (toward centre)
-  \draw[normaln] (0,1.20) -- (0,0.42);
-  \draw[normaln] (0,-1.20) -- (0,-0.42);
-  % tensile sigma_xx : horizontal OUTWARD arrows (away from centre)
-  \draw[normaln] (0.32,0) -- (1.10,0);
-  \draw[normaln] (-0.32,0) -- (-1.10,0);
-  % center marker
-  \fill[coralDark] (O) circle (0.8pt);
-  % labels, placed clear of the arrows
-  \node[cBlue!60!black, font=\scriptsize, align=left, anchor=west]
-       at (0.42,0.78) {$\sigma_{xx}>0$\\[-1.5pt]\itshape tensile};
-  \node[cBlue!60!black, font=\scriptsize, align=right, anchor=east]
-       at (-0.42,-0.78) {$\sigma_{yy}<0$\\[-1.5pt]\itshape compressive};
-
-  % --- rim traction-free label ---
-  \coordinate (rim) at (148:\Rd);
-  \draw[grayStroke, line width=0.5pt] (rim) -- ($(rim)+(-0.7,0.35)$);
-  \node[bcnode, anchor=east] at ($(rim)+(-0.78,0.35)$) {traction-free rim};
-
-  % --- diameter dimension D ---
-  \draw[dimen] (-\Rd-0.65,-\Rd) -- (-\Rd-0.65,\Rd);
-  \draw[grayStroke, line width=0.4pt] (-\Rd,\Rd) -- (-\Rd-0.78,\Rd);
-  \draw[grayStroke, line width=0.4pt] (-\Rd,-\Rd) -- (-\Rd-0.78,-\Rd);
-  \node[grayStroke, font=\small, anchor=east] at (-\Rd-0.72,0) {$D$};
-\end{tikzpicture}\\[3pt]
-{\footnotesize (a) boundary-value problem}
-\end{minipage}\hfill
-\begin{minipage}[b]{0.49\linewidth}
-\centering
-\includegraphics[width=\linewidth]{liusun_fig23_brazilian_sigma_yy_pub}\\[3pt]
-{\footnotesize (b) recovered $\sigma_{yy}$ field}
-\end{minipage}
-\caption{CV-3, the Brazilian disc. (a) The boundary-value problem: a disc of diameter $D$ and thickness $t$
-compressed across a diameter by load $P$ through flat platens; the centre develops a transverse tensile stress
-$\sigma_{xx}=2P/\pi D t$ and an axial compressive stress $\sigma_{yy}=-6P/\pi D t$ (Flamant superposition), with
-the rim traction-free, and no contact detector engaged. (b) The vertical stress $\sigma_{yy}$ recovered on the
-learned disc geometry by the chart-FEM solver: the compressive load column and the transverse tensile field
-reproduce the Flamant-superposition closed form away from the pole singularity.}
-\label{fig:cv3-bvp}\label{fig:cv3-brazilian}
-\end{figure}
-
-\subsubsection{CV-4 (nine-disc unit cell)} A $3\times3$ array of discs under isotropic confinement loads
-each interior disc through four equal contacts at its poles (Figure~\ref{fig:cv4-bvp}). This is a packing problem whose symmetry
-collapses it to a superposition of Brazilian solutions, and it tests whether the charts add by
+This benchmark verifies that the charts add by superposition across multiple simultaneous contacts on a
+symmetric packing whose closed form collapses to two perpendicular Brazilian solutions, again a regime in which
+chart and level set remain equivalent. A $3\times3$ array of discs under isotropic confinement loads each
+interior disc through four equal contacts at its poles (Figure~\ref{fig:cv4-bvp}). This is a packing problem
+whose symmetry collapses it to a superposition of Brazilian solutions, and it tests whether the charts add by
 superposition across multiple contacts. No diagonal contacts form, because $2\sqrt2\,R>2R$; by $D_4$
 symmetry every disc sees four equal inward loads $N$ at its north, south, east, and west poles, and
 reflection parity makes friction inactive. The unit cell is then the superposition of two perpendicular
@@ -1251,8 +1155,8 @@ cell reproduces \eqref{eq:nine_disc} to $0.15\%$ in $\sigma_{xx}$ and $0.01\%$ i
 measured in-plane anisotropy of $0.16\%$ and a center shear stress below the solver tolerance. Two
 caveats accompany the result: the equal-$N$ collapse is exact only for rigid loading platens, and this
 is the per-disc unit cell rather than a full $N$-body explicit-contact solve, so the contacts only
-place the load poles. The charts add by superposition exactly as in CV-3, and chart and level set stay
-equivalent. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
+place the load poles. The charts add by superposition exactly as for the Brazilian disc
+(Appendix~\ref{app:brazilian}), and chart and level set stay equivalent. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
 fields across the array; the pattern repeats identically from disc to disc and is equibiaxial at each
 center, the spatial signature of the symmetry that the closed form assumes.
 
@@ -1347,11 +1251,12 @@ Across CV-1--CV-4 the learned geometry reproduces the contact-mechanics closed f
 radial chart and the level set equivalent throughout. This is the floor the transition map must clear.
 It clears this floor without buying anything. CV-5 and CV-6 follow.
 
-\subsection{CV-5: the cusped non-convex superformula}\label{sec:verif_cv5}
+\subsection{Cusped superformula cam: holding a sharp normal}\label{sec:verif_cv5}
 
-CV-5 is the first benchmark on which the transition map and the level set differ. A rotating Gielis-superformula cam drives a
-free non-convex follower, and the cam's lobe tips are cusps (Figure~\ref{fig:cv5-bvp}). The problem tests whether the chart can
-hold a sharp normal where the ambient SDF cannot. The cam boundary is the superformula radius
+This is the first benchmark on which the transition map and the level set diverge: it demonstrates that the
+radial chart holds a sharp surface normal at a cusped lobe tip where the ambient neural SDF cannot. A rotating
+Gielis-superformula cam drives a free non-convex follower, and the cam's lobe tips are cusps
+(Figure~\ref{fig:cv5-bvp}). The cam boundary is the superformula radius
 \citep{gielis2003generic}
 %
 \begin{equation}\label{eq:superformula}
@@ -1493,11 +1398,13 @@ and a single closest-point projection recovers only one foot.}
   \label{fig:cv5_chart_vs_sdf}
 \end{figure}
 
-\subsection{CV-6: the Koch fractal, resolution independence and the SDF ceiling}\label{sec:verif_cv6}
+\subsection{Koch fractal interface: resolution independence and the SDF ceiling}\label{sec:verif_cv6}
 
-CV-6 mates two Koch snowflakes, a boundary generated by a four-contraction iterated-function system
-(IFS, scale $1/3$) evaluated to recursion depth $n$ (Figure~\ref{fig:cv6-bvp}). The benchmark tests what happens to each
-representation as geometric detail refines without bound. The snowflake is not star-shaped for $n\ge
+This benchmark demonstrates that the recursive chart represents a self-similar boundary at $O(1)$ storage as
+geometric detail refines without bound, whereas a fixed-capacity neural SDF hits a measurable accuracy ceiling.
+It mates two Koch snowflakes, a boundary generated by a four-contraction iterated-function system (IFS, scale
+$1/3$) evaluated to recursion depth $n$ (Figure~\ref{fig:cv6-bvp}), and measures how the storage cost and the
+boundary error of each representation scale as the recursion depth grows. The snowflake is not star-shaped for $n\ge
 2$, so the radial gap of CV-5 no longer applies. Here the chart is the recursive generating rule
 itself, with the IFS doubling as a bounding hierarchy for a pruned recursive descent. The
 representation costs of chart and level set are asymmetric, and that asymmetry is the point.
@@ -1702,13 +1609,15 @@ of CV-5 and CV-6, which a single neural SDF cannot represent.
 \end{figure}
 
 %% ======================== 07_validation_cv7 ========================
-\subsection{Validation: emergent dilatancy on a real rock joint (CV-7)}\label{sec:cv7}
+\subsection{Validation: emergent dilatancy on a real rock joint}\label{sec:cv7}
 
-The closed-form hierarchy of Section~\ref{sec:verif} verifies the solver against problems whose answer is
-known, where the transition map's gains remain abstract: a sharper gap, a cheaper representation. This section
-closes the argument on a problem with no closed form and direct engineering stakes, the direct shear of a
-natural rock joint, where resolving or smoothing the asperity geometry changes the \emph{predicted shear
-strength} of the interface. This is the quantity on which the chart and the level set disagree.
+This example validates the method on a problem with no closed form---the direct shear of a natural rock
+joint---where the boundary-fitted chart resolves the asperity slopes the ambient SDF smooths, so the level set
+under-predicts the predicted shear strength of the interface. The closed-form hierarchy of
+Section~\ref{sec:verif} verified the solver against problems whose answer is known, where the transition map's
+gains remained abstract: a sharper gap, a cheaper representation. Here the gains carry direct engineering
+stakes, because resolving or smoothing the asperity geometry changes the \emph{predicted shear strength}, the
+quantity on which the chart and the level set disagree.
 
 \paragraph{What a direct-shear test of a rock joint measures.} A rock joint is a fracture surface inside rock: the two faces left behind when the rock splits. The faces are rough, and their bumps, the \emph{asperities}, interlock like two meshed sawteeth. In a direct-shear test, a press holds the two faces together under a fixed normal stress $\sigma_n$ and then slides the top face sideways over the bottom one while recording the shear stress $\tau$ needed to keep it moving. Because the asperities interlock, the top face cannot slide horizontally without also riding up the flanks of the bumps, and the joint opens vertically as it shears. That climbing is \emph{dilatancy}, and it makes the joint stronger than a flat sawcut would be, because part of the applied shear now does work lifting the normal load. Engineers summarize the measured resistance by the \emph{apparent friction}, the stress ratio $\muapp=\tau/\sigma_n$, and read it as an \emph{apparent friction angle} $\arctan\muapp$ that combines the material's base friction with the geometric climb. The asperity geometry, not a material constant, sets how much extra strength the climb supplies, so a method's accuracy on this test is decided by how faithfully it represents the bumps.
 
@@ -2178,7 +2087,7 @@ half-width, and the planar reduction of CV-2, whose stick-radius exponent is $1/
 than the axisymmetric $1/3$. The plane-strain solver reaches these regimes; we leave full
 three-dimensional Hertz to future work.
 
-\subsection{CV-1 --- Hertz normal contact}\label{app:hertz}
+\subsection{Hertz normal contact}\label{app:hertz}
 
 Two elastic bodies of radii $R_1,R_2$ and moduli $(E_1,\nu_1),(E_2,\nu_2)$ are pressed
 together by a normal force $F$. Hertz theory replaces this two-body problem with a single
@@ -2239,7 +2148,7 @@ cube-root growth of the axisymmetric radius in \eqref{eq:hertz-a}. The subsurfac
 a Hertzian half-plane pressure over $[-a,a]$ is the McEwen solution
 \citep[Eq.~4.49]{johnson1985contact}, evaluated for the stress-bulb figures.
 
-\subsection{CV-2 --- Cattaneo--Mindlin frictional partial slip}\label{app:cattaneo}
+\subsection{Cattaneo--Mindlin frictional partial slip}\label{app:cattaneo}
 
 A tangential load $Q<\mu P$ is applied to a pre-formed Hertz contact of radius $a$ and
 peak pressure $p_0$ under normal load $P$. Because the tangential load stays below the
@@ -2277,7 +2186,7 @@ counterpart of the normal force--approach law. It softens as $Q$ rises and the s
 gives way. We accept the numerical solution when $c/a$ agrees to $<1\%$, the integral
 $\int q\,\mathrm{d}A = Q$ to $<1\%$, and $q(r)$ in \eqref{eq:cattaneo-q} agrees pointwise.
 
-\subsection{CV-3 --- Brazilian disc}\label{app:brazilian}
+\subsection{Brazilian disc}\label{app:brazilian}
 
 A disc of diameter $D=2R$ and thickness $t$ is compressed diametrally by a force $P$. The
 solution superposes two Flamant load-point charts at the poles $(0,\pm R)$ on a uniform
@@ -2320,7 +2229,71 @@ where $\Delta_D$ is the change in diameter along the load line. The prefactor an
 $-(1-\nu)/2$ term are robust, while the logarithmic argument carries the calibration of the
 contact width $b$.
 
-\subsection{CV-4 --- Nine-disc equibiaxial unit cell}\label{app:ninedisc}
+\paragraph{Chart-FEM verification (no contact detector).} The Brazilian disc is a pure stress boundary-value
+problem with no contact detector engaged, so it certifies the chart-FEM stress recovery on a learned disc
+geometry in isolation from the contact formulation of Section~\ref{sec:tmap}. The chart-FEM solve reproduces the
+center stresses \eqref{eq:brazilian-center} to $1.62\%$ in $\sigma_{xx}$ and $0.58\%$ in $\sigma_{yy}$ against
+the exact closed form. The constant-strain triangulation leaves a $\sim 1.6\%$ center floor that plateaus under
+mesh refinement, a discretization error rather than a modeling error, and we exclude the pole singularity from
+the comparison. With no detector engaged the chart contributes only the domain map, so the chart and the level
+set are interchangeable here; the example certifies the solver, not the detector
+(Figure~\ref{fig:brazilian-verif}).
+
+\begin{figure}[t]
+\centering
+\begin{minipage}[b]{0.49\linewidth}
+\centering
+\begin{tikzpicture}[>=Stealth, line cap=round]
+  \def\Rd{2.0} % disc radius
+  \coordinate (O) at (0,0);
+  \coordinate (Ntop) at (0,\Rd);
+  \coordinate (Sbot) at (0,-\Rd);
+  \draw[chartA] (O) circle (\Rd);
+  \fill[grayFill, draw=grayStroke, line width=1pt]
+        (-1.05,2.05) rectangle (1.05,2.42);
+  \foreach \x in {-0.6,-0.2,0.2,0.6}{
+     \draw[load] (\x,3.05) -- (\x,2.12);
+  }
+  \node[coralDark, font=\small] at (1.65,2.72) {$P$};
+  \fixedbase{-1.05,-2.05}{1.05,-2.05}
+  \foreach \x in {-0.6,-0.2,0.2,0.6}{
+     \draw[react] (\x,-3.05) -- (\x,-2.12);
+  }
+  \node[grayStroke, font=\small] at (1.65,-2.72) {$P$};
+  \draw[normaln] (0,1.20) -- (0,0.42);
+  \draw[normaln] (0,-1.20) -- (0,-0.42);
+  \draw[normaln] (0.32,0) -- (1.10,0);
+  \draw[normaln] (-0.32,0) -- (-1.10,0);
+  \fill[coralDark] (O) circle (0.8pt);
+  \node[cBlue!60!black, font=\scriptsize, align=left, anchor=west]
+       at (0.42,0.78) {$\sigma_{xx}>0$\\[-1.5pt]\itshape tensile};
+  \node[cBlue!60!black, font=\scriptsize, align=right, anchor=east]
+       at (-0.42,-0.78) {$\sigma_{yy}<0$\\[-1.5pt]\itshape compressive};
+  \coordinate (rim) at (148:\Rd);
+  \draw[grayStroke, line width=0.5pt] (rim) -- ($(rim)+(-0.7,0.35)$);
+  \node[bcnode, anchor=east] at ($(rim)+(-0.78,0.35)$) {traction-free rim};
+  \draw[dimen] (-\Rd-0.65,-\Rd) -- (-\Rd-0.65,\Rd);
+  \draw[grayStroke, line width=0.4pt] (-\Rd,\Rd) -- (-\Rd-0.78,\Rd);
+  \draw[grayStroke, line width=0.4pt] (-\Rd,-\Rd) -- (-\Rd-0.78,-\Rd);
+  \node[grayStroke, font=\small, anchor=east] at (-\Rd-0.72,0) {$D$};
+\end{tikzpicture}\\[3pt]
+{\footnotesize (a) boundary-value problem}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.49\linewidth}
+\centering
+\includegraphics[width=\linewidth]{liusun_fig23_brazilian_sigma_yy_pub}\\[3pt]
+{\footnotesize (b) recovered $\sigma_{yy}$ field}
+\end{minipage}
+\caption{Brazilian disc, chart-FEM stress recovery (no contact detector engaged). (a) The boundary-value
+problem: a disc of diameter $D$ and thickness $t$ compressed across a diameter by load $P$ through flat platens;
+the centre develops a transverse tensile stress $\sigma_{xx}=2P/\pi D t$ and an axial compressive stress
+$\sigma_{yy}=-6P/\pi D t$ (Flamant superposition), with the rim traction-free. (b) The vertical stress
+$\sigma_{yy}$ recovered on the learned disc geometry by the chart-FEM solver: the compressive load column and
+the transverse tensile band reproduce the Flamant-superposition closed form away from the pole singularity.}
+\label{fig:brazilian-verif}
+\end{figure}
+
+\subsection{Nine-disc equibiaxial unit cell}\label{app:ninedisc}
 
 A $3\times3$ square array of identical discs of radius $R$ is confined isotropically. No
 diagonal contacts form, because the diagonal spacing $2\sqrt2\,R$ exceeds the contact
