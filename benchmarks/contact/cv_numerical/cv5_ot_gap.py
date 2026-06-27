@@ -40,11 +40,13 @@ Writes runs/cv5_ot_gap/metrics.json (+ history.json arrays for plotting).
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
 
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))
@@ -96,8 +98,48 @@ def _cusp_angles(p, n_scan=4000):
     return cusp, tip
 
 
+# --------------------------------------------------------------------------- closest-point (ROUND 1)
+def _closest_point_polished(q, c, alpha, p, bracket_frac=0.08, n_scan=201):
+    """ROUND-1 sharpening of the transition-map closest-point: ``supershape.closest_point_refine``
+    supplies a same-lobe bracket (its single parabolic step on an equispaced scan caps the smooth-band
+    accuracy at the scan spacing), then a Brent line search on the boundary squared-distance polishes
+    the angle ``psi*`` to the float64 floor.  This does NOT touch the shared chart -- it is a driver-side
+    sub-grid solve of the SAME single-valued radial chart's perpendicular gap.
+
+    The cusp band already reaches machine precision in round 0 (steep boundary, |rho'| large); the
+    round-0 overall RMS (1.18e-4) is dominated by the SMOOTH band, where the equispaced scan under-
+    resolves the shallow distance minimum.  Brent removes that algorithmic floor entirely, exposing
+    that the chart is *analytically* exact.
+
+    Returns (psi_star, foot, signed_perp_gap, surf_normal) -- same signature as closest_point_refine.
+    """
+    q = np.asarray(q, dtype=float)
+    psi0, foot0, gap0, n0 = ss.closest_point_refine(q, c, alpha, p,
+                                                     bracket_frac=bracket_frac, n_scan=n_scan)
+    # tight same-lobe bracket around the parabolic estimate (a few scan cells either side)
+    half = bracket_frac * 2.0 * np.pi
+    cell = half / max(n_scan - 1, 1)
+    a, b, cc = psi0 - 4.0 * cell, psi0, psi0 + 4.0 * cell
+
+    def _d2(psi):
+        ft = ss.boundary(np.array([psi]), c, alpha, p)[0]
+        return float(np.sum((ft - q) ** 2))
+
+    try:
+        r = minimize_scalar(_d2, bracket=(a, b, cc), method="brent", options={"xtol": 1e-12})
+        psi_star = float(r.x)
+    except Exception:
+        psi_star = psi0                                        # robust fallback to the parabolic step
+    foot = ss.boundary(np.array([psi_star]), c, alpha, p)[0]
+    dist = float(np.linalg.norm(q - foot))
+    sign = -1.0 if ss.inside(q[None, :], c, alpha, p)[0] else 1.0
+    n = ss.outward_normal(np.array([psi_star]), c, alpha, p)[0]
+    return psi_star, foot, sign * dist, n
+
+
 # --------------------------------------------------------------------------- PART A
-def part_A_chart_vs_sdf(c, alpha, p, off=0.03, M=720, grids=(41, 61, 81, 121), verbose=True):
+def part_A_chart_vs_sdf(c, alpha, p, off=0.03, M=720, grids=(41, 61, 81, 121), verbose=True,
+                        polish=True, bracket_frac=0.08, n_scan=201):
     """Gap-field accuracy on a probe ring at true perpendicular offset ``off``: chart vs ambient SDF."""
     th = np.linspace(0.0, 2.0 * np.pi, M, endpoint=False)
     foot = ss.boundary(th, c, alpha, p)
@@ -107,7 +149,16 @@ def part_A_chart_vs_sdf(c, alpha, p, off=0.03, M=720, grids=(41, 61, 81, 121), v
 
     # NEW: chart maps
     g_rad, _ = ss.radial_gap(probe, c, alpha, p)               # radial-mode penalty gap (1/cos bias)
-    refine = [ss.closest_point_refine(q, c, alpha, p) for q in probe]
+    # ROUND-0 baseline: the shared closest_point_refine (single parabolic step, coarse equispaced scan)
+    refine0 = [ss.closest_point_refine(q, c, alpha, p) for q in probe]
+    g_perp0 = np.array([r[2] for r in refine0])
+    # ROUND-1 (default): Brent-polished sub-grid closest point on the SAME chart (driver-side; the
+    # shared chart is untouched).  Falls back to round-0 when polish=False for an honest A/B.
+    if polish:
+        refine = [_closest_point_polished(q, c, alpha, p, bracket_frac=bracket_frac, n_scan=n_scan)
+                  for q in probe]
+    else:
+        refine = refine0
     g_perp = np.array([r[2] for r in refine])                  # refined chart map: perpendicular gap
     n_refine = np.array([r[3] for r in refine])                # refined chart map: true surface normal
 
@@ -123,6 +174,7 @@ def part_A_chart_vs_sdf(c, alpha, p, off=0.03, M=720, grids=(41, 61, 81, 121), v
                     rms_smooth=float(np.sqrt(np.mean(err[smooth_band] ** 2))))
 
     e_refine = _stats(np.abs(g_perp - true_gap))               # NEW chart map (perpendicular)
+    e_refine0 = _stats(np.abs(g_perp0 - true_gap))             # ROUND-0 chart map (for the A/B ledger)
     e_radial = _stats(np.abs(g_rad - true_gap))                # NEW radial penalty gap
 
     # NORMAL-DIRECTION accuracy across a cusp (the manual's documented "SDF smooths asperity angle").
@@ -163,6 +215,12 @@ def part_A_chart_vs_sdf(c, alpha, p, off=0.03, M=720, grids=(41, 61, 81, 121), v
     res = {
         "off": off, "M_probes": M,
         "chart_refine": e_refine,
+        "chart_refine_round0": e_refine0,
+        "round0_rms": float(e_refine0["rms"]),
+        "improved_rms": float(e_refine["rms"]),
+        "improved": bool(polish and e_refine["rms"] < e_refine0["rms"]),
+        "improvement_factor": float(e_refine0["rms"] / (e_refine["rms"] + 1e-300)),
+        "polish": bool(polish), "bracket_frac": float(bracket_frac), "n_scan": int(n_scan),
         "chart_radial": e_radial,
         "chart_normal_rms_deg": chart_norm_rms,
         "chart_normal_cusp_deg": chart_norm_cusp,
@@ -177,8 +235,12 @@ def part_A_chart_vs_sdf(c, alpha, p, off=0.03, M=720, grids=(41, 61, 81, 121), v
     }
     if verbose:
         print("  PART A — gap-field accuracy on a probe ring (true offset = %.3f)" % off)
-        print("    NEW  refined chart map  : RMS=%.2e  max=%.2e  (cusp %.2e / smooth %.2e)"
-              % (e_refine["rms"], e_refine["maxv"], e_refine["rms_cusp"], e_refine["rms_smooth"]))
+        print("    ROUND-0 refined chart map : RMS=%.2e  (single parabolic step, coarse scan)"
+              % e_refine0["rms"])
+        print("    ROUND-1 refined chart map : RMS=%.2e  max=%.2e  (cusp %.2e / smooth %.2e)  "
+              "[polish=%s, bf=%.2f, n_scan=%d]  -> %.1fx better than round 0"
+              % (e_refine["rms"], e_refine["maxv"], e_refine["rms_cusp"], e_refine["rms_smooth"],
+                 polish, bracket_frac, n_scan, e_refine0["rms"] / (e_refine["rms"] + 1e-300)))
         print("    NEW  radial penalty gap : RMS=%.2e  (documented ~1/cos flank bias, sign+normal exact)"
               % e_radial["rms"])
         print("    NEW  chart refined normal err : RMS=%.4f deg  (cusp band %.4f deg)"
@@ -302,12 +364,14 @@ def _force_recovery(diag, eps_n):
 
 
 # --------------------------------------------------------------------------- main
-def run(verbose=True):
+def run(verbose=True, polish=True, bracket_frac=0.08, n_scan=201, grids=(41, 61, 81, 121), M=720):
     p = _make_params()
     c = np.array([0.0, 0.0])
     alpha = 0.0
 
-    A_res, A_hist = part_A_chart_vs_sdf(c, alpha, p, verbose=verbose)
+    A_res, A_hist = part_A_chart_vs_sdf(c, alpha, p, verbose=verbose, polish=polish,
+                                        bracket_frac=bracket_frac, n_scan=n_scan,
+                                        grids=grids, M=M)
     patch, force, _ = part_B_patch_and_force(c, alpha, p, verbose=verbose)
     if verbose:
         print("  PART B — consistent OT assembly on the charted surface")
@@ -339,8 +403,21 @@ def run(verbose=True):
 
 
 def main():
+    ap = argparse.ArgumentParser(description="CV-5 OT-gap transition-map chart vs ambient SDF")
+    ap.add_argument("--no-polish", action="store_true",
+                    help="disable the round-1 Brent closest-point polish (reproduces round 0)")
+    ap.add_argument("--bracket-frac", type=float, default=0.08,
+                    help="same-lobe scan bracket fraction (round-0 used 0.15)")
+    ap.add_argument("--n-scan", type=int, default=201, help="scan points for the bracket")
+    ap.add_argument("--fine", action="store_true",
+                    help="EULER fine probe ring + finer SDF grids (heavier; same chart accuracy)")
+    args = ap.parse_args()
+    grids = (41, 61, 81, 121, 161, 241) if args.fine else (41, 61, 81, 121)
+    M = 2880 if args.fine else 720
+
     os.makedirs(RUN_DIR, exist_ok=True)
-    metrics, hist = run(verbose=True)
+    metrics, hist = run(verbose=True, polish=not args.no_polish, bracket_frac=args.bracket_frac,
+                        n_scan=args.n_scan, grids=grids, M=M)
     with open(os.path.join(RUN_DIR, "metrics.json"), "w") as fh:
         json.dump(metrics, fh, indent=2)
     with open(os.path.join(RUN_DIR, "history.json"), "w") as fh:
@@ -348,10 +425,10 @@ def main():
     st = metrics["status"]
     A = metrics["part_A_chart_vs_sdf"]
     print("\n  CV-5 OT-gap (transition-map chart vs ambient SDF): %s" % st.upper())
-    print("    chart refined-map RMS=%.2e (grid-independent)  |  ambient-SDF MAX gap err=%.1fx "
-          "(coarse), cusp-normal err=%.1fx (coarse) the chart"
-          % (A["chart_refine"]["rms"], A["sdf_over_chart_max_coarse"],
-             A["sdf_normal_cusp_over_chart_coarse"]))
+    print("    chart refined-map RMS=%.2e (round-0 %.2e -> %.1fx better; grid-independent)  |  "
+          "ambient-SDF MAX gap err=%.1fx (coarse), cusp-normal err=%.1fx (coarse) the chart"
+          % (A["chart_refine"]["rms"], A["round0_rms"], A["improvement_factor"],
+             A["sdf_over_chart_max_coarse"], A["sdf_normal_cusp_over_chart_coarse"]))
 
 
 if __name__ == "__main__":

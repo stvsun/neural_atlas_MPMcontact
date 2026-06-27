@@ -58,6 +58,15 @@ def test_contact_halfwidth_order(result):
     assert result["a_relerr"] < 0.20, result["a_relerr"]
 
 
+def test_centre_quad_debias_beats_round0(result):
+    # ROUND 1 lever: quadratic centre-point recovery removes the ~0.6% patch-average curvature bias.
+    # The debiased sigma_xx error must (a) beat the round-0 patch-mean value, and (b) sit below the
+    # round-0 1.29% (n_rings=64) / target 1.0%.  The n_rings=40 fixture is coarser, so allow 1.0%.
+    assert result["centre_method"] == "quad"
+    assert result["center_sxx_relerr"] < result["center_sxx_relerr_patchmean"]
+    assert result["center_sxx_relerr"] < 0.01, result["center_sxx_relerr"]
+
+
 def test_old_vs_new_centre(result):
     # the OT field driver should be at least as accurate as the old Neumann driver at the same P
     cmp = cv3.compare_old(result, verbose=False)

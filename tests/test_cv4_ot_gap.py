@@ -31,3 +31,16 @@ def test_cv4_ot_gap_equibiaxial():
 
     # D4 symmetry: the four emergent wall forces are equal
     assert m["force_imbalance"] < 0.05, f"wall-force imbalance {m['force_imbalance']:.4f}"
+
+
+def test_cv4_ot_gap_fine_mesh_improves_sxx():
+    """Round-1 improvement lock-in: refining n_rings 64 -> 96 drives the centre sigma_xx error
+    from the round-0 0.12 pct (mesh-anisotropy inflated) down to the symmetric discretization
+    floor ~0.08 pct, and collapses the spurious D4 anisotropy.  ~4 s on the coarse-ish 96 mesh.
+    """
+    m96, _ = run(n_rings=96, verbose=False)
+    # measured improvement: below the round-0 0.12 pct sxx_relerr
+    assert m96["sxx_relerr"] < 0.0012, f"fine-mesh sxx_relerr {m96['sxx_relerr']:.5f} not < 0.0012"
+    # the win is physical: the n_rings=64 anisotropy (~0.09 pct) collapses
+    assert m96["equibiaxial_anisotropy"] < 0.0003, \
+        f"fine-mesh anisotropy {m96['equibiaxial_anisotropy']:.5f} not collapsed"

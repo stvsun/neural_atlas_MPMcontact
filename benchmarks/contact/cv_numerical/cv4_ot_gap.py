@@ -247,15 +247,30 @@ def run(n_rings=64, arc_half=0.30, E=1000.0, nu=0.25, R=1.0, t=1.0, delta=0.01,
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="CV-4 nine-disc unit cell, OT-gap field")
+    ap.add_argument("--n-rings", type=int, default=64,
+                    help="radial mesh refinement (round-0 default 64; --fine sweet spot 96).")
+    ap.add_argument("--quad-order", type=int, default=3,
+                    help="Gauss order for the mortar contact integral (3 is exact for the smooth "
+                         "wall pressure; 5 measured identical).")
+    ap.add_argument("--fine", action="store_true",
+                    help="shorthand for the measured-best ACCURACY mesh (--n-rings 96). Drives the "
+                         "centre sigma_xx error from the round-0 0.12%% (n_rings=64, mesh-anisotropy "
+                         "inflated) down to the symmetric discretization floor ~0.077%%.")
+    args = ap.parse_args()
+    n_rings = 96 if args.fine else args.n_rings
+
     os.makedirs(RUN_DIR, exist_ok=True)
     print("=" * 78)
     print("CV-4 nine-disc unit cell:  OT-gap field (NEW)  vs  prescribed-load (OLD)")
+    print(f"  (n_rings={n_rings}, quad_order={args.quad_order})")
     print("=" * 78)
-    m, _ = run()
+    m, _ = run(n_rings=n_rings, quad_order=args.quad_order)
 
     # --- OLD driver at the SAME emergent N (prescribed-load Neumann) ---
     print("\n  --- OLD driver (cv4_nine_disc_fem, prescribed-load Neumann) at the same N ---")
-    m_old, _ = cv4_old.run(N=m["N_emergent"], verbose=True)
+    m_old, _ = cv4_old.run(N=m["N_emergent"], n_rings=n_rings, verbose=True)
 
     m["old_center_sxx"] = m_old["center_sxx_fem"]
     m["old_center_syy"] = m_old["center_syy_fem"]

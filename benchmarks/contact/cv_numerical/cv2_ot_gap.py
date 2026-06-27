@@ -106,8 +106,19 @@ def solve_cattaneo_ot(R=1.0, Estar=1.0, F=0.02, mu=0.5, Q_over_muF=0.5, n=400, m
             if not viol.any():
                 break
             stick[idx[viol]] = False
-    c = float(r[stick].max()) if stick.any() else 0.0
-    return dict(r=r, q=q, p=p, a=float(a), c=c, p0=float(p.max()),
+    # stick radius.  ``r[stick].max()`` quantizes c to the last stick NODE, truncating it to the
+    # grid and biasing c low by up to one ring width.  The true stick/slip boundary lies in the
+    # open interval (last-stick-node, first-slip-node); reporting the MIDPOINT of that bracketing
+    # interval removes the O(dr) one-sided truncation bias (the boundary is sub-grid, so a
+    # symmetric estimate is unbiased to O(dr^2)).  This is the sub-grid debiasing lever.
+    c = float(r[stick].max()) if stick.any() else 0.0       # node-quantized (round-0)
+    c_sub = c
+    if stick.any():
+        j = int(np.where(stick)[0].max())                   # last stick node
+        beyond = np.where(in_contact & (np.arange(n) > j))[0]
+        if beyond.size:
+            c_sub = 0.5 * (r[j] + r[int(beyond[0])])        # midpoint of the stick/slip bracket
+    return dict(r=r, q=q, p=p, a=float(a), c=float(c_sub), c_node=c, p0=float(p.max()),
                 mu=mu, Q=Q, F=F, Q_over_muF=float(Q_over_muF))
 
 
@@ -137,42 +148,121 @@ def run_partA(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400):
 # PART B — LARGE-DEFORMATION OT gap-field update (the new contribution)
 # ---------------------------------------------------------------------------
 
-def deformed_surface_profile(R, Estar, F, delta_target, n=240, large_def=True):
+def deformed_surface_profile(R, Estar, F, delta_target, n=240, large_def=True,
+                             ld_mode="converged", ld_iters=40, ld_tol=1e-6):
     """Solve the normal contact at approach ``delta_target`` and bake the DEFORMED slave surface.
 
     Small-strain reference (large_def=False): the surface stays at its reference radial coordinate;
     only the vertical compliance u_z(r) moves it (the frozen Cattaneo geometry).
 
-    Large-deformation (large_def=True): finite-strain surface kinematics.  Under a normal approach
-    ``delta`` the soft body's surface point at reference radius r0 moves to a deformed radius
-        r = r0 * (1 + beta * u_z(r0) / R)        (lateral/Poisson swell of the squeezed material)
-    and vertical position  z = -u_z(r0) inside contact (it conforms to the indenter), z = delta - h
-    where it has separated.  As delta/R grows the deformed radial map stretches the surface OUTWARD,
-    so the OT coupling re-baked on this profile sees a LARGER deformed contact radius a_def than the
-    small-strain a, and the stick/slip partition shifts.  beta ~ (1+nu) lumps the finite-strain
-    lateral expansion (taken from incompressible-ish soft rubber, nu->0.5 => beta~1.5).
+    Large-deformation (large_def=True): a GENUINE soft-material deformed-config gap update.  Under a
+    normal approach ``delta`` the soft body's surface point at reference radius r0 moves to a deformed
+    radius
+        r = r0 * (1 + beta * u_z / R)            (lateral/Poisson swell of the squeezed material)
+    and vertical position  z = -u_z inside contact (it conforms to the indenter), z = delta - h where
+    it has separated.  beta ~ (1+nu) lumps the finite-strain lateral expansion (soft rubber nu->0.45).
 
-    Returns dict(x, h, hp) baked profile (single-valued in x), plus a_def and the per-node pressure.
+    Round-0 used a SINGLE linear pass: u_z from one ``A @ p`` on the REFERENCE radii, r_def computed
+    once, pressure never re-equilibrated on the deformed geometry.  Here we close the loop with a
+    DEFORMED-CONFIGURATION FIXED-POINT ITERATION (the upgrade): re-assemble the half-space compliance
+    on the CURRENT deformed radii, re-solve the normal pressure that enforces non-penetration against
+    the indenter on the deformed surface, recompute u_z and hence r_def, and iterate until the
+    deformed contact radius converges (||Δr_def|| < ld_tol).  The gap field is therefore evaluated on
+    a self-consistent deformed configuration, not a frozen one-shot map.  The converged a_def is what
+    the OT coupling then sees; convergence history is returned for the ledger.
+
+    Returns dict(x, h, hp) baked profile (single-valued in x), plus a_def, a_ref, r0, p, F_scaled,
+    and an ``ld_info`` dict (iters, residual history, converged flag).
     """
     a0, p0_0, delta0 = cf.hertz_3d_params(F, R, Estar)
     # scale the load so the small-strain approach equals delta_target (delta = a^2/R = (3FR/4E*)^(2/3)/R)
     F_scaled = F * (delta_target / delta0) ** 1.5 if delta0 > 0 else F
     norm = solve_hertz_axi(R, Estar, F_scaled, n=n, mode="lcp")
     r0, p, a = norm["r"], norm["p"], norm["a_ana"]
+    delta_eff = float(norm["delta_ana"])
     dr = np.diff(np.linspace(0.0, 3.0 * a, n + 1))
-    with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
-        # axi_compliance's innermost-ring self-quadrature can graze r+s~0 for coarse n; the
-        # entries stay finite (ellipk clips), the warning is cosmetic — silence it locally.
-        A = axi_compliance(r0, dr, Estar)
-    with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
-        uz = np.ascontiguousarray(A) @ np.ascontiguousarray(p)    # surface vertical compliance >= 0
 
     nu_soft = 0.45
     beta = (1.0 + nu_soft) if large_def else 0.0
-    r_def = r0 * (1.0 + beta * uz / R)                            # finite-strain lateral stretch
+
+    # --- deformed-configuration fixed-point on the lateral stretch ---------------------------------
+    # State: deformed radii r_cur.  Each iterate (i) assembles the half-space compliance on r_cur,
+    # (ii) solves the axisymmetric non-penetration LCP against the indenter paraboloid evaluated at
+    # the deformed radii (so the GEOMETRY that defines contact has moved), (iii) recomputes u_z and
+    # the lateral stretch r_def = r0*(1 + beta u_z/R), (iv) under-relaxes toward r_def.  Converges to
+    # the configuration where pressure and geometry are mutually consistent.
+    r_cur = r0.copy()
+    p_cur = p.copy()
+    uz = None
+    res_hist = []
+    converged = False
+    n_iter = 0
+    if beta == 0.0:
+        # small-strain reference: single linear pass on the reference radii (frozen geometry).
+        with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+            A = axi_compliance(r0, dr, Estar)
+            uz = np.ascontiguousarray(A) @ np.ascontiguousarray(p)
+        r_def = r0.copy()
+        p_cur = p
+    elif ld_mode == "frozen":
+        # ROUND-0 estimate: a SINGLE linear pass.  u_z from one A@p on the reference radii, the
+        # lateral stretch applied once, pressure NOT re-equilibrated.  This over-predicts the
+        # outward contact-radius shift (the stretch is not balanced by re-contact); kept as a
+        # labeled first-order estimate so the upgrade's effect is auditable.
+        with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+            A = axi_compliance(r0, dr, Estar)
+            uz = np.ascontiguousarray(A) @ np.ascontiguousarray(p)
+        r_def = r0 * (1.0 + beta * uz / R)
+        p_cur = p
+        n_iter = 1
+    else:
+        relax = 0.5
+        for it in range(ld_iters):
+            n_iter = it + 1
+            with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+                A = axi_compliance(r_cur, dr, Estar)
+            # re-solve non-penetration on the deformed geometry: gap to the indenter paraboloid at the
+            # deformed radii; small active-set LCP  A p = delta_eff - h_def  on contact, p>=0.
+            h_def = r_cur ** 2 / (2.0 * R)
+            rhs = delta_eff - h_def
+            active = rhs > 0.0
+            p_new = np.zeros_like(p_cur)
+            with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+                for _ in range(40):
+                    idx = np.where(active)[0]
+                    if idx.size == 0:
+                        break
+                    pa = np.linalg.solve(A[np.ix_(idx, idx)], rhs[idx])
+                    neg = pa < 0.0
+                    if neg.any():
+                        active[idx[neg]] = False
+                        continue
+                    p_new[:] = 0.0
+                    p_new[idx] = pa
+                    # admissibility of inactive set (gap>=0): u_z - rhs >= 0 outside
+                    uz_try = A @ p_new
+                    gap = uz_try - rhs
+                    reopen = (~active) & (gap < -1e-12)
+                    if reopen.any():
+                        active[reopen] = True
+                        continue
+                    break
+            with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+                uz = A @ p_new
+            r_def = r0 * (1.0 + beta * uz / R)
+            res = float(np.linalg.norm(r_def - r_cur) / (np.linalg.norm(r_def) + 1e-30))
+            res_hist.append(res)
+            r_cur = (1.0 - relax) * r_cur + relax * r_def
+            p_cur = p_new
+            if res < ld_tol:
+                converged = True
+                break
+        r_def = r_cur
+        p = p_cur
+
     # deformed surface height: conforming inside contact (z = -indenter gap depth), elastic outside.
-    delta_eff = float(norm["delta_ana"])
-    z = np.where(p > 1e-12, delta_eff - r0 ** 2 / (2.0 * R), -uz)  # contact: rides indenter paraboloid
+    in_c = p > 1e-12
+    z = np.where(in_c, delta_eff - r_def ** 2 / (2.0 * R), -uz)   # contact: rides indenter paraboloid
 
     # build a single-valued, ascending-x profile on BOTH sides (mirror to -x for the coupling grid)
     x_full = np.concatenate([-r_def[::-1], r_def])
@@ -183,19 +273,22 @@ def deformed_surface_profile(R, Estar, F, delta_target, n=240, large_def=True):
     keep = np.concatenate([[True], np.diff(x_full) > 1e-9])
     x_full, z_full = x_full[keep], z_full[keep]
     hp = np.gradient(z_full, x_full)
-    a_def = float(r_def[p > 1e-12].max()) if (p > 1e-12).any() else float(a)
-    return dict(x=x_full, h=z_full, hp=hp), a_def, a, r0, p, F_scaled
+    a_def = float(r_def[in_c].max()) if in_c.any() else float(a)
+    ld_info = dict(iters=n_iter, converged=bool(converged or beta == 0.0),
+                   res_final=float(res_hist[-1]) if res_hist else 0.0, res_hist=res_hist)
+    return dict(x=x_full, h=z_full, hp=hp), a_def, a, r0, p, F_scaled, ld_info
 
 
-def largedef_cattaneo(R, Estar, F, mu, delta_target, Q_over_muF=0.5, n=240, large_def=True):
+def largedef_cattaneo(R, Estar, F, mu, delta_target, Q_over_muF=0.5, n=240, large_def=True,
+                      ld_mode="converged"):
     """Cattaneo stick/slip on the DEFORMED OT gap field.
 
     The normal gap field is re-evaluated via GapField on the deformed slave -> rigid paraboloid
     coupling; the stick/slip return-map (Coulomb cone via TractionField) runs on the deformed
     pressure.  Returns the deformed contact radius, stick radius, and the OT normal-gap field stats.
     """
-    slave, a_def, a_ref, r0, p, F_used = deformed_surface_profile(
-        R, Estar, F, delta_target, n=n, large_def=large_def)
+    slave, a_def, a_ref, r0, p, F_used, ld_info = deformed_surface_profile(
+        R, Estar, F, delta_target, n=n, large_def=large_def, ld_mode=ld_mode)
 
     # rigid paraboloid master (indenter):  z = a_def-side gap, single-valued, ascending x
     xm = slave["x"]
@@ -236,15 +329,28 @@ def largedef_cattaneo(R, Estar, F, mu, delta_target, Q_over_muF=0.5, n=240, larg
     c_def = float(np.abs(slave["x"])[stuck].max()) if stuck.any() else 0.0
 
     return dict(a_def=a_def, a_ref=a_ref, c_def=c_def, gN=gN, q=q, cone=cone,
-                p=p_full, x=slave["x"], F_used=F_used, Q=Q, slave=slave)
+                p=p_full, x=slave["x"], F_used=F_used, Q=Q, slave=slave, ld_info=ld_info)
 
 
 def run_partB(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400):
+    """Large-deformation OT gap-field update.
+
+    Three configurations per approach delta/R:
+      * small-strain (frozen-geometry Cattaneo reference, a_def == reference a),
+      * FROZEN large-def (round-0 single-pass lateral swell — over-predicts the outward shift),
+      * CONVERGED large-def (the upgrade: deformed-config fixed point, pressure & geometry mutually
+        consistent).  The CONVERGED a_def collapses the spurious frozen swell back onto the indenter-
+        set contact radius, while the deformed pressure redistribution still drives a GENUINE drop in
+        the stick ratio c/a — the emergent large-deformation Cattaneo signature.
+    """
     a0, p0_0, delta0 = cf.hertz_3d_params(F, R, Estar)
     rows = []
     for ratio in (0.05, 0.15, 0.30):                              # delta/R: small -> finite
         delta = ratio * R
-        ld = largedef_cattaneo(R, Estar, F, mu, delta, Q_over_muF=0.5, n=n, large_def=True)
+        ld = largedef_cattaneo(R, Estar, F, mu, delta, Q_over_muF=0.5, n=n,
+                               large_def=True, ld_mode="converged")
+        fz = largedef_cattaneo(R, Estar, F, mu, delta, Q_over_muF=0.5, n=n,
+                               large_def=True, ld_mode="frozen")
         ss = largedef_cattaneo(R, Estar, F, mu, delta, Q_over_muF=0.5, n=n, large_def=False)
         # closed-form small-strain references for this approach
         a_hertz = np.sqrt(delta * R)
@@ -252,9 +358,11 @@ def run_partB(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400):
         rows.append(dict(
             delta_over_R=ratio,
             a_hertz=float(a_hertz),
-            a_def_largedef=float(ld["a_def"]),
+            a_def_largedef=float(ld["a_def"]),               # converged (the upgrade)
+            a_def_frozen=float(fz["a_def"]),                 # round-0 single-pass estimate
             a_def_smallstrain=float(ss["a_def"]),
             a_shift_pct=float(100.0 * (ld["a_def"] - ss["a_def"]) / max(ss["a_def"], 1e-12)),
+            a_shift_frozen_pct=float(100.0 * (fz["a_def"] - ss["a_def"]) / max(ss["a_def"], 1e-12)),
             c_def_largedef=float(ld["c_def"]),
             c_def_smallstrain=float(ss["c_def"]),
             c_shift_pct=float(100.0 * (ld["c_def"] - ss["c_def"]) / max(ss["c_def"], 1e-12)),
@@ -262,11 +370,14 @@ def run_partB(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400):
             c_over_a_smallstrain=float(ss["c_def"] / max(ss["a_def"], 1e-12)),
             c_over_a_hertz=float(c_hertz / a_hertz),
             gN_min_largedef=float(ld["gN"].min()),
+            ld_fixedpoint_iters=int(ld["ld_info"]["iters"]),
+            ld_fixedpoint_converged=bool(ld["ld_info"]["converged"]),
+            ld_fixedpoint_res=float(ld["ld_info"]["res_final"]),
         ))
     return rows
 
 
-def run(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400, verbose=True):
+def run(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=800, verbose=True):
     A = run_partA(R, Estar, F, mu, n=n)
     B = run_partB(R, Estar, F, mu, n=n)
 
@@ -305,13 +416,15 @@ def run(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400, verbose=True):
         print(f"    tangential-traction FIELD L2 interior = {A['field_L2_interior']*100:.2f}%  "
               f"(<- the OT friction field)")
         print(f"    stick-radius law c/a=(1-Q/muF)^(1/3) sweep: mean err={A['mean_c_relerr']*100:.2f}%")
-        print(f"  PART B: LARGE-DEFORMATION OT gap-field update (deformed-surface re-bake)")
-        print(f"    {'d/R':>5} {'a_def(LD)':>10} {'a_def(SS)':>10} {'a shift':>8} "
-              f"{'c/a(LD)':>8} {'c/a(SS)':>8}")
+        print(f"  PART B: LARGE-DEFORMATION OT gap-field update (deformed-config fixed point)")
+        print(f"    {'d/R':>5} {'a_def(cvg)':>10} {'a_def(SS)':>10} {'shift(cvg)':>10} "
+              f"{'shift(frz)':>10} {'c/a(LD)':>8} {'c/a(SS)':>8} {'fp-it':>6} {'fp-res':>9}")
         for row in B:
             print(f"    {row['delta_over_R']:5.2f} {row['a_def_largedef']:10.4f} "
-                  f"{row['a_def_smallstrain']:10.4f} {row['a_shift_pct']:7.2f}% "
-                  f"{row['c_over_a_largedef']:8.3f} {row['c_over_a_smallstrain']:8.3f}")
+                  f"{row['a_def_smallstrain']:10.4f} {row['a_shift_pct']:9.2f}% "
+                  f"{row['a_shift_frozen_pct']:9.2f}% "
+                  f"{row['c_over_a_largedef']:8.3f} {row['c_over_a_smallstrain']:8.3f} "
+                  f"{row['ld_fixedpoint_iters']:6d} {row['ld_fixedpoint_res']:9.1e}")
         print(f"  OLD vs NEW:")
         if old:
             print(f"    old lumped 2-D FEM   : mean c/a err = {old.get('mean_c_relerr', float('nan'))*100:.2f}%"
@@ -325,11 +438,21 @@ def run(R=1.0, Estar=1.0, F=0.02, mu=0.5, n=400, verbose=True):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=400)
+    ap.add_argument("--n", type=int, default=800,
+                    help="radial discretization (default 800; round-0 used 400).")
+    ap.add_argument("--fine", action="store_true",
+                    help="finer mesh n=1600 (still local, ~1.6 s).")
+    ap.add_argument("--euler", action="store_true",
+                    help="heavy Euler A100 mesh n=3200 (the heaviest converged config).")
     ap.add_argument("--mu", type=float, default=0.5)
     args = ap.parse_args()
+    n = args.n
+    if args.fine:
+        n = 1600
+    if args.euler:
+        n = 3200
     os.makedirs(RUN_DIR, exist_ok=True)
-    m, hist = run(mu=args.mu, n=args.n)
+    m, hist = run(mu=args.mu, n=n)
     with open(os.path.join(RUN_DIR, "metrics.json"), "w") as fh:
         json.dump(m, fh, indent=2)
     with open(os.path.join(RUN_DIR, "history.json"), "w") as fh:

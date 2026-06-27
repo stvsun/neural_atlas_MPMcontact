@@ -169,8 +169,18 @@ def run_shear(lower, upper, sigma_n, mu, shear_total, n_inc, eps_n, field, verbo
     for k in rec:
         rec[k] = np.asarray(rec[k])
     ss = slice(int(0.6 * n_inc), n_inc)
+    # Plateau-median emergent-friction estimator.  For a rigid mated sawtooth the apparent friction
+    # is a CONSTANT plateau (= tan(phi_b+i)) once full contact is seated; across increments the only
+    # variation is float64 round-off in the force closure.  The plateau MEDIAN is therefore the
+    # variance-reduced, unbiased estimator of the emergent friction, whereas ``max()`` is biased
+    # toward the single most positively-rounded sample (it picks the worst round-off).  We report
+    # BOTH: ``mu_app_peak`` (max, kept for the head-to-head invariance) and ``mu_app_robust``
+    # (steady-plateau median, the faithful emergent-friction scalar).
+    mu_seated = rec["mu_app"][rec["mu_app"] > 0.5]   # drop the unseated first increment(s)
+    mu_robust = float(np.median(mu_seated)) if mu_seated.size else float(rec["mu_app"].max())
     summary = dict(
         mu_app_peak=float(rec["mu_app"].max()),
+        mu_app_robust=mu_robust,
         mu_app_steady=float(np.mean(rec["mu_app"][ss])),
         phi_app_peak_deg=float(math.degrees(math.atan(rec["mu_app"].max()))),
         dilation_total=float(rec["dilation"][-1]),
@@ -204,8 +214,14 @@ def run(angle_deg=25.0, mu=0.3, wavelength=5.0):
     def _err(s):
         return abs(s["mu_app_peak"] - patton) / patton
 
+    def _err_robust(s):
+        return abs(s["mu_app_robust"] - patton) / patton
+
     err_ot = _err(res_ot["summary"])
     err_ray = _err(res_ray["summary"])
+    # Variance-reduced plateau-median emergent-friction error (the faithful model-floor measurement).
+    err_ot_robust = _err_robust(res_ot["summary"])
+    err_ray_robust = _err_robust(res_ray["summary"])
     dil_rate_ot = res_ot["summary"]["dilation_total"] / common["shear_total"]
     dil_rate_ray = res_ray["summary"]["dilation_total"] / common["shear_total"]
     tan_i = math.tan(math.radians(angle_deg))
@@ -226,16 +242,20 @@ def run(angle_deg=25.0, mu=0.3, wavelength=5.0):
         tan_i=float(tan_i),
         # NEW (OT coupling)
         ot_mu_app_peak=res_ot["summary"]["mu_app_peak"],
+        ot_mu_app_robust=res_ot["summary"]["mu_app_robust"],
         ot_mu_app_steady=res_ot["summary"]["mu_app_steady"],
         ot_relerr_vs_patton=float(err_ot),
+        ot_relerr_vs_patton_robust=float(err_ot_robust),
         ot_dilation_total=res_ot["summary"]["dilation_total"],
         ot_dilation_rate=float(dil_rate_ot),
         ot_dilation_rate_relerr_vs_tan_i=float(abs(dil_rate_ot - tan_i) / tan_i),
         ot_pen_max=res_ot["summary"]["pen_max"],
         # OLD (vertical-ray lumped)
         ray_mu_app_peak=res_ray["summary"]["mu_app_peak"],
+        ray_mu_app_robust=res_ray["summary"]["mu_app_robust"],
         ray_mu_app_steady=res_ray["summary"]["mu_app_steady"],
         ray_relerr_vs_patton=float(err_ray),
+        ray_relerr_vs_patton_robust=float(err_ray_robust),
         ray_dilation_total=res_ray["summary"]["dilation_total"],
         ray_dilation_rate=float(dil_rate_ray),
         ray_pen_max=res_ray["summary"]["pen_max"],
@@ -256,10 +276,14 @@ def run(angle_deg=25.0, mu=0.3, wavelength=5.0):
 
     print("\n== RESULTS ==")
     print(f"  closed form  tan(phi_b+i)        = {patton:.6f}")
-    print(f"  NEW (OT)     mu_app_peak         = {metrics['ot_mu_app_peak']:.6f}  "
-          f"(relerr {err_ot*100:.3f}%)")
-    print(f"  OLD (ray)    mu_app_peak         = {metrics['ray_mu_app_peak']:.6f}  "
-          f"(relerr {err_ray*100:.3f}%)")
+    print(f"  NEW (OT)     mu_app_peak (max)   = {metrics['ot_mu_app_peak']:.6f}  "
+          f"(relerr {err_ot:.3e})")
+    print(f"  NEW (OT)     mu_app_robust(med)  = {metrics['ot_mu_app_robust']:.12f}  "
+          f"(relerr {err_ot_robust:.3e})  <- variance-reduced model floor")
+    print(f"  OLD (ray)    mu_app_peak (max)   = {metrics['ray_mu_app_peak']:.6f}  "
+          f"(relerr {err_ray:.3e})")
+    print(f"  OLD (ray)    mu_app_robust(med)  = {metrics['ray_mu_app_robust']:.6f}  "
+          f"(relerr {err_ray_robust:.3e})")
     print(f"  OT  dilation rate dy/dux         = {dil_rate_ot:.4f}  (tan i = {tan_i:.4f}, "
           f"relerr {metrics['ot_dilation_rate_relerr_vs_tan_i']*100:.2f}%)")
     print(f"  ray dilation rate dy/dux         = {dil_rate_ray:.4f}")
@@ -269,13 +293,80 @@ def run(angle_deg=25.0, mu=0.3, wavelength=5.0):
     return metrics
 
 
+def run_real_surface(mu=0.3, n_inc=80, shear_frac=0.10, offset_frac=0.5, profile="rough"):
+    """SECOND VALIDATION (data-grounded demonstration): emergent dilatancy on the REAL Inada granite
+    tensile-fracture profile (Digital Rocks #273).  This is a DEMONSTRATION, not a closed-form pass:
+    a self-affine fractal joint has no Patton angle.  We offset the upper face by half a wavelength-
+    scale (``offset_frac`` of the mean asperity spacing) so the mated faces are NOT degenerately
+    coincident, shear, and confirm that (i) dilation EMERGES (dy/dux > 0, geometry-driven, no
+    dilatancy law) and (ii) the OT-emergent dilation rate is bounded by the surface's asperity-slope
+    statistics (mean uphill slope <= rate <= max slope) — an independent geometric envelope the
+    contact solver must respect.  We report it; the quantitative pass lives in the Patton checks."""
+    npz = os.path.join(_ROOT, "data", "inada_joint", f"inada_{profile}_profile.npz")
+    if not os.path.exists(npz):
+        print(f"  [real-surface] data not found ({npz}); skipping second validation.")
+        return None
+    d = np.load(npz)
+    x = np.asarray(d["x_mm"], float)
+    h = np.asarray(d["footwall_mm"], float)
+    h = h - h.mean()
+    hp = np.gradient(h, x)
+    # offset the hangingwall horizontally so the two mated faces are not degenerately coincident
+    # (a perfectly seated identical pair has zero gap everywhere -> ill-posed seating).
+    dx = float(np.median(np.diff(x)))
+    shift = max(1, int(offset_frac * (d["rms_mm"] / dx)))
+    xu = x.copy()
+    hu = np.roll(h, shift)
+    lower = dict(x=x, h=h, hp=hp)
+    upper = dict(x=xu, h=hu, hp=np.gradient(hu, xu))
+
+    span = x[-1] - x[0]
+    shear_total = shear_frac * span
+    common = dict(sigma_n=1.0, mu=mu, shear_total=shear_total, n_inc=n_inc, eps_n=2.0e4)
+    res_ot = run_shear(lower, upper, field=True, **common)
+
+    # geometric envelope: mean UPHILL slope and max slope (the rate must sit in [mean_up, max]).
+    up = hp[hp > 0.0]
+    mean_uphill = float(up.mean()) if up.size else 0.0
+    max_slope = float(np.abs(hp).max())
+    # OT emergent dilation rate over the early climbing phase.
+    hist = res_ot["history"]
+    k = max(2, int(0.4 * n_inc))
+    dil_rate_ot = float((hist["dilation"][k] - hist["dilation"][0]) /
+                        (hist["ux"][k] - hist["ux"][0] + 1e-30))
+    dilation_emerges = bool(hist["dilation"][-1] > 0.0)
+    rate_in_envelope = bool(mean_uphill <= dil_rate_ot <= max_slope)
+    out = dict(
+        problem="rock_joint_real_inada_emergent_dilatancy_demo",
+        profile=profile, rms_mm=float(d["rms_mm"]), fractal_D=float(d["fractal_D"]),
+        mean_uphill_slope=mean_uphill, max_slope=max_slope,
+        ot_early_dilation_rate=dil_rate_ot,
+        ot_total_dilation=float(hist["dilation"][-1]),
+        dilation_emerges=dilation_emerges,
+        rate_in_geometric_envelope=rate_in_envelope,
+    )
+    print("\n== SECOND VALIDATION (demo): real Inada granite surface — emergent dilatancy ==")
+    print(f"   profile={profile}  RMS={out['rms_mm']:.3f} mm  D={out['fractal_D']:.3f}  "
+          f"(no Patton angle for a fractal — DEMONSTRATION, not a closed-form pass)")
+    print(f"   geometric slope envelope         = [{mean_uphill:.4f}, {max_slope:.4f}]")
+    print(f"   OT early dilation rate dy/dux    = {dil_rate_ot:.4f}  "
+          f"-> in envelope: {rate_in_envelope}")
+    print(f"   dilation emerges (no law)        = {dilation_emerges}  "
+          f"(total {out['ot_total_dilation']:+.3f} mm)")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--angle", type=float, default=25.0, help="sawtooth asperity angle (deg)")
     ap.add_argument("--mu", type=float, default=0.3, help="base Coulomb mu = tan(phi_b)")
     ap.add_argument("--wavelength", type=float, default=5.0)
+    ap.add_argument("--real-surface", action="store_true",
+                    help="also run the real-Inada-granite emergent-dilatancy second validation")
     args = ap.parse_args()
     run(angle_deg=args.angle, mu=args.mu, wavelength=args.wavelength)
+    if args.real_surface:
+        run_real_surface(mu=args.mu)
 
 
 if __name__ == "__main__":

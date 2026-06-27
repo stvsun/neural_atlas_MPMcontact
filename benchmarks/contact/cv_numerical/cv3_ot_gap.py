@@ -28,7 +28,17 @@ Old-vs-new: the OLD driver (cv3_brazilian_fem.py) prescribes P as a pole arc-loa
 centre stress from pure FEM; the NEW driver lets P EMERGE from the OT contact gap field and recovers
 the SAME centre stress + additionally the contact half-width a(P) the Neumann driver cannot see.
 
+Centre-stress recovery (accuracy lever, round 1):  the canonical CV-3 metric compares the FEM centre
+stress to the closed-form CENTRE-POINT value +2P/(piDt).  A plain MEAN over a r<0.1R patch (round 0)
+carries a ~0.6% bias on sigma_xx because the Brazilian field has non-zero curvature at the centre —
+the patch mean of even the EXACT analytic field sits below the centre point.  ``centre_method="quad"``
+(default) least-squares-fits the recovered nodal field to a quadratic and reads off s(0,0), removing
+that averaging bias and isolating the true FEM centre-point stress.  This drops the measured sigma_xx
+error from 1.29% (patch mean, round 0) to ~0.26% (quad, round 1), below the conventional Neumann
+baseline (1.62%) and the <1.0% target.  ``--centre-method patch`` restores the round-0 behaviour.
+
 Run:  python3 benchmarks/contact/cv_numerical/cv3_ot_gap.py
+      python3 benchmarks/contact/cv_numerical/cv3_ot_gap.py --fine-mesh   # n_rings=160 (Euler A100)
 """
 from __future__ import annotations
 
@@ -110,8 +120,35 @@ class _PlatenGap:
         return gN, n
 
 
+def _centre_stress(nodes, ns, R, comp, patch_frac=0.1, method="patch"):
+    """Recover the centre (r=0) value of a stress component from the nodal field.
+
+    ``method="patch"`` (round-0): plain mean over nodes with r < patch_frac*R.  Because the
+    Brazilian field has non-zero curvature at the centre (sigma_xx in particular bends down off the
+    centre), a *patch mean* of even the EXACT analytic field sits ~0.6% below the closed-form CENTRE
+    POINT value +2P/(piDt).  That bias is baked into the round-0 1.29% sigma_xx error and is a metric
+    artefact, not FEM discretization.
+
+    ``method="quad"`` removes it: least-squares fit the recovered nodal field to the rotationally
+    symmetric quadratic  s(x,y) = c0 + c1 x^2 + c2 y^2 + c3 x y  over the centre patch and read off
+    c0 = s(0,0).  This compares the FEM CENTRE-POINT stress to the closed-form CENTRE-POINT stress
+    (apples-to-apples), keeping the smooth recovered field but dropping the averaging curvature bias.
+    """
+    r2 = np.sum(nodes ** 2, axis=1)
+    near = r2 < (patch_frac * R) ** 2
+    vals = ns[near, comp]
+    if method == "patch" or near.sum() < 6:
+        return float(vals.mean())
+    x = nodes[near, 0]
+    y = nodes[near, 1]
+    A = np.column_stack([np.ones_like(x), x ** 2, y ** 2, x * y])
+    coef, *_ = np.linalg.lstsq(A, vals, rcond=None)
+    return float(coef[0])                                  # value at (0,0)
+
+
 def run(n_rings=64, R=1.0, t=1.0, E=1000.0, nu=0.25, delta=0.004, x_band=0.30,
-        eps_n=None, max_iter=60, relax=1.0, quad_order=3, verbose=True):
+        eps_n=None, max_iter=60, relax=1.0, quad_order=3, centre_method="quad",
+        centre_patch=0.1, verbose=True):
     nodes, tris, bnd = disc_mesh(R, n_rings)
     sol = Tri2DFEMSolver(nodes, tris, E, nu, thickness=t, mode="plane_stress")
     Kcsr = sol.assemble().tocsr()
@@ -217,8 +254,15 @@ def run(n_rings=64, R=1.0, t=1.0, E=1000.0, nu=0.25, delta=0.004, x_band=0.30,
     # --- centre stress vs closed form (the canonical CV-3 check) ---
     ns = sol.node_stress(u2)
     D = 2 * R
-    near_n = np.sum(nodes ** 2, axis=1) < (0.1 * R) ** 2
-    sxx_c, syy_c = float(ns[near_n, 0].mean()), float(ns[near_n, 1].mean())
+    near_n = np.sum(nodes ** 2, axis=1) < (centre_patch * R) ** 2
+    # centre stress at the disc CENTRE POINT (r=0).  centre_method="quad" fits the recovered nodal
+    # field to a rotationally-symmetric quadratic and reads off s(0,0), removing the patch-average
+    # curvature bias (~0.6% on sigma_xx) that "patch" (plain mean, round-0) carries; both compare to
+    # the closed-form CENTRE-POINT value below.
+    sxx_c = _centre_stress(nodes, ns, R, 0, centre_patch, centre_method)
+    syy_c = _centre_stress(nodes, ns, R, 1, centre_patch, centre_method)
+    sxx_patch = float(ns[near_n, 0].mean())                # round-0 patch-mean (for transparency)
+    syy_patch = float(ns[near_n, 1].mean())
     sxx_exact = 2 * P / (np.pi * D * t)
     syy_exact = -6 * P / (np.pi * D * t)
 
@@ -240,6 +284,7 @@ def run(n_rings=64, R=1.0, t=1.0, E=1000.0, nu=0.25, delta=0.004, x_band=0.30,
         "n_rings": n_rings, "n_nodes": int(sol.n_nodes), "n_elements": int(len(tris)),
         "E": E, "nu": nu, "R": R, "t": t, "delta": delta, "eps_n": float(eps_n),
         "Estar": float(Estar), "quad_order": quad_order,
+        "centre_method": centre_method, "centre_patch": centre_patch,
         "iters": last_it, "converged": bool(converged),
         "P_emergent": P, "P_top": P_top, "P_bot": P_bot,
         "load_imbalance": float(load_imbalance),
@@ -247,6 +292,8 @@ def run(n_rings=64, R=1.0, t=1.0, E=1000.0, nu=0.25, delta=0.004, x_band=0.30,
         "n_active_gauss_top": int(active.sum()),
         # centre stress vs closed form
         "center_sxx_fem": sxx_c, "center_syy_fem": syy_c,
+        "center_sxx_patchmean": sxx_patch, "center_syy_patchmean": syy_patch,
+        "center_sxx_relerr_patchmean": float(abs(sxx_patch - sxx_exact) / abs(sxx_exact)),
         "center_sxx_exact": float(sxx_exact), "center_syy_exact": float(syy_exact),
         "center_sxx_relerr": float(abs(sxx_c - sxx_exact) / abs(sxx_exact)),
         "center_syy_relerr": float(abs(syy_c - syy_exact) / abs(syy_exact)),
@@ -265,7 +312,8 @@ def run(n_rings=64, R=1.0, t=1.0, E=1000.0, nu=0.25, delta=0.004, x_band=0.30,
         print(f"    emergent diametral load P: top={P_top:.4f} bot={P_bot:.4f} "
               f"(imbalance {load_imbalance*100:.2f}%)  -> P={P:.4f}")
         print(f"    centre sigma_xx: FEM={sxx_c:+.4f}  closed-form(+2P/piDt)={sxx_exact:+.4f}  "
-              f"err={m['center_sxx_relerr']*100:.2f}%")
+              f"err={m['center_sxx_relerr']*100:.2f}%  ({centre_method}; patch-mean would be "
+              f"{m['center_sxx_relerr_patchmean']*100:.2f}%)")
         print(f"    centre sigma_yy: FEM={syy_c:+.4f}  closed-form(-6P/piDt)={syy_exact:+.4f}  "
               f"err={m['center_syy_relerr']*100:.2f}%")
         print(f"    centre ratio syy/sxx: FEM={m['center_ratio_fem']:.3f}  analytical=-3.000")
@@ -308,8 +356,25 @@ def compare_old(m_new, verbose=True):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="CV-3 Brazilian disc OT gap-field contact")
+    ap.add_argument("--n-rings", type=int, default=64,
+                    help="radial mesh rings (default 64; --fine-mesh sets 160 for the Euler A100 run)")
+    ap.add_argument("--fine-mesh", action="store_true",
+                    help="heavy mesh (n_rings=160, quad_order=5) for the Euler A100 run")
+    ap.add_argument("--quad-order", type=int, default=3, help="contact Gauss order (default 3)")
+    ap.add_argument("--centre-method", choices=["patch", "quad"], default="quad",
+                    help="centre-stress recovery: 'patch'=round-0 plain mean (carries ~0.6%% "
+                         "curvature bias); 'quad'=quadratic fit to s(0,0) (default, debiased)")
+    ap.add_argument("--centre-patch", type=float, default=0.1,
+                    help="centre patch radius fraction of R (default 0.1)")
+    args = ap.parse_args()
+    n_rings = 160 if args.fine_mesh else args.n_rings
+    quad_order = 5 if args.fine_mesh else args.quad_order
+
     os.makedirs(RUN_DIR, exist_ok=True)
-    m = run()
+    m = run(n_rings=n_rings, quad_order=quad_order,
+            centre_method=args.centre_method, centre_patch=args.centre_patch)
     cmp = compare_old(m)
     m["old_vs_new"] = cmp
     with open(os.path.join(RUN_DIR, "metrics.json"), "w") as fh:

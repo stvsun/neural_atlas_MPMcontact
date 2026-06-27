@@ -33,6 +33,22 @@ def test_cv5_patch_test_uniform_pressure_exact_load():
     assert out["PASS"]
 
 
+def test_cv5_round1_polish_beats_round0():
+    """ROUND-1: the Brent closest-point polish drives the chart gap RMS from the round-0 1.18e-4
+    (coarse equispaced scan + single parabolic step) to the float64 floor -- the chart is analytically
+    exact; the round-0 error was purely the 1-D scan discretization."""
+    metrics, _ = cv5.run(verbose=False, polish=True)
+    A = metrics["part_A_chart_vs_sdf"]
+    assert A["improved"]                                  # measured lower than round 0
+    assert A["improved_rms"] < A["round0_rms"]
+    assert A["improved_rms"] < 1.18e-4                    # below the round-0 number to beat
+    assert A["improved_rms"] < 1e-8                       # at the analytic/float64 floor
+    assert A["improvement_factor"] > 1.0e4               # orders of magnitude, not noise
+    # A/B: with polish disabled the driver reproduces the round-0 RMS
+    m0, _ = cv5.run(verbose=False, polish=False)
+    assert abs(m0["part_A_chart_vs_sdf"]["chart_refine"]["rms"] - A["round0_rms"]) < 1e-12
+
+
 def test_cv5_chart_gap_independent_of_grid():
     """The refined chart gap does not change with the (absent) grid; the SDF does -- show the SDF
     monotone-ish improvement vs the flat chart line."""
