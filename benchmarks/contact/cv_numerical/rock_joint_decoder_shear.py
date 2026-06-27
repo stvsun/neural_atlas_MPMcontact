@@ -62,6 +62,11 @@ class DecoderJointShear:
         self.surf_amp = surf_amp
         self.A_nom = (2 * L) ** 2
         self._surf_fn = lambda x, y: band_limited_rough_surface(x, y, amp=surf_amp)  # mating surface
+        # Opt-in App.-E consistent tangent (resolved-force Jacobian = the 2-block tangent plus the
+        # Weingarten curvature and friction-direction blocks).  Default False keeps the smoother
+        # 2-block tangent, which is more robust on the non-smooth rough-Coulomb interface; the
+        # consistent tangent restores quadratic Newton convergence on smooth geometry (App. E study).
+        self.consistent_tangent = False
 
     def _upper_surface(self, X, Y, u_x, z_p):
         """Rigid mating rough surface height + downward-normal gradient at world (X,Y)."""
@@ -98,28 +103,45 @@ class DecoderJointShear:
         return f, diag
 
     def _contact_tangent(self, U, u_x, z_p):
-        """Consistent 3x3 contact tangent per ACTIVE top node: eps_n*A*(n n^T + mu t_proj n^T).
-        The n n^T term is the tilted-normal penalty stiffness; the mu t_proj n^T term is the
-        friction-normal coupling (non-symmetric) — both are what the scalar-vertical tangent missed."""
+        """3x3 contact tangent per ACTIVE top node.
+
+        With ``self.consistent_tangent`` False, only the two analytic blocks of eq:contact-block are
+        assembled, eps_n*A*(n n^T + mu t_proj n^T): the tilted-normal penalty stiffness and the
+        non-symmetric friction-normal coupling.  With it True (default) the CONSISTENT tangent of
+        Appendix~E is assembled: the exact per-node Jacobian of the resolved contact force, which adds
+        the curvature (Weingarten) block t_N*A*(dn/du), eq:weingarten-chart, and the friction-direction
+        block mu*t_N*A*(dt_proj/du), eq:friction-dir-deriv.  Differencing the resolved force avoids the
+        third surface derivatives the closed form would need and stays consistent with the eps-smoothed
+        normal the force evaluates, so the Newton iteration recovers its asymptotic quadratic rate on
+        smooth geometry (the rough-Coulomb residual is then limited only by the slip non-smoothness)."""
         from scipy.sparse import csr_matrix
         ndof = 3 * self.N
         p = self.xyz0[self.top] + U[self.top]
         z_up, hx, hy = self._upper_surface(p[:, 0], p[:, 1], u_x, z_p)
         sec = np.sqrt(1 + hx ** 2 + hy ** 2)
-        nx, ny, nz = hx / sec, hy / sec, -1.0 / sec
-        gN = (z_up - p[:, 2]) * (-nz)
+        gN = (z_up - p[:, 2]) / sec                                      # = gap * (-nz)
         act = gN < 0.0
-        tvec = np.stack([np.ones_like(hx), np.zeros_like(hx), np.zeros_like(hx)], 1)
-        nmat = np.stack([nx, ny, nz], 1)
-        tp = tvec - (tvec * nmat).sum(1, keepdims=True) * nmat
-        tp = tp / np.clip(np.linalg.norm(tp, axis=1, keepdims=True), 1e-12, None)
-        kA = self.eps_n * self.A_top
+        if self.consistent_tangent:
+            e = 1e-7                                                     # per-node force Jacobian (top nodes independent)
+            f0 = self.contact(U, u_x, z_p)[0][self.top]
+            blocks = np.zeros((len(self.top), 3, 3))
+            for d in range(3):
+                Ue = U.copy(); Ue[self.top, d] += e
+                blocks[:, :, d] = -(self.contact(Ue, u_x, z_p)[0][self.top] - f0) / e
+        else:
+            nx, ny, nz = hx / sec, hy / sec, -1.0 / sec
+            tvec = np.stack([np.ones_like(hx), np.zeros_like(hx), np.zeros_like(hx)], 1)
+            nmat = np.stack([nx, ny, nz], 1)
+            tp = tvec - (tvec * nmat).sum(1, keepdims=True) * nmat
+            tp = tp / np.clip(np.linalg.norm(tp, axis=1, keepdims=True), 1e-12, None)
+            kA = self.eps_n * self.A_top
+            blocks = np.stack([kA * (np.outer(nmat[k], nmat[k]) + self.mu * np.outer(tp[k], nmat[k]))
+                               for k in range(len(self.top))])
         rows, cols, vals = [], [], []
         for k, nidx in enumerate(self.top):
             if not act[k]:
                 continue
-            nv = nmat[k]; tv = tp[k]
-            blk = kA * (np.outer(nv, nv) + self.mu * np.outer(tv, nv))   # normal + friction coupling
+            blk = blocks[k]
             for a in range(3):
                 for b in range(3):
                     rows.append(3 * nidx + a); cols.append(3 * nidx + b); vals.append(blk[a, b])
@@ -139,11 +161,13 @@ class DecoderJointShear:
         scaleR = tol * (1 + self.eps_n * self.A_top)
         u = u0.copy().reshape(-1)
         rn = None
+        res_hist = []
         for it in range(max_iter):
             U = u.reshape(self.N, 3)
             fext, diag = self.contact(U, u_x, z_p)
             R = self.K @ u - fext.reshape(-1)
             rn = np.linalg.norm(R[free])
+            res_hist.append(rn)
             if rn < scaleR:
                 break
             Kc, _ = self._contact_tangent(U, u_x, z_p)
@@ -163,6 +187,8 @@ class DecoderJointShear:
         fext, diag = self.contact(U, u_x, z_p)
         diag["resid"] = float(np.linalg.norm((self.K @ u - fext.reshape(-1))[free]))
         diag["resid_rel"] = diag["resid"] / max(self.eps_n * self.A_top, 1e-12)
+        diag["res_hist"] = res_hist
+        diag["n_iter"] = len(res_hist)
         return u, diag
 
     def normal_force(self, u, u_x, z_p):
