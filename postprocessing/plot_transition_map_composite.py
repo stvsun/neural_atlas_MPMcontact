@@ -56,9 +56,9 @@ def build():
     from utils import set_pub_style, DOUBLE_COL_W
     set_pub_style(fontsize=8.5)
 
-    fig = plt.figure(figsize=(DOUBLE_COL_W, 3.62))
+    fig = plt.figure(figsize=(DOUBLE_COL_W, 3.45))
     outer = fig.add_gridspec(1, 3, width_ratios=[1.06, 0.40, 1.04],
-                             wspace=0.05, left=0.012, right=0.988, top=0.90, bottom=0.15)
+                             wspace=0.05, left=0.012, right=0.988, top=0.91, bottom=0.075)
     axP = fig.add_subplot(outer[0, 0])
     axG = fig.add_subplot(outer[0, 1])
     rg = outer[0, 2].subgridspec(2, 1, height_ratios=[0.58, 0.42], hspace=0.55)
@@ -129,26 +129,38 @@ def build():
     axG.text(0.735, 0.295, r"$\pi_B$", color=BLUE, fontsize=8, ha="center")
     axG.text(0.50, 0.485, r"$\tau_{AB}$", color=INK, fontsize=8, ha="center")
 
-    # ============================ (b) REFERENCE STRIPS ============================
-    axTh.text(0.0, 1.14, "(b) reference coordinates", fontsize=9, fontweight="bold", va="top")
-    x0, x1 = 0.08, 0.92
-    thA_x, psB_x = 0.40, 0.50                            # caret positions (non-trivial reparametrisation)
+    # ===================== (b) REFERENCE STRIPS: the transport tau_AB : Theta_A -> Theta_B =====
+    axTh.text(0.0, 1.17, "(b) reference coordinates", fontsize=9, fontweight="bold", va="top")
+    x0, x1 = 0.10, 0.90
+    yTA, yTB = 0.76, 0.21
+    umap = lambda u: u ** 1.40                            # monotone, non-identity reparametrisation
+    XA = lambda u: x0 + (x1 - x0) * u                     # param u in [0,1] -> position on Theta_A
+    XB = lambda u: x0 + (x1 - x0) * umap(u)               # its image position on Theta_B
+
     def strip(yc, color, lab):
-        axTh.add_patch(FancyBboxPatch((x0, yc - 0.055), x1 - x0, 0.11,
-                       boxstyle="round,pad=0.006,rounding_size=0.04", mutation_aspect=0.4,
-                       fc=color, ec=color, lw=1.6, alpha=0.12, zorder=2))
+        axTh.add_patch(FancyBboxPatch((x0, yc - 0.05), x1 - x0, 0.10,
+                       boxstyle="round,pad=0.005,rounding_size=0.035", mutation_aspect=0.4,
+                       fc=color, ec=color, lw=1.6, alpha=0.11, zorder=2))
         axTh.plot([x0, x1], [yc, yc], color=color, lw=1.6, zorder=3, solid_capstyle="round")
         axTh.text(x1 + 0.03, yc, lab, color=color, fontsize=9.5, va="center", ha="left")
-    strip(0.72, CORAL, r"$\Theta_A$")
-    strip(0.24, BLUE,  r"$\Theta_B$")
-    axTh.plot(thA_x, 0.72, marker="^", ms=8, color=CORAL, zorder=5)
-    axTh.text(thA_x, 0.86, r"$\theta_A$", color=CORAL, fontsize=9, ha="center")
-    axTh.plot(psB_x, 0.24, marker="^", ms=8, color=BLUE, zorder=5)
-    axTh.text(psB_x, 0.085, r"$\psi_B$", color=BLUE, fontsize=9, ha="center", va="top")
-    _arrow(axTh, (thA_x, 0.665), (psB_x, 0.30), INK, lw=1.7, ms=12, rad=-0.30, zorder=4)
-    axTh.text(0.30, 0.47, r"$\tau_{AB}$", color=INK, fontsize=9, ha="center")
-    axTh.text(0.5, -0.03, r"direct chart composition:  parameter $\to$ parameter",
-              color=MUTE, fontsize=6.8, ha="center", style="italic", va="top")
+    strip(yTA, CORAL, r"$\Theta_A$")
+    strip(yTB, BLUE,  r"$\Theta_B$")
+
+    # transport of a uniform grid: ticks on Theta_A carried to a WARPED grid on Theta_B
+    for u in np.linspace(0.10, 0.90, 7):
+        axTh.plot([XA(u)] * 2, [yTA - 0.036, yTA + 0.036], color=CORAL, lw=1.0, alpha=0.65, zorder=4)
+        axTh.plot([XB(u)] * 2, [yTB - 0.036, yTB + 0.036], color=BLUE, lw=1.0, alpha=0.65, zorder=4)
+        axTh.plot([XA(u), XB(u)], [yTA - 0.05, yTB + 0.05], color=MUTE, lw=0.65, alpha=0.5, zorder=3)
+    # the highlighted pair theta_A -> psi_B (the point evaluated in panel a)
+    uth = 0.50
+    _arrow(axTh, (XA(uth), yTA - 0.05), (XB(uth), yTB + 0.05), INK, lw=1.9, ms=12, zorder=6)
+    axTh.plot(XA(uth), yTA, marker="^", ms=8, color=CORAL, mec="white", mew=0.5, zorder=7)
+    axTh.text(XA(uth), yTA + 0.105, r"$\theta_A$", color=CORAL, fontsize=9, ha="center")
+    axTh.plot(XB(uth), yTB, marker="^", ms=8, color=BLUE, mec="white", mew=0.5, zorder=7)
+    axTh.text(XB(uth), yTB - 0.10, r"$\psi_B$", color=BLUE, fontsize=9, ha="center", va="top")
+    axTh.text(0.5 * (XA(uth) + XB(uth)) - 0.085, 0.485, r"$\tau_{AB}$", color=INK, fontsize=9, ha="center")
+    axTh.text(0.5, -0.04, r"$\tau_{AB}$ transports $\Theta_A$ onto $\Theta_B$  (non-uniform reparametrisation)",
+              color=MUTE, fontsize=6.6, ha="center", style="italic", va="top")
 
     # ============================ (c) PULLED-BACK GAP ============================
     axGap.set_xlim(0, 1)
@@ -179,13 +191,6 @@ def build():
         axGap.spines[sp].set_visible(False)
     for sp in ("left", "bottom"):
         axGap.spines[sp].set_color(MUTE); axGap.spines[sp].set_linewidth(0.9)
-
-    # ============================ FOOTER punchline ============================
-    fig.text(0.5, 0.022,
-             r"$\delta W_c=\int_{\Gamma_c}(t_N\,\delta g_N+\mathbf{t}_T\!\cdot\delta\mathbf{g}_T)\,dA$"
-             r"   depends on the geometry only through $(g_N,\mathbf{n})$",
-             ha="center", va="bottom", fontsize=8,
-             bbox=dict(boxstyle="round,pad=0.42", fc=LIGHT, ec=MUTE, lw=0.8))
 
     os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, "transition_map_composite_pub.png")

@@ -439,13 +439,14 @@ coordinates} the contact point $\xbf=\map{A}(\theta_A)$ on $\partial\Omega_A$ an
 on $\partial\Omega_B$ fix the signed normal gap $\gn$ along $\nbf$ and the traction $\tbf=t_N\nbf+\tbf_T$;
 recovering the mate by a closest-point search (grey) is the iterative step a level set also requires. (b) In
 \emph{reference coordinates} the inter-body transition map $\tmap=\pi_B\circ\map{A}=\map{B}^{-1}\circ\map{A}$
-carries the parameter $\theta_A\in\Theta_A$ directly to its image $\psi_B\in\Theta_B$ by evaluating $\map{A}$ and
-inverting $\map{B}$, a composition of charts with no search (the commuting triangle states
+\emph{transports} the parameter domain $\Theta_A$ onto $\Theta_B$ by evaluating $\map{A}$ and inverting $\map{B}$,
+with no search: a uniform grid on $\Theta_A$ is carried to a non-uniformly reparametrised grid on $\Theta_B$, and
+the highlighted pair takes $\theta_A$ to its image $\psi_B$ (the commuting triangle states
 $\tmap=\pi_B\circ\map{A}$). (c) The gap pulls back to a one-dimensional function
 $\bar g(\theta_A)=\gn^{B}(\map{A}(\theta_A))$ on $\Theta_A$, whose open sub-level set
-$\{\theta_A:\bar g<0\}$, the active set, is a union of arcs. Because the contact virtual work
-\eqref{eq:contact-vw} depends on the geometry only through $(\gn,\nbf)$, the physical and the reference
-pictures are interchangeable at the force layer.}
+$\{\theta_A:\bar g<0\}$, the active set, is a union of arcs. The contact virtual work \eqref{eq:contact-vw}
+depends on the geometry only through $(\gn,\nbf)$, so the physical and the reference descriptions are
+interchangeable at the force layer.}
 \label{fig:atlas-extension}
 \end{figure}
 
