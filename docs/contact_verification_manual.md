@@ -95,6 +95,47 @@ $p_0\approx1.61\,\sigma_Y$.
 
 ---
 
+## 3b. CV-1b / CV-1c / CV-2b — Consistent field-traction (measure coupling)
+
+**Goal.** Validate the **surface-to-surface measure-coupling** contact discretization
+(`solvers/contact/measure_coupling/`): a continuous gap field over the slave surface, a pointwise
+traction field, and consistent Galerkin nodal forces $f_I=\sum_q w_q\,N_I[p_N n+t_T]$ with a
+2-node-coupled (mortar) tangent. The validated quantity is the traction **distribution**
+$p_N(x),\,q(r)$ — not just the scalar $a$ — against the closed forms. The marginal (mass) constraint
+of the coupling is what makes the traction a field and passes the contact patch test, which the
+node-collocated tributary-lumped penalty (CV-1, `cv1_hertz_fem.py`) fails.
+
+**Formulation.** Two couplings share `map(xi) -> (x_m, X_m, mass)`: the exact 1-D monotone
+rearrangement (`MonotoneCoupling1D`, closed-form optimal transport, the bias-free anchor) and the
+entropic `SinkhornCoupling1D` (which $\to$ monotone as $\varepsilon\to0$). The normal law is penalty/AL
+(reusing the audited `penalty`/`augmented_lagrangian` kernels); the tangential law is Coulomb. See the
+OT↔contact dictionary in the Bandeira-2004 audit note (`memory/bandeira-2004-contact-audit.md`).
+
+**Pass criteria & MEASURED (all passing today):**
+- **Contact patch test** — a uniform pressure transmitted EXACTLY across non-uniform nodes:
+  pressure uniformity and line-load error $<10^{-12}$ (`cv1b_hertz_field.patch_test`).
+- **CV-1b 2-D line Hertz (deformable FEM)** — pressure-FIELD $L^2$ vs the half-ellipse **3.2%**
+  interior ($|x|<0.85a$); $a(F)$–$E^*$ ratio **constant to CoV 0.00%** over an 8× $E^*$ sweep (3.7%
+  is the bulk-FEM discretization floor, matching CV-1).
+- **CV-1b half-space BEM cross-check** — on the EXACT half-space the coupling penalty law reproduces
+  the closed-form Hertz and the active-set LCP to **0.00%** (isolates the coupling math from the
+  bulk-FEM floor).
+- **CV-1c 3-D axisymmetric Hertz (BEM)** — approach $\delta=a^2/R$ to **0.018%**; $p(r)$-FIELD $L^2$
+  **0.34%** interior.
+- **CV-2b Cattaneo–Mindlin tangential FIELD** — $q(r)$-FIELD $L^2$ **0.24%**; stick radius
+  $c/a=(1-Q/\mu F)^{1/3}$ to **0.12%** over a $Q/\mu F$ sweep.
+- **Sinkhorn↔monotone consistency** — barycentric maps agree to **<0.02%** (both couplings, compared).
+- **Rock joint (`rock_joint_shear.py --field`)** — the field path reproduces the Patton anchor
+  $\tan(\phi_b+i)$ to **0.00%** (for a rigid block the net force is integration-scheme-invariant, so
+  the field formulation is consistent with the validated result; its distribution-sensitive payoff is
+  the deformable Hertz/Cattaneo field above).
+
+**Artifacts / tests.** Module `solvers/contact/measure_coupling/{quadrature,coupling,gap_field,traction,assembly,halfspace_bem}.py`;
+drivers `benchmarks/contact/cv_numerical/{cv1b_hertz_field,cv1c_hertz3d_field,cv2b_cattaneo_field,measure_coupling_compare}.py`;
+figure `figures/measure_coupling_field_traction.png`; tests `tests/test_measure_coupling.py` (8 pass, ~3 s, torch-free).
+
+---
+
 ## 4. CV-2 — Cattaneo–Mindlin frictional partial slip
 
 **Goal.** Reproduce the stick/slip partition under a tangential load $Q<\mu P$ on a

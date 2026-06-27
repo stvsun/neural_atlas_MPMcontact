@@ -78,20 +78,41 @@ def _interp(grid: dict, X: np.ndarray):
 # --------------------------------------------------------------------------------------------------
 # contact: footwall = master.  Upper nodes are the hangingwall grid points (material xi).
 # --------------------------------------------------------------------------------------------------
-def contact_forces(yU: float, ux: float, lower: dict, upper: dict, eps_n: float, mu: float):
+def contact_forces(yU: float, ux: float, lower: dict, upper: dict, eps_n: float, mu: float,
+                   field: bool = False):
     """Net (F_x, F_z) on the hangingwall + diagnostics, at vertical position yU and shear offset ux.
 
-    Footwall is master: normal/tangent from the footwall.  Fully-mobilized forward-slip Coulomb."""
+    Footwall is master: normal/tangent from the footwall.  Fully-mobilized forward-slip Coulomb.
+
+    ``field=True`` finds the footwall contact point for each upper node by the measure-coupling
+    correspondence (``MonotoneCoupling1D``, 1-D optimal transport) instead of the vertical ray, and
+    measures the gap in the footwall normal frame at that point.  (For a RIGID block the net force is
+    integration-scheme-invariant — consistent and tributary-lumped sums coincide — so the field
+    formulation changes the rigid rock-joint answer only through this correspondence; its
+    distribution-sensitive benefit is the deformable Hertz/Cattaneo field, CV-1b/1c/2b.)"""
     xi = upper["x"]                                   # hangingwall material coords
     dxi = np.gradient(xi)                             # tributary width per node
     X = xi + ux                                       # world x of each upper node
     Z = yU + upper["h"]                               # world z of each upper node (bottom surface)
-    hL, hpL, valid = _interp(lower, X)
-    # footwall unit normal (up) and tangent (forward)
-    sec = np.sqrt(1.0 + hpL ** 2)
-    nz = 1.0 / sec; nx = -hpL / sec                   # n = (-h', 1)/sec
-    tx = 1.0 / sec; tz = hpL / sec                    # t = (1,  h')/sec
-    gap_n = (Z - hL) * nz                             # normal gap (vertical offset projected on n)
+    if field:
+        from solvers.contact.measure_coupling.coupling import MonotoneCoupling1D
+        slave = dict(x=X, h=Z, hp=np.gradient(Z, X))
+        master = dict(x=lower["x"], h=lower["h"], hp=lower["hp"])
+        _, Xm, _ = MonotoneCoupling1D(slave, master).map(X)
+        xm = Xm[:, 0]
+        hpL = np.interp(xm, lower["x"], lower["hp"])
+        valid = (xm >= lower["x"][0]) & (xm <= lower["x"][-1])
+        sec = np.sqrt(1.0 + hpL ** 2)
+        nz = 1.0 / sec; nx = -hpL / sec
+        tx = 1.0 / sec; tz = hpL / sec
+        gap_n = (Z - Xm[:, 1]) * nz + (X - xm) * nx   # (X_s - X_m) . n_master (coupling gap)
+    else:
+        hL, hpL, valid = _interp(lower, X)
+        # footwall unit normal (up) and tangent (forward)
+        sec = np.sqrt(1.0 + hpL ** 2)
+        nz = 1.0 / sec; nx = -hpL / sec               # n = (-h', 1)/sec
+        tx = 1.0 / sec; tz = hpL / sec                # t = (1,  h')/sec
+        gap_n = (Z - hL) * nz                         # normal gap (vertical offset projected on n)
     active = valid & (gap_n < 0.0)
     fn = np.where(active, eps_n * (-gap_n) * dxi, 0.0)   # >=0 normal magnitude per node
     # node forces: normal along n, friction -mu*fn along t (opposing forward slip)
@@ -103,13 +124,13 @@ def contact_forces(yU: float, ux: float, lower: dict, upper: dict, eps_n: float,
 
 
 def solve_y_equilibrium(ux: float, lower: dict, upper: dict, eps_n: float, mu: float, W: float,
-                        y_bracket) -> float:
+                        y_bracket, field: bool = False) -> float:
     """Bisection: find yU such that the vertical contact force F_z(yU) == W (normal equilibrium).
     F_z is monotone decreasing in yU (higher => less penetration => less force)."""
     ylo, yhi = y_bracket                              # ylo: deep penetration (F_z>W); yhi: free (F_z<W)
     for _ in range(60):
         ym = 0.5 * (ylo + yhi)
-        _, Fz, _ = contact_forces(ym, ux, lower, upper, eps_n, mu)
+        _, Fz, _ = contact_forces(ym, ux, lower, upper, eps_n, mu, field=field)
         if Fz > W:                                    # too much force -> raise the block
             ylo = ym
         else:
@@ -119,7 +140,7 @@ def solve_y_equilibrium(ux: float, lower: dict, upper: dict, eps_n: float, mu: f
 
 def run_shear(lower: dict, upper: dict, sigma_n: float = 1.0, mu: float = 0.3,
               shear_total: float = 8.0, n_inc: int = 160, eps_n: float = 5.0e3,
-              verbose: bool = False) -> dict:
+              verbose: bool = False, field: bool = False) -> dict:
     """Quasi-static incremental direct shear.  Returns history arrays + scalar summaries."""
     x0, x1 = lower["x"][0], lower["x"][-1]
     span = x1 - x0
@@ -134,8 +155,8 @@ def run_shear(lower: dict, upper: dict, sigma_n: float = 1.0, mu: float = 0.3,
     for j, ux in enumerate(uxs):
         L_ov = max(span - abs(ux), 0.25 * span)        # current overlap length
         W = sigma_n * L_ov                             # constant normal STRESS -> load over overlap
-        y = solve_y_equilibrium(ux, lower, upper, eps_n, mu, W, (y_lo, y_hi))
-        Fx, Fz, d = contact_forces(y, ux, lower, upper, eps_n, mu)
+        y = solve_y_equilibrium(ux, lower, upper, eps_n, mu, W, (y_lo, y_hi), field=field)
+        Fx, Fz, d = contact_forces(y, ux, lower, upper, eps_n, mu, field=field)
         if y0 is None:
             y0 = y
         tau = -Fx / L_ov
@@ -182,8 +203,10 @@ def _save(name: str, payload: dict):
     return out_dir
 
 
-def run_sawtooth_patton(angle_deg=20.0, mu=0.3, wavelength=5.0):
-    """L1 verification: mating sawtooth shear -> emergent mu_app vs Patton tan(phi_b + i)."""
+def run_sawtooth_patton(angle_deg=20.0, mu=0.3, wavelength=5.0, field=False):
+    """L1 verification: mating sawtooth shear -> emergent mu_app vs Patton tan(phi_b + i).
+
+    ``field=True`` uses the measure-coupling gap (CV measure_coupling) instead of the vertical ray."""
     import torch  # noqa
     from solvers.contact.profile_chart_2d import AnalyticSawtooth1D
     x = np.linspace(0.0, 50.0, 6000)
@@ -193,7 +216,8 @@ def run_sawtooth_patton(angle_deg=20.0, mu=0.3, wavelength=5.0):
     upper = dict(x=g["x"].copy(), h=g["h"].copy(), hp=g["hp"].copy())   # perfectly mated
     # shear by half a wavelength (a full ride-up flank) to reach the Patton plateau
     res = run_shear(lower, upper, sigma_n=1.0, mu=mu, shear_total=0.45 * wavelength,
-                    n_inc=120, eps_n=2.0e4, verbose=True)
+                    n_inc=120, eps_n=2.0e4, verbose=True, field=field)
+    res["summary"]["contact_scheme"] = "measure_coupling_field" if field else "vertical_ray_lumped"
     phi_b = math.degrees(math.atan(mu))
     patton = math.tan(math.radians(phi_b + angle_deg))
     res["summary"]["patton_mu_pred"] = float(patton)
@@ -264,10 +288,12 @@ def main():
     ap.add_argument("--mated", action="store_true", help="perfectly-mated (upper=footwall)")
     ap.add_argument("--no-chart", action="store_true", help="use raw samples, not the neural chart")
     ap.add_argument("--mu", type=float, default=0.3)
+    ap.add_argument("--field", action="store_true",
+                    help="use the measure-coupling gap (CV measure_coupling) instead of the vertical ray")
     args = ap.parse_args()
 
     if args.sawtooth:
-        run_sawtooth_patton(angle_deg=args.angle, mu=args.mu)
+        run_sawtooth_patton(angle_deg=args.angle, mu=args.mu, field=args.field)
     if args.surface:
         run_real_surface(tag=args.surface, mated=args.mated, mu=args.mu,
                          use_chart=not args.no_chart)
