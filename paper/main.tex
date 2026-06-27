@@ -115,26 +115,21 @@ resolving rough and non-convex geometry that the level set smooths}
 \maketitle
 
 \begin{abstract}
-Contact between geometrically complex bodies is governed by how the boundary is represented
-rather than by the scheme that enforces the contact constraint. On rough and non-convex geometry the gap,
-the surface normal, and the active set are read from a model of the boundary, and a fixed-capacity ambient
-level set smooths the asperities, cusps, and fine relief that carry the contact response; no downstream
-penalty, augmented-Lagrangian, or mortar scheme can recover what the representation has discarded. We pose
-contact detection as a boundary-to-boundary transition map, $\tmap=\map{B}^{-1}\circ\map{A}$, on a learned
-coordinate atlas, from which the gap, a conservative surface normal, and every disjoint contact arc follow
-without an ambient field. The charts are Fourier-feature coordinate networks whose random-feature embedding
-defeats the spectral bias that low-passes a neural signed-distance function; the level set is retained
-throughout as a matched baseline on identical meshes and tolerances. The contact problem is formulated in the
-classical sequence (strong form, weak form, chart-based Galerkin discretisation), with the gap and a
-conservative, gradient-consistent normal supplied by the transition map, so that the chart and the level set
-are interchangeable at the force layer and the geometry is the only controlled variable. The method is
-verified against six closed-form benchmarks (Hertz line contact, Cattaneo--Mindlin partial slip, the nine-disc
-cell, the cusped superformula, and the Koch fractal, with the Brazilian disc in an appendix) to a few percent, and validated on a real Inada-granite tensile
-fracture, where dilation and apparent friction emerge from the resolved asperity geometry under plain Coulomb
-friction with no imposed dilatancy law. On the granite profile the level set smooths the mean asperity slope
-from $19.4^\circ$ to $12.5^\circ$, reconstructs the surface to only $107~\mu$m against the chart's
-$2.3~\mu$m, and under-predicts the peak shear strength by $61\%$; on a synthetic band-limited rough block it
-under-predicts the emergent dilatancy by $98\%$.
+Contact between geometrically complex bodies is governed by how the boundary is represented rather than by the
+scheme that enforces the constraint. On rough and non-convex interfaces a fixed-capacity ambient level set
+smooths the asperities, cusps, and fine relief that carry the contact response, distorting the gap, the surface
+normal, and the active set that any downstream penalty, augmented-Lagrangian, or mortar scheme then consumes. We
+pose contact detection as a boundary-to-boundary transition map, $\tmap=\map{B}^{-1}\circ\map{A}$, on a learned
+coordinate atlas, from which the gap, a conservative gradient-consistent normal, and every disjoint contact arc
+follow by chart composition and inversion, with no ambient field. The charts are Fourier-feature coordinate
+networks whose random-feature embedding defeats the spectral bias that low-passes a neural signed-distance
+function, and the level set is retained throughout as a matched baseline on identical meshes and tolerances. The
+formulation is variationally consistent through the classical sequence---strong form, weak form, chart-based
+Galerkin discretisation---verified against six analytical benchmarks (Hertz, Cattaneo--Mindlin, Brazilian,
+nine-disc, superformula, and Koch) and validated on a direct-shear simulation of a real scanned Inada-granite
+fracture. By smoothing the asperity slopes the level set under-predicts the peak shear strength of the granite
+profile by $61\%$ and the emergent dilatancy of a synthetic rough block by $98\%$, while the transition map
+recovers both from the resolved geometry under plain Coulomb friction with no imposed dilatancy law.
 \keywords{computational contact mechanics \and coordinate atlas \and transition map \and
 neural signed-distance function \and Fourier-feature charts \and rock-joint dilatancy}
 \end{abstract}
@@ -152,8 +147,9 @@ distribution of asperity slopes, a property of the boundary, and not by any mate
 non-convex geometry the representation of the boundary, not the constraint-enforcement scheme, controls contact
 fidelity.} We will
 show that a fixed-capacity ambient signed-distance field smooths the mean asperity slope of a real
-Inada-granite joint from $19.4^\circ$ to $12.5^\circ$ and, through the shear-strength law, thereby under-predicts the peak strength by $61\%$ and the emergent dilatancy by $98\%$,
-whereas a boundary chart of the same surface resolves the slopes and recovers the response.
+Inada-granite joint from $19.4^\circ$ to $12.5^\circ$ and, through the shear-strength law, thereby under-predicts
+its peak strength by $61\%$, and on a synthetic rough block under-predicts the emergent dilatancy by $98\%$,
+whereas a boundary chart of the same surfaces resolves the slopes and recovers the response.
 
 A computational contact algorithm reduces, at each query point $\xbf$ near a body $X$, to two local
 questions. Is $\xbf$ inside $X$, and by how much? This is the gap $\gn$, with the sign convention
@@ -2060,6 +2056,25 @@ rather than the default everywhere. The explicit cross-check reproduces the Coul
 energy-consistency of Remark~\ref{prop:matched-normal}, confirmed by the cyclic ledger of
 Appendix~\ref{app:supp}, whose per-cycle balance closes from $1.09$ to $1.01$ on the deformable joint.
 
+\emph{A bounded trait with a definite resolution path.} The slope proxy and the moving-master residual are not
+open-ended failures but bounded numerical traits, each with a matched cure, and the three cures compose into one
+roadmap. First, the vertical proxy $g_{\mathrm{vert}}$ is replaced by the exact normal-projected gap, the
+perpendicular foot $\bar{\bm\xi}=\arg\min_{\bm\xi}\norm{\xbf-\map{B}(\bm\xi)}$ on the master chart, which removes
+the $O(\text{slope}^2)$ magnitude error while preserving the sign-exact active set of
+Remark~\ref{prop:active-set}; on a height chart this is a single scalar Newton solve per query, and the radial
+chart already carries it (the perpendicular-foot refinement of Section~\ref{sec:disc:precond}). Second, the
+consistent tangent of Appendix~\ref{app:linearization}, with the chart-intrinsic curvature
+\eqref{eq:weingarten-chart} and friction-direction \eqref{eq:friction-dir-deriv} blocks restored, recovers the
+asymptotic quadratic Newton rate; we measured this directly, $8$ iterations against $40$ on a smooth curved
+master surface frictionless and $11$ against $44$ under friction, with the converged solution unchanged. Third,
+what survives the first two upgrades is the genuine non-smoothness of the moving contact point under Coulomb
+stick--slip: completing the tangent leaves the apparent friction invariant to within $0.3\%$ and the residual
+floor unmoved on the rough joint, isolating the plateau as a tangential complementarity problem to be closed by
+a semismooth (primal--dual active-set) Newton or an augmented-Lagrangian or mortar treatment of the tangential
+condition \citep{alart1991mixed,simo1992augmented,puso2004mortar,chouly2013nitsche}. The $3.8$--$4.8\%$ plateau
+is thus a diagnosed property of constraint enforcement, orthogonal to the chart-versus-level-set representation
+result the rest of the paper establishes.
+
 \subsection{Conclusions and outlook}\label{sec:disc:concl}
 
 The geometric representation of the boundary, not the constraint-enforcement scheme, controls contact fidelity on
@@ -2089,6 +2104,22 @@ mortar or augmented-Lagrangian dynamic solver, with a finite-strain hyperelastic
 representation-controls-fidelity result from quasi-static rock joints to large-sliding, finite-deformation
 contact. Across all three the conclusion is constant: fidelity on hard contact follows the geometry one chooses
 to resolve, and the transition map resolves what the level set smooths.
+
+Two directions reach further. The first is topo-geometric. A contact pair tracked across a sliding increment can
+leave the chart $i$ that first held it, and the inter-body map $\tmap$ then composes with the intra-body
+transition map $\psi_{ij}$ of \eqref{eq:intra-tmap} to re-express the migrating foot in the neighbouring chart
+$j$ before re-pairing, $\tmap\circ\psi_{ij}$, the active set handed off across the chart overlap by the
+partition-of-unity blend of the multiplicative-Schwarz coupling (Remark~\ref{rem:schwarz}) with the Newton
+inversion \eqref{eq:newton-invert} kept local to each chart. Genus, branching, and overhang then reduce to
+bookkeeping on the overlap graph rather than a global re-parametrisation, so the detector inherits the atlas's
+topological generality at the cost of a chart-membership test per active node. The second couples the geometry
+to material degradation. Because the boundary is itself a trainable field---a height chart $h_\theta$ or a
+volumetric decoder $D_\theta$---it can carry an evolving state: an Archard-type wear law or a surface
+phase-field damage posed on the chart parameter domain evolves $h_\theta\mapsto h_\theta(t)$, so that asperity
+crushing, tip plasticity, and micro-cracking feed back into the very geometry the detector reads. The resolved
+contact tractions then drive the degradation that reshapes the asperities, closing a loop between the geometry
+and the response it produces, and carrying the representation-controls-fidelity thesis from elastic rock joints
+to wear, third-body debris, and gouge formation.
 
 
 \begin{appendix}
@@ -2727,21 +2758,54 @@ curvature term,
 \begin{equation}\label{eq:lin-normal}
 \bm K_N=\varepsilon_n A\,(\nbf\otimes\nbf)+t_N A\,\frac{\partial\nbf}{\partial\ubf},
 \end{equation}
-in which $\partial\nbf/\partial\ubf$ is the shape operator of \eqref{eq:shape-operator}. Linearising the
+in which $\partial\nbf/\partial\ubf$ is the shape operator of \eqref{eq:shape-operator}. Written intrinsically on
+the master chart---the second factor $\map{B}$ of the transition map $\tmap=\map{B}^{-1}\circ\map{A}$---the shape
+operator is the pushforward of the surface's second fundamental form,
+\begin{equation}\label{eq:weingarten-chart}
+\frac{\partial\nbf}{\partial\ubf}=-\,\bm J_B^{t}\,\bm a^{-1}\bm b\,\bm a^{-1}\,\bm J_B^{t\top},\qquad
+a_{\alpha\beta}=\tbf_\alpha\!\cdot\!\tbf_\beta,\quad
+b_{\alpha\beta}=\nbf\!\cdot\!\frac{\partial^2\map{B}}{\partial\xi^\alpha\partial\xi^\beta},\quad
+\tbf_\alpha=\frac{\partial\map{B}}{\partial\xi^\alpha},
+\end{equation}
+with $\bm J_B^{t}=[\tbf_1\,\tbf_2]$ the surface tangents (the master-chart Jacobian columns), $\bm a$ the first
+fundamental form (metric) and $\bm b$ the second fundamental form (curvature) at the foot $\map{B}(\psi_B)$, and
+$\bm a^{-1}\bm b$ the Weingarten map; the signed-distance Hessian of \eqref{eq:shape-operator} is its level-set
+specialisation. For a three-dimensional height chart $z=h_\theta(x,y)$, $\bm a=\bm I_2+\grad h\otimes\grad h$ and
+$\bm b=\mathrm{Hess}\,h/s$ with $s=\sqrt{1+\norm{\grad h}^2}$, generalising the two-dimensional graph curvature
+already given in \eqref{eq:shape-operator}. Linearising the
 regularised friction traction \eqref{eq:friction-reg} at the cone bound gives a friction--normal coupling and a
 friction--tangent term,
 \begin{equation}\label{eq:lin-friction}
 \bm K_T=\mu\,\varepsilon_n A\,(\tbf_{\mathrm{proj}}\otimes\nbf)
 +\mu\,t_N A\,\frac{\partial\tbf_{\mathrm{proj}}}{\partial\ubf},
 \end{equation}
-the first block non-symmetric, the structural signature of the non-associative friction law. The
+the first block non-symmetric, the structural signature of the non-associative friction law. With
+$\tbf_{\mathrm{proj}}=\bm P_T\vbf/\norm{\bm P_T\vbf}$ the projected slip direction and
+$\bm P_T=\bm I-\nbf\otimes\nbf$ the tangential projector, so that $\bm P_T\vbf=\vbf_T$ of
+\eqref{eq:friction-reg}, the friction--tangent factor follows by differentiating the projection,
+\begin{equation}\label{eq:friction-dir-deriv}
+\frac{\partial\tbf_{\mathrm{proj}}}{\partial\ubf}
+=-\frac{\bm I-\tbf_{\mathrm{proj}}\otimes\tbf_{\mathrm{proj}}}{\norm{\bm P_T\vbf}}
+\Big[(\nbf\!\cdot\!\vbf)\,\frac{\partial\nbf}{\partial\ubf}
++\nbf\otimes\Big(\vbf^{\top}\frac{\partial\nbf}{\partial\ubf}\Big)\Big],
+\end{equation}
+so the friction--tangent block is governed by the same chart curvature \eqref{eq:weingarten-chart} as the normal
+term. By default the
 implementation assembles the penalty normal stiffness and the friction--normal coupling,
 $\bm K^a_c=\varepsilon_n A(\nbf\otimes\nbf+\mu\,\tbf_{\mathrm{proj}}\otimes\nbf)$ of \eqref{eq:contact-block},
-and drops the curvature term $t_N A\,\partial\nbf/\partial\ubf$ and the friction--tangent term
-$\mu\,t_N A\,\partial\tbf_{\mathrm{proj}}/\partial\ubf$. On the smooth single-asperity benchmarks these terms
-are small and the frictional Newton residual still reaches $\sim10^{-9}$; on the two-deformable moving-master
-problem their omission, with the non-smoothness of the moving contact point, leaves the few-percent residual
-reported in Section~\ref{sec:discr}.
+the smoother two-block tangent. The curvature \eqref{eq:weingarten-chart} and friction--tangent
+\eqref{eq:friction-dir-deriv} blocks are available as an opt-in \emph{consistent} tangent, assembled per active
+node as the exact Jacobian of the resolved contact force; this equals $\bm K_N+\bm K_T$ to leading order, needs
+no third derivative of the boundary, and stays consistent with the $\varepsilon$-smoothed resolved normal. We
+verified the closed form against that Jacobian---the curvature term \eqref{eq:weingarten-chart} matches the
+finite-difference normal derivative to $5.6\times10^{-4}$---and measured its effect. On a smooth curved master
+surface the consistent tangent restores the asymptotic quadratic Newton rate, converging in $8$ iterations
+against $40$ for the two-block tangent frictionless and $11$ against $44$ under Coulomb friction, with the
+converged solution unchanged. On the rough Coulomb joint, by contrast, completing the tangent does \emph{not}
+remove the residual plateau: both tangents stall at the same few-percent floor and the emergent apparent
+friction is invariant to within $0.3\%$. The plateau reported in Section~\ref{sec:discr} is therefore
+the slip non-smoothness of the moving contact point, not the dropped tangent terms, and is cured by the
+semismooth or augmented-Lagrangian treatments discussed there.
 
 \end{appendix}
 
