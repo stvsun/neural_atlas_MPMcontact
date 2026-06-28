@@ -76,8 +76,16 @@ def test_pair_third_law_exact():
     uB = np.zeros((B.sol.n_nodes, 2))
     res = cv9a._pair_forces(A, B, np.array([1.0, 0.0]), 0.30, uA, uB, tr, 3, pen_offset=0.04)
     assert res is not None
-    fA2, fB2, _, _, _ = res
+    fA2, fB2, slaveA_ids, masterB_ids, Kss, Ksm, Kmm = res
     total = fA2.sum(axis=0) + fB2.sum(axis=0)
     assert np.linalg.norm(total) < 1e-10, total
     # the contact is repulsive: A (left) pushed in -x, B (right) pushed in +x
     assert fA2.sum(axis=0)[0] < 0.0 and fB2.sum(axis=0)[0] > 0.0
+    # the FULL 4-block tangent assembled on the shared (A,B) dof system is symmetric and SPSD:
+    # [[K_ss, K_sm],[K_sm^T, K_mm]] (frictionless mortar -> consistent, symmetric, SPSD).
+    from scipy.sparse import bmat
+    Kpair = bmat([[Kss, Ksm], [Ksm.T, Kmm]]).toarray()
+    assert np.allclose(Kpair, Kpair.T, atol=1e-10), "pair tangent must be symmetric"
+    assert np.linalg.eigvalsh(Kpair).min() > -1e-8, "pair tangent must be SPSD"
+    # the cross block is non-trivial: the master-coupling D_IK block is actually present.
+    assert abs(Ksm).sum() > 0.0, "K_sm (slave-master coupling) must be non-zero"

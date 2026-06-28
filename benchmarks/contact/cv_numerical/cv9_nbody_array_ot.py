@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
     os.path.abspath(__file__))))))
 from solvers.fem.tri2d import Tri2DFEMSolver, disc_mesh                                  # noqa: E402
 from solvers.contact.measure_coupling import (assemble_contact, TractionField,           # noqa: E402
-                                              MonotoneCoupling1D)
+                                              MonotoneCoupling1D, assemble_two_body_contact)
 from solvers.contact.measure_coupling.gap_field import GapField                          # noqa: E402
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -98,22 +98,40 @@ class Disc:
 
 def _pair_forces(A: Disc, B: Disc, out_dir, arc_half, uA, uB, traction, quad_order, pen_offset=0.0):
     """OT measure-coupling contact between neighbouring discs A (slave) and B (master) along
-    ``out_dir`` (A -> B).  Returns ``(fA (nA_node,2), fB (nB_node,2))`` consistent nodal contact
-    forces.  Newton's third law is EXACT: fB is the OT-mortar pushforward of -fA onto B's rim.
-    ``pen_offset`` (>=0) is a prescribed extra penetration injected into the gap to RAMP the
-    geometric overlap load (g_N -> g_N - pen_offset) without remeshing."""
-    R_lg, R_gl = _frame(out_dir)
-    # slave (A) rim band on the +out_dir side, in A-local frame
+    ``out_dir`` (A -> B), assembled with the FULL 4-block consistent tangent
+    (``assemble_two_body_contact``).
+
+    Both rim bands are expressed in the A-local frame (``+y_local = -out_dir`` = toward A's centre),
+    where each is a single-valued height profile ``h(x_local)`` (h<0 on the contact side) and the gap
+    is the vertical (y_local) separation.  ``assemble_two_body_contact`` then returns the symmetric
+    SPSD tangent
+
+        K_ss = +eps M(n(x)n)   K_sm = -eps D(n(x)n)   K_ms = K_sm^T   K_mm = +eps Dmm(n(x)n)
+
+    coupling A's and B's dofs through the SAME OT correspondence, so Newton sees the master's response
+    and converges (no under-relaxation needed).  Returns the global-frame nodal forces on BOTH bodies
+    plus the four global-frame tangent blocks (already in each disc's local dof indexing; the caller
+    offsets them into the global system).  ``pen_offset`` (>=0) injects a prescribed geometric overlap
+    (the load) into the gap, ramped by the caller.
+
+    Returns ``(fA2, fB2, slaveA_ids, masterB_ids, Kss, Ksm, Kmm)`` where the blocks are CSR on each
+    disc's own ``n_dof`` (Kss on A, Kmm on B) and Ksm is the cross block (rows=A dof, cols=B dof);
+    Kms is its transpose.  All quantities are in the GLOBAL frame.
+    """
+    from scipy.sparse import coo_matrix
+
+    R_lg, R_gl = _frame(out_dir)                          # +y_local = -out_dir (toward A's centre)
+    # slave (A) rim band on the +out_dir side (h<0 in A-local), single-valued h(x_local)
     xA = A.sol.nodes[A.rim] + uA[A.rim]
     locA = (xA - A.center0) @ R_gl.T
     bakedA, orderA = _bake_band(locA, arc_half)
     if bakedA is None:
         return None
-    slaveA_ids = A.rim[orderA]
+    slaveA_ids = A.rim[orderA]                            # A node indices, ordered by x_local
 
-    # master (B) rim band FACING the slave, expressed in A-local frame so the gap is vertical.
-    # In A-local coords B's near rim sits at the LARGEST y_local (least negative ~ -R); its far rim
-    # leaks in at y_local ~ -3R and must be filtered out or the OT arclength map is corrupted.
+    # master (B) rim band FACING the slave, expressed in the SAME A-local frame so the gap is vertical.
+    # B's near rim sits at the LARGEST y_local (least negative ~ -spacing+R); its far rim leaks in at
+    # y_local ~ -(spacing+R) and must be filtered or the OT arclength map is corrupted.
     xB_rim = B.sol.nodes[B.rim] + uB[B.rim]
     locB_in_A = (xB_rim - A.center0) @ R_gl.T
     facing = locB_in_A[:, 1] > (locB_in_A[:, 1].max() - B.R)    # near half only
@@ -126,52 +144,65 @@ def _pair_forces(A: Disc, B: Disc, out_dir, arc_half, uA, uB, traction, quad_ord
     mx, mh = locB_near[o, 0], locB_near[o, 1]
     keepm = np.concatenate([[True], np.diff(mx) > 1e-9])
     mx, mh = mx[keepm], mh[keepm]
-    masterB_ids = rim_near[o][keepm]                    # B global ids ordered with mx
-    master_prof = dict(x=mx, h=mh, hp=np.gradient(mh, mx))
+    masterB_ids = rim_near[o][keepm]                     # B node indices, ordered by x_local
 
-    coupling = MonotoneCoupling1D(bakedA, master_prof)
-    gf = GapField(bakedA, coupling)
+    # --- assemble the full 4-block tangent on a SHARED LOCAL dof vector (A band then B band) ---
+    # local node ids: A band -> 0..nA-1 ;  B band -> nA..nA+nB-1
+    nA, nB = len(slaveA_ids), len(masterB_ids)
+    slave_xy = np.column_stack([bakedA["x"], bakedA["h"]])           # A band in A-local coords
+    master_xy = np.column_stack([mx, mh])                            # B band in A-local coords
+    sloc_ids = np.arange(nA)
+    mloc_ids = np.arange(nA, nA + nB)
+    n_loc_dof = 2 * (nA + nB)
+    f_loc, Kc_loc, diag = assemble_two_body_contact(
+        slave_xy, sloc_ids, master_xy, mloc_ids, n_loc_dof, traction.eps_n,
+        order=quad_order, pen_offset=pen_offset)
+    # f_loc : (nA+nB, 2) in A-LOCAL frame -> rotate to global
+    f_glob = f_loc @ R_lg.T                                          # (nA+nB, 2) global
+    fA_band = f_glob[:nA]                                            # global force on A band nodes
+    fB_band = f_glob[nA:]                                            # global force on B band nodes
 
-    def eval_gap(X_global, R_gl=R_gl, R_lg=R_lg, gf=gf, c0=A.center0, po=pen_offset):
-        Xl = (X_global - c0) @ R_gl.T
-        gN, n_loc = gf.eval_gap(Xl)
-        return gN - po, n_loc @ R_lg.T
-
-    surfA = A.sol.nodes[slaveA_ids] + uA[slaveA_ids]
-    fA, KcA, diag = assemble_contact(surfA, slaveA_ids, A.n_dof, eval_gap, traction, order=quad_order)
-    fA2 = fA.reshape(-1, 2)
-
-    # --- exact Newton's third law: push -fA onto B through the OT correspondence (P1 mortar) ---
-    # and build a lumped reaction tangent on B's active master nodes so Newton sees B's stiffness.
-    from scipy.sparse import coo_matrix
+    fA2 = np.zeros((A.sol.n_nodes, 2))
     fB2 = np.zeros((B.sol.n_nodes, 2))
-    xs_local = (surfA - A.center0) @ R_gl.T              # slave local x of each band node (in order)
-    x_master, _, _ = coupling.map(xs_local[:, 0])       # OT-mapped master x for each slave node
-    n_glob = np.array([0.0, 1.0]) @ R_lg.T              # inward normal in global = out_dir
-    nn = np.outer(n_glob, n_glob)
-    band_len = float(mx[-1] - mx[0])
-    active_master = set()
-    for li, gidA in enumerate(slaveA_ids):
-        fa = fA2[gidA]
-        if not np.any(fa):
-            continue
-        j = int(np.clip(np.searchsorted(mx, x_master[li]) - 1, 0, len(mx) - 2))
-        x0, x1 = mx[j], mx[j + 1]
-        w1 = 0.0 if x1 == x0 else float(np.clip((x_master[li] - x0) / (x1 - x0), 0.0, 1.0))
-        w0 = 1.0 - w1
-        fB2[masterB_ids[j]] += -fa * w0
-        fB2[masterB_ids[j + 1]] += -fa * w1
-        active_master.update([masterB_ids[j], masterB_ids[j + 1]])
-    rB, cB, vB = [], [], []
-    w_lump = band_len / max(len(active_master), 1)
-    for gid in active_master:
+    fA2[slaveA_ids] = fA_band
+    fB2[masterB_ids] = fB_band
+
+    # --- rotate the 2x2 nodal tangent blocks from local to global: K_glob = R_lg K_loc R_lg^T ---
+    # Kc_loc is (2(nA+nB))^2; convert each 2x2 (node-pair) block.  Build the three global blocks
+    # (Kss on A dofs, Kmm on B dofs, Ksm cross A->B) directly from Kc_loc's COO entries.
+    Kl = Kc_loc.tocoo()
+    # map a local 2*node+comp dof index -> (band_node_local, comp)
+    rss, css, vss = [], [], []
+    rmm, cmm, vmm = [], [], []
+    rsm, csm, vsm = [], [], []   # rows=A dof, cols=B dof
+    # accumulate raw 2x2 blocks keyed by (node_i_local, node_j_local), rotate, then scatter
+    blocks = {}
+    for r, c, v in zip(Kl.row, Kl.col, Kl.data):
+        ni, ci = r // 2, r % 2
+        nj, cj = c // 2, c % 2
+        blocks.setdefault((ni, nj), np.zeros((2, 2)))[ci, cj] += v
+    for (ni, nj), blk in blocks.items():
+        gblk = R_lg @ blk @ R_lg.T                                  # rotate to global
+        i_is_A, j_is_A = ni < nA, nj < nA
+        gi = slaveA_ids[ni] if i_is_A else masterB_ids[ni - nA]
+        gj = slaveA_ids[nj] if j_is_A else masterB_ids[nj - nA]
         for di in range(2):
             for dk in range(2):
-                rB.append(2 * gid + di); cB.append(2 * gid + dk)
-                vB.append(traction.eps_n * w_lump * nn[di, dk])
-    KcB = coo_matrix((vB, (rB, cB)), shape=(B.n_dof, B.n_dof)).tocsr() if vB else \
-        coo_matrix((B.n_dof, B.n_dof)).tocsr()
-    return fA2, fB2, slaveA_ids, KcA, KcB
+                val = gblk[di, dk]
+                if val == 0.0:
+                    continue
+                if i_is_A and j_is_A:
+                    rss.append(2 * gi + di); css.append(2 * gj + dk); vss.append(val)
+                elif (not i_is_A) and (not j_is_A):
+                    rmm.append(2 * gi + di); cmm.append(2 * gj + dk); vmm.append(val)
+                elif i_is_A and (not j_is_A):
+                    rsm.append(2 * gi + di); csm.append(2 * gj + dk); vsm.append(val)
+                # j_is_A and not i_is_A (the K_ms block) is the transpose of Ksm; the caller adds
+                # both Ksm and Ksm^T, so we skip it here to avoid double counting.
+    Kss = coo_matrix((vss, (rss, css)), shape=(A.n_dof, A.n_dof)).tocsr()
+    Kmm = coo_matrix((vmm, (rmm, cmm)), shape=(B.n_dof, B.n_dof)).tocsr()
+    Ksm = coo_matrix((vsm, (rsm, csm)), shape=(A.n_dof, B.n_dof)).tocsr()
+    return fA2, fB2, slaveA_ids, masterB_ids, Kss, Ksm, Kmm
 
 
 def _wall_forces(disc: Disc, out_dir, arc_half, wall_face, u, traction, quad_order):
@@ -254,45 +285,58 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
     def split(u):
         return {k: u[offset[k]:offset[k] + discs[k].n_dof].reshape(-1, 2) for k in keys}
 
-    def _scatter_block(Kc_glob, Kc_local, off):
-        """Scatter a per-body (n_dof_body) contact tangent into the global matrix at ``off``."""
-        Kc_local = Kc_local.tocoo()
-        Kc_glob[2].extend((Kc_local.row + off).tolist())
-        Kc_glob[3].extend((Kc_local.col + off).tolist())
-        Kc_glob[4].extend(Kc_local.data.tolist())
+    from scipy.sparse import coo_matrix
+
+    def _scatter(Krow, Kcol, Kdat, blk, off_r, off_c):
+        """Scatter a sparse contact block into the global COO accumulators with row/col offsets."""
+        blk = blk.tocoo()
+        Krow.extend((blk.row + off_r).tolist())
+        Kcol.extend((blk.col + off_c).tolist())
+        Kdat.extend(blk.data.tolist())
 
     u = np.zeros(N_dof)
     iters_total = 0
+    converged_all = True            # True iff EVERY load step reaches the Newton tol (not max_iter)
+    rtol = 1e-8                     # relative residual tolerance for a true Newton convergence flag
     for step in range(1, n_steps + 1):
         pen = overlap * step / n_steps          # ramp the prescribed geometric overlap (the load)
+        step_converged = False
         for it in range(max_iter):
             iters_total += 1
             ud = split(u)
             f_tot = np.zeros(N_dof)
             Krow, Kcol, Kdat = [], [], []     # COO accumulators for the contact tangent
 
-            # disc-disc OT pairs (both bodies get the equal/opposite mortar traction)
+            # disc-disc OT pairs: BOTH bodies get equal/opposite mortar traction AND the full
+            # 4-block tangent (K_ss on A, K_mm on B, K_sm cross A->B, K_ms = K_sm^T cross B->A).
             for ka, kb, out_dir in pairs:
                 res = _pair_forces(discs[ka], discs[kb], out_dir, arc_half, ud[ka], ud[kb],
                                    traction, quad_order, pen_offset=pen)
                 if res is None:
                     continue
-                fA2, fB2, slaveA_ids, KcA, KcB = res
-                f_tot[offset[ka]:offset[ka] + discs[ka].n_dof] += fA2.reshape(-1)
-                f_tot[offset[kb]:offset[kb] + discs[kb].n_dof] += fB2.reshape(-1)
-                _scatter_block([None, None, Krow, Kcol, Kdat], KcA, offset[ka])
-                _scatter_block([None, None, Krow, Kcol, Kdat], KcB, offset[kb])
+                fA2, fB2, slaveA_ids, masterB_ids, Kss, Ksm, Kmm = res
+                oa, ob = offset[ka], offset[kb]
+                f_tot[oa:oa + discs[ka].n_dof] += fA2.reshape(-1)
+                f_tot[ob:ob + discs[kb].n_dof] += fB2.reshape(-1)
+                _scatter(Krow, Kcol, Kdat, Kss, oa, oa)        # K_ss  (A dofs x A dofs)
+                _scatter(Krow, Kcol, Kdat, Kmm, ob, ob)        # K_mm  (B dofs x B dofs)
+                _scatter(Krow, Kcol, Kdat, Ksm, oa, ob)        # K_sm  (A dofs x B dofs)
+                _scatter(Krow, Kcol, Kdat, Ksm.T, ob, oa)      # K_ms = K_sm^T (B dofs x A dofs)
 
             resid = Kg @ u - f_tot
-            from scipy.sparse import coo_matrix
             Kc = coo_matrix((Kdat, (Krow, Kcol)), shape=(N_dof, N_dof)).tocsr() if Kdat else \
                 coo_matrix((N_dof, N_dof)).tocsr()
             Jc = (Kg + Kc).tocsr()
             du = np.zeros(N_dof)
             du[free] = spsolve(Jc[free][:, free].tocsc(), -resid[free])
             u = u + relax * du
-            if np.linalg.norm(du[free]) < 1e-10 * max(np.linalg.norm(u[free]), 1e-12):
+            # true Newton convergence: residual (out-of-balance force) on the free dofs -> 0
+            rnorm = np.linalg.norm(resid[free])
+            fscale = max(np.linalg.norm(f_tot[free]), 1e-12)
+            if rnorm < rtol * fscale:
+                step_converged = True
                 break
+        converged_all = converged_all and step_converged
 
     ud = split(u)
 
@@ -308,7 +352,7 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
                            traction, quad_order, pen_offset=pen)
         if res is None:
             continue
-        fA2, fB2, _, _, _ = res
+        fA2, fB2, _, _, _, _, _ = res
         f_global[offset[ka]:offset[ka] + discs[ka].n_dof] += fA2.reshape(-1)
         f_global[offset[kb]:offset[kb] + discs[kb].n_dof] += fB2.reshape(-1)
         # collect the force on the centre disc whenever it is a member of the pair
@@ -351,12 +395,14 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
         "shear_rel": float(abs(sxy_c) / scale),
         "force_imbalance": float(force_imbalance),
         "global_balance": global_balance,
-        "iters": iters_total, "E": E, "nu": nu, "R": R, "t": t,
+        "iters": iters_total, "converged": bool(converged_all),
+        "E": E, "nu": nu, "R": R, "t": t,
         "overlap": overlap, "delta": delta, "eps_n": eps_n, "arc_half": arc_half,
     }
     if verbose:
         print(f"  CV-9a N-body disc array  ({n_discs}x{n_discs} = {len(keys)} discs, "
-              f"{len(pairs)} OT pairs, {n_rings} rings, {N_dof} dof, {iters_total} iters)")
+              f"{len(pairs)} OT pairs, {n_rings} rings, {N_dof} dof, {iters_total} iters, "
+              f"converged={converged_all})")
         print(f"    centre-disc N per face (OT field) = {N_per_face:.4f}   faces: "
               f"{', '.join(f'{v:.3f}' for v in centre_face_N.values())}")
         print(f"    global force balance |sum f| = {global_balance:.2e}   "
@@ -392,9 +438,10 @@ def main():
     # the physically meaningful target is the equibiaxial MEAN (sxx+syy)/2 vs -2N/(pi R t); the
     # individual components split by a mesh-induced D4 anisotropy (the concentric-ring disc mesh is
     # not exactly 4-fold symmetric), reported honestly.  Global Newton's-third-law balance is exact.
-    ok = (m["center_mean_relerr"] < 0.05 and m["global_balance"] < 1e-6)
+    ok = (m["center_mean_relerr"] < 0.05 and m["global_balance"] < 1e-6 and m["converged"])
     print(f"\n  CV-9a vs equibiaxial closed form: {'PASS' if ok else 'CHECK'} "
-          f"(centre MEAN within 5%, exact global force balance; D4 anisotropy {m['equibiaxial_anisotropy']*100:.1f}% is a mesh artifact)")
+          f"(centre MEAN within 5%, true Newton convergence, exact global force balance; "
+          f"D4 anisotropy {m['equibiaxial_anisotropy']*100:.1f}% is a mesh artifact)")
     print(f"  metrics -> {os.path.join(RUN_DIR, 'metrics.json')}")
     return m, ok
 

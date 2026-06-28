@@ -31,6 +31,7 @@ from .coupling import MonotoneCoupling1D
 from .gap_field import GapField
 from .traction import TractionField
 from .assembly import assemble_contact
+from .two_body import assemble_two_body_contact
 
 __all__ = [
     "gauss_legendre_1d",
@@ -40,4 +41,5 @@ __all__ = [
     "GapField",
     "TractionField",
     "assemble_contact",
+    "assemble_two_body_contact",
 ]

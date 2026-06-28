@@ -325,3 +325,69 @@ assembled**, so any solve that needs it either diverges (T2) or stalls at max_it
 5. (context, shared module) `assemble_contact`'s `Kc` off-diagonal `M_IJ n_J⊗n_J` is only symmetric
    for flat facets; on curved surfaces it is asymmetric. Fine for the flat patch tests; it
    undermines the "symmetric SPSD tangent" assumption that T4 inherits.
+
+---
+
+## Two-body tangent FIX — verified (adversarial re-check)
+
+The decisive T2/T4 blocker above ("the two-body / multi-body mortar tangent is never assembled") is
+now **resolved**. A new shared assembler `solvers/contact/measure_coupling/two_body.py`
+(`assemble_two_body_contact`) builds the full SYMMETRIC SPSD 4-block consistent tangent, and the cv8
+(T2) and cv9 (T4) drivers call it. Re-derived independently, SymPy-verified, FD-verified, and run to
+numbers below — no NaN-masking, no rigged overall verdict.
+
+### The 4 blocks as shipped (`two_body.py:180-204`)
+
+Per active slave Gauss point ξ_q, with one interpolated unit normal `n_hat` and the four signed
+weights `entries = [(N_I⁺,slave,+1), (N_J⁺,slave,+1), (N_K⁻∘χ,master,−1), (N_L⁻∘χ,master,−1)]`, the
+code accumulates `coeff = (ε_n w J)·(s_a w_a)·(s_b w_b)` times the SAME `n_hat⊗n_hat` for every
+(a,b) pair. This is exactly
+
+    K_ss = +ε_n Σ_q wJ N_I⁺N_J⁺ (n⊗n),   K_sm = −ε_n Σ_q wJ N_I⁺(N_K⁻∘χ)(n⊗n),
+    K_ms = K_sm^T,                        K_mm = +ε_n Σ_q wJ (N_K⁻∘χ)(N_L⁻∘χ)(n⊗n),
+
+with the signs (+,−,−,+) coming from `s_a s_b` (slave +1, master −1). K_ms = K_sm^T holds *by
+construction* because the same nested loop emits the (a,b) and (b,a) entries with identical `coeff`.
+
+### Gates (all executed, measured)
+
+| gate | result |
+|---|---|
+| **SymPy** `dR/du == [K_ss,K_sm;K_ms,K_mm]` (all 64 entries, general n) | `two_body_mortar_tangent.py` → **0** (exact); symmetry 0; K_ms−K_sm^T = 0; signs +,−,−,+ confirmed; patch-test resultant [0,0] under Σ_K(N_K⁻∘χ)=1 |
+| **FD Jacobian** `max|K_ana − K_fd|/scale` (non-matching 4v4, frozen geometry) | `two_body.py` self-test 2 → **3.3e-11** (≪1e-6) ✅ |
+| **flat self-test** force balance / F_line / symmetric SPSD | 4.4e-16 / exact / symmetric SPSD ✅ |
+| **curved-rim symmetry** `max|Kc−Kc^T|` (non-flat slave+master, general normals) | **0.0** (resolves the prior 2.4e3 asymmetry); min eig 0.0 (SPSD); |Σf|=0.0 ✅ |
+| **T2 patch test** (cv8, non-matching 12 vs 17 jittered) | CONVERGES (was NaN/1e108). σ_yy mean **−0.049992** vs −0.05 (err 1.7e-4), non-uniformity 3.3e-3; net-resultant **3.6e-17**, transmit err **1.4e-16**; LUMPED baseline σ_yy=−0.909, non-unif 67.3 ✅ |
+| **T4 N-body** (cv9, 3×3, 12 pairs) | **converged=True** (84 iters; was `converged=False`/max_iter every run); centre MEAN err **0.21%** vs −2N/πRt; global |Σf|=2.9e-15; gate requires `converged` → prints **PASS** ✅ |
+
+### Why the curved-rim asymmetry is fixed
+
+The prior shared `assemble_contact` used per-node normals `M_IJ (n_J⊗n_J)` (asymmetric in I,J on a
+curved rim). The new block uses ONE interpolated `n_hat` per Gauss point as both the row and column
+normal — `N_I N_J (n_hat⊗n_hat)` — which is manifestly symmetric in (I,J). cv9 also assembles all
+four global blocks including `Ksm.T` explicitly (`cv9_nbody_array_ot.py:321-324`), with the local→
+global rotation `R K R^T` preserving symmetry.
+
+### Honest caveats (not correctness bugs, flagged so they are not over-read)
+
+- **cv8 `coupling_pou_err`** (`cv8_deformable_ot.py:312-321`) computes `abs((1−tt)+tt−1.0)`, which is
+  identically 0 by algebra — it does NOT actually probe Σ_K(N_K⁻∘χ)=1 and always reads 0.0. It is
+  cosmetic and NOT load-bearing: the real evidence is the converged interior σ_yy (−0.049992 vs −0.05)
+  plus `net_resultant`/`transmit_err` at machine precision and the SymPy patch-test identity. The line
+  should be removed or replaced with an actual mass-marginal residual, but it does not inflate the
+  verdict.
+- **CV-8 overall prints `CHECK`, not `PASS`** — honest: the deformable-Hertz `a_fem` is 37.6% off on
+  the coarse 40×10 CST mesh (stress-recovery / penalty bias), independent of the now-correct coupling.
+  The verdict was NOT rigged to PASS.
+- Scope unchanged: frictionless symmetric block (friction adds force only); small-rotation (d(n),
+  d(χ) dropped, documented and consistent with the FD-frozen-geometry check).
+
+### Updated verdict
+
+| track | prior | now |
+|---|---|---|
+| **T2** | ❌ patch test NaN; master block absent | ✅ **4-block tangent assembled, FD==Jacobian (3.3e-11), patch test CONVERGES, uniform stress transmitted to ~1e-16**; CV-8 still `CHECK` only for the unrelated coarse-CST Hertz `a` |
+| **T4** | ❌ asymmetric tangent, never converges | ✅ **symmetric SPSD tangent (curved-rim 0.0), N-body converged=True, centre 0.21%, |Σf|=2.9e-15 → PASS** |
+
+The two errors #1 (T2) and the T4 half of #4/#5 in "Errors flagged" above are **fixed**. The T3 items
+(#2 sign bug, #3 rigged `or True` gate) are a different module and remain open.

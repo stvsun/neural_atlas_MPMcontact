@@ -6,6 +6,20 @@ the gates — and **overturned the builder agents' optimistic self-reports** (`o
 Full derivations in `next_phase_math.md`. This file is the honest at-a-glance status; the verdicts were
 independently reproduced by the orchestrator before recording.
 
+> **UPDATE (T2 & T4 FIXED).** The root-cause gap below — the never-assembled multi-body mortar
+> master-coupling tangent — has since been deployed via a derive → SymPy → code → V&V pipeline. The new
+> shared helper `solvers/contact/measure_coupling/two_body.py::assemble_two_body_contact` assembles the
+> full 4-block tangent `[[K_ss, K_sm],[K_ms, K_mm]]` (`K_ms = K_sm^T`, symmetric SPSD). Independently
+> re-verified: SymPy proves the symbolic `dR/du` **equals** the 4-block tangent (`docs/hertz_derivation/
+> two_body_mortar_tangent.py`, resultant `[0,0]`); the FD check gives `K==∂f/∂u` to **3.3e-11**;
+> **T2** the two-body patch test now **converges** (no NaN) and transmits a uniform pressure to
+> **1.4e-16** on non-matching meshes (lumped baseline 67× worse); **T4** the 3×3 N-body array
+> **converges** at full Newton (force balance 2.9e-15) with centre mean stress **0.21%**, mesh-robust
+> (prior 2%↔46% swing gone). Residual honest caveats: T2's both-deformable Hertz sub-test is still
+> coarse-mesh `CHECK` (a 38% — discretization, not coupling); T4 per-component anisotropy ~12% is a
+> non-monotone mesh artifact (mean is the closed-form target). The dropped `d(n)/d(χ)` geometric term is
+> the standard small-rotation approximation (recovered across Newton iters; residual → 8e-9).
+
 | Track | What was built | Honest status |
 |-------|----------------|---------------|
 | **T1** Neural charts | `cv_neural_chart_verify.py` + test | ✅ **VERIFIED** — OT-path patch test machine-exact; neural radial chart hits L0 (gap RMSE/L < 6e-3, normal median < 2°); disc-SDF floor reported as honest-partial (Euler budget). 3/3 tests pass. Reuses the audited `measure_coupling` module. |
