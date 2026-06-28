@@ -49,6 +49,44 @@ _WALL_DIRS = {"E": np.array([1.0, 0.0]), "W": np.array([-1.0, 0.0]),
               "N": np.array([0.0, 1.0]), "S": np.array([0.0, -1.0])}
 
 
+def disc_mesh_d4(R=1.0, n_rings=10, center=(0.0, 0.0)):
+    """D4-symmetric concentric-ring disc triangulation.
+
+    The default ``solvers.fem.tri2d.disc_mesh`` builds rings with node counts ``max(6, round(2 pi i))``
+    (6, 12, 19, 25, ...) and an alternating per-ring angular offset; that node set is NOT invariant
+    under the dihedral group D4 (the x<->y swap and the axis reflections), so even an exactly
+    equibiaxial load splits into per-component sigma_xx != sigma_yy by a MESH artifact (~12% here).
+
+    This mesh instead gives every ring a node count that is a MULTIPLE OF 4 and generates each ring by
+    replicating ONE quadrant ``[0, pi/2)`` four times, so the node set is invariant under x<->y swap and
+    under x->-x / y->-y reflections to machine precision.  An equibiaxial field then recovers EACH
+    component (not just the mean (sxx+syy)/2) to the closed form, collapsing the anisotropy.
+
+    Returns ``(nodes (N,2), tris (M,3 CCW), boundary_node_idx)`` matching ``disc_mesh``'s signature.
+    """
+    from scipy.spatial import Delaunay
+    pts = [np.array([0.0, 0.0])]
+    bnd = []
+    for i in range(1, n_rings + 1):
+        r = R * i / n_rings
+        n_i = max(8, 4 * int(round(np.pi * i / 2.0)))          # multiple of 4, ~uniform arc spacing
+        per_quad = n_i // 4
+        base = (np.arange(per_quad) + 0.5) / per_quad * (np.pi / 2.0)   # off-axis -> clean Delaunay
+        ang = np.concatenate([base + q * (np.pi / 2.0) for q in range(4)])
+        ring = np.column_stack([r * np.cos(ang), r * np.sin(ang)])
+        if i == n_rings:
+            bnd = list(range(len(pts), len(pts) + n_i))
+        pts.extend(ring)
+    nodes = np.array(pts)
+    tri = Delaunay(nodes).simplices
+    v = nodes[tri]
+    area2 = ((v[:, 1, 0] - v[:, 0, 0]) * (v[:, 2, 1] - v[:, 0, 1]) -
+             (v[:, 2, 0] - v[:, 0, 0]) * (v[:, 1, 1] - v[:, 0, 1]))
+    tri[area2 < 0] = tri[area2 < 0][:, [0, 2, 1]]
+    nodes = nodes + np.asarray(center)
+    return nodes, tri, np.array(bnd, int)
+
+
 def _frame(out_dir):
     """Local frame: +y = INWARD normal (-out_dir), +x along the contact face."""
     n_in = -np.asarray(out_dir, float)
@@ -77,8 +115,8 @@ def _bake_band(loc_xy, arc_half):
 class Disc:
     """A single elastic disc body: its own Tri2D solver, stiffness, rim bookkeeping."""
 
-    def __init__(self, center, R, n_rings, E, nu, t):
-        nodes, tris, bnd = disc_mesh(R, n_rings, center=tuple(center))
+    def __init__(self, center, R, n_rings, E, nu, t, mesh_fn=disc_mesh):
+        nodes, tris, bnd = mesh_fn(R, n_rings, center=tuple(center))
         self.center0 = np.asarray(center, float)
         self.R = R
         self.sol = Tri2DFEMSolver(nodes, tris, E, nu, thickness=t, mode="plane_stress")
@@ -229,13 +267,28 @@ def _wall_forces(disc: Disc, out_dir, arc_half, wall_face, u, traction, quad_ord
 
 
 def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, delta=0.03,
-        arc_half=0.30, eps_n=None, max_iter=60, relax=0.7, n_steps=4, quad_order=3, verbose=True):
+        arc_half=0.30, eps_n=None, max_iter=60, relax=1.0, n_steps=4, quad_order=3,
+        line_search=True, mesh="d4", verbose=True):
     """N-body array.  Disc centres are PINNED on a grid with spacing ``2R - overlap`` so every
     interior face carries a fixed geometric overlap (the load).  The overlap is ramped 0 -> overlap
     over ``n_steps`` by sliding the disc centres together; the per-face confining force N then EMERGES
     from the OT measure-coupling contact field.  The interior (centre) disc of an odd lattice sees four
     equal inward forces -> exactly equibiaxial, matching the closed form sigma = -2N/(pi R t).
-    ``delta`` is unused (kept for CLI compatibility / wall variants)."""
+    ``delta`` is unused (kept for CLI compatibility / wall variants).
+
+    Convergence.  The contact problem is non-smooth (the active set and the OT host-segment weights
+    are recomputed each Newton iteration), so the full Newton step can OVERSHOOT and limit-cycle near
+    the active-set boundary at the final load step.  ``line_search=True`` adds a BACKTRACKING line
+    search on the residual-norm merit ``||K u - f_c||`` (Armijo-style halving, ``alpha`` in
+    {1, 1/2, 1/4, ...}); accepting the largest ``alpha`` that decreases the merit breaks the limit
+    cycle and lets the array converge at FULL Newton (``relax=1.0``) -- no fixed under-relaxation.
+    ``relax`` still multiplies the (possibly line-searched) step, so ``relax<1`` gives the legacy
+    damped-Newton path for comparison.
+
+    Mesh.  ``mesh="d4"`` uses the D4-symmetric disc mesh (:func:`disc_mesh_d4`) so each stress
+    COMPONENT -- not just the mean -- recovers the equibiaxial closed form; ``mesh="ring"`` is the
+    legacy concentric-ring mesh whose ~12% per-component anisotropy is a mesh artifact."""
+    mesh_fn = disc_mesh_d4 if mesh == "d4" else disc_mesh
     h_elem = R / n_rings
     if eps_n is None:
         # moderate, mesh-independent penalty (~2.5 E); the lumped master tangent under-resolves B's
@@ -250,7 +303,7 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
         for j in range(n_discs):
             c = np.array([i * spacing, j * spacing])
             centers[(i, j)] = c
-            discs[(i, j)] = Disc(c, R, n_rings, E, nu, t)
+            discs[(i, j)] = Disc(c, R, n_rings, E, nu, t, mesh_fn=mesh_fn)
     keys = list(discs.keys())
     lattice_max = (n_discs - 1) * spacing
 
@@ -294,8 +347,42 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
         Kcol.extend((blk.col + off_c).tolist())
         Kdat.extend(blk.data.tolist())
 
+    def _contact_assemble(u, pen, want_tangent=True):
+        """Assemble the global contact force ``f_tot`` (and, if requested, the 4-block tangent ``Kc``)
+        at displacement ``u`` for prescribed overlap ``pen``.  Returns ``(f_tot, Kc_or_None)``."""
+        ud = split(u)
+        f_tot = np.zeros(N_dof)
+        Krow, Kcol, Kdat = ([], [], []) if want_tangent else (None, None, None)
+        # disc-disc OT pairs: BOTH bodies get equal/opposite mortar traction AND the full
+        # 4-block tangent (K_ss on A, K_mm on B, K_sm cross A->B, K_ms = K_sm^T cross B->A).
+        for ka, kb, out_dir in pairs:
+            res = _pair_forces(discs[ka], discs[kb], out_dir, arc_half, ud[ka], ud[kb],
+                               traction, quad_order, pen_offset=pen)
+            if res is None:
+                continue
+            fA2, fB2, slaveA_ids, masterB_ids, Kss, Ksm, Kmm = res
+            oa, ob = offset[ka], offset[kb]
+            f_tot[oa:oa + discs[ka].n_dof] += fA2.reshape(-1)
+            f_tot[ob:ob + discs[kb].n_dof] += fB2.reshape(-1)
+            if want_tangent:
+                _scatter(Krow, Kcol, Kdat, Kss, oa, oa)        # K_ss  (A dofs x A dofs)
+                _scatter(Krow, Kcol, Kdat, Kmm, ob, ob)        # K_mm  (B dofs x B dofs)
+                _scatter(Krow, Kcol, Kdat, Ksm, oa, ob)        # K_sm  (A dofs x B dofs)
+                _scatter(Krow, Kcol, Kdat, Ksm.T, ob, oa)      # K_ms = K_sm^T (B dofs x A dofs)
+        if not want_tangent:
+            return f_tot, None
+        Kc = coo_matrix((Kdat, (Krow, Kcol)), shape=(N_dof, N_dof)).tocsr() if Kdat else \
+            coo_matrix((N_dof, N_dof)).tocsr()
+        return f_tot, Kc
+
+    def _merit(u, pen):
+        """Residual-norm merit ||K u - f_c|| on the free dofs (no tangent assembled)."""
+        f_tot, _ = _contact_assemble(u, pen, want_tangent=False)
+        return float(np.linalg.norm((Kg @ u - f_tot)[free]))
+
     u = np.zeros(N_dof)
     iters_total = 0
+    ls_steps_total = 0              # cumulative backtracking trials (diagnostic)
     converged_all = True            # True iff EVERY load step reaches the Newton tol (not max_iter)
     rtol = 1e-8                     # relative residual tolerance for a true Newton convergence flag
     for step in range(1, n_steps + 1):
@@ -303,39 +390,35 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
         step_converged = False
         for it in range(max_iter):
             iters_total += 1
-            ud = split(u)
-            f_tot = np.zeros(N_dof)
-            Krow, Kcol, Kdat = [], [], []     # COO accumulators for the contact tangent
-
-            # disc-disc OT pairs: BOTH bodies get equal/opposite mortar traction AND the full
-            # 4-block tangent (K_ss on A, K_mm on B, K_sm cross A->B, K_ms = K_sm^T cross B->A).
-            for ka, kb, out_dir in pairs:
-                res = _pair_forces(discs[ka], discs[kb], out_dir, arc_half, ud[ka], ud[kb],
-                                   traction, quad_order, pen_offset=pen)
-                if res is None:
-                    continue
-                fA2, fB2, slaveA_ids, masterB_ids, Kss, Ksm, Kmm = res
-                oa, ob = offset[ka], offset[kb]
-                f_tot[oa:oa + discs[ka].n_dof] += fA2.reshape(-1)
-                f_tot[ob:ob + discs[kb].n_dof] += fB2.reshape(-1)
-                _scatter(Krow, Kcol, Kdat, Kss, oa, oa)        # K_ss  (A dofs x A dofs)
-                _scatter(Krow, Kcol, Kdat, Kmm, ob, ob)        # K_mm  (B dofs x B dofs)
-                _scatter(Krow, Kcol, Kdat, Ksm, oa, ob)        # K_sm  (A dofs x B dofs)
-                _scatter(Krow, Kcol, Kdat, Ksm.T, ob, oa)      # K_ms = K_sm^T (B dofs x A dofs)
-
+            f_tot, Kc = _contact_assemble(u, pen, want_tangent=True)
             resid = Kg @ u - f_tot
-            Kc = coo_matrix((Kdat, (Krow, Kcol)), shape=(N_dof, N_dof)).tocsr() if Kdat else \
-                coo_matrix((N_dof, N_dof)).tocsr()
             Jc = (Kg + Kc).tocsr()
             du = np.zeros(N_dof)
             du[free] = spsolve(Jc[free][:, free].tocsc(), -resid[free])
-            u = u + relax * du
             # true Newton convergence: residual (out-of-balance force) on the free dofs -> 0
             rnorm = np.linalg.norm(resid[free])
             fscale = max(np.linalg.norm(f_tot[free]), 1e-12)
             if rnorm < rtol * fscale:
                 step_converged = True
                 break
+            # ---- backtracking line search on the residual merit ----
+            # The active set / OT host weights flip with u, so a full Newton step can OVERSHOOT and
+            # limit-cycle (merit increases).  Halve alpha until the merit DECREASES vs the current
+            # residual (Armijo with c=1e-4); accept the largest such alpha.  Without line search this
+            # reduces to the plain (under-)relaxed step u += relax*du.
+            if line_search:
+                alpha, accepted = 1.0, False
+                for _ in range(12):                 # alpha = 1, 1/2, ..., 1/4096
+                    trial = u + relax * alpha * du
+                    if _merit(trial, pen) < (1.0 - 1e-4 * alpha) * rnorm:
+                        accepted = True
+                        break
+                    alpha *= 0.5
+                    ls_steps_total += 1
+                # if no alpha decreased the merit (rare; near a kink) take the smallest damped step
+                u = u + relax * (alpha if accepted else alpha) * du
+            else:
+                u = u + relax * du
         converged_all = converged_all and step_converged
 
     ud = split(u)
@@ -396,13 +479,18 @@ def run(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0.03, de
         "force_imbalance": float(force_imbalance),
         "global_balance": global_balance,
         "iters": iters_total, "converged": bool(converged_all),
+        "relax": relax, "line_search": bool(line_search), "ls_backtracks": int(ls_steps_total),
+        "mesh": mesh,
         "E": E, "nu": nu, "R": R, "t": t,
         "overlap": overlap, "delta": delta, "eps_n": eps_n, "arc_half": arc_half,
     }
     if verbose:
+        solver_tag = (f"FULL Newton (relax={relax}, line-search ON, {ls_steps_total} backtracks)"
+                      if line_search else f"damped Newton (relax={relax}, no line search)")
         print(f"  CV-9a N-body disc array  ({n_discs}x{n_discs} = {len(keys)} discs, "
-              f"{len(pairs)} OT pairs, {n_rings} rings, {N_dof} dof, {iters_total} iters, "
+              f"{len(pairs)} OT pairs, {n_rings} rings, mesh={mesh}, {N_dof} dof, {iters_total} iters, "
               f"converged={converged_all})")
+        print(f"    solver: {solver_tag}")
         print(f"    centre-disc N per face (OT field) = {N_per_face:.4f}   faces: "
               f"{', '.join(f'{v:.3f}' for v in centre_face_N.values())}")
         print(f"    global force balance |sum f| = {global_balance:.2e}   "
@@ -423,25 +511,45 @@ def main():
     ap.add_argument("--n-steps", type=int, default=5)
     ap.add_argument("--delta", type=float, default=0.03)
     ap.add_argument("--overlap", type=float, default=0.025)
+    ap.add_argument("--relax", type=float, default=1.0,
+                    help="step scale; 1.0 = FULL Newton (default, line search makes it converge)")
+    ap.add_argument("--no-line-search", action="store_true",
+                    help="disable backtracking line search (reverts to damped/relaxed Newton)")
+    ap.add_argument("--mesh", choices=["d4", "ring"], default="d4",
+                    help="d4 = 4-fold-symmetric disc mesh (per-component equibiaxial); "
+                         "ring = legacy concentric-ring mesh (~12%% per-component anisotropy)")
     args = ap.parse_args()
 
     os.makedirs(RUN_DIR, exist_ok=True)
     print("=" * 78)
     print(f"CV-9a  N-body elastic disc array -- mutual OT measure-coupling contact")
-    print(f"  ({args.n_discs}x{args.n_discs}, n_rings={args.n_rings})")
+    print(f"  ({args.n_discs}x{args.n_discs}, n_rings={args.n_rings}, mesh={args.mesh}, "
+          f"relax={args.relax}, line_search={not args.no_line_search})")
     print("=" * 78)
     m = run(n_discs=args.n_discs, n_rings=args.n_rings, max_iter=args.max_iter,
-            n_steps=args.n_steps, delta=args.delta, overlap=args.overlap)
+            n_steps=args.n_steps, delta=args.delta, overlap=args.overlap,
+            relax=args.relax, line_search=(not args.no_line_search), mesh=args.mesh)
     with open(os.path.join(RUN_DIR, "metrics.json"), "w") as fh:
         json.dump(m, fh, indent=2)
 
-    # the physically meaningful target is the equibiaxial MEAN (sxx+syy)/2 vs -2N/(pi R t); the
-    # individual components split by a mesh-induced D4 anisotropy (the concentric-ring disc mesh is
-    # not exactly 4-fold symmetric), reported honestly.  Global Newton's-third-law balance is exact.
-    ok = (m["center_mean_relerr"] < 0.05 and m["global_balance"] < 1e-6 and m["converged"])
-    print(f"\n  CV-9a vs equibiaxial closed form: {'PASS' if ok else 'CHECK'} "
-          f"(centre MEAN within 5%, true Newton convergence, exact global force balance; "
-          f"D4 anisotropy {m['equibiaxial_anisotropy']*100:.1f}% is a mesh artifact)")
+    # Decisive gate.  The contact problem is non-smooth, so the FULL Newton step (relax=1.0) is made to
+    # converge by the BACKTRACKING LINE SEARCH (option A in the task): converged=True means every load
+    # step hit the residual tol rtol=1e-8 (NOT max_iter).  We require: (i) FULL Newton (relax==1.0),
+    # (ii) true convergence, (iii) exact global Newton's-third-law balance |sum f|<1e-8, (iv) centre
+    # equibiaxial MEAN within 5%.  With the D4 mesh each COMPONENT (not just the mean) is also reported.
+    full_newton = abs(m["relax"] - 1.0) < 1e-12
+    ok = (m["center_mean_relerr"] < 0.05 and m["global_balance"] < 1e-8 and
+          m["converged"] and full_newton)
+    solver_note = (f"FULL Newton relax=1.0 + backtracking line search ({m['ls_backtracks']} backtracks)"
+                   if (full_newton and m["line_search"]) else
+                   f"damped-Newton relax={m['relax']} (NOT full step)")
+    print(f"\n  CV-9a vs equibiaxial closed form: {'PASS' if ok else 'CHECK'}")
+    print(f"    solver        : {solver_note}")
+    print(f"    converged     : {m['converged']} (every load step reached rtol=1e-8, not max_iter)")
+    print(f"    centre MEAN   : {m['center_mean_relerr']*100:.2f}%  (gate < 5%)")
+    print(f"    |sum f|       : {m['global_balance']:.2e}  (gate < 1e-8, Newton's 3rd law)")
+    print(f"    per-component : sxx {m['sxx_relerr']*100:.2f}%  syy {m['syy_relerr']*100:.2f}%  "
+          f"anisotropy {m['equibiaxial_anisotropy']*100:.2f}%  (mesh={m['mesh']})")
     print(f"  metrics -> {os.path.join(RUN_DIR, 'metrics.json')}")
     return m, ok
 

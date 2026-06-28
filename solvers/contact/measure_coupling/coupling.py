@@ -86,6 +86,88 @@ class MonotoneCoupling1D:
         return x_m, Xm, mass
 
 
+class ClosestPointCoupling1D:
+    """Closest-point (orthogonal-projection) correspondence between two deformed polylines.
+
+    This IS the composite transition map ``tau_AB = pi_B o phi_A`` of the project's Fig-2: each slave
+    point ``x_s`` is carried to the point ``pi_B(x_s)`` = its NEAREST point on the deformed master
+    surface polyline, rather than to the arclength-quantile partner of the global
+    :class:`MonotoneCoupling1D`.
+
+    WHY (cv1_ot_gap.py:15-20, manual §11.8):  the global arclength-monotone map transports ALL slave
+    mass onto ALL master mass, so it cannot represent a *partial* (Hertz) contact — it smears the
+    pressure across the whole interface (mis-maps central slave nodes onto the indenter edge).  The
+    closest-point projection is the correct OT map for non-conforming / partial contact: it is local,
+    so an isolated central contact patch maps onto the matching central master patch and the rest of
+    the interface stays open.
+
+    The contract mirrors :class:`MonotoneCoupling1D` — ``map(xi)`` returns ``(x_m, X_m, mass)`` — but
+    additionally exposes the host master *segment* and its P1 weights via :meth:`map_full`, because
+    the orthogonal foot of a slave point need not lie at the master node sharing its x-coordinate (the
+    weights are the projection parameter ``t`` on the hosting segment, not ``F_m^{-1}(F_s)``).
+
+    Parameters
+    ----------
+    slave, master : dict ``{"x","h","hp"}`` baked profiles (x strictly ascending).
+    contact_band : float, optional
+        If given, slave points whose closest-point distance to the master polyline exceeds this band
+        receive ``mass=0`` (the active set emerges as ``supp(mass)``).  If None the coupling is
+        balanced (``mass==1``) and the active set is decided downstream by the penalty clamp.
+    """
+
+    def __init__(self, slave: dict, master: dict, unbalanced: bool = True,
+                 contact_band: float | None = None):
+        self.slave = {k: np.asarray(v, float) for k, v in slave.items()}
+        self.master = {k: np.asarray(v, float) for k, v in master.items()}
+        self.unbalanced = bool(unbalanced)
+        self.contact_band = contact_band
+        self._mx = self.master["x"]
+        self._my = self.master["h"]
+        # master polyline segment endpoints A_j -> B_j and direction AB_j
+        self._A = np.column_stack([self._mx[:-1], self._my[:-1]])
+        self._B = np.column_stack([self._mx[1:], self._my[1:]])
+        self._AB = self._B - self._A
+        L2 = (self._AB * self._AB).sum(axis=1)
+        self._L2 = np.where(L2 == 0.0, 1e-30, L2)
+
+    def _project(self, P: np.ndarray):
+        """Closest point on the master polyline to ``P`` (2,): (Qx, Qy, seg_index, t in [0,1])."""
+        t = np.clip(((P - self._A) * self._AB).sum(axis=1) / self._L2, 0.0, 1.0)
+        Q = self._A + t[:, None] * self._AB
+        d = np.linalg.norm(P - Q, axis=1)
+        j = int(np.argmin(d))
+        return Q[j, 0], Q[j, 1], j, float(t[j]), float(d[j])
+
+    def map_full(self, xi: np.ndarray):
+        """Full correspondence at slave x-coords ``xi``.
+
+        Returns ``(X_m (n,2), seg (n,), N0 (n,), N1 (n,), mass (n,))`` where ``seg`` is the hosting
+        master segment index and ``N0,N1`` (= ``1-t,t``) are its P1 host weights (partition of unity).
+        """
+        xi = np.asarray(xi, float)
+        h_s = np.interp(xi, self.slave["x"], self.slave["h"])
+        Xm = np.zeros((len(xi), 2))
+        seg = np.zeros(len(xi), int)
+        N0 = np.zeros(len(xi))
+        N1 = np.zeros(len(xi))
+        mass = np.ones(len(xi))
+        for i in range(len(xi)):
+            P = np.array([xi[i], h_s[i]])
+            qx, qy, j, t, d = self._project(P)
+            Xm[i] = (qx, qy)
+            seg[i] = j
+            N0[i] = 1.0 - t
+            N1[i] = t
+            if self.unbalanced and self.contact_band is not None and d > float(self.contact_band):
+                mass[i] = 0.0
+        return Xm, seg, N0, N1, mass
+
+    def map(self, xi: np.ndarray):
+        """Coupling contract: ``(x_m, X_m, mass)`` (x_m = master x of the closest point)."""
+        Xm, _seg, _N0, _N1, mass = self.map_full(xi)
+        return Xm[:, 0], Xm, mass
+
+
 def _logsumexp(M, axis):
     m = np.max(M, axis=axis, keepdims=True)
     out = m + np.log(np.sum(np.exp(M - m), axis=axis, keepdims=True))
@@ -179,3 +261,21 @@ if __name__ == "__main__":
     # equal-total-arclength surfaces: cumulative quantiles must align endpoints.
     assert abs(c._Fs1[0]) < 1e-15 and abs(c._Fs1[-1] - 1.0) < 1e-15
     print("  MonotoneCoupling1D self-test OK (identity map + normalized CDFs)")
+
+    # self-test 3: ClosestPointCoupling — flat master, the orthogonal foot of an interior slave
+    # point is the vertical projection (x_m == x_s), host weights sum to 1, and a far slave point
+    # (separation beyond the band) loses its transported mass.
+    mx = np.linspace(0.0, 1.0, 11)
+    master = dict(x=mx, h=np.zeros_like(mx), hp=np.zeros_like(mx))
+    sx = np.linspace(0.0, 1.0, 7)
+    slave = dict(x=sx, h=np.full_like(sx, -0.01), hp=np.zeros_like(sx))   # 0.01 below master
+    cp = ClosestPointCoupling1D(slave, master, contact_band=0.05)
+    Xm, seg, N0, N1, mass = cp.map_full(np.array([0.23, 0.5, 0.77]))
+    assert np.allclose(Xm[:, 0], [0.23, 0.5, 0.77], atol=1e-9), Xm[:, 0]   # vertical foot on flat
+    assert np.allclose(N0 + N1, 1.0, atol=1e-12), (N0, N1)                 # partition of unity
+    assert np.all(mass == 1.0), mass                                      # 0.01 < band 0.05
+    far = dict(x=sx, h=np.full_like(sx, -0.2), hp=np.zeros_like(sx))      # 0.2 below -> out of band
+    cp2 = ClosestPointCoupling1D(far, master, contact_band=0.05)
+    _, _, _, _, mass2 = cp2.map_full(np.array([0.5]))
+    assert mass2[0] == 0.0, mass2
+    print("  ClosestPointCoupling1D self-test OK (orthogonal foot + partition of unity + band mass)")

@@ -11,9 +11,11 @@ multi-body OT contact recovers the equibiaxial closed form and the exact conserv
     enforced exactly by the OT-mortar pushforward of the slave reaction onto the master rim);
   * a single isolated disc (no pairs) carries NO contact force and zero stress (sanity baseline).
 
-The per-component D4 anisotropy (~10 %) is a documented concentric-ring-mesh artifact, NOT checked
-here; the physically meaningful equibiaxial MEAN is the closed-form target.  Coarse meshes keep the
-run < ~30 s; the publication mesh runs on Euler (see the driver docstring).
+The physically meaningful equibiaxial MEAN is the closed-form target asserted here.  The driver now
+defaults to the D4-symmetric disc mesh (``mesh="d4"``), which also collapses the per-component
+anisotropy that the legacy concentric-ring mesh exhibited (~10 %); that per-component recovery is
+reported by the driver but not separately asserted here.  Coarse meshes keep the run < ~30 s; the
+publication mesh runs on Euler (see the driver docstring).
 """
 import os
 import sys

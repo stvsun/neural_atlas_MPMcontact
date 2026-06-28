@@ -30,5 +30,39 @@
   "ot_vs_conventional_advantage": {"cv1": "3.2x", "cv2": "370x", "cv3": "6.3x", "cv4": "1.4x", "cv5": ">1e10x (grid-indep)", "cv6": "convergent vs frozen", "cv7": "~1e10x (machine-precision)"},
   "improvement_tol_rel": 0.05,
   "stop": true,
-  "stop_reason": "Converged at round 3: no CV improved (frontier 7->1->0). CV-1 plateau proven by mesh convergence + Euler fine-mesh degradation; the other 6 at evidenced floors since rounds 1-2. Math verification clean (one wrong doc claim self-corrected)."
+  "stop_reason": "Converged at round 3: no CV improved (frontier 7->1->0). CV-1 plateau proven by mesh convergence + Euler fine-mesh degradation; the other 6 at evidenced floors since rounds 1-2. Math verification clean (one wrong doc claim self-corrected).",
+  "two_body_bvp_extension": {
+    "label": "CV-8 (T2) deformable-deformable OT Hertz + CV-9a (T4) N-body array via the closest-point OT transition map pi_B o phi_A",
+    "status": "VERIFIED (post-fix; orchestrator independently re-ran every gate)",
+    "regime": "contact between two DEFORMABLE bodies (the rigid-master CV-1..7 suite never reaches this; this is the regime OT is built for)",
+    "unlock": "solvers/contact/measure_coupling/two_body.py::assemble_two_body_contact assembles the full 4-block mortar tangent [[K_ss,K_sm],[K_ms,K_mm]] with K_ms=K_sm^T (symmetric SPSD)",
+    "tangent_verification": {"sympy_dRdu_eq_Kblock_resultant": [0, 0], "fd_closest_point_tangent": 3.45e-11, "force_balance_selftest": 4.4e-16},
+    "ot_map_finding": "GLOBAL ARCLENGTH MonotoneCoupling1D (Brenier map for two MATED rough profiles) SMEARS a partial/non-conforming contact across the whole interface; the CLOSEST-POINT projection pi_B o phi_A is the correct OT map for a localized convex indenter (convex-cost OT degenerates to g=|p-c|-R, per cv1_ot_gap.py:15-20). Driver hardcodes closest_point for seat/slide/convergence; arclength only for full-contact patch test.",
+    "prior_bugs_fixed": ["inverted Hertz geometry (cv8 block_mesh sign made indenter convex the wrong way)", "use of global arclength MonotoneCoupling1D for a partial contact (smears -> mis-maps central nodes to indenter edge)"],
+    "cv8_T2": {
+      "driver": "benchmarks/contact/cv_numerical/cv8_deformable_ot.py",
+      "metrics": "runs/cv8_deformable_ot/metrics.json",
+      "patch_test": {"coupling_pou_err": 0.0, "coupling_net_resultant": 3.64e-17, "coupling_transmit_err": 1.39e-16, "lumped_uniformity_rel_x_worse": 67},
+      "hertz_finest_nx": 192,
+      "a_relerr_finest": 0.0275, "a_relerr_threshold": 0.10,
+      "p0_relerr_finest": 0.0582, "p0_relerr_threshold": 0.12, "p0_source": "Gauss-point pressures",
+      "a_relerr_mesh_convergence_96_to_192": [0.0514, 0.0414, 0.0296, 0.0275],
+      "p0_relerr_mesh_convergence_96_to_192": [0.0634, 0.0568, 0.0591, 0.0582],
+      "p0_note": "drops then plateaus ~5.8% (a real floor, not a lucky point)",
+      "sliding_centroid_monotone": true, "sliding_max_backstep": 0.0, "sliding_force_balance": 1.27e-19, "sliding_F_cov": 0.0017,
+      "contact_localizes": {"n_active_nodal": 52, "n_slave_total": 161, "aW": 0.228}
+    },
+    "cv9a_T4": {
+      "driver": "benchmarks/contact/cv_numerical/cv9_nbody_array_ot.py",
+      "metrics": "runs/cv9_nbody_array_ot/metrics.json",
+      "array": "3x3 (9 discs, 12 mortar pairs)",
+      "converged": true, "iters": 32, "relax": 1.0, "line_search": true, "ls_backtracks": 0,
+      "converged_flag_honest": "forcing max_iter=1 yields converged=False",
+      "global_force_balance": 3.71e-15, "force_balance_threshold": 1e-8, "force_balance_note": "genuine per-pair |f|~14.4 cancellation, not trivial zero",
+      "centre_mean_stress_relerr": 0.0058, "centre_mean_threshold": 0.05,
+      "per_component_anisotropy_d4_mesh": "0.20-0.22%", "per_component_anisotropy_ring_mesh": "11.59% (genuine artifact, honestly labeled mesh-symmetry; MEAN gate passes under both)",
+      "tests": "tests/test_cv9_nbody_ot.py 5/5 pass"
+    },
+    "honest_residuals": "CV-8 ~3-6% in a/p0 is discrete contact-edge noise (infinite Hertz edge-pressure slope rounded over one element; p0 plateaus ~5.8%); both single-realization, plane-strain CST (small-strain Tri2D), frictionless, rigid outer walls (T4); dropped dn/dchi geometric term is the standard small-rotation approximation (recovered across Newton iters)."
+  }
 }

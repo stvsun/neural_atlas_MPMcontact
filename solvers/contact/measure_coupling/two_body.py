@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .coupling import MonotoneCoupling1D
+from .coupling import ClosestPointCoupling1D, MonotoneCoupling1D
 from .quadrature import gauss_legendre_1d
 from .traction import TractionField
 
@@ -80,7 +80,7 @@ def _locate_master(master_x: np.ndarray, xm: float):
 
 def assemble_two_body_contact(slave_xy, slave_ids, master_xy, master_ids, n_dof, eps_n,
                               mu=0.0, order=3, slip_dir=None, contact_band=None,
-                              coupling=None, pen_offset=0.0):
+                              coupling=None, pen_offset=0.0, correspondence="monotone"):
     """Consistent two-body mortar OT contact with the FULL 4-block tangent.
 
     Parameters
@@ -94,12 +94,28 @@ def assemble_two_body_contact(slave_xy, slave_ids, master_xy, master_ids, n_dof,
         symmetric block — friction adds force only, see note).
     order : int, Gauss points per slave segment.
     slip_dir : float|None, unit tangential drag sign for the friction force (optional).
-    contact_band : float|None, vertical band for the unbalanced OT pre-screen (mass=0 outside).
-    coupling : MonotoneCoupling1D, optional pre-built coupling (else built from the profiles).
+    contact_band : float|None, separation band for the unbalanced OT pre-screen (mass=0 outside).
+    coupling : optional pre-built coupling (else built from the profiles per ``correspondence``).
     pen_offset : float, prescribed extra penetration injected into the gap (``g_N -> g_N - pen_offset``)
         to ramp a geometric overlap load without remeshing.  Affects the residual only (the active-set
         threshold), NOT the tangent (the tangent depends on ``deps``, which is consistent with the
         shifted gap because the shift is a constant w.r.t. the dofs).
+    correspondence : {"monotone", "closest_point"}
+        Which transition map carries the slave point onto the master surface.
+
+        - ``"monotone"`` (default): the GLOBAL arclength-quantile map :class:`MonotoneCoupling1D`
+          (``T = F_m^{-1} o F_s``).  Mass-balanced over the WHOLE interface — correct for a fully
+          conforming / full-contact interface (the patch test), but it transports ALL slave mass onto
+          ALL master mass and therefore CANNOT represent a partial contact (it smears a Hertz patch
+          across the entire interface; see cv1_ot_gap.py:15-20, manual §11.8).
+        - ``"closest_point"``: the LOCAL orthogonal-projection map :class:`ClosestPointCoupling1D`
+          (``tau_AB = pi_B o phi_A``, the Fig-2 composite map).  Each slave point is carried to its
+          NEAREST point on the deformed master polyline, so an isolated central contact patch maps
+          onto the matching central master patch — the correct OT map for NON-CONFORMING / PARTIAL
+          (Hertz, large-sliding) contact.
+
+        Both produce the SAME symmetric SPSD 4-block tangent (slave +N_I, master -(N_K o chi),
+        n(x)n); only the master point and its host P1 weights differ.
 
     Returns
     -------
@@ -118,10 +134,26 @@ def assemble_two_body_contact(slave_xy, slave_ids, master_xy, master_ids, n_dof,
 
     slave_prof = _profile(slave_xy)
     master_prof = _profile(master_xy)
+    closest_point = (correspondence == "closest_point")
     if coupling is None:
-        coupling = MonotoneCoupling1D(slave_prof, master_prof,
-                                      unbalanced=(contact_band is not None),
-                                      contact_band=contact_band)
+        if closest_point:
+            coupling = ClosestPointCoupling1D(slave_prof, master_prof,
+                                              unbalanced=(contact_band is not None),
+                                              contact_band=contact_band)
+        else:
+            coupling = MonotoneCoupling1D(slave_prof, master_prof,
+                                          unbalanced=(contact_band is not None),
+                                          contact_band=contact_band)
+    closest_point = isinstance(coupling, ClosestPointCoupling1D)
+
+    def _master_at(xi_scalar):
+        """Return ``(xmaster (2,), jm, Nm0, Nm1, mass)`` for a slave x-coordinate ``xi_scalar``."""
+        if closest_point:
+            Xm, seg, N0, N1, m = coupling.map_full(np.array([xi_scalar]))
+            return Xm[0], int(seg[0]), float(N0[0]), float(N1[0]), float(m[0])
+        xm_q, Xm_q, mass_q = coupling.map(np.array([xi_scalar]))
+        jm, Nm0, Nm1 = _locate_master(master_x, float(xm_q[0]))
+        return Xm_q[0], jm, Nm0, Nm1, float(mass_q[0])
 
     # slave unit normal (upward): contact pushes slave UP, master DOWN.
     sec_s = np.sqrt(1.0 + slave_prof["hp"] ** 2)
@@ -157,11 +189,7 @@ def assemble_two_body_contact(slave_xy, slave_ids, master_xy, master_ids, n_dof,
             xs = Nq[0] * P0 + Nq[1] * P1
             xi_q = float(xs[0])
             # OT correspondence -> master point + the host-segment P1 weights (N_K- o chi)
-            xm_q, Xm_q, mass_q = coupling.map(np.array([xi_q]))
-            xm_q = float(xm_q[0])
-            xmaster = Xm_q[0]                                  # (2,) master surface point
-            jm, Nm0, Nm1 = _locate_master(master_x, xm_q)
-            mass = float(mass_q[0])
+            xmaster, jm, Nm0, Nm1, mass = _master_at(xi_q)     # (2,) master surface point
 
             # normal gap  g_N = (x_s - x_m).n - pen_offset   (mass-screened; inactive -> big +gap)
             gN = (float((xs - xmaster) @ n_hat) - pen_offset) * mass + (1.0 - mass) * 1e3
@@ -312,3 +340,73 @@ if __name__ == "__main__":
     print("  two_body self-test 2: max|K_ana - K_fd| / scale = %.3e" % rel)
     assert rel < 1e-6, "tangent does NOT match the finite-difference Jacobian (rel=%.2e)" % rel
     print("  two_body self-test 2 OK: 4-block tangent == df/du (FD, frozen-geom) to %.1e" % rel)
+
+    # ---- self-test 3: CLOSEST-POINT correspondence — same guarantees as the monotone path ----
+    #   (a) exact force balance (Newton's 3rd law) ;
+    #   (b) symmetric SPSD 4-block tangent ;
+    #   (c) tangent == finite-difference df/du under FROZEN geometry (normal + host weights frozen at
+    #       the linearization point, exactly as the Newton loop uses them).
+    from .coupling import ClosestPointCoupling1D as _CPC
+    pen3, eps3 = 0.02, 500.0
+    sxy3 = np.array([[0.0, 0.0], [0.4, 0.0], [1.0, 0.0]])
+    sid3 = np.array([0, 1, 2])
+    mxy3 = np.array([[0.0, pen3], [0.55, pen3], [1.0, pen3]])      # NON-MATCHING node spacing
+    mid3 = np.array([3, 4, 5])
+    ndof3 = 2 * 6
+    f3, Kc3, diag3 = assemble_two_body_contact(sxy3, sid3, mxy3, mid3, ndof3, eps3, order=3,
+                                               correspondence="closest_point")
+    pN3 = eps3 * pen3
+    assert abs(diag3["force_balance"]) < 1e-10, diag3["force_balance"]
+    assert abs(diag3["F_line"] - pN3 * 1.0) < 1e-10, diag3["F_line"]
+    assert abs(f3[[0, 1, 2], 1].sum() - pN3) < 1e-10, f3[[0, 1, 2], 1].sum()
+    assert abs(f3[[3, 4, 5], 1].sum() + pN3) < 1e-10, f3[[3, 4, 5], 1].sum()
+    Kd3 = Kc3.toarray()
+    assert np.allclose(Kd3, Kd3.T, atol=1e-12), "closest-point Kc must be symmetric"
+    assert np.linalg.eigvalsh(Kd3).min() > -1e-9, "closest-point Kc must be SPSD"
+    print("  two_body self-test 3 OK: closest-point force balance %.1e, F_line exact, symmetric SPSD"
+          % diag3["force_balance"])
+
+    # FD-tangent gate for the closest-point path (curved master so the foot is non-trivially placed).
+    sx4 = np.array([[0.0, 0.0], [0.37, 0.0], [0.71, 0.0], [1.0, 0.0]])
+    sid4 = np.array([0, 1, 2, 3])
+    mx4 = np.column_stack([np.array([0.0, 0.42, 0.83, 1.0]),
+                           0.015 + 0.01 * np.array([0.0, 0.42, 0.83, 1.0]) ** 2])   # curved master
+    mid4 = np.array([4, 5, 6, 7])
+    N4 = 8; ndof4 = 2 * N4; u04 = np.zeros(ndof4); base4 = np.vstack([sx4, mx4])
+    sprof4 = _profile(sx4); sec4 = np.sqrt(1 + sprof4["hp"] ** 2)
+    ns4 = np.column_stack([-sprof4["hp"] / sec4, 1 / sec4])
+    cpc4 = _CPC(sprof4, _profile(mx4))
+    frozen4 = []
+    for k in range(3):
+        for q in range(order):
+            Nq = Nref[q]; P0, P1 = sx4[k], sx4[k + 1]; L = np.linalg.norm(P1 - P0)
+            wq = w_g[q] * 0.5 * L
+            nq = Nq[0] * ns4[k] + Nq[1] * ns4[k + 1]; nq = nq / np.linalg.norm(nq)
+            xs0 = Nq[0] * P0 + Nq[1] * P1
+            _Xm, seg, Nm0, Nm1, _m = cpc4.map_full(np.array([xs0[0]]))
+            frozen4.append((k, q, wq, nq, Nq, int(seg[0]), float(Nm0[0]), float(Nm1[0])))
+
+    def resid_frozen4(u):
+        cur = base4 + u.reshape(N4, 2); f = np.zeros((N4, 2)); tr = TractionField(eps_n)
+        for (k, q, wq, nhat, Nq, jm, Nm0, Nm1) in frozen4:
+            xs = Nq[0] * cur[k] + Nq[1] * cur[k + 1]
+            xm = Nm0 * cur[4 + jm] + Nm1 * cur[4 + jm + 1]
+            gN = (xs - xm) @ nhat
+            t = tr.evaluate(np.array([gN]), nhat[None, :])["t"][0]
+            f[k] += wq * Nq[0] * t; f[k + 1] += wq * Nq[1] * t
+            f[4 + jm] += -wq * Nm0 * t; f[4 + jm + 1] += -wq * Nm1 * t
+        return -f.reshape(-1)
+
+    _, Kc4, _ = assemble_two_body_contact(base4[:4], sid4, base4[4:], mid4, ndof4, eps_n, order=3,
+                                          correspondence="closest_point")
+    K_ana4 = Kc4.toarray(); K_fd4 = np.zeros((ndof4, ndof4))
+    for j in range(ndof4):
+        up = u04.copy(); up[j] += h
+        um = u04.copy(); um[j] -= h
+        K_fd4[:, j] = (resid_frozen4(up) - resid_frozen4(um)) / (2 * h)
+    scale4 = max(np.abs(K_ana4).max(), np.abs(K_fd4).max(), 1e-30)
+    rel4 = np.abs(K_ana4 - K_fd4).max() / scale4
+    print("  two_body self-test 3: closest-point max|K_ana - K_fd| / scale = %.3e" % rel4)
+    assert rel4 < 1e-6, "closest-point tangent != FD Jacobian (rel=%.2e)" % rel4
+    print("  two_body self-test 3 OK: closest-point 4-block tangent == df/du (FD, frozen) to %.1e"
+          % rel4)

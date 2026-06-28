@@ -159,11 +159,38 @@ deep half-plane); **CV-3** Brazilian (centre 1.62%); **CV-4** nine-disc unit cel
 0.15%); neural-SDF L0 (sphere 1.6e-3, disc 3.5e-3); **CV-5 the chart-over-SDF advantage MEASURED** —
 neural SDF degrades on cusps (8e-3) while the neural **radial chart** (`solvers/contact/radial_chart_2d.py`,
 Fourier-feature $\rho_\theta$) reaches 3.8e-3 / 0.42°, and drives the cam-drive dynamics to a 0.04% match
-vs the analytical chart; **CV-6** refinement ceiling measured. NOT BUILT: full N-body disc-array contact
-(only the unit cell), ChartDecoder trained on CV shapes (the FEM is verified on a ChartDecoder), 3-D
-Hertz, MPM cross-checks. Harness `tests/test_neural_chart_verification.py` + `tests/test_chart_fem.py`
+vs the analytical chart; **CV-6** refinement ceiling measured. NOW BUILT (post-fix, see the two-body OT
+paragraph below): the **full N-body disc-array contact** (CV-9a / T4) and the **two-body
+deformable–deformable OT Hertz** (CV-8 / T2). STILL NOT BUILT: ChartDecoder trained on CV shapes (the FEM
+is verified on a ChartDecoder), 3-D Hertz, MPM cross-checks. Harness
+`tests/test_neural_chart_verification.py` + `tests/test_chart_fem.py`
 pass against trained `.pt` charts (gitignored, so a fresh checkout skips until retrained); the slow
 contact sweeps (CV-1/CV-2/CV-5-dynamics) run as benchmark drivers, not routine tests.
+
+**Two-body deformable–deformable OT contact (CV-8 / T2 + CV-9a / T4) — VERIFIED, orchestrator re-ran
+every gate** (manual §11.8.1; report `docs/ot_benchmark/{final_report,next_phase_status}.md`). The OT
+measure-coupling gap is built for contact between two **deformable** bodies (the rigid-master CV-1..7
+suite never reaches it). The unlock is the full 4-block mortar tangent in
+`solvers/contact/measure_coupling/two_body.py::assemble_two_body_contact` (`K_ms=K_sm^T`, symmetric SPSD;
+SymPy `dR/du == K`; FD tangent **3.45e-11**; force-balance self-test **4.4e-16**). KEY FINDING: the
+**global arclength** `MonotoneCoupling1D` (the Brenier map for two *mated rough* profiles) **smears** a
+partial/non-conforming contact across the interface; the **closest-point transition map** `π_B∘φ_A` is
+the correct OT map for a localized convex indenter (convex-cost OT degenerates to `g=|p−c|−R`, per
+`cv_numerical/cv1_ot_gap.py:15-20`) — the driver hardcodes `closest_point` for seat/slide/convergence and
+uses arclength only for the full-contact patch test. Two prior CV-8 bugs fixed: inverted Hertz geometry
+(`block_mesh` sign) and the arclength-for-partial mis-use. MEASURED — **CV-8** (`cv8_deformable_ot.py`,
+`runs/cv8_deformable_ot/metrics.json`): deformable Hertz finest nx=192 **a_relerr 2.75%** (<10%),
+**p0_relerr 5.82%** (<12%, p0 from Gauss-point pressures) with monotone mesh convergence (a:
+5.14→4.14→2.96→2.75%; p0: 6.34→5.68→5.91→5.82%, plateaus ~5.8%); non-matching **patch test** transmits
+uniform pressure to **1.4e-16** (67× tighter than lumped); large **sliding** centroid-monotone (max
+backstep 0.0); **force balance 1.27e-19**; contact localizes (52/161 slave nodes, a/W=0.228). **CV-9a /
+T4** (`cv9_nbody_array_ot.py`): 3×3 array (12 mortar pairs) **converges at full Newton relax=1.0** (32
+iters, line search on, 0 backtracks; `converged=True`, not max_iter); global **force balance 3.71e-15**;
+centre-disc equibiaxial **MEAN stress 0.58%** (<5%); per-component anisotropy 0.20–0.22% on the D4 mesh
+(11.6% on the legacy ring mesh — honestly labeled mesh-symmetry; MEAN gate passes under both);
+`tests/test_cv9_nbody_ot.py` 5/5 pass. HONEST: the residual ~3–6% in CV-8 a/p0 is discrete contact-edge
+noise (∞ Hertz edge slope over one element; p0 plateaus ~5.8%); both single-realization, plane-strain CST
+(small-strain Tri2D), frictionless, rigid outer walls (T4).
 
 **CV-7 capstone — real fractal rock-joint direct shear** (manual §11.9; the CMAME showcase). Real
 Inada-granite tensile fracture (Digital Rocks #273, DOI 10.17612/QXSA-TK92; self-affine $D\approx2.2$,

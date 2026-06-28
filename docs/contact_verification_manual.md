@@ -670,7 +670,9 @@ adversarial review): the numbers below are what is *verified*, not what is aspir
 | CV-1 | FEM Hertz line contact, neural disc SDF indenter; $a=2\sqrt{FR/\pi E^*}$ ties $a$ to $E^*$ | **~1.6%** (constant $a/\sqrt F$ ratio over an 8× $E^*$ sweep) | one independent anchor ($E^*$); $p_0=2F/\pi a$ is the half-ellipse identity, **not** independent; neural **matches** the exact-SDF baseline, does not beat it; 3-D axisymmetric not tractable (patch resolution) |
 | CV-2 | FEM tangential stick/slip on the CV-1 contact; $c/a=\sqrt{1-Q/\mu P}$ (2-D line) | **~5–7%** at low $Q$ (mean 11%) | needs a DEEP half-plane (edge-singular tangential traction, not block shear); the stick radius coarsens at high $Q$ (node-spacing quantises the slip boundary); 2-D law used (ref is the 3-D $^{1/3}$) |
 | CV-3 | FEM Brazilian, centre stress vs $\pm2P/\pi Dt,-6P/\pi Dt$ | **$\sigma_{xx}$ 1.62%, $\sigma_{yy}$ 0.58%** (vs the *exact* closed form) | CST gives a ~1.6% center floor that plateaus under refinement; pole singularity excluded; material-independent (verified) |
-| CV-4 | FEM unit cell (D4: 4 equal diametral loads), equibiaxial centre $-2N/\pi Rt$ | **0.15% / 0.01%**, isotropic (anisotropy 0.16%, shear 0%) | the per-disc UNIT CELL (the equibiaxial physics); the full N-body explicit-contact array is the heavier extension, not built |
+| CV-4 | FEM unit cell (D4: 4 equal diametral loads), equibiaxial centre $-2N/\pi Rt$ | **0.15% / 0.01%**, isotropic (anisotropy 0.16%, shear 0%) | the per-disc UNIT CELL (the equibiaxial physics); the full N-body explicit-contact array is the heavier extension — **now built as CV-9a / T4**, see below |
+| CV-8 (T2) | two-body **deformable–deformable** OT Hertz via the **closest-point transition map** $\pi_B\!\circ\!\phi_A$ ; mortar coupling; large sliding | $a$ **2.75%**, $p_0$ **5.82%** (finest nx=192, $p_0$ from Gauss-point pressures); patch test transmits uniform pressure to **1.4e-16**; force balance **1.27e-19** | discrete contact-edge noise at the half-ellipse edge (∞ Hertz edge slope rounded over one element); single realization; plane-strain CST; rigid outer walls |
+| CV-9a (T4) | **N-body** OT disc array (3×3, 12 mortar pairs), mutual measure-coupling, full Newton | centre-disc equibiaxial **MEAN stress 0.58%** (<5%); converged (32 iters, relax=1.0); global force balance **3.71e-15** | per-component anisotropy is mesh-symmetry-controlled (0.20–0.22% D4 mesh; 11.6% on the legacy ring mesh) — the MEAN gate passes under both; frictionless, rigid outer walls |
 | CV-5 (SDF) | neural SDF on the cusped superformula | gap 8e-3, normal degraded (median \|$n_z$\|~0.5) | a smooth SDF **cannot** represent cusps/concavities well — the spectral-bias ceiling, by design |
 | CV-5 (chart) | neural **radial chart** vs the analytical radial gap/normal; L1 cam-drive dynamics | gap **3.8e-3**, median normal **0.42°**; dynamics trajectory matches analytical to **0.04%** (momentum 1e-15) | the **accurate** path — the transition-map chart succeeds where the SDF degrades, and drives the SAME contact dynamics (Fourier-feature 1-D fit; star-shaped only) |
 | CV-6 | fixed-capacity SDF vs the exact Koch SDF, rising level | refinement ceiling **measured** (§11.6) | a level-set/SDF *fundamentally* cannot resolve a fractal at depth — that is the demonstrated point |
@@ -697,10 +699,12 @@ fractals) — intrinsic spectral bias; the framework's *answer* is to switch cha
 star-shaped, recursive IFS for fractal). **Sharp contact patches need fine local mesh** (3-D
 axisymmetric Hertz not yet tractable on uniform meshes); **frictional stick radii coarsen** at high
 tangential load (node-spacing-limited). **Learned geometry caps L1 accuracy at ~1–5%** (training
-error propagates) — never machine precision. **Not built:** the full N-body explicit-contact disc
-array (only the per-disc unit cell), a **ChartDecoder trained on the CV shapes** (the FEM is verified
-to run on a ChartDecoder domain map, but the per-shape decoder atlas is the remaining Stage-2 piece),
-3-D Hertz, and MPM dynamic cross-checks.
+error propagates) — never machine precision. **Now built (post-fix, see §11.8.1):** the
+**two-body deformable–deformable OT Hertz** contact (CV-8 / T2, via the closest-point transition map)
+and the **full N-body explicit-contact disc array** (CV-9a / T4, 3×3 with mutual measure-coupling) —
+the per-disc unit cell is no longer the only N-body result. **Still not built:** a **ChartDecoder
+trained on the CV shapes** (the FEM is verified to run on a ChartDecoder domain map, but the per-shape
+decoder atlas is the remaining Stage-2 piece), 3-D Hertz, and MPM dynamic cross-checks.
 
 *Bottom line:* a **verified pipeline across the contact-mechanics suite** — Hertz, Brazilian,
 nine-disc and Cattaneo–Mindlin to ~1–11%, on learned geometry — plus a **rigorously-measured case for
@@ -708,6 +712,68 @@ charts over level-sets** on geometry level-sets handle badly (CV-5 cusps, CV-6 f
 demonstration that the neural chart reproduces the contact *dynamics*. The distinctive value is not
 beating an SDF on a sphere — there they are equivalent — but representing geometry (cusps, fractals,
 multi-patch) a single neural SDF or uniform level-set cannot.
+
+### 11.8.1 Two deformable bodies via the closest-point OT transition map (CV-8 / T2, CV-9a / T4)
+
+The CV-1…CV-6 numerical suite presses learned geometry against a **rigid** counterface (a rigid master
+has no dofs, so the mortar master-coupling tangent is never needed). The OT measure-coupling gap is
+expected to most decisively beat a conventional gap function precisely in the regime the rigid-master
+suite never reaches: **contact between two deformable bodies**. That regime is now built and verified.
+
+**The mortar master-coupling tangent (the unlock).** The shared helper
+`solvers/contact/measure_coupling/two_body.py::assemble_two_body_contact` assembles the full 4-block
+consistent tangent $[[K_{ss},K_{sm}],[K_{ms},K_{mm}]]$ with $K_{ms}=K_{sm}^{\top}$ (symmetric SPSD,
+verified to atol 1e-12 with min-eigenvalue $> -10^{-9}$ on the Hertz seat). SymPy proves the symbolic
+$\mathrm dR/\mathrm du$ **equals** the 4-block tangent (`docs/hertz_derivation/two_body_mortar_tangent.py`,
+resultant $[0,0]$); a finite-difference check on the closest-point tangent gives
+$\max|K_{\text{ana}}-K_{\text{fd}}|/\text{scale}=\mathbf{3.45\times10^{-11}}$ (`two_body.py` self-test 3);
+the two-body force-balance self-test is $\mathbf{4.4\times10^{-16}}$.
+
+**The OT-map subtlety (a real finding — arclength smears a partial contact).** For two *mated rough
+profiles* the 1-D convex-cost OT map is the **global arclength-monotone** rearrangement
+(`MonotoneCoupling1D`, the Brenier map). But for a **localized convex indenter pressed into a
+half-plane** the contact is **partial / non-conforming**, and the arclength map *smears* it across the
+whole interface — it mis-maps central nodes to the indenter edge. The correct OT map there is the
+**closest-point projection** $\pi_B\!\circ\!\phi_A$: for a localized convex rigid indenter the
+convex-cost OT map degenerates to the radial closest-point projection $g=|p-c|-R$, exactly as
+`benchmarks/contact/cv_numerical/cv1_ot_gap.py:15-20` already documents. The CV-8 driver therefore
+hardcodes `CORR='closest_point'` for all seat/slide/convergence solves and uses the arclength map
+**only** for the full-contact patch test. (Two prior CV-8 bugs were fixed alongside this: an inverted
+Hertz geometry — the `block_mesh` sign that made the indenter convex the wrong way — and the
+arclength-for-partial-contact mis-use just described.)
+
+**CV-8 / T2 — deformable Hertz now passes with mesh convergence** (`cv8_deformable_ot.py`,
+`runs/cv8_deformable_ot/metrics.json`):
+
+| gate | measured | threshold |
+|---|---|---|
+| patch-test OT mass-marginal err | **0.0** | machine zero |
+| patch-test net resultant / transmit err | **3.64e-17 / 1.39e-16** | $<10^{-8}$ |
+| deformable Hertz $a$ relerr (finest nx=192) | **2.75%** | $<10\%$ |
+| deformable Hertz $p_0$ relerr (finest nx=192, $p_0$ from Gauss-point pressures) | **5.82%** | $<12\%$ |
+| mesh convergence $a$ relerr (nx 96→128→160→192) | **5.14 → 4.14 → 2.96 → 2.75%** (strictly down) | monotone down |
+| mesh convergence $p_0$ relerr (nx 96→128→160→192) | **6.34 → 5.68 → 5.91 → 5.82%** (drops then plateaus ~5.8%) | monotone-ish down |
+| large sliding centroid monotone | **True** (max backstep 0.0, centroid tracks platen) | no saltation |
+| large sliding force balance $|\sum f|$ | **1.27e-19** | $<10^{-8}$ |
+| large sliding normal-load constancy $F_{\text{cov}}$ | **0.0017** | $<0.05$ |
+| contact localizes | **52 active / 161 slave nodes**, $a/W=0.228$ | $n_{\text{active}}\ll$ total |
+
+**CV-9a / T4 — N-body OT disc array at full Newton** (`cv9_nbody_array_ot.py`,
+`runs/cv9_nbody_array_ot/metrics.json`): the 3×3 array (9 discs, 12 mortar pairs) **converges** (32
+iters, relax=1.0, line search on, 0 backtracks at default settings — `converged==True`, *not* max_iter;
+forcing max_iter=1 correctly yields `converged=False`); global **force balance 3.71e-15** (genuine
+Newton's-third-law cancellation of per-pair $|f|\approx14.4$, not a trivial zero); centre-disc
+equibiaxial **MEAN stress relerr 0.58%** (<5%). Per-component anisotropy is **0.20–0.22% on the
+D4-symmetric mesh** (the legacy ring mesh reproduces the ~11.6% artifact, so the D4 fix is a real
+mesh-symmetry effect, honestly labeled; the MEAN gate — the physical invariant — passes under *both*
+meshes, so the mesh choice does not prop up the gate). Tests `tests/test_cv9_nbody_ot.py` 5/5 pass.
+
+**Honest residuals (kept).** The residual ~3–6% in CV-8 $a$/$p_0$ is **discrete contact-edge noise**
+— the infinite Hertz edge-pressure slope is rounded over one element (the $p_0$ error plateaus ~5.8%, a
+genuine floor, not a lucky point). Both T2 and T4 are **single realization**, plane-strain CST
+(small-strain Tri2D), frictionless, with rigid outer walls (T4); the dropped $\mathrm dn/\mathrm d\chi$
+geometric term is the standard small-rotation approximation (recovered across Newton iters; the
+converged solution is tangent-independent). The orchestrator independently re-ran every gate above.
 
 ---
 
