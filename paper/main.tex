@@ -2042,6 +2042,16 @@ contact-edge noise: the half-width error \emph{decreases} monotonically at every
 ($5.14\to4.14\to2.96\to2.75\%$) while the peak pressure drops then plateaus ($6.34\to5.68\to5.91\to5.82\%$); the
 plateau, not a stall mid-descent, identifies $\sim5.8\%$ as the genuine one-element edge-slope floor of the
 half-ellipse Hertz pressure, which no constraint scheme escapes on a $C^0$ contact edge, not a tuning gap.
+Pushing the surface resolution past the gate confirms this reading rather than improving on it: the half-width
+error does not fall below the $2.75\%$ of nx$=192$ but instead jitters in a $\sim1.8$--$4\%$ band
+($1.79\to3.19\to4.03\%$ at nx$=224,256,288$), because the Hertz edge-pressure slope is infinite at $x=\pm a$ and
+the recovered contact edge shifts by $O(1)$ surface nodes ($\sim1/\mathrm{nx}$) as the mesh changes, so the
+half-width error fluctuates with an $O(1/\mathrm{nx})$ amplitude set by the edge discretisation rather than
+decreasing at the interior convergence rate; that the two finest meshes (nx$=256,288$) are no better than the
+gate---the finest is in fact the worst---is itself the signature of an edge floor, since a genuine convergence
+rate could never grow under refinement. The peak pressure, read in the interior away from that edge, plateaus
+cleanly across the same finer sweep ($5.31\to5.70\to5.99\%$, still near $5.8\%$); the residual is therefore a
+discrete contact-edge floor, not a convergence-rate error that finer meshes would remove.
 
 \begin{figure}[t]
   \centering

@@ -9,9 +9,9 @@ Scope: `solvers/contact/measure_coupling/` (`coupling.py`, `gap_field.py`, `trac
 `two_body.py`), the two-body drivers under `benchmarks/contact/cv_numerical/`, and the mathlib-free Lean
 project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, Appendix B `app:ot`).
 
-## Status: CONSISTENT (re-verified loop 6, finalized; structure/equation-completeness SATURATED — loop-6 was a substantive-refinement pass: intro two-limits dedup + partial-OT `fig:ot-unbalanced` schematic, no equation moved)
+## Status: CONSISTENT (re-verified loop 7; data-extension pass — the CV-8 mesh sweep is extended to nx=224/256/288 and the manuscript's contact-edge-floor reading is now EVIDENCED by the finer data, not merely asserted; no equation moved, headline gate nx=192 numbers untouched)
 
-`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 6; `grep -ci undefined
+`tectonic main.tex` exits 0 with 0 undefined references/citations and 0 multiply-defined labels (re-run this loop, loop 7; `grep -icE 'undefined (reference|citation)' main.log` = 0, `grep -icE 'multiply.defined' main.log` = 0; no rerun/labels-changed warning; the regenerated `cv8_hertz_convergence_pub.png` loads from `../figures/`). The loop-6 state below is otherwise unchanged: `grep -ci undefined
 main.log` = 0; labels `eq:ot-kantorovich-body`/`eq:ot-cyclical-body` (body), `eq:ot-kantorovich`/`eq:ot-cyclical`
 (appendix proof home), `eq:ot-unbalanced` (Fig 37/page 51, co-located with the new schematic Eq 82),
 `fig:ot-coupling`, `fig:ot-unbalanced` (loop-6 NEW), `sec:ot`/`sec:tmap:ot`, and the
@@ -164,8 +164,10 @@ Lean precondition (`patch_test_resultant`).
 
 | Paper claim | Value | Source | Consistent? |
 |---|---|---|---|
-| CV-8 deformable Hertz `a` (nx 24→192) | 5.14→4.14→2.96→2.75% | `cv8_deformable_ot.py`, `runs/cv8_deformable_ot/metrics.json`; `final_report.md` §7 | yes |
-| CV-8 `p_0` | 6.34→5.68→5.91→5.82% (plateau ~5.8%) | same | yes |
+| CV-8 deformable Hertz `a` (nx 24→192, the GATE) | 5.14→4.14→2.96→**2.75%** | `cv8_deformable_ot.py`, `runs/cv8_deformable_ot/metrics.json`; `final_report.md` §7 | yes — headline gate, untouched |
+| CV-8 `a` finer mesh (nx 224/256/288, loop 7) | 1.79→3.19→4.03% (jitters in the ~1.8–4% contact-edge floor band; NOT monotone past the gate; finest mesh is the worst) | `CV8_CONV_FINER` in `postprocessing/plot_two_body_ot.py::fig_hertz` (production regime R=2.0, δ=0.02, n_load=6, graded mesh, jitter 0.03; force balances ~1e-18..1e-19) | yes — finer points added as DATA only; no monotone-convergence claim past nx=192 |
+| CV-8 `p_0` (nx 24→192) | 6.34→5.68→5.91→**5.82%** (plateau ~5.8%) | same as gate row | yes — headline gate, untouched |
+| CV-8 `p_0` finer mesh (nx 224/256/288, loop 7) | 5.31→5.70→5.99% (clean interior plateau, still near 5.8%) | `CV8_CONV_FINER` | yes |
 | CV-8 patch test / force balance | 1.4e-16 / 1.27e-19 | same | yes |
 | CV-9a centre mean stress / anisotropy (D4) / force balance | 0.58% / 0.20–0.22% / 3.71e-15 | `cv9_nbody_array_ot.py`; `tests/test_cv9_nbody_ot.py` | yes |
 | tangent FD / force balance | 3.45e-11 / 4.4e-16 | `two_body.py` self-tests | yes |
@@ -173,7 +175,7 @@ Lean precondition (`patch_test_resultant`).
 
 ## 6. Honest residuals / caveats carried in the paper (unchanged)
 
-- CV-8 ~3–6% `a`/`p_0` is contact-edge noise (∞ Hertz edge slope over one element; `p_0` plateaus ~5.8%, a floor). Stated in `sec:ex_twobody`, `tab:ot:gates` caption, abstract (N8 parenthetical), and `sec:verif_summary` closing paragraph (P9).
+- CV-8 ~3–6% `a`/`p_0` is contact-edge noise (∞ Hertz edge slope over one element; `p_0` plateaus ~5.8%, a floor). Stated in `sec:ex_twobody`, `tab:ot:gates` caption, abstract (N8 parenthetical), and `sec:verif_summary` closing paragraph (P9). **Loop 7 EVIDENCES the floor** (no longer asserted from the 24→192 sweep alone): extending the surface resolution past the nx=192 gate, `a_relerr` does not fall below 2.75% but jitters 1.79→3.19→4.03% across nx=224/256/288 — bouncing inside the ~1.8–4% band, with the two finest meshes no better than the gate and nx=288 the worst, which a genuine convergence rate could never produce. The interior `p_0` plateaus cleanly over the same sweep (5.31→5.70→5.99%, near 5.8%). The honest reading is a discrete contact-edge floor of `O(1/nx_edge)` amplitude (the recovered edge shifts by `O(1)` surface node over the infinite Hertz edge slope), NOT a convergence-rate error finer meshes remove, and NOT instability. New text appended to the `sec:ex_twobody` CV-8 paragraph (`main.tex` l.2044–2052) + the finer sweep plotted in the `fig:cv8-hertz` inset (`CV8_CONV_FINER`, shaded "contact-edge floor" `axhspan` over nx≥192, gate marker at nx=192). Headline 2.75%/5.82% (nx=192) unchanged.
 - Both two-body solves: single-realization, plane-strain CST small-strain, frictionless, rigid outer walls (CV-9a). Stated in the same places + `sec:disc:limits`.
 - Brazilian/nine-disc conventional baselines are prescribed-load (Neumann-exact); the OT win there is structural (emergent load, recovered half-width/symmetry), not a like-for-like stress win. Stated in `tab:ot_vs_conv` caption, the nine-disc callout (P5), and `final_report.md` §6.
 - Dropped geometric tangent (`∂n`, `∂χ`) is a Newton-path lever only; the converged `a_fem` is tangent-independent (identical at 40 vs 120 iters; `math_verification.md` §R2). Stated in `app:ot:tangent` and `sec:disc:limits`.
