@@ -2131,7 +2131,11 @@ contact, in which the per-pole load is an emergent output of the twelve coupling
 load (Figure~\ref{fig:cv9-array}). The solve converges at full Newton relaxation ($32$ iterations, no
 backtracks). The centre disc reaches the equibiaxial closed form
 $\sigma_{xx}=\sigma_{yy}=-2N/\pi Rt$ to $0.58\%$ in the mean, the per-component anisotropy is $0.20$--$0.22\%$ on
-the $D_4$-symmetric mesh, and the global force balance is $3.71\times10^{-15}$. The full gate ledger for both
+the $D_4$-symmetric mesh, and the global force balance is $3.71\times10^{-15}$. Refining the disc mesh from
+$n_{\mathrm{rings}}=6$ to $14$ confirms the recovery is mesh-converged: the centre mean error decreases
+monotonically across the five meshes ($1.22\to0.87\to0.58\to0.52\to0.52\%$) toward a plateau near $0.52\%$, with
+the headline $n_{\mathrm{rings}}=10$ value of $0.58\%$ lying on this curve; every mesh converges at full Newton
+with a force balance of order $10^{-15}$. The full gate ledger for both
 two-body solves is collected in Table~\ref{tab:ot:gates}; Table~\ref{tab:twobody:headline} surfaces the decisive
 subset here, where the two-body advantage is argued.
 
