@@ -139,7 +139,7 @@ on identical meshes so the measured accuracy gap is charged to the geometric rep
 is variationally consistent through the classical strong--weak--Galerkin sequence and verified against analytical
 benchmarks (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc, superformula, and Koch), on which the measure-coupling
 model reaches the closed forms to $0.03\%$--$0.50\%$ where the conventional node-lumped model plateaus at
-$1.59\%$--$11.15\%$ (Cattaneo stick radius, Hertz half-width)---each at its converged resolution---and ties it on
+$1.59\%$--$11.15\%$ (Hertz half-width, Cattaneo stick radius)---each at its converged resolution---and ties it on
 the smooth nine-disc field. As the empirical consequence of the same coupling on a conforming interface, by
 smoothing the asperity slopes the level set under-predicts the peak shear strength of a real Inada-granite profile
 by $61\%$ and the emergent dilatancy of a synthetic rough block by $98\%$, while the transition map recovers both
@@ -2112,7 +2112,7 @@ subset here, where the two-body advantage is argued.
   \label{fig:cv9-array}
 \end{figure}
 
-Both two-body solves are single-realization, plane-strain CST small-strain, and frictionless, with rigid outer
+Both two-body solves are single-realization, plane-strain constant-strain-triangulation (CST) small-strain, and frictionless, with rigid outer
 walls in CV-9a; the analytic four-block tangent matches the symbolic Jacobian $dR/du$ on all $64$ entries and the
 finite-difference perturbation of the residual to $3.45\times10^{-11}$, with a net force balance of
 $4.4\times10^{-16}$ (Appendix~\ref{app:ot}).
@@ -2221,7 +2221,7 @@ while also delivering the contact half-width and the $D_4$ symmetry the prescrib
   whereas the measure coupling transmits the uniform field to $1.4\!\times\!10^{-16}$ because the gap and traction
   are mass-preserving fields; the $67.3\times$ non-uniformity is structural, not a resolution artifact, and does
   not shrink under mesh refinement. \textbf{(c)} The regime the coupling is built for: contact between two
-  \emph{deformable} bodies through the symmetric SPSD four-block mortar tangent. The CV-8 deformable-Hertz
+  \emph{deformable} bodies through the symmetric positive-semidefinite four-block mortar tangent. The CV-8 deformable-Hertz
   half-width error converges monotonically under mesh refinement ($5.14\%\!\to\!2.75\%$), and the
   conservation/consistency structure holds to machine precision---global force balance $1.27\!\times\!10^{-19}$
   (CV-8) and $3.71\!\times\!10^{-15}$ (CV-9a $3\times3$ array), analytic tangent matching its finite difference to
@@ -2939,7 +2939,8 @@ $\tfrac12|\sigma_z-\sigma_r|$ reaches $\tau_{\max}=0.31\,p_0$ at depth $z/a=0.48
 von Mises stress peaks at $\sigma_{vM}^{\max}=0.62\,p_0$, and first yield occurs at
 $p_0\approx 1.61\,\sigma_Y$. We accept the numerical solution when $a$, $p_0$, $\delta$,
 and $F(\delta)$ agree to $<1\%$, the pressure integral to $<0.5\%$, and the subsurface
-maximum shear lies at $z/a=0.48\pm0.02$ with magnitude $0.31\,p_0\pm2\%$.
+maximum shear lies at $z/a=0.48\pm0.02$ with magnitude $0.31\,p_0\pm2\%$ (these
+acceptance tolerances are collected in Table~\ref{tab:closedforms}).
 
 The plane-strain solver reaches the line-contact limit rather than the full axisymmetric
 case, so we use that limit as the indenter benchmark for the chart-FEM verification. For a
