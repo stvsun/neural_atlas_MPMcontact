@@ -64,4 +64,41 @@ theorem marginal_two_host (d k : Int) : (d - k) + k = d := by omega
 theorem marginal_general (d k0 k1 k2 : Int) (h : k0 + k1 + k2 = d) :
     k0 + k1 + k2 = d := h
 
+/-!
+### Exact transmission of a constant pressure (the patch-test resultant)
+
+The patch test (`benchmarks/.../cv8_deformable_ot.py`, residual `1.4e-16`) is the statement that a
+*constant* normal pressure `p` transmits across a non-matching interface as a uniform stress with a
+zero net resultant.  At a Gauss foot with two P1 host weights `(N0, N1)` the slave applies a force
+proportional to `p` and the master receives `-(N0 + N1)·p`; the resultant vanishes **iff**
+`N0 + N1 = 1` (partition of unity).  We certify the algebraic core over `Int` with the scaled weights
+`(d - k, k)` of `p1_host_weights` and a scaled pressure `p`, so the per-Gauss-point slave force is
+`d·p` (full mass `d`) and the master reaction is `-((d - k) + k)·p`.
+
+This is the precondition isolated in proposal OT-6: the constant-pressure resultant is a consequence
+of the **partition of unity** plus exact (Gauss) integration of the mass, NOT of the OT mass marginal
+that places the foot.  Both theorems below are closed by `ring`/`omega` and are `sorry`-free.
+-/
+
+/-- The scaled master host-weight sum reduces to the denominator `d` (partition of unity), so the
+    master reaction `-((d - k) + k)·p` equals `-(d·p)` for any pressure `p`.  Rewriting the
+    partition-of-unity sum first keeps the goal linear (no mathlib `ring`). -/
+theorem constant_pressure_master_reaction (d k p : Int) :
+    -(((d - k) + k) * p) = -(d * p) := by
+  rw [pou_sum]
+
+/-- Per-Gauss-point force balance for a constant pressure.  Slave force `d·p`, master reaction
+    `-((d - k) + k)·p`; their sum is zero because `(d - k) + k = d` (partition of unity at scale `d`). -/
+theorem constant_pressure_balance_point (d k p : Int) :
+    (d * p) + (-(((d - k) + k) * p)) = 0 := by
+  rw [pou_sum]; omega
+
+/-- Patch-test resultant (two-host, single Gauss foot).  Writing the slave force as `f_slave = d·p`
+    and the master reaction as `f_master = -((d - k) + k)·p`, the net resultant is exactly zero:
+    `f_master = -f_slave`, i.e. `Σ_K f_K = -Σ_I f_I` for the constant-pressure case.  The hypothesis
+    `0 ≤ k ≤ d`, `0 < d` is `p1_host_weights` (the weights are an admissible partition of unity). -/
+theorem patch_test_resultant (d k p : Int) (_hd : 0 < d) (_h0 : 0 ≤ k) (_h1 : k ≤ d) :
+    -(((d - k) + k) * p) = -(d * p) ∧ (d * p) + (-(((d - k) + k) * p)) = 0 := by
+  refine ⟨constant_pressure_master_reaction d k p, constant_pressure_balance_point d k p⟩
+
 end OTContact.PartitionOfUnity

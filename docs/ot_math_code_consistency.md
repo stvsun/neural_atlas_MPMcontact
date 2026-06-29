@@ -9,12 +9,21 @@ Scope: `solvers/contact/measure_coupling/` (`coupling.py`, `gap_field.py`, `trac
 `two_body.py`), the two-body drivers under `benchmarks/contact/cv_numerical/`, and the mathlib-free Lean
 project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, Appendix B `app:ot`).
 
-## Status: CONSISTENT
+## Status: CONSISTENT (re-verified loop 1)
 
-`tectonic main.tex` exits 0 with 0 undefined references/citations. `cd lean && lake build` exits 0
-(7 jobs, mathlib-free, packages `[]`); the four cited algebraic theorems are sorry-free and depend only on
-`propext`/`Quot.sound` (verified by `#print axioms`); only the two `*_proposed` Brenier theorems carry
-`sorryAx` and are labelled "proposed, not machine-checked" in the paper. No math/code mismatch found.
+`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop). `cd lean && lake build`
+exits 0 (7 jobs, mathlib-free, packages `[]`); the cited algebraic theorems are sorry-free and depend only on
+`propext`/`Quot.sound` (verified by `#print axioms` this loop, including the OT-6 patch-test extension
+`patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point`); only the two
+`*_proposed` Brenier theorems carry `sorryAx` (build emits exactly the two expected `sorry` warnings at
+`BrenierProposed.lean:93,113`) and are labelled "proposed, not machine-checked" in the paper. No math/code
+mismatch found.
+
+Loop-1 code-side delta: `solvers/contact/measure_coupling/two_body.py` PATCH TEST docstring (l.29-40) was
+corrected (OT-3) to stop equating the P1 partition of unity with the OT mass marginal — it now reads "DISTINCT
+FROM, and downstream of, the OT mass marginal `chi_# mu_A = mu_B`", matching the manuscript wording at
+`app:ot:discrete` and the abstract/intro/discussion. The docstring also now points at the machine-checked
+Lean precondition (`patch_test_resultant`).
 
 ## 1. Measure coupling and the Brenier map (`app:ot:gap`)
 
@@ -41,8 +50,9 @@ project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, App
 |---|---|---|---|---|
 | `eq:ot-force` | `f_I⁺=Σ w J N_I⁺ t`; `f_K⁻=−Σ w J (N_K⁻∘χ) t` | `two_body.py` (`f[sgid]+=wq*Nq*t_q`; `f[master_ids[jm]]+=−wq*Nm0*t_q`) | — | yes |
 | `eq:ot-mortar-mass` | consistent mass `M=(L/6)[[2,1],[1,2]]` | `assembly.py::assemble_contact` (`m=einsum('q,qa,qb->ab',wds,Nref,Nref)`) | — | yes — `M=(L/6)[[2,1],[1,2]]` exact (`math_verification.md` C3) |
-| `eq:ot-marginal` | host weights partition of unity `Σ_K(N_K⁻∘χ)=1` — PoU, **not** the OT mass marginal | `two_body.py::_locate_master` (returns `(j,1−t,t)`, sum≡1); `coupling.py::ClosestPointCoupling1D.map_full` (`N0=1−t,N1=t`) | `PartitionOfUnity.p1_host_weights`, `marginal_two_host` (sorry-free) | yes — OT-P1: relabelled PoU at all ~10 sites; paper now states "where the foot lands" (measure preservation) vs "how the reaction is split" (PoU, what the patch test exercises) |
-| patch test | uniform pressure → 1.4e-16 across non-matching mesh; node-lumped non-uniformity 67.3 | `two_body.py` self-test 1 (`F_line` exact, force balance) | (PoU is the algebraic precondition) | yes — 1.4e-16 (`final_report.md` §7); 67.3 (P6) |
+| `eq:ot-marginal` | host weights partition of unity `Σ_K(N_K⁻∘χ)=1` — PoU, **not** the OT mass marginal | `two_body.py::_locate_master` (returns `(j,1−t,t)`, sum≡1); `coupling.py::ClosestPointCoupling1D.map_full` (`N0=1−t,N1=t`) | `PartitionOfUnity.p1_host_weights`, `marginal_two_host` (sorry-free) | yes — OT-3/P1: relabelled PoU at all ~10 paper sites + the `two_body.py` docstring (loop 1); paper now states "where the foot lands" (measure preservation) vs "how the reaction is split" (PoU, what the patch test exercises) |
+| `prop:patch` (boxed Proposition) | constant pressure transmits exactly: `Σ_K f_K⁻ = −Σ_I f_I⁺ = 0` **iff** single-host + PoU + Gauss exactness (NOT the OT marginal) | `two_body.py::assemble_two_body_contact` (constant-`t` master sum; self-test 1) | `PartitionOfUnity.patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point` (sorry-free, `propext`/`Quot.sound`) | yes — OT-6: Proposition + two-line proof added; Lean resultant extension built + `#print axioms`-checked this loop before the paper cites it |
+| patch test (measured) | uniform pressure → 1.4e-16 across non-matching mesh; node-lumped non-uniformity 67.3 (structural, mesh-independent) | `two_body.py` self-test 1 (`F_line` exact, force balance) | (PoU + Gauss exactness is the algebraic precondition; `patch_test_resultant`) | yes — 1.4e-16 (`final_report.md` §7); 67.3 (NE-7) |
 
 ## 4. The symmetric four-block tangent (`app:ot:tangent`, Proposition `prop:spsd`)
 
@@ -76,7 +86,7 @@ project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, App
 
 | Lean file | sorry-free theorems cited | axioms (`#print axioms`) | paper citation site |
 |---|---|---|---|
-| `PartitionOfUnity.lean` | `p1_host_weights`, `marginal_two_host` | `propext`, `Quot.sound` | `app:ot:discrete` footnote |
+| `PartitionOfUnity.lean` | `p1_host_weights`, `marginal_two_host`, `patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point` | `propext`, `Quot.sound` | `app:ot:discrete` footnote (eq:ot-marginal + Prop `prop:patch`) |
 | `TangentPSD.lean` | `rank1_psd`, `rank1_form`, `block_coeff_symm`, `quad_form_nonneg` | `propext`(/`Quot.sound`) | `app:ot:tangent` (Prop `prop:spsd`) footnote |
 | `RadialSign.lean` | `active_set_iff`, `radial_gap_sign_agree` | `propext`, `Quot.sound` | `prop:active-set` (Sec. 4) footnote |
 | `BrenierProposed.lean` | `quantile_identity` (axiom-free); `*_proposed` carry `sorryAx` | none / `sorryAx` | `app:ot:gap` footnote + `app:repro` |

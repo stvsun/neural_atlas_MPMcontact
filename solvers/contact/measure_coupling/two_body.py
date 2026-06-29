@@ -27,11 +27,16 @@ Forces (Newton's third law transmitted through the SAME correspondence field):
     f_K- = -sum_q w J (N_K- o chi)(xi_q) t(xi_q)  (master reaction).
 
 PATCH TEST.  A uniform pressure transmits as a uniform stress to the receiving body iff the master
-interpolation is a partition of unity along the correspondence, ``sum_K (N_K- o chi) = 1`` — exactly
-the OT marginal / mass-preservation property of ``chi`` (here :class:`MonotoneCoupling1D`).  Because
-``(N_K- o chi)`` are P1 host-segment weights summing to 1 by construction, the reaction force on the
-master integrates the SAME traction field the slave applies, so ``f_I+`` and ``f_K-`` are the
-transpose-coupled image of one nodal traction vector and the net resultant is machine-zero.
+interpolation is a partition of unity along the correspondence, ``sum_K (N_K- o chi) = 1``.  This
+partition of unity is DISTINCT FROM, and downstream of, the OT mass marginal ``chi_# mu_A = mu_B``
+that places the foot ``chi(xi_q)``: the marginal controls WHERE the foot lands, the partition of
+unity controls HOW the reaction is split once it lands, and it is the latter (single host + P1
+partition of unity + Gauss-exact integration) — NOT the marginal — that the patch test exercises.
+Because ``(N_K- o chi)`` are P1 host-segment weights summing to 1 by construction, the reaction force
+on the master integrates the SAME traction field the slave applies, so ``f_I+`` and ``f_K-`` are the
+transpose-coupled image of one nodal traction vector and the net resultant is machine-zero.  This
+precondition is machine-checked in ``lean/OTContact/PartitionOfUnity.lean``
+(``patch_test_resultant``, ``p1_host_weights``; sorry-free).
 
 This module exposes :func:`assemble_two_body_contact`, returning ``f`` (force on both bodies),
 ``Kc`` (the assembled 4-block CSR tangent on the shared dof vector), and a diagnostics dict.  The
