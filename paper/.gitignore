@@ -10,4 +10,5 @@
 *.synctex.gz
 *.toc
 *.abs
-main.pdf
+## main.pdf is intentionally TRACKED (the compiled manuscript); other build artifacts stay ignored
+!main.pdf
