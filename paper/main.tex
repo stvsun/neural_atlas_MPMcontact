@@ -577,6 +577,38 @@ resolves slopes the \emph{neural} field of comparable size smooths (granite join
 $107~\mu$m).
 \end{remark}
 
+The phrase ``comparable size'' is auditable. Table~\ref{tab:capacity-audit} reports the trainable parameter
+counts of the three representations, instantiated directly from the code (the Fourier bank $B$ is a fixed,
+non-trainable buffer and is excluded). The ambient level set carries \emph{more} trainable capacity than the
+height chart---$83{,}073$ against $66{,}178$, a $25.5\%$ surplus---and still reconstructs the granite joint
+$47\times$ worse and smooths the mean asperity slope by $7^\circ$ (Section~\ref{sec:cv7}). The advantage is
+therefore representation-limited, not capacity-limited.
+
+\begin{table}[ht]
+\centering
+\caption{Trainable parameter counts for the three representations of the Inada profile, instantiated from the
+code (height chart \texttt{n\_freq=64}, width $128$; the Fourier bank is a fixed, non-trainable buffer and is
+excluded). The ambient level set carries \emph{more} capacity than the chart and still reconstructs $47\times$
+worse: the chart's advantage is not bought with parameters. The reconstruction errors and angles are those of
+Section~\ref{sec:cv7}.}
+\label{tab:capacity-audit}
+\begin{tabular}{lrrr}
+\toprule
+Representation & Trainable params & Recon.\ error & Mean asperity angle \\
+\midrule
+Fourier height chart $h_\theta$ (\texttt{n\_freq}\,$=64$) & $66{,}178$ & $2.3~\mu$m & $19.8^\circ$ \\
+Ambient neural SDF $\phi(x,z)$ (depth $6$)                 & $83{,}073$ & $107~\mu$m & $12.5^\circ$ \\
+Plain-MLP chart (Fourier off, ablation)\footnotemark       & $49{,}922$ & $136~\mu$m & $11.5^\circ$ \\
+\midrule
+True measured surface                                      & ---        & ---        & $19.4^\circ$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+\footnotetext{The plain-MLP row is the Fourier-off ablation of the height chart (\code{plain=True} in
+\code{profile\_chart\_2d.py}); it matches the chart in width, depth, and optimizer but \emph{not} in total
+parameters, since the Fourier encoding necessarily widens the first layer. It is reported here as the
+encoding-on/off control, not as a second capacity-matched comparison.}
+
 
 \section{Governing equations and variational formulation on the coordinate chart}\label{sec:govern}\label{sec:strong}
 
@@ -2241,6 +2273,25 @@ We fit two representations to the same Inada profile and then shear them. The fi
 
 The reconstruction gap is large and one-signed. The height chart reproduced the measured surface to $2.3~\mu$m with 66k parameters; the ambient SDF reached only $107~\mu$m, $47\times$ worse, and did so with \emph{more} parameters (83k). The level set spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well. The mechanism is the spectral bias of a fixed-capacity coordinate MLP \citep{rahaman2019spectral}: such a network learns smooth, low-frequency content first and starves the sharp high-frequency detail. The Fourier-feature encoding of the chart defeats that bias \citep{tancik2020fourier}, whereas the plain SDF carries it intrinsically.
 
+This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} compares the radially-averaged power spectral density (Welch periodogram) of each trained reconstruction of the real Inada profile against the ground-truth profile. In the friction-relevant asperity band $[1,14.2]$~cyc/mm the Fourier chart never rolls off---it retains $100\%$ of the ground-truth band power and stays within $0.0$~dB of the truth across the band---whereas the plain MLP and the ambient SDF roll off at $0.33$ and $0.25$~cyc/mm respectively and retain only $0.027\%$ and $0.019\%$ of the band power ($-35.7$ and $-37.2$~dB). The spectral cutoff sits two decades below the asperity band: the level set's smoothing is a frequency-domain truncation of exactly the slopes that set the strength, and the chart's win is that it does not truncate them.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{fig_spectral_bias_pub}
+  \caption{Measured spectral bias on the real Inada profile. (a) The radially-averaged power spectral
+  density (Welch) of each \emph{trained} reconstruction against the ground-truth profile; the shaded strip is
+  the friction-relevant asperity band $[1,14.2]$~cyc/mm. The plain coordinate MLP and the ambient neural SDF
+  roll off at $0.33$ and $0.25$~cyc/mm---two decades below the band---while the Fourier height chart tracks
+  the truth across it. (b) The same spectra as a ratio to the truth in dB: the chart holds $0$~dB through the
+  band ($100\%$ retained), the plain MLP and SDF lose $-35.7$ and $-37.2$~dB ($0.027\%$, $0.019\%$ retained).
+  The three networks are the exact representations the manuscript compares, trained with the repository's own
+  optimizer and schedule; the parameter counts in the legend are those instantiated from the code (this PSD
+  run uses the \texttt{n\_freq=128} chart, distinct from the \texttt{n\_freq=64} capstone of
+  Table~\ref{tab:capacity-audit}). This is the frequency-domain statement of the spatial-domain slope
+  smoothing $19.4^\circ\!\to\!12.5^\circ$.}
+  \label{fig:spectral-bias}
+\end{figure}
+
 Height reconstruction error is not the relevant metric for contact. Friction and dilation depend on the asperity \emph{angle} $i=\arctan\abs{h'}$, the local slope of the surface, not on the height itself. On slope the two representations separate. The chart reproduced the mean asperity angle, $19.8^\circ$ against $19.4^\circ$ for the true surface, while the SDF's spectral bias smoothed it to $12.5^\circ$. Through the Patton law \eqref{eq:patton} the smoothed slope yields a lower strength: shearing the two representations, the level set under-predicted the peak shear strength by $61\%$. The total dilation, by contrast, was barely affected ($0.5\%$). Dilation is set by the large-scale waviness the SDF captures, while strength is controlled by the asperity slope the SDF smooths; the strongly affected strength beside the barely affected dilation is consistent with this mechanism. Figure~\ref{fig:cv7-capstone} collects the results.
 
 \begin{figure}
@@ -3057,7 +3108,9 @@ valid in both regimes. In the conforming regime where $\tmap=\grad\varphi$ is a 
 parameter coordinate, the displacement-to-target is itself a gradient, $\grad f(\xbf)=\xbf-\tmap(\xbf)$ with
 $f=\tfrac12\norm{\xbf}^2-\varphi$ the quadratic shift of the convex Brenier potential
 (the Kantorovich--Brenier link for the quadratic cost, \citet[Prop.~1.21]{santambrogio2015optimal}; here
-$\varphi$ is read on the parameter line and $f$ on the surface coordinate it parametrises), and the gap is the
+$\varphi$ and $f$ are scalar potentials on the one-dimensional slave parameter line $\Gamma_c^A$, not fields
+on the ambient $\R^2$---the physical point $\xbf\in\R^2$ in \eqref{eq:ot-gap} enters only through the slave
+coordinate that parametrises it), and the gap is the
 normal derivative of that potential, $\gn=\partial_n f$. In the partial/closest-point regime $\tmap=\pi_B$ is a
 coupling rather than a gradient map---$\pi_B$ is many-to-one across the medial axis, hence not almost everywhere a
 gradient, so no potential $f$ exists there---and \eqref{eq:ot-gap} remains the definition. Either way the
@@ -3077,10 +3130,15 @@ quadratic-cost Brenier map is the arclength-monotone rearrangement $\tmap=F_B^{-
 \emph{(ii) Partial-support limit.} When only a sub-arc of the slave touches a localised convex master, the global
 rearrangement is no longer admissible: it forces every slave point onto a master partner and smears the load
 across the open part of the interface, mislocating a central slave node onto the indenter edge. The admissible
-coupling restricts transport to the touching supports (an unbalanced/partial transport), and for a convex master
-its restriction is the closest-point projection $\pi_B=\map{B}^{-1}\circ\map{A}$ with gap
+coupling restricts transport to the touching supports (an unbalanced/partial transport
+\citep{chizat2018unbalanced}), and for a convex master its restriction is the closest-point projection
+$\pi_B=\map{B}^{-1}\circ\map{A}$ with gap
 $\gn=\norm{\bm p-\bm c}-R$, $\bm p$ the slave point, $\bm c$ the indenter centre, $R$ its radius. The two are the
-conforming and partial-support limits of one measure coupling, not opposites.
+conforming and partial-support limits of one measure coupling, not opposites. The restriction is well posed
+under two hypotheses: the master is convex, so its metric projection $\pi_B$ is single-valued for every slave
+point off the master's medial axis \citep[\S1.3]{santambrogio2015optimal}, and the slave face is a
+single-valued graph $z=h_A(x)$, so the slave parameter $x$ indexes the contact arc without overhang; the
+restricted quadratic-cost minimiser is then unique and coincides with $\pi_B$ on the touching support.
 \end{remark}
 
 Compactly,

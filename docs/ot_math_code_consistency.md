@@ -9,15 +9,39 @@ Scope: `solvers/contact/measure_coupling/` (`coupling.py`, `gap_field.py`, `trac
 `two_body.py`), the two-body drivers under `benchmarks/contact/cv_numerical/`, and the mathlib-free Lean
 project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, Appendix B `app:ot`).
 
-## Status: CONSISTENT (re-verified loop 1)
+## Status: CONSISTENT (re-verified loop 3)
 
-`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop). `cd lean && lake build`
+`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 3). `cd lean && lake build`
 exits 0 (7 jobs, mathlib-free, packages `[]`); the cited algebraic theorems are sorry-free and depend only on
 `propext`/`Quot.sound` (verified by `#print axioms` this loop, including the OT-6 patch-test extension
 `patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point`); only the two
 `*_proposed` Brenier theorems carry `sorryAx` (build emits exactly the two expected `sorry` warnings at
 `BrenierProposed.lean:93,113`) and are labelled "proposed, not machine-checked" in the paper. No math/code
 mismatch found.
+
+Loop-3 delta (manuscript-side, additive — no verified number altered):
+- **Spectral-bias measurement wired in.** New figure `fig:spectral-bias`
+  (`\includegraphics{fig_spectral_bias_pub}`, Sec.~`sec:cv7-headline`) replaces the previously asserted
+  "spectral bias" sentence with the MEASURED Welch-PSD comparison produced by
+  `postprocessing/fig_spectral_bias.py`. Measured values printed by that script and quoted in the prose/caption:
+  asperity band `[1, 14.2]` cyc/mm; chart never rolls off (retains 100% / +0.0 dB of band power); plain MLP
+  rolls off at 0.33 cyc/mm (0.027% / −35.7 dB); ambient SDF at 0.25 cyc/mm (0.019% / −37.2 dB); built-in
+  honesty gate `chart_wins=True`. The figure's chart uses `n_freq=128` (82,562 params), labelled in the caption
+  as DISTINCT from the `n_freq=64` capstone, so the 82k vs 66k counts are never conflated.
+- **Parameter-count audit table added** (`tab:capacity-audit`, after Remark `cor:capacity` in Sec.~`sec:fourier`).
+  Trainable counts instantiated from the code (`scratchpad/count_params.py`; Fourier bank `freqs` is a
+  non-trainable registered buffer, excluded): Fourier height chart `n_freq=64` = 66,178; ambient SDF depth-6 =
+  83,073; plain-MLP ablation = 49,922. The SDF carries 25.5% MORE trainable params than the chart and still
+  reconstructs 47× worse — the chart's win is capacity-matched-or-better, not bought with parameters. The
+  plain-MLP row carries a footnote: it is the width/depth/optimizer-matched encoding-off ablation, NOT a
+  total-param-matched comparison (the Fourier encoding necessarily widens the first layer).
+- **Two OT rigor one-liners** (minimal, additive) in `app:ot:gap` / Remark `rem:ot-limits`: (1) the
+  closest-point = restricted-OT-map claim now carries its well-posedness hypotheses (convex master ⇒ single-valued
+  metric projection off the medial axis, `\citep[\S1.3]{santambrogio2015optimal}`; single-valued slave graph
+  `z=h_A(x)`) and the partial-transport `\citep{chizat2018unbalanced}` cite; (2) `eq:ot-gap` now states `φ`/`f`
+  are scalar potentials on the 1-D slave parameter line `Γ_c^A`, not fields on the ambient `R²`. Point (3)
+  (`π_B` not a.e. a gradient across the medial axis) was already present at `app:ot:gap` and was NOT touched.
+  All cited bib keys (`santambrogio2015optimal`, `chizat2018unbalanced`) pre-exist in `refs.bib`.
 
 Loop-1 code-side delta: `solvers/contact/measure_coupling/two_body.py` PATCH TEST docstring (l.29-40) was
 corrected (OT-3) to stop equating the P1 partition of unity with the OT mass marginal — it now reads "DISTINCT
@@ -33,7 +57,7 @@ Lean precondition (`patch_test_resultant`).
 | `eq:ot-monge` | quadratic-cost Monge problem, `τ=∇φ` convex; AC hypothesis `√(1+h'²)≥1>0` | `coupling.py::_arclength_cdf` docstring ("strictly increasing ⇒ F⁻¹ well-defined") | — | yes — AC/equal-mass hypotheses now stated (OT-P5) |
 | `eq:ot-brenier-1d` | 1-D monotone map `τ=F_B⁻¹∘F_A`, quantile identity `F_B(τ(x))=F_A(x)` | `coupling.py::MonotoneCoupling1D.map` (`q=interp(xi,x,Fs1)`, `x_m=interp(q,Fm1,master_x)`) | `BrenierProposed.quantile_identity` (axiom-free) | yes — quantile to 1.1e-16 (`math_verification.md` C1) |
 | `eq:ot-brenier-1d` (existence/uniqueness, pushforward) | Brenier theorem; `τ_#μ_A=μ_B` | (measure-theoretic; not in code) | `BrenierProposed.brenier_existence_uniqueness_proposed`, `monotone_map_pushes_forward_proposed` (`sorry`, prose proof) | yes — honestly labelled "proposed, not machine-checked" |
-| `eq:ot-gap` | `g_N=(x−τ(x))·n`; `∇f=x−τ`, `f=½‖x‖²−φ` (potential defined; identity `g_N=∂_n f` scoped to conforming branch) | `gap_field.py::GapField.sample` (`d=Xs−Xm`, `gN=(d·ns)`); `two_body.py` (`gN=(xs−xmaster)@n_hat`) | — | yes — `f` now defined w/ ½‖x‖² shift; identity scoped to Rem `rem:ot-limits` (OT-P4) |
+| `eq:ot-gap` | `g_N=(x−τ(x))·n`; `∇f=x−τ`, `f=½‖x‖²−φ` (potential defined; identity `g_N=∂_n f` scoped to conforming branch; `φ`,`f` are 1-D potentials on slave line `Γ_c^A`, not fields on `R²`) | `gap_field.py::GapField.sample` (`d=Xs−Xm`, `gN=(d·ns)`); `two_body.py` (`gN=(xs−xmaster)@n_hat`) | — | yes — `f` defined w/ ½‖x‖² shift; identity scoped to Rem `rem:ot-limits` (OT-P4); domain clause added loop 3 |
 | `eq:ot-gap` (true normal, unbiased) | `n_s=(−h',1)/√(1+h'²)`; no 1/cosα bias | `gap_field.py` (`ns=[-hp/sec,1/sec]`); `two_body.py::assemble_two_body_contact` (`ns`) | `RadialSign.*` (separates magnitude bias from sign) | yes — unbiased normal (`math_verification.md` C2) |
 
 ## 2. The two admissible regimes (`app:ot:limits`, Remark `rem:ot-limits`)
@@ -41,7 +65,7 @@ Lean precondition (`patch_test_resultant`).
 | Paper (eq/label) | Statement | Code (`file::symbol`) | Lean | Consistent? |
 |---|---|---|---|---|
 | `rem:ot-limits` (i) conforming | full support ⇒ Brenier = arclength-monotone | `coupling.py::MonotoneCoupling1D` | — | yes |
-| `rem:ot-limits` (ii) partial-support | partial contact ⇒ admissible coupling restricts to closest-point `π_B`; `g_N=‖p−c‖−R` | `coupling.py::ClosestPointCoupling1D` (`_project` orthogonal foot; `map_full`); contact-band mass screen | — | yes — wording changed from "degenerates" to "admissible/partial-support" (OT-P3); `cv1_ot_gap.py:15-20` documents `g=|p−c|−R` |
+| `rem:ot-limits` (ii) partial-support | partial contact ⇒ admissible coupling restricts to closest-point `π_B`; `g_N=‖p−c‖−R`; well-posed under convex master (single-valued metric projection off medial axis) + single-valued slave graph `z=h_A(x)` | `coupling.py::ClosestPointCoupling1D` (`_project` orthogonal foot; `map_full`); contact-band mass screen | — | yes — wording "admissible/partial-support" (OT-P3); uniqueness hypotheses + `chizat2018unbalanced`/`santambrogio2015optimal §1.3` cites added loop 3; `cv1_ot_gap.py:15-20` documents `g=|p−c|−R` |
 | `eq:ot-twolimits` | piecewise map; partial limit realised by `mass=0` outside support | `coupling.py::ClosestPointCoupling1D.map_full` (`mass[i]=0` if `d>contact_band`); `two_body.py` (`gN=...*mass+(1−mass)*1e3`) | — | yes — unbalanced/partial OT screen |
 
 ## 3. The discrete coupling is a mortar assembly (`app:ot:discrete`)
