@@ -16,11 +16,18 @@
       g_perp = g_rad cos α have the same sign, so the active set { g < 0 } is identical under either
       measure (sign-exact active set).  (Code: `chart_gap.py` lines 37-39.)
 
-  A fourth module states the genuinely measure-theoretic results (Brenier existence/uniqueness; the
+    * `OTContact.MortarMass` — the consistent P1 interface mass M = (L/6) [[2,1],[1,2]] is symmetric
+      positive-definite: xᵀ A x = (x0+x1)² + x0² + x1² > 0 for x ≠ 0 (`posdef`), the consistent mass
+      itself is SPD (`scaled_posdef`), eigenvalues 3 and 1 of A — so L/2 and L/6 of M — (`eigen_three`,
+      `eigen_one`), and det A = 3 > 0 (`det_pos`).  This is the well-posedness of the non-lumped mortar
+      form of `eq:ot-mortar-mass`, distinct from its lumped tributary-penalty diagonal.
+
+  A fifth module states the genuinely measure-theoretic results (Brenier existence/uniqueness; the
   1-D monotone map T = F_B⁻¹ ∘ F_A pushes μ_A to μ_B) as formal statements with a documented `sorry`
   and a rigorous prose proof — labelled "proposed, not machine-checked".
 -/
 import OTContact.PartitionOfUnity
 import OTContact.TangentPSD
 import OTContact.RadialSign
+import OTContact.MortarMass
 import OTContact.BrenierProposed

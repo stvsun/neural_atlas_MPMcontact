@@ -351,7 +351,8 @@ The contributions of this work are the following.
 optimal-transport coupling of two boundary measures: the contact pairing is the Brenier map of the quadratic-cost
 transport problem \citep{brenier1991polar,mccann1995existence}, from which the gap and the contact traction follow
 as continuous, mass-preserving fields assembled mortar-consistently, in place of node-collocated, tributary-lumped
-penalties (Appendix~\ref{app:ot}). The same coupling carries two regimes---the global arclength-monotone
+penalties (Section~\ref{sec:tmap:ot}, with the measure-theoretic backbone and the consistent tangent in
+Appendix~\ref{app:ot}). The same coupling carries two regimes---the global arclength-monotone
 (Brenier) rearrangement for two mated rough surfaces and the closest-point projection for a localised convex
 indenter---which resolves the apparent tension between treating contact as a composition and treating it as a
 projection, with the closest-point limit required for partial contact.
@@ -415,12 +416,15 @@ The remainder of the paper is organised as follows. Section~\ref{sec:atlas} intr
 atlas, the three chart families, and their Fourier-feature representation. Section~\ref{sec:govern} states the
 governing equations of two-body frictional contact and reduces them to the reference chart through the decoder
 Jacobian. Section~\ref{sec:tmap} develops the transition-map contact model: the gap, the conservative normal,
-the chart inversions, the contact contribution to the weak form, and the
+the chart inversions, the optimal-transport measure coupling and its two limits (Section~\ref{sec:tmap:ot}), the
+contact contribution to the weak form, and the
 interface constitutive law. Section~\ref{sec:discr} gives the chart-based finite element implementation.
 Section~\ref{sec:verif} reports the numerical examples, from the closed-form ladder through the two-body
 deformable--deformable optimal-transport solves (Section~\ref{sec:ex_twobody}) to the
 real Inada-granite joint. Section~\ref{sec:disc} states the preconditions, limitations, and conclusions, and
-Appendix~\ref{app:ot} develops the optimal-transport measure coupling and the two-body contact tangent in full.
+Appendix~\ref{app:ot} supplies the measure-theoretic backbone of Section~\ref{sec:tmap:ot}---the Brenier
+existence and pushforward, the discrete mortar coupling, and the symmetric four-block consistent tangent---in
+full.
 
 %% ======================== METHOD (restructured) ========================
 
@@ -723,7 +727,7 @@ study.
 \end{remark}
 
 
-\section{Formulation of frictional contact by the transition map}\label{sec:tmap}
+\section{Contact as optimal transport: the transition-map measure coupling}\label{sec:tmap}\label{sec:ot}
 
 Every contact formulation rests on two geometric quantities evaluated at each candidate point: the gap $\gn$,
 which measures how far the surfaces are from touching, and the outward unit normal $\nbf$, which orients the
@@ -860,6 +864,123 @@ boundary scan of Remark~\ref{lemma:multiarc} marks both, where a closest-point p
 nearest foot.}
 \label{fig:tm-multiarc}
 \end{figure}
+
+\subsection{The transition map as an optimal-transport measure coupling}\label{sec:tmap:ot}
+
+The transition map \eqref{eq:tmap-def} is not an ad hoc construction but the optimal-transport coupling of the
+two boundary measures, and that identification supplies the gap and the traction as continuous, mass-preserving
+\emph{fields} rather than node-collocated penalties. Each boundary chart pushes Lebesgue measure on its
+parameter line forward to the arclength measure on the face; for a single-valued face $z=h_X(x)$,
+\begin{equation}\label{eq:ot-measure-body}
+d\mu_X=(\map{X})_\#\,dx=\sqrt{1+\abs{h_X'(x)}^2}\,dx ,
+\end{equation}
+the object the contact pairing couples between the two bodies. The coupling matches the \emph{normalised}
+cumulative measures $\hat F_X=F_X/F_X(\theta_{\max})$, so the two marginals carry equal total mass even when the
+faces have unequal arclength; writing $\hat\mu_X=\mu_X/\mu_X(\Gamma_c^X)$ for the resulting probability
+marginals, a correspondence $\chi:\Gamma_c^A\to\Gamma_c^B$ is \emph{admissible} when it transports the slave
+marginal onto the master marginal, $\chi_\#\hat\mu_A=\hat\mu_B$. Among admissible correspondences the Monge
+problem selects the one of least quadratic-cost transport,
+\begin{equation}\label{eq:ot-monge-body}
+\tmap=\arg\min_{\chi_\#\hat\mu_A=\hat\mu_B}\int_{\Gamma_c^A} c\big(\xbf,\chi(\xbf)\big)\,d\hat\mu_A(\xbf),\qquad
+c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2,
+\end{equation}
+the quadratic cost the choice that makes the contact pairing a metric-projection map. By the theorem of
+\citet{brenier1991polar,mccann1995existence} this minimiser is unique and is the gradient of a convex potential,
+$\tmap=\grad\varphi$, whenever $\hat\mu_A$ is absolutely continuous with respect to Lebesgue measure---here
+automatic, since the arclength density $\sqrt{1+\abs{h_A'}^2}\ge1>0$ is strictly positive, so $\hat F_A$ is a
+strictly increasing homeomorphism. In the single parameter dimension of a boundary chart the convex potential
+integrates to the explicit monotone-rearrangement form, the classical quadratic-cost Brenier map
+\citep[Thm.~2.5]{santambrogio2015optimal}\citep{mccann1995existence},
+\begin{equation}\label{eq:ot-brenier-1d-body}
+\tmap=\hat F_B^{-1}\circ\hat F_A,\qquad \hat F_X(\theta)=\frac{1}{F_X(\theta_{\max})}\int_{\theta_{\min}}^{\theta}d\mu_X,\qquad
+\hat F_B\big(\tmap(\theta_A)\big)=\hat F_A(\theta_A),
+\end{equation}
+so the transported point carries the same cumulative-arclength quantile and the pushforward identity
+$(\tmap)_\#\hat\mu_A=\hat\mu_B$ holds; the chart inversion $\map{B}^{-1}\circ\map{A}$ of \eqref{eq:tmap-def}
+\emph{is} this Brenier map. The signed gap is the normal projection of the displacement to the transported
+point,
+\begin{equation}\label{eq:ot-gap-body}
+\gn(\xbf)=\big(\xbf-\tmap(\xbf)\big)\!\cdot\!\nbf ,
+\end{equation}
+with $\nbf$ the chart normal \eqref{eq:jacobian-normal}; \eqref{eq:ot-gap-body} is the primary definition of the
+gap, and unlike the single-body radial gap of Remark~\ref{prop:active-set} it carries no $1/\cos\alpha$ magnitude
+bias.
+
+One coupling carries two regimes, selected by the support of the contact, and the closest-point projection is
+not the opposite of the transition map but its partial-support limit:
+\begin{equation}\label{eq:ot-twolimits-body}
+\tmap(\xbf)=
+\begin{cases}
+\big(\hat F_B^{-1}\circ\hat F_A\big)(\xbf)\ (\text{arclength-monotone}), & \text{conforming / rough interface},\\[3pt]
+\pi_B(\xbf)=\map{B}^{-1}\circ\map{A}\ (\text{closest point}), & \text{partial-support / convex master},
+\end{cases}
+\qquad \gn=\norm{\bm p-\bm c}-R\ (\text{partial limit}).
+\end{equation}
+For two mated rough faces in full contact the unique quadratic-cost Brenier map is the arclength-monotone
+rearrangement \eqref{eq:ot-brenier-1d-body}; for a localised convex indenter touching a sub-arc the global
+rearrangement is inadmissible---it transports every slave point onto a master partner and smears a partial load
+across the open interface---and the admissible coupling restricts transport to the touching supports (an
+unbalanced/partial transport \citep{chizat2018unbalanced}), whose restriction for a convex master is the
+closest-point projection $\pi_B$ with gap $\gn=\norm{\bm p-\bm c}-R$, $\bm p$ the slave point, $\bm c$ the
+indenter centre, $R$ its radius (Figure~\ref{fig:tm-ot-limits}). The closest-point projection that the
+node-to-segment tradition rejects as fragile is therefore the convex-cost limit of the one coupling, which
+resolves the apparent tension between treating contact as a composition and treating it as a projection.
+
+The discrete form of \eqref{eq:ot-gap-body} is a mortar assembly. On $P_1$ surface elements with Gauss
+quadrature $\{(\xi_q,w_q)\}$ the consistent nodal force tests the interface traction $\tbf=t_N\nbf+\tbf_T$
+against the slave shape functions and scatters it to the master through the host weights $(N_K^-\!\circ\chi)$,
+\begin{equation}\label{eq:ot-force-body}
+\fbf_I^+=\sum_q w_q\,J\,N_I^+(\xi_q)\,\tbf(\xi_q),\qquad
+\fbf_K^-=-\sum_q w_q\,J\,(N_K^-\!\circ\chi)(\xi_q)\,\tbf(\xi_q),
+\end{equation}
+which writing $\fbf_I=\sum_J M_{IJ}\tbf_J$ recovers as the consistent (non-lumped) interface mass on a $P_1$
+segment of length $L$,
+\begin{equation}\label{eq:ot-mortar-mass-body}
+M_{IJ}=\int N_I N_J\,ds,\qquad M=\frac{L}{6}\begin{bmatrix}2&1\\[1pt]1&2\end{bmatrix},
+\end{equation}
+whose lumped diagonal $M_{IJ}\to A_I\delta_{IJ}$ is the node-collocated tributary penalty of the contact element
+of Section~\ref{sec:weak:contact}. The consistent mass is symmetric positive-definite (eigenvalues $L/2$ and
+$L/6$; quadratic form $\bm x^{\top}M\bm x=\tfrac{L}{3}(x_0^2+x_0x_1+x_1^2)>0$), so the non-lumped mortar form is
+invertible and energy-positive.\footnote{The symmetric positive-definiteness of the consistent $P_1$ mortar mass
+$M=\tfrac{L}{6}[[2,1],[1,2]]$---$\bm x^{\top}A\bm x=(x_0{+}x_1)^2+x_0^2+x_1^2>0$ for $\bm x\neq\bm0$, eigenvalues
+$3$ and $1$ (so $M$ has $L/2$ and $L/6$), $\det A=3>0$---is machine-checked in Lean~4
+(\code{lean/OTContact/MortarMass.lean}, theorems \code{posdef}, \code{scaled\_posdef}, \code{eigen\_three},
+\code{eigen\_one}, \code{det\_pos}; sorry-free, \code{posdef}/\code{scaled\_posdef} depending only on
+\code{propext}/\code{Quot.sound} and the eigenvalue/determinant theorems axiom-free).} The host weights along the
+correspondence form a partition of unity,
+\begin{equation}\label{eq:ot-marginal-body}
+\sum_K\big(N_K^-\!\circ\chi\big)(\xi_q)\equiv1 ,
+\end{equation}
+because they are the $P_1$ shape functions of the master segment hosting the foot $\chi(\xi_q)$. Two roles are
+distinct: measure preservation of $\chi$, the quantile identity \eqref{eq:ot-brenier-1d-body}, controls
+\emph{where} the foot lands, while the partition of unity \eqref{eq:ot-marginal-body} controls \emph{how} the
+reaction is split once it lands; it is this latter property, not the optimal-transport mass marginal, that the
+non-matching contact patch test exercises (a constant pressure transmits to a uniform stress to
+$1.4\times10^{-16}$, $67\times$ tighter than the node-lumped scheme; Proposition~\ref{prop:patch}).
+
+When both surfaces are deformable the master point $\xbf_m(\chi)=\sum_K(N_K^-\!\circ\chi)\,\xbf_K^-$ moves with
+the master dofs, so $\gn=(\xbf_s-\xbf_m)\!\cdot\!\nbf$ depends on slave and master dofs alike. Taking the
+variations at \emph{frozen geometry} (the normal $\nbf$ and the correspondence $\chi$ held at the current
+configuration), $\partial\gn/\partial\ubf_I^+=N_I^+\nbf$ and
+$\partial\gn/\partial\ubf_K^-=-(N_K^-\!\circ\chi)\nbf$, the penalty traction
+$\tbf=\varepsilon_n\pos{-\gn}\nbf$ (active where $\gn<0$) gives the symmetric positive-semidefinite four-block
+tangent
+\begin{equation}\label{eq:twobody-tangent-body}
+\begin{aligned}
+\bm K_{ss}[I,J]&=+\varepsilon_n\!\sum_q w_q J\,N_I^+ N_J^+\,(\nbf\otimes\nbf),
+&\bm K_{sm}[I,K]&=-\varepsilon_n\!\sum_q w_q J\,N_I^+(N_K^-\!\circ\chi)(\nbf\otimes\nbf),\\
+\bm K_{ms}[K,J]&=\bm K_{sm}^{\top}=-\varepsilon_n\!\sum_q w_q J\,(N_K^-\!\circ\chi)N_J^+(\nbf\otimes\nbf),
+&\bm K_{mm}[K,L]&=+\varepsilon_n\!\sum_q w_q J\,(N_K^-\!\circ\chi)(N_L^-\!\circ\chi)(\nbf\otimes\nbf),
+\end{aligned}
+\end{equation}
+in which $\bm K_{sm}=\bm K_{ms}^{\top}$ is the slave--master coupling block the rigid-master suite never
+assembles. This two-sided block, finite-difference verified against the frozen-geometry residual to
+$3.45\times10^{-11}$, is what unlocks the deformable Hertz and $N$-body array solves of
+Section~\ref{sec:ex_twobody}. The measure-theoretic backbone---the Kantorovich relaxation \eqref{eq:ot-kantorovich}
+and $c$-cyclical monotonicity \eqref{eq:ot-cyclical} that make the Brenier map \eqref{eq:ot-brenier-1d-body} the
+unique optimiser, the well-posedness of the two limits \eqref{eq:ot-twolimits-body}, the patch-test proof
+(Proposition~\ref{prop:patch}), and the positive-semidefiniteness of \eqref{eq:twobody-tangent-body}
+(Proposition~\ref{prop:spsd})---is collected, with the decisive numerical gates, in Appendix~\ref{app:ot}.
 
 \subsection{Contact contribution to the weak form}\label{sec:weak:contact}
 
@@ -1051,8 +1172,9 @@ boundary break that equivalence and force the transition map and the neural sign
 apart, and the rough rock joint of Section~\ref{sec:cv7} carries the separation to a problem with no closed
 form. Because the equivalence cases buy nothing, the separation measured on the hard geometries cannot be read
 as a tuned advantage. A separate group, Section~\ref{sec:ex_twobody}, lifts the rigid-master restriction shared
-by all of the above and solves two genuinely deformable bodies through the optimal-transport measure coupling and
-its symmetric four-block contact tangent (deformable Hertz, CV-8; a $3\times3$ N-body disc array, CV-9a).
+by all of the above and solves two genuinely deformable bodies through the optimal-transport measure coupling of
+Section~\ref{sec:tmap:ot} and its symmetric four-block contact tangent (deformable Hertz, CV-8; a $3\times3$
+N-body disc array, CV-9a).
 
 Two conventions hold throughout. We write $\gn<0$ for penetration, where $\gn$ is the normal gap of
 \S\ref{sec:tmap}. Each benchmark is solved on a learned geometry---a trained neural signed-distance function,
@@ -1091,7 +1213,8 @@ two bodies. Equation~\eqref{eq:hertz_a} predicts two checks: a constant ratio $a
 $E^{*}$, and the scaling $a\propto (E^{*})^{-1/2}$. To exercise both, we drive a chart-FEM block against
 a neural-SDF disc indenter under penalty contact and sweep $E^{*}$ over a factor of eight. The measured
 ratio holds the closed form to $\sim 1.6\%$ across the sweep. This $1.6\%$ is the chart-FEM solve against a
-neural-SDF indenter; under the optimal-transport coupling the half-width tightens to $0.50\%$, against the
+neural-SDF indenter; under the optimal-transport measure coupling (the mortar-consistent assembly of
+Appendix~\ref{app:ot}) the half-width tightens to $0.50\%$, against the
 $1.59\%$ of the conventional node-lumped gap at its converged resolution---a $3.2\times$ reduction (Table~\ref{tab:ot_vs_conv})---with a discrete
 contact-edge floor of $\sim0.4$--$0.5\%$ set by the infinite Hertz edge slope resolved over one element. On a
 convex body the gain is purely the consistent-versus-lumped edge integration; the chart and the level set coincide
@@ -1735,7 +1858,8 @@ The benchmarks above press a deformable body against a rigid-master detector, so
 carries a contact tangent. This example exercises the two-sided coupling: both bodies deform, the gap depends on
 slave and master degrees of freedom alike, and the contact tangent is the symmetric positive-semidefinite
 four-block operator \eqref{eq:twobody-tangent} of Appendix~\ref{app:ot}. The detector is the optimal-transport
-measure coupling, in which the contact pairing is the Brenier map of the quadratic-cost transport problem
+measure coupling of Section~\ref{sec:tmap:ot}, in which the contact pairing is the Brenier map of the
+quadratic-cost transport problem
 \citep{brenier1991polar,mccann1995existence,santambrogio2015optimal}; the same coupling carries two regimes, the
 closest-point projection for a localised convex indenter and the arclength-monotone (Brenier) rearrangement for
 two mated rough faces (Figure~\ref{fig:tm-ot-limits}). The closest-point limit is required for partial contact:
@@ -2009,7 +2133,8 @@ while also delivering the contact half-width and the $D_4$ symmetry the prescrib
   a structural advantage (emergent load, recovered half-width and symmetry), not a like-for-like stress win; the
   superformula, Koch, and Patton cases are detector-only grid-independence on a resolving grid, not deformable-BVP
   stress matches. The Patton row is detector accuracy on the resolved tilt; the physical consequence of the level
-  set smoothing that tilt is the $61\%$ under-prediction of peak shear strength reported for the real Inada joint
+  set smoothing that tilt is the $61\%$ under-prediction of peak shear strength (and, on a synthetic rough block,
+  the $98\%$ under-prediction of emergent dilatancy) reported for the rock joint
   in Table~\ref{tab:cv_summary} and Section~\ref{sec:cv7}. All values are measured
   (Appendix~\ref{app:ot:results}; \code{benchmarks/contact/cv\_numerical/}).}
   \label{tab:ot_vs_conv}
@@ -2444,9 +2569,9 @@ This validation has a deliberately narrow scope. The blocks here are one deforma
 \section{Discussion, limitations, and conclusions}\label{sec:disc}
 
 Two statements organise the results. First, the transition map $\tmap=\map{B}^{-1}\circ\map{A}$ is the
-optimal-transport coupling of the two boundary measures: a two-sided, mass-conserving operator that transmits a
-constant pressure exactly across a non-matching interface and solves a genuine two-body
-deformable--deformable problem. Second, as the empirical consequence of that coupling on a conforming interface,
+optimal-transport coupling of the two boundary measures (Section~\ref{sec:tmap:ot}): a two-sided,
+mass-conserving operator that transmits a constant pressure exactly across a non-matching interface and solves a
+genuine two-body deformable--deformable problem. Second, as the empirical consequence of that coupling on a conforming interface,
 the geometric representation, not the constraint-enforcement scheme, controls contact fidelity on
 geometrically hard contact. The closest-point projection that the node-to-segment tradition rejects as fragile is
 not the opposite of the transition map but its convex-cost / partial-contact limit, while the arclength-monotone
@@ -2459,7 +2584,27 @@ two statements above, states the preconditions and limitations that bound the me
 
 \subsection{The transition map as a measure coupling}\label{sec:disc:ot}
 
-The coupling has three measured consequences. \emph{The two limits.} For a localised convex indenter under
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{fig_ot_section_loop4}
+  \caption{The contact pairing as an optimal-transport coupling of the two boundary measures.
+  (a)~Each face carries the arclength measure $d\mu_X=\sqrt{1+\abs{h_X'}^2}\,dx$ of
+  \eqref{eq:ot-measure} (shaded density ribbons); the admissible correspondence $\chi=\tmap$ transports the
+  normalised slave measure onto the master, $\chi_{\#}\hat\mu_A=\hat\mu_B$, drawn on an equal-quantile
+  (equal-mass) sample so the arrows visualise mass preservation. (b)~Among admissible couplings the
+  quadratic-cost Brenier map is selected by matching cumulative-arclength quantiles, $\tmap=F_B^{-1}\!\circ F_A$
+  with $F_B(\tmap(x))=F_A(x)$ \eqref{eq:ot-brenier-1d}; this is the construction \code{MonotoneCoupling1D}
+  evaluates to machine precision. (c)~The same coupling has two admissible regimes: under partial support of a
+  convex master it restricts to the closest-point projection $\pi_B$ with $\gn=\norm{\bm p-\bm c}-R$, the load
+  localising at a single foot; for two mated rough faces it is the global arclength-monotone rearrangement,
+  every slave arc carrying its conforming master partner. The closest-point projection is the convex-cost /
+  partial-support limit of the one coupling, not its opposite (Remark~\ref{rem:ot-limits}). Schematic; no
+  benchmark quantity is plotted.}
+  \label{fig:ot-coupling}
+\end{figure}
+
+The coupling has three measured consequences. \emph{The two limits} (Figure~\ref{fig:ot-coupling}). For a
+localised convex indenter under
 partial support the admissible optimal-transport coupling restricts to the closest-point projection,
 $\gn=\norm{\bm p-\bm c}-R$; for two mated rough surfaces it is the global arclength-monotone (Brenier)
 rearrangement $\tmap=F_B^{-1}\circ F_A$ \citep{brenier1991polar,mccann1995existence}
@@ -3079,7 +3224,31 @@ minimising a transport cost,
 \tmap=\arg\min_{\chi_\#\hat\mu_A=\hat\mu_B}\int_{\Gamma_c^A} c\big(\xbf,\chi(\xbf)\big)\,d\hat\mu_A(\xbf),\qquad
 c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2 .
 \end{equation}
-For the quadratic cost \citet{brenier1991polar} proves the minimiser is unique and is the gradient of a convex
+The Monge problem \eqref{eq:ot-monge} can be infeasible---no map need carry an atom of $\hat\mu_A$ to a spread
+of $\hat\mu_B$---so existence is established through its convex Kantorovich relaxation, which minimises over
+transport plans $\pi\in\Pi(\hat\mu_A,\hat\mu_B)$ (couplings on $\Gamma_c^A\times\Gamma_c^B$ with the prescribed
+marginals) rather than over maps,
+\begin{equation}\label{eq:ot-kantorovich}
+\inf_{\pi\in\Pi(\hat\mu_A,\hat\mu_B)}\ \int_{\Gamma_c^A\times\Gamma_c^B}\!\! c(\xbf,\ybf)\,d\pi(\xbf,\ybf),\qquad
+\Pi(\hat\mu_A,\hat\mu_B)=\big\{\pi\ge0:\ (P_A)_\#\pi=\hat\mu_A,\ (P_B)_\#\pi=\hat\mu_B\big\},
+\end{equation}
+with $P_A,P_B$ the coordinate projections \citep{villani2009optimal,santambrogio2015optimal}. The optimiser is
+characterised geometrically: the support of an optimal plan is $c$-cyclically monotone, meaning that for every
+finite cycle of matched pairs $\{(\xbf_i,\ybf_i)\}_{i=1}^{N}\subset\operatorname{supp}\pi$ no rematching lowers
+the total cost,
+\begin{equation}\label{eq:ot-cyclical}
+\sum_{i=1}^{N} c(\xbf_i,\ybf_i)\ \le\ \sum_{i=1}^{N} c\big(\xbf_i,\ybf_{\sigma(i)}\big)
+\qquad\text{for every permutation }\sigma ,
+\end{equation}
+the transport analogue of the rearrangement inequality \citep{villani2009optimal,santambrogio2015optimal}. For
+the quadratic cost and an absolutely continuous slave marginal the relaxation \eqref{eq:ot-kantorovich} is tight:
+the optimal plan is supported on the graph of a map, $\pi=(\mathrm{id}\times\tmap)_\#\hat\mu_A$, so the Monge and
+Kantorovich values coincide and \eqref{eq:ot-cyclical} reduces to monotonicity of the correspondence,
+$\big(\tmap(\xbf_1)-\tmap(\xbf_2)\big)\cdot(\xbf_1-\xbf_2)\ge0$. On the one-dimensional contact parameter this is
+exactly the order-preserving (no-crossing) property of the conforming arclength rearrangement
+\eqref{eq:ot-brenier-1d}; it is the structure that the partial-support restriction below \emph{forfeits} when it
+drops to a sub-arc, not the cause of the smearing it avoids. For the quadratic cost \citet{brenier1991polar}
+proves the minimiser is unique and is the gradient of a convex
 potential $\varphi$, $\tmap=\grad\varphi$, provided $\hat\mu_A$ is absolutely continuous with respect to Lebesgue
 measure on the parameter line (here guaranteed by the strictly positive arclength density
 $\sqrt{1+\abs{h_A'}^2}\ge1>0$, so $\hat F_A$ is a strictly increasing homeomorphism and $\hat F_A^{-1}$ exists,
@@ -3339,8 +3508,9 @@ the analytic tangent is checked entry by entry by the symbolic verifier
 The algebraic core of the formulation is additionally certified in Lean~4 (\code{lean/}, toolchain
 \code{leanprover/lean4:v4.30.0}, mathlib-free): \code{cd lean \&\& lake build} builds in about one second and
 machine-checks the partition-of-unity/host-weight marginal (\code{PartitionOfUnity.lean}), the symmetric
-positive-semidefinite four-block tangent (\code{TangentPSD.lean}), the sign-exact active set
-(\code{RadialSign.lean}), and the one-dimensional Brenier quantile identity (\code{BrenierProposed.lean}); the
+positive-definite consistent mortar mass (\code{MortarMass.lean}), the symmetric positive-semidefinite four-block
+tangent (\code{TangentPSD.lean}), the sign-exact active set (\code{RadialSign.lean}), and the one-dimensional
+Brenier quantile identity (\code{BrenierProposed.lean}); the
 measure-theoretic Brenier existence/uniqueness and pushforward are stated formally with a documented \code{sorry}
 and labelled proposed, not machine-checked. The cited theorems are sorry-free and depend only on
 \code{propext}/\code{Quot.sound} (verified by \code{\#print axioms}).

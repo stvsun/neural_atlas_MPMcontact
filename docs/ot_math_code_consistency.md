@@ -9,15 +9,44 @@ Scope: `solvers/contact/measure_coupling/` (`coupling.py`, `gap_field.py`, `trac
 `two_body.py`), the two-body drivers under `benchmarks/contact/cv_numerical/`, and the mathlib-free Lean
 project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, Appendix B `app:ot`).
 
-## Status: CONSISTENT (re-verified loop 3)
+## Status: CONSISTENT (re-verified loop 4)
 
-`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 3). `cd lean && lake build`
-exits 0 (7 jobs, mathlib-free, packages `[]`); the cited algebraic theorems are sorry-free and depend only on
-`propext`/`Quot.sound` (verified by `#print axioms` this loop, including the OT-6 patch-test extension
-`patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point`); only the two
-`*_proposed` Brenier theorems carry `sorryAx` (build emits exactly the two expected `sorry` warnings at
+`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 4; new labels
+`eq:ot-kantorovich`, `eq:ot-cyclical`, `fig:ot-coupling`, and the `sec:tmap:ot` cross-references all resolve in
+`main.aux`). `cd lean && lake build` exits 0 (mathlib-free, packages `[]`); the cited algebraic theorems are
+sorry-free and depend only on `propext`/`Quot.sound` (verified by `#print axioms`, including the loop-3
+`MortarMass.lean` SPD set `posdef`, `scaled_posdef`, `eigen_three`, `eigen_one`, `det_pos` and the OT-6 patch-test
+extension `patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point`); only the
+two `*_proposed` Brenier theorems carry `sorryAx` (build emits exactly the two expected `sorry` warnings at
 `BrenierProposed.lean:93,113`) and are labelled "proposed, not machine-checked" in the paper. No math/code
 mismatch found.
+
+Loop-4 delta (manuscript-side, additive — no verified number altered):
+- **Two genuinely-missing OT equations restored to the appendix proof home** (`app:ot:gap`, after `eq:ot-monge`):
+  the convex **Kantorovich relaxation** `eq:ot-kantorovich` (inf over plans `π∈Π(μ̂_A,μ̂_B)` with the prescribed
+  marginals) and **c-cyclical monotonicity** `eq:ot-cyclical` (`Σ c(x_i,y_i) ≤ Σ c(x_i,y_{σ(i)})` ∀σ), with the
+  tightness statement (a.c. slave marginal ⇒ plan on a graph ⇒ Monge=Kantorovich) and the reduction to
+  correspondence monotonicity `(τ(x_1)−τ(x_2))·(x_1−x_2)≥0`. The body (`sec:tmap:ot`, l.975) already promised
+  "the Kantorovich relaxation and c-cyclical monotonicity ... in Appendix `app:ot`"; that forward-promise is now
+  kept and `\eqref`-linked to the two new labels. HONESTY: c-cyclical monotonicity is scoped to the **conforming**
+  Brenier map (no-crossing order-preservation); the prose states it is the structure the partial-support
+  restriction *forfeits*, **not** the cause of the partial-load smearing (a separate support/admissibility
+  mechanism) — per the applied-math judge's note. No code object (these are measure-theoretic existence
+  statements, like the `*_proposed` Brenier theorems); not in Lean.
+- **Spine threaded to the body OT subsection** (`sec:tmap:ot`, which a prior loop created but left referenced from
+  nowhere): organisation paragraph (P2), contributions item 1 (P3), examples-intro two-body (P4), `sec:ex_twobody`
+  detector opener (P5), and discussion opener (P6) now name `Section~\ref{sec:tmap:ot}`; the organisation
+  paragraph recasts `app:ot` from "develops in full" to "supplies the measure-theoretic backbone of
+  Section~\ref{sec:tmap:ot}". No equation moved — the `-body` display copies and the canonical `app:ot` copies
+  both stay (the panel rejected the move-not-duplicate label churn).
+- **Repro Lean list completed** (`app:repro`, TEX-2): `MortarMass.lean` added to the machine-checked-module
+  enumeration (now five modules: PartitionOfUnity, MortarMass, TangentPSD, RadialSign, BrenierProposed), matching
+  the body footnote at `eq:ot-mortar-mass-body` (l.940-945) and the actual `lean/OTContact/` directory.
+- **Measure-coupling hero schematic added** to `sec:disc:ot` (`fig:ot-coupling`,
+  `\includegraphics{fig_ot_section_loop4}`): the (a) two densities + mass-preserving χ, (b) quantile-matched
+  Brenier map, (c) two-limits schematic the existing figures omit. Number-free (caption: "Schematic; no benchmark
+  quantity is plotted"). The figure script `postprocessing/fig_ot_section_loop4.py` builds `τ=F_B⁻¹∘F_A` by the
+  same arclength-CDF construction `MonotoneCoupling1D` uses.
 
 Loop-3 delta (manuscript-side, additive — no verified number altered):
 - **Spectral-bias measurement wired in.** New figure `fig:spectral-bias`
@@ -55,6 +84,8 @@ Lean precondition (`patch_test_resultant`).
 |---|---|---|---|---|
 | `eq:ot-measure` | arclength measure `dμ_X = √(1+h'²) dx`; normalised CDF `F̂=F/F[-1]` (equal total mass) | `coupling.py::_arclength_cdf`; `MonotoneCoupling1D.__init__` (`_Fs1=Fs/Fs[-1]`, `_Fm1=Fm/Fm[-1]`) | — | yes — renormalisation now stated in paper (OT-P5) |
 | `eq:ot-monge` | quadratic-cost Monge problem, `τ=∇φ` convex; AC hypothesis `√(1+h'²)≥1>0` | `coupling.py::_arclength_cdf` docstring ("strictly increasing ⇒ F⁻¹ well-defined") | — | yes — AC/equal-mass hypotheses now stated (OT-P5) |
+| `eq:ot-kantorovich` (loop 4, NEW) | convex Kantorovich relaxation: `inf_{π∈Π(μ̂_A,μ̂_B)} ∫c dπ`, `Π` = plans with the prescribed marginals; tight for a.c. slave marginal (plan on graph ⇒ Monge=Kantorovich) | (measure-theoretic existence; not in code — same status as the Brenier existence statement) | — | yes — body promise (`sec:tmap:ot` l.975) now kept; cited `villani2009optimal`, `santambrogio2015optimal` (pre-exist in `refs.bib`) |
+| `eq:ot-cyclical` (loop 4, NEW) | c-cyclical monotonicity `Σ c(x_i,y_i) ≤ Σ c(x_i,y_{σ(i)})` ∀σ; quadratic cost ⇒ `(τ(x_1)−τ(x_2))·(x_1−x_2)≥0` = no-crossing order-preservation of the **conforming** map | (measure-theoretic; not in code) | — | yes — scoped to conforming Brenier map; prose states partial-support restriction *forfeits* it (NOT the cause of smearing), per judge note |
 | `eq:ot-brenier-1d` | 1-D monotone map `τ=F_B⁻¹∘F_A`, quantile identity `F_B(τ(x))=F_A(x)` | `coupling.py::MonotoneCoupling1D.map` (`q=interp(xi,x,Fs1)`, `x_m=interp(q,Fm1,master_x)`) | `BrenierProposed.quantile_identity` (axiom-free) | yes — quantile to 1.1e-16 (`math_verification.md` C1) |
 | `eq:ot-brenier-1d` (existence/uniqueness, pushforward) | Brenier theorem; `τ_#μ_A=μ_B` | (measure-theoretic; not in code) | `BrenierProposed.brenier_existence_uniqueness_proposed`, `monotone_map_pushes_forward_proposed` (`sorry`, prose proof) | yes — honestly labelled "proposed, not machine-checked" |
 | `eq:ot-gap` | `g_N=(x−τ(x))·n`; `∇f=x−τ`, `f=½‖x‖²−φ` (potential defined; identity `g_N=∂_n f` scoped to conforming branch; `φ`,`f` are 1-D potentials on slave line `Γ_c^A`, not fields on `R²`) | `gap_field.py::GapField.sample` (`d=Xs−Xm`, `gN=(d·ns)`); `two_body.py` (`gN=(xs−xmaster)@n_hat`) | — | yes — `f` defined w/ ½‖x‖² shift; identity scoped to Rem `rem:ot-limits` (OT-P4); domain clause added loop 3 |
@@ -73,7 +104,7 @@ Lean precondition (`patch_test_resultant`).
 | Paper (eq/label) | Statement | Code (`file::symbol`) | Lean lemma | Consistent? |
 |---|---|---|---|---|
 | `eq:ot-force` | `f_I⁺=Σ w J N_I⁺ t`; `f_K⁻=−Σ w J (N_K⁻∘χ) t` | `two_body.py` (`f[sgid]+=wq*Nq*t_q`; `f[master_ids[jm]]+=−wq*Nm0*t_q`) | — | yes |
-| `eq:ot-mortar-mass` | consistent mass `M=(L/6)[[2,1],[1,2]]` | `assembly.py::assemble_contact` (`m=einsum('q,qa,qb->ab',wds,Nref,Nref)`) | — | yes — `M=(L/6)[[2,1],[1,2]]` exact (`math_verification.md` C3) |
+| `eq:ot-mortar-mass` (`eq:ot-mortar-mass-body`) | consistent mass `M=(L/6)[[2,1],[1,2]]`, SPD (eigenvalues `L/2`,`L/6`; `xᵀMx=(L/3)(x₀²+x₀x₁+x₁²)>0`) | `assembly.py::assemble_contact` (`m=einsum('q,qa,qb->ab',wds,Nref,Nref)`) | `MortarMass.posdef`, `scaled_posdef`, `eigen_three`, `eigen_one`, `det_pos` (sorry-free) | yes — `M=(L/6)[[2,1],[1,2]]` exact (`math_verification.md` C3); SPD machine-checked (loop 3 module), footnote at `eq:ot-mortar-mass-body` + repro list (loop 4) |
 | `eq:ot-marginal` | host weights partition of unity `Σ_K(N_K⁻∘χ)=1` — PoU, **not** the OT mass marginal | `two_body.py::_locate_master` (returns `(j,1−t,t)`, sum≡1); `coupling.py::ClosestPointCoupling1D.map_full` (`N0=1−t,N1=t`) | `PartitionOfUnity.p1_host_weights`, `marginal_two_host` (sorry-free) | yes — OT-3/P1: relabelled PoU at all ~10 paper sites + the `two_body.py` docstring (loop 1); paper now states "where the foot lands" (measure preservation) vs "how the reaction is split" (PoU, what the patch test exercises) |
 | `prop:patch` (boxed Proposition) | constant pressure transmits exactly: `Σ_K f_K⁻ = −Σ_I f_I⁺ = 0` **iff** single-host + PoU + Gauss exactness (NOT the OT marginal) | `two_body.py::assemble_two_body_contact` (constant-`t` master sum; self-test 1) | `PartitionOfUnity.patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point` (sorry-free, `propext`/`Quot.sound`) | yes — OT-6: Proposition + two-line proof added; Lean resultant extension built + `#print axioms`-checked this loop before the paper cites it |
 | patch test (measured) | uniform pressure → 1.4e-16 across non-matching mesh; node-lumped non-uniformity 67.3 (structural, mesh-independent) | `two_body.py` self-test 1 (`F_line` exact, force balance) | (PoU + Gauss exactness is the algebraic precondition; `patch_test_resultant`) | yes — 1.4e-16 (`final_report.md` §7); 67.3 (NE-7) |
@@ -111,6 +142,7 @@ Lean precondition (`patch_test_resultant`).
 | Lean file | sorry-free theorems cited | axioms (`#print axioms`) | paper citation site |
 |---|---|---|---|
 | `PartitionOfUnity.lean` | `p1_host_weights`, `marginal_two_host`, `patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point` | `propext`, `Quot.sound` | `app:ot:discrete` footnote (eq:ot-marginal + Prop `prop:patch`) |
+| `MortarMass.lean` | `posdef`, `scaled_posdef`, `eigen_three`, `eigen_one`, `det_pos` (+`quadform`, `psd`, `symm`) | `posdef`/`scaled_posdef`: `propext`,`Quot.sound`; `eigen_three`/`eigen_one`/`det_pos`: axiom-free | `eq:ot-mortar-mass-body` footnote (Sec. 4 `sec:tmap:ot`) + `app:repro` (loop 4) |
 | `TangentPSD.lean` | `rank1_psd`, `rank1_form`, `block_coeff_symm`, `quad_form_nonneg` | `propext`(/`Quot.sound`) | `app:ot:tangent` (Prop `prop:spsd`) footnote |
 | `RadialSign.lean` | `active_set_iff`, `radial_gap_sign_agree` | `propext`, `Quot.sound` | `prop:active-set` (Sec. 4) footnote |
 | `BrenierProposed.lean` | `quantile_identity` (axiom-free); `*_proposed` carry `sorryAx` | none / `sorryAx` | `app:ot:gap` footnote + `app:repro` |
