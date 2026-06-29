@@ -22,7 +22,14 @@
       `eigen_one`), and det A = 3 > 0 (`det_pos`).  This is the well-posedness of the non-lumped mortar
       form of `eq:ot-mortar-mass`, distinct from its lumped tributary-penalty diagonal.
 
-  A fifth module states the genuinely measure-theoretic results (Brenier existence/uniqueness; the
+    * `OTContact.TranslationInvariance` — two claims the single-foot lemmas above do not cover:
+      (i) the patch resultant summed over the WHOLE list of Gauss feet is zero for a constant pressure
+      (`patch_resultant_list`, by list induction); (ii) a rigid-body translation leaves the gap
+      unchanged because the slave and master partitions of unity are equal, so the net contact force
+      and the `K_ms` master row-sum vanish (`rigid_translation_gap_invariant`, `tangent_translation_null`).
+      (Code: `eq:ot-force` summed over quadrature; `app:ot:tangent` row-sum claim.)
+
+  A sixth module states the genuinely measure-theoretic results (Brenier existence/uniqueness; the
   1-D monotone map T = F_B⁻¹ ∘ F_A pushes μ_A to μ_B) as formal statements with a documented `sorry`
   and a rigorous prose proof — labelled "proposed, not machine-checked".
 -/
@@ -30,4 +37,5 @@ import OTContact.PartitionOfUnity
 import OTContact.TangentPSD
 import OTContact.RadialSign
 import OTContact.MortarMass
+import OTContact.TranslationInvariance
 import OTContact.BrenierProposed

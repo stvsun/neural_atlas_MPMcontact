@@ -9,44 +9,83 @@ Scope: `solvers/contact/measure_coupling/` (`coupling.py`, `gap_field.py`, `trac
 `two_body.py`), the two-body drivers under `benchmarks/contact/cv_numerical/`, and the mathlib-free Lean
 project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, Appendix B `app:ot`).
 
-## Status: CONSISTENT (re-verified loop 4)
+## Status: CONSISTENT (re-verified loop 4, finalized; Kantorovich + c-cyclical promoted to body loop-4 integrator pass)
 
-`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 4; new labels
-`eq:ot-kantorovich`, `eq:ot-cyclical`, `fig:ot-coupling`, and the `sec:tmap:ot` cross-references all resolve in
-`main.aux`). `cd lean && lake build` exits 0 (mathlib-free, packages `[]`); the cited algebraic theorems are
-sorry-free and depend only on `propext`/`Quot.sound` (verified by `#print axioms`, including the loop-3
-`MortarMass.lean` SPD set `posdef`, `scaled_posdef`, `eigen_three`, `eigen_one`, `det_pos` and the OT-6 patch-test
-extension `patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point`); only the
-two `*_proposed` Brenier theorems carry `sorryAx` (build emits exactly the two expected `sorry` warnings at
-`BrenierProposed.lean:93,113`) and are labelled "proposed, not machine-checked" in the paper. No math/code
-mismatch found.
+`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 4; `grep -ci undefined
+main.log` = 0; labels `eq:ot-kantorovich-body`/`eq:ot-cyclical-body` (body), `eq:ot-kantorovich`/`eq:ot-cyclical`
+(appendix proof home), `fig:ot-coupling`, `sec:ot`/`sec:tmap:ot`, and the
+`TranslationInvariance` footnote cross-references all resolve in `main.aux`; no duplicate `\label`). `cd lean &&
+lake build` exits 0 (mathlib-free, packages `[]`, 9 jobs); the cited algebraic theorems are sorry-free and depend
+only on `propext`/`Quot.sound` (verified by `#print axioms` this loop, including the loop-3 `MortarMass.lean` SPD
+set `posdef`, `scaled_posdef`, `eigen_three`, `eigen_one`, `det_pos`, the OT-6 patch-test extension
+`patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point`, and the **new
+`TranslationInvariance.lean` set `patch_resultant_list`, `tangent_translation_null`,
+`rigid_translation_gap_invariant`, `foot_resultant_zero`, `rigid_translation_balanced` — all `[propext,
+Quot.sound]`**); only the two `*_proposed` Brenier theorems carry `sorryAx` (build emits exactly the two expected
+`sorry` warnings at `BrenierProposed.lean:93,113`) and are labelled "proposed, not machine-checked" in the paper.
+No math/code mismatch found.
 
 Loop-4 delta (manuscript-side, additive — no verified number altered):
-- **Two genuinely-missing OT equations restored to the appendix proof home** (`app:ot:gap`, after `eq:ot-monge`):
-  the convex **Kantorovich relaxation** `eq:ot-kantorovich` (inf over plans `π∈Π(μ̂_A,μ̂_B)` with the prescribed
-  marginals) and **c-cyclical monotonicity** `eq:ot-cyclical` (`Σ c(x_i,y_i) ≤ Σ c(x_i,y_{σ(i)})` ∀σ), with the
-  tightness statement (a.c. slave marginal ⇒ plan on a graph ⇒ Monge=Kantorovich) and the reduction to
-  correspondence monotonicity `(τ(x_1)−τ(x_2))·(x_1−x_2)≥0`. The body (`sec:tmap:ot`, l.975) already promised
-  "the Kantorovich relaxation and c-cyclical monotonicity ... in Appendix `app:ot`"; that forward-promise is now
-  kept and `\eqref`-linked to the two new labels. HONESTY: c-cyclical monotonicity is scoped to the **conforming**
-  Brenier map (no-crossing order-preservation); the prose states it is the structure the partial-support
-  restriction *forfeits*, **not** the cause of the partial-load smearing (a separate support/admissibility
-  mechanism) — per the applied-math judge's note. No code object (these are measure-theoretic existence
-  statements, like the `*_proposed` Brenier theorems); not in Lean.
+- **Two core OT equations PROMOTED into the main-body OT subsection** (EQ1/EQ2/X1; `sec:tmap:ot`, after
+  `eq:ot-monge-body`): the convex **Kantorovich relaxation** `eq:ot-kantorovich-body` (inf over plans
+  `π∈Π(μ̂_A,μ̂_B)` with the prescribed marginals) and **c-cyclical monotonicity** `eq:ot-cyclical-body`
+  (`Σ c(x_i,y_i) ≤ Σ c(x_i,y_{σ(i)})` ∀σ), with the tightness statement (a.c. slave marginal ⇒ plan on a graph ⇒
+  Monge=Kantorovich) and the reduction to correspondence monotonicity `(τ(x_1)−τ(x_2))·(x_1−x_2)≥0`. This makes
+  the existence chain Monge→(infeasible)→Kantorovich→cyclical-monotone→Brenier self-contained in the body; the
+  body now `\eqref`s the two `-body` labels and the closing-sentence pointer (`sec:tmap:ot`, formerly l.975) is
+  reframed from "the Kantorovich relaxation … in Appendix" to "stated here … their measure-theoretic existence and
+  pushforward proof … are given in Appendix~`app:ot`". The appendix copies `eq:ot-kantorovich`/`eq:ot-cyclical`
+  (proof home) are KEPT — they carry the appendix's own internal `\eqref`s (l.3280, 3282, 3345, 3354) and the
+  detailed tightness/Brenier flow — so this is a PROMOTE with distinct labels, not a move (no appendix `\ref`
+  breaks; no duplicate `\label`). HONESTY: c-cyclical monotonicity is scoped to the **conforming** Brenier map
+  (no-crossing order-preservation); the body block ties it to `eq:ot-brenier-1d-body`, and the appendix prose
+  states it is the structure the partial-support restriction *forfeits*, **not** the cause of the partial-load
+  smearing — per the applied-math judge's note. No code object (these are measure-theoretic existence statements,
+  like the `*_proposed` Brenier theorems); not in Lean.
 - **Spine threaded to the body OT subsection** (`sec:tmap:ot`, which a prior loop created but left referenced from
   nowhere): organisation paragraph (P2), contributions item 1 (P3), examples-intro two-body (P4), `sec:ex_twobody`
   detector opener (P5), and discussion opener (P6) now name `Section~\ref{sec:tmap:ot}`; the organisation
   paragraph recasts `app:ot` from "develops in full" to "supplies the measure-theoretic backbone of
   Section~\ref{sec:tmap:ot}". No equation moved — the `-body` display copies and the canonical `app:ot` copies
   both stay (the panel rejected the move-not-duplicate label churn).
-- **Repro Lean list completed** (`app:repro`, TEX-2): `MortarMass.lean` added to the machine-checked-module
-  enumeration (now five modules: PartitionOfUnity, MortarMass, TangentPSD, RadialSign, BrenierProposed), matching
-  the body footnote at `eq:ot-mortar-mass-body` (l.940-945) and the actual `lean/OTContact/` directory.
+- **Repro Lean list completed** (`app:repro`, TEX-2): the machine-checked-module enumeration now lists all SIX
+  modules — PartitionOfUnity, MortarMass, TangentPSD, **TranslationInvariance** (loop-4 NEW), RadialSign,
+  BrenierProposed — matching the body footnotes (`eq:ot-mortar-mass-body` l.954, the `app:ot:tangent`
+  rigid-translation footnote l.3458) and the actual `lean/OTContact/` directory.
 - **Measure-coupling hero schematic added** to `sec:disc:ot` (`fig:ot-coupling`,
   `\includegraphics{fig_ot_section_loop4}`): the (a) two densities + mass-preserving χ, (b) quantile-matched
   Brenier map, (c) two-limits schematic the existing figures omit. Number-free (caption: "Schematic; no benchmark
-  quantity is plotted"). The figure script `postprocessing/fig_ot_section_loop4.py` builds `τ=F_B⁻¹∘F_A` by the
-  same arclength-CDF construction `MonotoneCoupling1D` uses.
+  quantity is plotted"). The figure script `postprocessing/fig_ot_section_loop4.py` builds `τ=F̂_B⁻¹∘F̂_A` by the
+  same arclength-CDF construction `MonotoneCoupling1D` uses (`_Fs1=Fs/Fs[-1]`, max|F̂_B(τ)−F̂_A|=1.1e-16).
+- **OT-MATH-2 normalisation fix (Brenier display + propagated to EVERY symbol site).** The appendix display
+  `eq:ot-brenier-1d` (l.3273) and the body display `eq:ot-brenier-1d-body` (l.902) both carry the normalised
+  `τ=F̂_B⁻¹∘F̂_A` with `F̂_X=F_X/F_X(θ_max)` and `F̂_B(τ(θ_A))=F̂_A(θ_A)`, matching the code
+  (`coupling.py::MonotoneCoupling1D`, `_Fs1=Fs/Fs[-1]`, `_Fm1=Fm/Fm[-1]`). The false "both sides scale by the same
+  total mass" parenthetical is GONE, replaced by the correct admissibility argument (the unnormalised composition
+  would query `F_B⁻¹` at a quantile up to `F_A(θ_max)` outside `F_B`'s range; the renormalisation by the in general
+  unequal totals `F_A(θ_max)≠F_B(θ_max)` is what makes `χ_#μ̂_A=μ̂_B` admissible). This loop the `F̂` convention
+  was made UNIFORM across all eight Brenier-map symbol sites: abstract (l.125), `fig:tm-ot-limits` node label +
+  caption (l.1905, 1925), CV-5 conforming-limit prose (l.2240), `fig:ot-coupling` caption (l.2606-2608),
+  `sec:disc:ot` prose (l.2622), and the appendix display + two-limits + `rem:ot-limits` (l.3269, 3273, 3316, 3336).
+  The only remaining bare `F_B⁻¹` (l.3279) is deliberate — it is the explanatory clause stating WHAT goes wrong
+  WITHOUT normalisation. Type-row in §1 updated.
+- **OT-MATH-1 type-consistency fix (conforming-regime potential).** `app:ot:gap` (l.3292-3306) no longer claims
+  `f=½‖x‖²−φ` is simultaneously a 1-D scalar potential on `Γ_c^A` and satisfies the `R²` gradient identity
+  `∇f(x)=x−τ(x)`. It now states the Brenier gradient is the PARAMETER-space map `τ=φ'` (monotone, conservative, no
+  circulation), and routes the physical-gap energy-consistency to the matched-normal property `∇_x g_N=n` of
+  Remark `prop:matched-normal` (already proven; `RadialSign.lean`). No `g_N=∂_n f` claim remains. §1 `eq:ot-gap`
+  row updated to reflect the parameter-space-gradient / physical-gap split.
+- **OT-LEAN-3 rigid-translation invariance machine-checked (NEW module `TranslationInvariance.lean`).** The
+  `app:ot:tangent` claim was tightened from the imprecise "master row-sum of `K_ms` vanishes" (false in isolation:
+  `Σ_J K_ms[K,J]=−ε Σ_q w_q J (N_K⁻∘χ)(n⊗n)≠0`) to "the COMBINED slave–master gap variation vanishes under a
+  uniform translation, `Σ_I N_I⁺=Σ_K(N_K⁻∘χ)=1`, so `ε(Σ N_I⁺−Σ N_K⁻∘χ)=0` and the net contact force is null."
+  Three theorems now certify this sorry-free: `tangent_translation_null` (`ε d+(−(ε((d−k)+k)))=0`),
+  `rigid_translation_gap_invariant` (`d−((d−k)+k)=0`), and `patch_resultant_list` (the patch resultant of
+  `prop:patch` summed over the FULL Gauss-foot list, by list induction, not one foot). §4 + §7 Lean-citation map
+  updated (now SIX modules).
+- **Two-limits ordering harmonised.** Body `eq:ot-twolimits-body` (l.918) and appendix `eq:ot-twolimits` (l.3333)
+  now both list the arclength-monotone (conforming) branch FIRST, then the closest-point (partial-support) branch —
+  resolving the prior body-vs-appendix ordering mismatch. No content change.
 
 Loop-3 delta (manuscript-side, additive — no verified number altered):
 - **Spectral-bias measurement wired in.** New figure `fig:spectral-bias`
@@ -84,11 +123,11 @@ Lean precondition (`patch_test_resultant`).
 |---|---|---|---|---|
 | `eq:ot-measure` | arclength measure `dμ_X = √(1+h'²) dx`; normalised CDF `F̂=F/F[-1]` (equal total mass) | `coupling.py::_arclength_cdf`; `MonotoneCoupling1D.__init__` (`_Fs1=Fs/Fs[-1]`, `_Fm1=Fm/Fm[-1]`) | — | yes — renormalisation now stated in paper (OT-P5) |
 | `eq:ot-monge` | quadratic-cost Monge problem, `τ=∇φ` convex; AC hypothesis `√(1+h'²)≥1>0` | `coupling.py::_arclength_cdf` docstring ("strictly increasing ⇒ F⁻¹ well-defined") | — | yes — AC/equal-mass hypotheses now stated (OT-P5) |
-| `eq:ot-kantorovich` (loop 4, NEW) | convex Kantorovich relaxation: `inf_{π∈Π(μ̂_A,μ̂_B)} ∫c dπ`, `Π` = plans with the prescribed marginals; tight for a.c. slave marginal (plan on graph ⇒ Monge=Kantorovich) | (measure-theoretic existence; not in code — same status as the Brenier existence statement) | — | yes — body promise (`sec:tmap:ot` l.975) now kept; cited `villani2009optimal`, `santambrogio2015optimal` (pre-exist in `refs.bib`) |
-| `eq:ot-cyclical` (loop 4, NEW) | c-cyclical monotonicity `Σ c(x_i,y_i) ≤ Σ c(x_i,y_{σ(i)})` ∀σ; quadratic cost ⇒ `(τ(x_1)−τ(x_2))·(x_1−x_2)≥0` = no-crossing order-preservation of the **conforming** map | (measure-theoretic; not in code) | — | yes — scoped to conforming Brenier map; prose states partial-support restriction *forfeits* it (NOT the cause of smearing), per judge note |
-| `eq:ot-brenier-1d` | 1-D monotone map `τ=F_B⁻¹∘F_A`, quantile identity `F_B(τ(x))=F_A(x)` | `coupling.py::MonotoneCoupling1D.map` (`q=interp(xi,x,Fs1)`, `x_m=interp(q,Fm1,master_x)`) | `BrenierProposed.quantile_identity` (axiom-free) | yes — quantile to 1.1e-16 (`math_verification.md` C1) |
+| `eq:ot-kantorovich-body` (body, loop 4) / `eq:ot-kantorovich` (appendix proof home) | convex Kantorovich relaxation: `inf_{π∈Π(μ̂_A,μ̂_B)} ∫c dπ`, `Π` = plans with the prescribed marginals; tight for a.c. slave marginal (plan on graph ⇒ Monge=Kantorovich) | (measure-theoretic existence; not in code — same status as the Brenier existence statement) | — | yes — promoted to body (EQ1) with distinct `-body` label; appendix copy kept as proof home; cited `villani2009optimal`, `santambrogio2015optimal` (pre-exist in `refs.bib`) |
+| `eq:ot-cyclical-body` (body, loop 4) / `eq:ot-cyclical` (appendix proof home) | c-cyclical monotonicity `Σ c(x_i,y_i) ≤ Σ c(x_i,y_{σ(i)})` ∀σ; quadratic cost ⇒ `(τ(x_1)−τ(x_2))·(x_1−x_2)≥0` = no-crossing order-preservation of the **conforming** map | (measure-theoretic; not in code) | — | yes — promoted to body (EQ2) with distinct `-body` label; scoped to conforming Brenier map; appendix prose states partial-support restriction *forfeits* it (NOT the cause of smearing), per judge note |
+| `eq:ot-brenier-1d` | NORMALISED 1-D monotone map `τ=F̂_B⁻¹∘F̂_A`, `F̂_X=F_X/F_X(θ_max)`, quantile identity `F̂_B(τ(x))=F̂_A(x)` | `coupling.py::MonotoneCoupling1D.map` (`q=interp(xi,x,Fs1)`, `x_m=interp(q,Fm1,master_x)`; `_Fs1=Fs/Fs[-1]`) | `BrenierProposed.quantile_identity` (axiom-free) | yes — OT-MATH-2 (loop 4): display + ALL 8 symbol sites normalised to `F̂`; false "same total mass" parenthetical removed; quantile to 1.1e-16 (`math_verification.md` C1) |
 | `eq:ot-brenier-1d` (existence/uniqueness, pushforward) | Brenier theorem; `τ_#μ_A=μ_B` | (measure-theoretic; not in code) | `BrenierProposed.brenier_existence_uniqueness_proposed`, `monotone_map_pushes_forward_proposed` (`sorry`, prose proof) | yes — honestly labelled "proposed, not machine-checked" |
-| `eq:ot-gap` | `g_N=(x−τ(x))·n`; `∇f=x−τ`, `f=½‖x‖²−φ` (potential defined; identity `g_N=∂_n f` scoped to conforming branch; `φ`,`f` are 1-D potentials on slave line `Γ_c^A`, not fields on `R²`) | `gap_field.py::GapField.sample` (`d=Xs−Xm`, `gN=(d·ns)`); `two_body.py` (`gN=(xs−xmaster)@n_hat`) | — | yes — `f` defined w/ ½‖x‖² shift; identity scoped to Rem `rem:ot-limits` (OT-P4); domain clause added loop 3 |
+| `eq:ot-gap` | `g_N=(x−τ(x))·n`; conforming branch: Brenier gradient is the PARAMETER-space map `τ=φ'` (monotone, conservative, no circulation), NOT an `R²` gradient of `f`; the physical-gap energy consistency is the matched-normal property `∇_x g_N=n` (Rem `prop:matched-normal`) | `gap_field.py::GapField.sample` (`d=Xs−Xm`, `gN=(d·ns)`); `two_body.py` (`gN=(xs−xmaster)@n_hat`) | `RadialSign.*` (matched-normal sign/magnitude) | yes — OT-MATH-1 (loop 4): dropped the type-inconsistent `g_N=∂_n f` / `∇f(x)=x−τ∈R²` claim; `τ=φ'` is the 1-D param-space gradient, physical-gap conservativeness via `prop:matched-normal` |
 | `eq:ot-gap` (true normal, unbiased) | `n_s=(−h',1)/√(1+h'²)`; no 1/cosα bias | `gap_field.py` (`ns=[-hp/sec,1/sec]`); `two_body.py::assemble_two_body_contact` (`ns`) | `RadialSign.*` (separates magnitude bias from sign) | yes — unbiased normal (`math_verification.md` C2) |
 
 ## 2. The two admissible regimes (`app:ot:limits`, Remark `rem:ot-limits`)
@@ -144,6 +183,7 @@ Lean precondition (`patch_test_resultant`).
 | `PartitionOfUnity.lean` | `p1_host_weights`, `marginal_two_host`, `patch_test_resultant`, `constant_pressure_master_reaction`, `constant_pressure_balance_point` | `propext`, `Quot.sound` | `app:ot:discrete` footnote (eq:ot-marginal + Prop `prop:patch`) |
 | `MortarMass.lean` | `posdef`, `scaled_posdef`, `eigen_three`, `eigen_one`, `det_pos` (+`quadform`, `psd`, `symm`) | `posdef`/`scaled_posdef`: `propext`,`Quot.sound`; `eigen_three`/`eigen_one`/`det_pos`: axiom-free | `eq:ot-mortar-mass-body` footnote (Sec. 4 `sec:tmap:ot`) + `app:repro` (loop 4) |
 | `TangentPSD.lean` | `rank1_psd`, `rank1_form`, `block_coeff_symm`, `quad_form_nonneg` | `propext`(/`Quot.sound`) | `app:ot:tangent` (Prop `prop:spsd`) footnote |
+| `TranslationInvariance.lean` (loop 4, NEW) | `patch_resultant_list`, `tangent_translation_null`, `rigid_translation_gap_invariant` (+`foot_resultant_zero`, `rigid_translation_balanced`) | `propext`, `Quot.sound` | `app:ot:tangent` rigid-translation footnote (combined slave−master PoU difference + full-list patch resultant) |
 | `RadialSign.lean` | `active_set_iff`, `radial_gap_sign_agree` | `propext`, `Quot.sound` | `prop:active-set` (Sec. 4) footnote |
 | `BrenierProposed.lean` | `quantile_identity` (axiom-free); `*_proposed` carry `sorryAx` | none / `sorryAx` | `app:ot:gap` footnote + `app:repro` |
 

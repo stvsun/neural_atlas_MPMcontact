@@ -62,15 +62,18 @@ C_CHI = "#6A6A6A"     # neutral grey for the correspondence (the coupling itself
 def _faces(n=801):
     xa = np.linspace(0.0, 1.0, n)
     xb = np.linspace(0.0, 1.0, n)
-    # slave A: a rough face whose roughness is CONCENTRATED on the left half, so the
-    # arclength density (and hence the cumulative arclength F_A) is strongly front-
-    # loaded; master B: a gentle, nearly symmetric face.  The contrasting densities
-    # make the coupling chi visibly NON-IDENTITY (the arrows tilt) and separate the
-    # two CDFs in panel (b) so the quantile bridge is legible.
-    ramp = np.clip(1.5 - 1.4 * xa, 0.05, 1.0)            # taper roughness left->right
-    ha = ramp * (0.085 * np.sin(2.0 * np.pi * 2.3 * xa)
-                 + 0.045 * np.sin(2.0 * np.pi * 4.2 * xa + 0.6))
-    hb = 0.055 * np.sin(2.0 * np.pi * 1.0 * xb + 0.30)
+    # slave A: a rough face whose roughness is STRONGLY CONCENTRATED on the left third,
+    # so the arclength density (and hence the cumulative arclength F_A) is sharply front-
+    # loaded; master B: roughness concentrated on the RIGHT instead.  The OPPOSED density
+    # gradients make the coupling chi visibly NON-IDENTITY (the arrows fan / tilt) and
+    # SEPARATE the two CDFs in panel (b) so the quantile bridge is wide and legible
+    # (the prior near-symmetric master kept both CDFs hugging the diagonal).
+    ramp_a = np.clip(1.7 - 2.2 * xa, 0.04, 1.0)          # A: roughness front-loaded (left)
+    ha = ramp_a * (0.115 * np.sin(2.0 * np.pi * 2.6 * xa)
+                   + 0.060 * np.sin(2.0 * np.pi * 4.6 * xa + 0.6))
+    ramp_b = np.clip(2.2 * xb - 0.5, 0.04, 1.0)          # B: roughness back-loaded (right)
+    hb = ramp_b * (0.090 * np.sin(2.0 * np.pi * 2.2 * xb + 0.30)
+                   + 0.045 * np.sin(2.0 * np.pi * 3.7 * xb + 0.2))
     return xa, ha, xb, hb
 
 
@@ -144,13 +147,19 @@ def main():
                               lw=0.9, color=C_CHI, alpha=0.85, zorder=4,
                               shrinkA=0, shrinkB=0)
         axA.add_patch(arr)
-    # highlight one correspondence pair in ink
-    axA.scatter(xA_k[4], yA_k[4], s=16, color=C_A, zorder=6)
-    axA.scatter(xB_k[4], yB_k[4], s=16, color=C_B, zorder=6)
-    axA.annotate(r"$\chi=\tau_{AB}$", xy=(0.5 * (xA_k[4] + xB_k[4]),
-                 0.5 * (yA_k[4] + yB_k[4])), xytext=(0.62, 0.52),
-                 fontsize=8.5, color=C_INK,
-                 arrowprops=dict(arrowstyle="-", color=C_CHI, lw=0.6))
+    # highlight one correspondence pair in ink and redraw its arrow heavier so the
+    # NON-IDENTITY tilt of the coupling reads at a glance
+    k = 2   # a left-side slave node maps to a right-shifted master node (visible tilt)
+    arr_hi = FancyArrowPatch((xA_k[k], yA_k[k] + 0.012), (xB_k[k], yB_k[k] - 0.012),
+                             arrowstyle="-|>", mutation_scale=8.5, lw=1.6,
+                             color=C_INK, zorder=7, shrinkA=0, shrinkB=0)
+    axA.add_patch(arr_hi)
+    axA.scatter(xA_k[k], yA_k[k], s=20, color=C_A, zorder=8, ec=C_INK, lw=0.5)
+    axA.scatter(xB_k[k], yB_k[k], s=20, color=C_B, zorder=8, ec=C_INK, lw=0.5)
+    axA.annotate(r"$\chi=\tau_{AB}$",
+                 xy=(0.5 * (xA_k[k] + xB_k[k]), 0.5 * (yA_k[k] + yB_k[k])),
+                 xytext=(0.66, 0.50), fontsize=8.5, color=C_INK, ha="left",
+                 arrowprops=dict(arrowstyle="-", color=C_INK, lw=0.7))
 
     axA.text(0.50, yA0 - 0.155, r"$d\mu_A=\sqrt{1+|h_A'|^2}\,dx$",
              fontsize=7.0, color=C_A, ha="center", va="center")
