@@ -447,7 +447,7 @@ def _recover_ap_gauss(diag, R, Estar):
 
 def hertz_test(n_lower=(160, 16), n_upper=(160, 16), R=2.0, delta=0.02, n_load=6,
                mu=0.0, slide=0.0, n_slide=0, eps_n=None, eps_fac=600.0, grade=1.4,
-               jitter=0.03, n_avg=3, verbose=True):
+               jitter=0.03, n_avg=3, mesh_seed=7, verbose=True):
     """Curved-bottom upper block pressed (delta) onto a flat lower block; BOTH deformable.
 
     Production regime (verified to localize to a central Hertz patch and converge): R=2.0, delta=0.02,
@@ -470,7 +470,7 @@ def hertz_test(n_lower=(160, 16), n_upper=(160, 16), R=2.0, delta=0.02, n_load=6
     W, H = 1.0, 0.5
     nL, eL, topL, botL = block_mesh(W, H, n_lower[0], n_lower[1], y0=-H, grade=grade)
     nU, eU, topU, botU = block_mesh(W, H, n_upper[0], n_upper[1], y0=0.0, curve_R=R,
-                                    jitter=jitter, seed=7, grade=grade)
+                                    jitter=jitter, seed=mesh_seed, grade=grade)
     tb = TwoBlockOT((nL, eL, topL, botL), (nU, eU, topU, botU), E1, nu1, E2, nu2)
     h = 2 * W / n_lower[0]
     eps_n = (eps_fac * E1 / h) if eps_n is None else eps_n
@@ -619,17 +619,19 @@ def hertz_test(n_lower=(160, 16), n_upper=(160, 16), R=2.0, delta=0.02, n_load=6
 
 
 def hertz_convergence(nx_list=(96, 128, 160, 192), ny=16, R=2.0, delta=0.02, n_load=6,
-                      eps_fac=600.0, grade=1.4, jitter=0.03, n_avg=3, verbose=True):
+                      eps_fac=600.0, grade=1.4, jitter=0.03, n_avg=3, mesh_seed=7, verbose=True):
     """Mesh-convergence study: a_relerr & p0_relerr vs nx, shrinking toward the analytical Hertz.
 
     Runs the seating-only Hertz solve (no sliding) at >=3 surface resolutions and tabulates the
     load-averaged half-width and peak-pressure relative errors.  The finest mesh's row is the one the
-    acceptance gate reads.  Returns a dict with the per-mesh table.
+    acceptance gate reads.  ``mesh_seed`` threads the jitter seed of the curved upper block all the way
+    to ``block_mesh`` so the convergence sweep (and the ensemble study below) can be re-run on an
+    independent realization without editing source.  Returns a dict with the per-mesh table.
     """
     rows = []
     for nx in nx_list:
         r = hertz_test(n_lower=(nx, ny), n_upper=(nx, ny), R=R, delta=delta, n_load=n_load,
-                       eps_fac=eps_fac, grade=grade, jitter=jitter, n_avg=n_avg,
+                       eps_fac=eps_fac, grade=grade, jitter=jitter, n_avg=n_avg, mesh_seed=mesh_seed,
                        slide=0.0, n_slide=0, verbose=False)
         rows.append(dict(nx=int(nx), F=r["F_line"], a_ana=r["a_ana"], a_fem=r["a_fem"],
                          a_relerr=r["a_relerr"], p0_ana=r["p0_ana"], p0_fem=r["p0_fem"],
@@ -643,11 +645,78 @@ def hertz_convergence(nx_list=(96, 128, 160, 192), ny=16, R=2.0, delta=0.02, n_l
     return dict(table=rows, finest=rows[-1])
 
 
+def hertz_ensemble(seeds=(7, 11, 17, 23, 31), nx=192, ny=16, R=2.0, delta=0.02, n_load=6,
+                   eps_fac=600.0, grade=1.4, jitter=0.03, n_avg=3, verbose=True):
+    """Multi-realization spread at the headline mesh (nx=192): run the seating Hertz solve on a list
+    of INDEPENDENT jitter realizations (one per ``mesh_seed``) and tabulate a_relerr / p0_relerr.
+
+    This is the auditable source of the paper's CV-8 ensemble disclosure (manuscript
+    Table~ref{tab:cv8-ensemble}, Figure~ref{fig:cv8-ensemble}).  The reported gate seed is the first
+    entry (seed 7).  The HONEST reading: the half-width error is realization-DEPENDENT (the gate seed
+    is the best of the set), whereas the peak-pressure error is realization-INDEPENDENT (a tight
+    systematic floor).  Population standard deviations (ddof=0) over the full set are reported so the
+    spread is not read as artificially tight; the figure generator reads this JSON rather than
+    hard-coding the arrays.
+    """
+    per_seed = []
+    for s in seeds:
+        r = hertz_test(n_lower=(nx, ny), n_upper=(nx, ny), R=R, delta=delta, n_load=n_load,
+                       eps_fac=eps_fac, grade=grade, jitter=jitter, n_avg=n_avg, mesh_seed=int(s),
+                       slide=0.0, n_slide=0, verbose=False)
+        per_seed.append(dict(mesh_seed=int(s), nx=int(nx),
+                             a_relerr=float(r["a_relerr"]), p0_relerr=float(r["p0_relerr"]),
+                             a_fem=float(r["a_fem"]), p0_fem=float(r["p0_fem"]),
+                             force_balance=float(r["force_balance"])))
+        if verbose:
+            print("    [ens] seed=%2d  a_relerr=%.2f%%  p0_relerr=%.2f%%  |sum f|=%.1e" %
+                  (s, 100 * r["a_relerr"], 100 * r["p0_relerr"], r["force_balance"]))
+    a = np.array([p["a_relerr"] for p in per_seed]) * 100.0    # percent
+    p0 = np.array([p["p0_relerr"] for p in per_seed]) * 100.0  # percent
+
+    def _stats(v):
+        return dict(mean=float(v.mean()), sd_pop=float(v.std(ddof=0)),
+                    sd_sample=float(v.std(ddof=1)) if v.size > 1 else float("nan"),
+                    min=float(v.min()), max=float(v.max()))
+
+    out = dict(nx=int(nx), seeds=[int(s) for s in seeds], headline_seed=int(seeds[0]),
+               sd_convention="population (ddof=0)", per_seed=per_seed,
+               a_relerr_pct=[float(x) for x in a], p0_relerr_pct=[float(x) for x in p0],
+               a_stats=_stats(a), p0_stats=_stats(p0))
+    if verbose:
+        print("    [ens] half-width a : mean %.2f%%  sd(pop) %.2f%%  range [%.2f, %.2f]%%  "
+              "-> REALIZATION-DEPENDENT (gate seed %d is the best)" %
+              (out["a_stats"]["mean"], out["a_stats"]["sd_pop"], out["a_stats"]["min"],
+               out["a_stats"]["max"], out["headline_seed"]))
+        print("    [ens] peak p0      : mean %.2f%%  sd(pop) %.2f%%  range [%.2f, %.2f]%%  "
+              "-> REALIZATION-INDEPENDENT (systematic floor)" %
+              (out["p0_stats"]["mean"], out["p0_stats"]["sd_pop"], out["p0_stats"]["min"],
+               out["p0_stats"]["max"]))
+    os.makedirs(RUN_DIR, exist_ok=True)
+    path = os.path.join(RUN_DIR, "ensemble.json")
+    with open(path, "w") as fh:
+        json.dump(out, fh, indent=2)
+    if verbose:
+        print("    [ens] wrote %s" % path)
+    return out
+
+
 # ==================================================================================================
-def run(mode="all", mesh_coarse=None, verbose=True):
+def run(mode="all", mesh_coarse=None, mesh_seed=7, ensemble_seeds=None, verbose=True):
     os.makedirs(RUN_DIR, exist_ok=True)
     t0 = time.time()
-    metrics = {"cv": "CV-8 two-body deformable OT contact (non-matching mortar + large sliding)"}
+    metrics = {"cv": "CV-8 two-body deformable OT contact (non-matching mortar + large sliding)",
+               "mesh_seed": int(mesh_seed)}
+    if mode == "ensemble":
+        # auditable multi-realization spread at the headline mesh (writes runs/.../ensemble.json).
+        seeds = tuple(ensemble_seeds) if ensemble_seeds else (7, 11, 17, 23, 31)
+        if verbose:
+            print("  [HERTZ] multi-realization ensemble at the headline mesh (nx=192), seeds %s:"
+                  % (list(seeds),))
+        metrics["hertz_ensemble"] = hertz_ensemble(seeds=seeds, nx=192, ny=16, verbose=verbose)
+        metrics["elapsed_sec"] = time.time() - t0
+        with open(os.path.join(RUN_DIR, "metrics_ensemble.json"), "w") as fh:
+            json.dump(metrics, fh, indent=2)
+        return metrics
     if mode in ("all", "patch"):
         metrics["patch_test"] = patch_test(verbose=verbose)
     if mode in ("all", "cylinder"):
@@ -663,12 +732,13 @@ def run(mode="all", mesh_coarse=None, verbose=True):
         if verbose:
             print("  [HERTZ] mesh-convergence study (closest-point OT map, graded mesh, "
                   "Gauss-point p0 fit):")
-        metrics["hertz_convergence"] = hertz_convergence(nx_list=nx_list, ny=ny, verbose=verbose)
+        metrics["hertz_convergence"] = hertz_convergence(nx_list=nx_list, ny=ny,
+                                                         mesh_seed=mesh_seed, verbose=verbose)
         # final seated + large-sliding run at the production mesh (carries the slide gate + figure).
         if verbose:
             print("  [HERTZ] production seat + large-sliding run (nx=%d):" % prod_nx)
         metrics["hertz"] = hertz_test(n_lower=(prod_nx, ny), n_upper=(prod_nx, ny),
-                                      R=2.0, delta=0.02, n_load=6,
+                                      R=2.0, delta=0.02, n_load=6, mesh_seed=mesh_seed,
                                       slide=0.06, n_slide=6, verbose=verbose)
         # the gate reads a/p0 from the FINEST converged mesh (most resolved contact edge).
         fin = metrics["hertz_convergence"]["finest"]
@@ -693,15 +763,36 @@ def run(mode="all", mesh_coarse=None, verbose=True):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", default="all", choices=["all", "patch", "cylinder"])
+    ap.add_argument("--mode", default="all", choices=["all", "patch", "cylinder", "ensemble"],
+                    help="'ensemble' runs the headline-mesh multi-realization seed sweep "
+                         "(writes runs/cv8_deformable_ot/ensemble.json)")
     ap.add_argument("--mesh-coarse", type=int, nargs=2, default=None,
                     help="lower-block (n_x n_y); upper uses the same n_x")
+    ap.add_argument("--mesh-seed", type=int, default=7,
+                    help="jitter seed of the curved upper block (threaded into block_mesh); "
+                         "the reported gate value uses seed 7")
+    ap.add_argument("--ensemble-seeds", type=int, nargs="+", default=None,
+                    help="seed list for --mode ensemble (default 7 11 17 23 31)")
     ap.add_argument("--n-inc", type=int, default=None)
     ap.add_argument("--mu-sweep", action="store_true")
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
-    m = run(mode=args.mode, mesh_coarse=args.mesh_coarse, verbose=not args.quiet)
+    m = run(mode=args.mode, mesh_coarse=args.mesh_coarse, mesh_seed=args.mesh_seed,
+            ensemble_seeds=args.ensemble_seeds, verbose=not args.quiet)
+    if args.mode == "ensemble":
+        es = m["hertz_ensemble"]
+        print("\n  ==== CV-8 ENSEMBLE (headline mesh nx=%d, seeds %s) ====" %
+              (es["nx"], es["seeds"]))
+        print("  half-width a : mean %.2f%%  sd(pop) %.2f%%  range [%.2f, %.2f]%%  "
+              "(gate seed %d is the best: realization-DEPENDENT)" %
+              (es["a_stats"]["mean"], es["a_stats"]["sd_pop"], es["a_stats"]["min"],
+               es["a_stats"]["max"], es["headline_seed"]))
+        print("  peak  p0     : mean %.2f%%  sd(pop) %.2f%%  range [%.2f, %.2f]%%  "
+              "(realization-INDEPENDENT systematic floor)" %
+              (es["p0_stats"]["mean"], es["p0_stats"]["sd_pop"], es["p0_stats"]["min"],
+               es["p0_stats"]["max"]))
+        return
     ok = True
     print("\n  ==== CV-8 ACCEPTANCE GATES ====")
     if "patch_test" in m:
