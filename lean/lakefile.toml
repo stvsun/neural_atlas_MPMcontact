@@ -1,0 +1,10 @@
+name = "ot_contact"
+defaultTargets = ["OTContact"]
+
+# Mathlib-free by design: every machine-checked lemma below is proved over `Int`
+# using only the Lean 4 core library (no `import Mathlib`, no `ring`/`positivity`).
+# This keeps the build hermetic and fast (no ~GB mathlib cache download) while still
+# certifying the discrete/algebraic core of the OT measure-coupling contact model.
+
+[[lean_lib]]
+name = "OTContact"

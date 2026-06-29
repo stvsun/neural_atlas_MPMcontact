@@ -122,23 +122,30 @@ transport cost, from which the gap and the contact traction follow as continuous
 assembled mortar-consistently, in place of node-collocated, tributary-lumped penalties. On a learned coordinate
 atlas this coupling is read from a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which we
 identify as the optimal-transport map between the boundary measures of $A$ and $B$. One framework spans two
-regimes: for a localised convex indenter the convex-cost optimal-transport map degenerates to the closest-point
-projection $\gn=\norm{\bm p-\bm c}-R$, while for two mated rough surfaces it is the global arclength-monotone
-(Brenier) rearrangement; the closest-point limit is required for partial contact, where the arclength map smears
-the load across the interface. The discrete coupling carries the optimal-transport mass marginal
-$\sum_K(N_K^-\!\circ\chi)=1$, so a constant pressure transmits exactly across a non-matching mesh (the contact
-patch test, to $10^{-16}$), which the node-lumped scheme fails. Because the coupling is two-sided and
-transpose-coupled, with a symmetric positive-semidefinite four-block consistent tangent (finite-difference
-verified to $3.4\times10^{-11}$), it solves a genuine two-body deformable--deformable problem rather than
-rigid-master detection: on deformable Hertz contact between two elastic blocks the contact half-width and peak
-pressure converge under mesh refinement to $2.75\%$ and $5.82\%$ of the closed form, and a $3\times3$ elastic disc
-array matches the equibiaxial closed form to $0.58\%$ at full Newton. The charts are Fourier-feature coordinate
+regimes: for a localised convex indenter against partial support the admissible optimal-transport coupling
+restricts to the closest-point projection $\gn=\norm{\bm p-\bm c}-R$, while for two mated rough surfaces it is the
+global arclength-monotone (Brenier) rearrangement; the closest-point limit is required for partial contact, where
+the arclength map smears the load across the interface. The discrete master interpolation is a partition of unity along the correspondence,
+$\sum_K(N_K^-\!\circ\chi)=1$---the discrete reflection of mass conservation---so a constant pressure transmits
+exactly across a non-matching mesh (the contact patch test, to $10^{-16}$), which the node-lumped scheme fails. Because the coupling is two-sided and
+transpose-coupled, with a symmetric positive-semidefinite four-block tangent that is consistent at frozen geometry
+(finite-difference verified to $3.4\times10^{-11}$), it solves a genuine two-body deformable--deformable problem
+rather than rigid-master detection: on deformable Hertz contact between two elastic blocks the contact half-width
+and peak pressure converge under mesh refinement to $2.75\%$ and $5.82\%$ of the closed form (a contact-edge
+floor, not a vanishing discretisation error), and a $3\times3$ elastic disc array matches the equibiaxial closed
+form to $0.58\%$ at full Newton. The charts are Fourier-feature coordinate
 networks whose random-feature embedding defeats the spectral bias that low-passes a neural signed-distance
-function, and the level set is retained throughout as a matched baseline on identical meshes and tolerances. The
-formulation is variationally consistent through the classical sequence---strong form, weak form, chart-based
-Galerkin discretisation---verified against analytical benchmarks (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc,
-superformula, and Koch), on which the measure coupling meets or beats the conventional node-lumped scheme on
-identical meshes, and validated on a direct-shear simulation of a real scanned Inada-granite fracture. By
+function; that level set is held as a matched baseline on identical meshes throughout, so the measured accuracy
+gap is charged to the geometric representation alone. Against the conventional node-lumped penalty the decisive,
+rigorously mesh-matched test is the non-matching contact patch test, where the measure coupling transmits a
+constant pressure to $1.4\times10^{-16}$ while the lumped scheme produces a node-spacing sawtooth ($67\times$
+larger stress non-uniformity). The formulation is variationally consistent through the classical
+sequence---strong form, weak form, chart-based Galerkin discretisation---verified against analytical benchmarks
+(Hertz, Cattaneo--Mindlin, Brazilian, nine-disc, superformula, and Koch), on which the measure-coupling
+gap-function model reaches the closed forms to $0.03\%$--$0.50\%$ where the conventional node-lumped model
+plateaus at $1.59\%$--$11.15\%$ (Cattaneo stick radius, Hertz half-width), each at its converged resolution, and
+ties it on the smooth nine-disc field; and validated on a direct-shear
+simulation of a real scanned Inada-granite fracture. By
 smoothing the asperity slopes the level set under-predicts the peak shear strength of the granite profile by
 $61\%$ and the emergent dilatancy of a synthetic rough block by $98\%$, while the transition map recovers both
 from the resolved geometry under plain Coulomb friction with no imposed dilatancy law.
@@ -149,6 +156,18 @@ rock-joint dilatancy}
 
 %% ======================== 01_introduction ========================
 \section{Introduction}\label{sec:intro}
+
+Two surfaces come into contact when each point of one is paired with a point of the other. We take that pairing
+literally: contact is an optimal-transport coupling of the two boundary measures, and the gap and traction it
+induces are continuous, mass-preserving fields rather than node-collocated penalties. Read on a learned coordinate
+atlas, the pairing is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which we identify as
+the Brenier map of the transport problem (Section~\ref{sec:tmap}, Appendix~\ref{app:ot}). This single object has
+two faces an engineer already knows: the closest-point projection of node-to-segment contact is its partial-support
+limit, and the arclength-monotone rearrangement of mortar contact is its conforming limit. Posing contact this way
+does two things classical detection cannot---it transmits a constant pressure exactly across a non-matching mesh,
+and it couples two deformable bodies through a symmetric tangent---and it makes precise a fact the rest of the
+paper measures: on rough, non-convex geometry it is the representation of the boundary, not the
+constraint-enforcement scheme, that controls fidelity.
 
 \subsection{Geometry, not the force law, controls contact fidelity}\label{sec:intro-motivation}
 
@@ -353,13 +372,19 @@ shear of a real Inada-granite tensile fracture, where the apparent friction $\ta
 dilation emerge from the resolved asperity geometry under plain Coulomb friction, and where the level set, by
 smoothing the asperity slopes, under-predicts strength and dilatancy on the quantity an engineer would design
 with (Section~\ref{sec:verif}). Because the measure coupling is two-sided and transpose-coupled, with a symmetric
-positive-semidefinite four-block consistent tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ (finite-difference verified to
-$3.4\times10^{-11}$), it solves a genuine two-body deformable--deformable problem rather than rigid-master
-detection: deformable Hertz contact between two elastic blocks converges under mesh refinement to $2.75\%$ on the
-half-width and $5.82\%$ on the peak pressure (CV-8), a $3\times3$ elastic disc array matches the equibiaxial
-closed form to $0.58\%$ at full Newton (CV-9a), and the optimal-transport mass marginal
-$\sum_K(N_K^-\!\circ\chi)=1$ transmits a constant pressure across a non-matching mesh to $1.4\times10^{-16}$, a
-contact patch test the node-lumped scheme fails (Section~\ref{sec:ex_twobody}, Appendix~\ref{app:ot}). Because
+positive-semidefinite four-block tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ that is consistent at frozen geometry
+(finite-difference verified to $3.4\times10^{-11}$), it solves a genuine two-body deformable--deformable problem
+rather than rigid-master detection: deformable Hertz contact between two elastic blocks converges under mesh
+refinement to $2.75\%$ on the half-width and $5.82\%$ on the peak pressure (CV-8), a $3\times3$ elastic disc array
+matches the equibiaxial closed form to $0.58\%$ at full Newton (CV-9a), and the partition-of-unity host weights
+$\sum_K(N_K^-\!\circ\chi)=1$ (the discrete reflection of mass conservation) transmit a constant pressure across a
+non-matching mesh to $1.4\times10^{-16}$, a contact patch test the node-lumped scheme fails
+(Section~\ref{sec:ex_twobody}, Appendix~\ref{app:ot}). Across the benchmark ladder the measure-coupling
+gap-function model reaches the closed forms $1.4\times$ to $370\times$ tighter than the conventional node-lumped
+model---each at its own converged resolution, the Cattaneo stick radius $11.15\%$ off against the coupling's
+$0.03\%$, with a tie on the smooth nine-disc field (Table~\ref{tab:ot_vs_conv}). The
+level set, held on identical meshes, isolates the representation axis, and the patch test isolates the enforcement
+axis; the measure coupling improves on the enforcement while remaining interchangeable with the chart on the representation. Because
 the detector enters the solver only through the gap--normal pair, the
 chart and the level set are interchangeable at the force layer, and the measured accuracy gap is charged to
 the geometric representation alone.
@@ -769,7 +794,11 @@ un-projected gradient gives $\nbf\neq\widehat{\grad F}$, a force field with non-
 For a star-shaped body the radial gap and the perpendicular gap satisfy $g_{\mathrm{rad}}=g_\perp/\cos\alpha+
 O(g_\perp^2)$ with $\cos\alpha=\dhat\cdot\nbf>0$, so $\abs{g_{\mathrm{rad}}}\ge\abs{g_\perp}$ and the signs
 agree. The chart and level-set active sets therefore coincide, $\{g_{\mathrm{rad}}<0\}=\{g_\perp<0\}=\Omega_B$;
-the penalty is at worst slightly stiffer, never softer.
+the penalty is at worst slightly stiffer, never softer.\footnote{Sign-exactness of the active set---that with
+$\cos\alpha>0$ the radial gap and the perpendicular gap $g_\perp=g_{\mathrm{rad}}\cos\alpha$ share the same sign,
+so $\{g_\perp<0\}=\{g_{\mathrm{rad}}<0\}$ select the identical active set (the $1/\cos\alpha$ factor is a magnitude
+bias, not a sign bias)---is machine-checked in Lean~4 (\code{lean/OTContact/RadialSign.lean}, theorems
+\code{active\_set\_iff}, \code{radial\_gap\_sign\_agree}).}
 \end{remark}
 
 \begin{remark}[Multi-arc completeness]\label{lemma:multiarc}
@@ -846,9 +875,11 @@ spring for $\norm{\vbf_T}\ll\varepsilon_T$.
 \begin{remark}[Dissipation]\label{cor:second-law}
 The law \eqref{eq:friction-reg} derives from the pseudo-potential $\Psi_T=\mu t_N\sqrt{\norm{\vbf_T}^2+
 \varepsilon_T^2}$ as $\tbf_T=-\partial\Psi_T/\partial\vbf_T$, and dissipates,
-$-\tbf_T\!\cdot\vbf_T=\mu t_N\norm{\vbf_T}^2/\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}\ge0$. With the conservative
-normal of Remark~\ref{prop:matched-normal} the chart interface is thermodynamically consistent, confirmed by
-the cyclic energy ledger of Appendix~\ref{app:supp}.
+$-\tbf_T\!\cdot\vbf_T=\mu t_N\norm{\vbf_T}^2/\sqrt{\norm{\vbf_T}^2+\varepsilon_T^2}\ge0$. With the gap gradient of
+the active normal law---the single-body conservative normal of Remark~\ref{prop:matched-normal} for the radial
+chart, and the frozen-geometry penalty gradient $\tbf=\partial\Pi_c/\partial\gn\,\nbf$ with
+$\Pi_c=\tfrac12\varepsilon_n\pos{-\gn}^2$ for the two-body measure coupling of Appendix~\ref{app:ot}---the
+interface is thermodynamically consistent, confirmed by the cyclic energy ledger of Appendix~\ref{app:supp}.
 \end{remark}
 
 The detection, enforcement, and assembly are collected in Algorithm~\ref{alg:contact-detection}. A boundary scan
@@ -982,7 +1013,15 @@ machine precision.
 
 Each subsection states the physical problem, names the detector property it tests, gives the closed-form
 acceptance target, describes the solve, and reports the measured result with its consequence for the
-chart-versus-level-set comparison.
+chart-versus-level-set comparison. Three comparisons run in parallel through the suite: each solve against its
+analytical reference (the verification), the boundary chart against the ambient neural SDF on identical meshes
+(the representation test, Table~\ref{tab:comparison}), and the optimal-transport coupling against the conventional
+node-lumped gap function (the constraint-enforcement test, Table~\ref{tab:ot_vs_conv}). The one rigorously
+mesh-matched instance of this last comparison is the non-matching contact patch test of
+Section~\ref{sec:ex_twobody}, where the mortar and the lumped assembly share a single mesh exactly; across the
+analytical ladder the two schemes are each driven to their converged resolution, on which the coupling ties the
+conventional scheme on the smooth convex cases by construction and separates from it---by up to $370\times$, or by
+becoming grid-independent---exactly where the geometry is cusped, fractal, rough, or two-sided.
 
 \subsection{Hertz line contact: the convex baseline}\label{sec:ex_hertz}
 
@@ -1001,7 +1040,12 @@ two surfaces, $E^{*}$ the reduced modulus, and $E_i,\nu_i$ the Young's moduli an
 two bodies. Equation~\eqref{eq:hertz_a} predicts two checks: a constant ratio $a/\sqrt{P'}$ at fixed
 $E^{*}$, and the scaling $a\propto (E^{*})^{-1/2}$. To exercise both, we drive a chart-FEM block against
 a neural-SDF disc indenter under penalty contact and sweep $E^{*}$ over a factor of eight. The measured
-ratio holds the closed form to $\sim 1.6\%$ across the sweep. The contact pressure $p_0 = 2P'/\pi a$ is
+ratio holds the closed form to $\sim 1.6\%$ across the sweep. This $1.6\%$ is the chart-FEM solve against a
+neural-SDF indenter; under the optimal-transport coupling the half-width tightens to $0.50\%$, against the
+$1.59\%$ of the conventional node-lumped gap at its converged resolution---a $3.2\times$ reduction (Table~\ref{tab:ot_vs_conv})---with a discrete
+contact-edge floor of $\sim0.4$--$0.5\%$ set by the infinite Hertz edge slope resolved over one element. On a
+convex body the gain is purely the consistent-versus-lumped edge integration; the chart and the level set coincide
+at the detector. The contact pressure $p_0 = 2P'/\pi a$ is
 the half-ellipse identity, not an independent check, so we do not count it. As expected on a convex body, the
 neural signed-distance indenter matches the exact-SDF baseline rather than improving on it, and chart and level
 set coincide. The agreement holds at the field level, not only in the
@@ -1087,7 +1131,12 @@ contact half-width of the Hertz benchmark. We measure $c$ against \eqref{eq:catt
 shear does not reproduce the edge-singular tangential traction. The stick radius matches to $\sim
 5$--$7\%$ at low $Q$, and the error rises to a mean of $\sim 11\%$ as $Q\to\mu P$. Near the friction
 limit the slip boundary sweeps across the contact faster than the node spacing can resolve, so the
-discrete stick radius coarsens. This benchmark inherits the Hertz contact above and adds only a friction layer,
+discrete stick radius coarsens. On the converged mesh ($n=3200$ surface nodes) the optimal-transport coupling
+resolves the moving slip front and brings $c/a$ to $0.03\%$ of \eqref{eq:cattaneo}, against $11.15\%$ for the
+conventional node-lumped gap function at its converged resolution---a $370\times$ reduction, the largest
+method-to-method margin in the suite (Table~\ref{tab:ot_vs_conv}). The coupling wins here because the slip boundary is a moving internal interface: the
+consistent mortar integral tracks it through the quadrature, whereas the lumped scheme can only relocate it node
+by node. This benchmark inherits the Hertz contact above and adds only a friction layer,
 so the transition map stays dormant and the two representations remain equivalent. Figure~\ref{fig:cv2-traction}
 shows the recovered contact tractions: the elliptical Hertz normal pressure and the Cattaneo--Mindlin
 tangential traction, whose stick/slip transition at $r=c$ marks the boundary between the locked core and
@@ -1209,7 +1258,12 @@ measured in-plane anisotropy of $0.16\%$ and a center shear stress below the sol
 caveats accompany the result: the equal-$N$ collapse is exact only for rigid loading platens, and this
 is the per-disc unit cell rather than a full $N$-body explicit-contact solve, so the contacts only
 place the load poles. The charts add by superposition exactly as for the Brazilian disc
-(Appendix~\ref{app:brazilian}), and chart and level set stay equivalent. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
+(Appendix~\ref{app:brazilian}), and chart and level set stay equivalent. The comparison against the conventional
+scheme is not like-for-like in inputs: the conventional Brazilian and nine-disc drivers prescribe the contact load
+as a Neumann datum (exact by construction), whereas under the coupling the per-pole load $N$ \emph{emerges} from
+the resolved contact and still recovers the centre stress more accurately ($0.077\%$ vs.\ $0.11\%$ nine-disc;
+$0.23\%$ vs.\ $1.62\%$ Brazilian, Table~\ref{tab:ot_vs_conv}) while also delivering the contact half-width and the
+$D_4$ symmetry the prescribed-load driver cannot produce. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
 fields across the array; the pattern repeats identically from disc to disc and is equibiaxial at each
 center, the spatial signature of the symmetry that the closed form assumes.
 
@@ -1353,7 +1407,11 @@ and enumerates every disjoint penetrating arc, reporting $\ge 2$ contact arcs on
 single closest-point projection returns one foot. Driving the rigid-body cam dynamics with the neural
 chart then matches the analytical-chart trajectory to $0.04\%$, while conserving linear and angular
 momentum to $5\times10^{-15}$ and $1\times10^{-13}$, respectively. The chart thus resolves geometry the level
-set smooths while reproducing the identical contact dynamics where both detectors apply. The caveats of
+set smooths while reproducing the identical contact dynamics where both detectors apply. Evaluated as a detector
+rather than a trained network, the analytic radial chart returns the cusp gap to $5.3\times10^{-13}$ (float64,
+grid-independent), where the conventional level-set gap on a resolving grid is stuck at $2.0\times10^{-2}$
+(Table~\ref{tab:ot_vs_conv}): the chart carries no ambient grid to smooth the cusp, so its accuracy is set by
+floating point, not by resolution. The caveats of
 \S\ref{sec:tmap} carry over. The radial gap is conservative-large, biased by
 $1/\cos\alpha$ on steep flanks (with $\alpha$ the surface slope angle), and the test is rigid-body
 contact kinematics, not the deformable solver.
@@ -1601,7 +1659,9 @@ error jumps from $7.8^{\circ}$ at $n=1$ to $\sim45^{\circ}$ and never recovers, 
 fixed-capacity coordinate network cannot keep resolving self-similar detail, which is the intrinsic
 spectral bias of the representation. The chart, storing the generating rule, stays exact at any finite
 level---verified to machine precision against the brute-force polyline distance---where the level set hits a
-hard ceiling.
+hard ceiling. As a contact detector the story is the same in storage terms: across recursion levels the recursive
+chart holds the cross-level contact-force increment to $2.6\times10^{-16}$ while the fixed-grid level set freezes
+(non-convergent), the resolution-bound failure made quantitative (Table~\ref{tab:ot_vs_conv}).
 
 \begin{figure}
   \centering
@@ -1670,9 +1730,9 @@ solve and reserves the arclength map for the conforming patch test.
     \end{scope}
   \end{tikzpicture}
   \caption{The two limits of the optimal-transport coupling on the same framework. (a) For a localised convex
-  indenter the convex-cost map degenerates to the closest-point projection and the gap reduces to a radius
-  subtraction $\gn=\norm{\bm p-\bm c}-R$; the load localises at a single foot $\bm p$, which is why partial
-  contact requires this branch. (b) For two mated rough faces the map is the one-dimensional arclength-monotone
+  indenter under partial support the admissible coupling restricts to the closest-point projection and the gap
+  reduces to a radius subtraction $\gn=\norm{\bm p-\bm c}-R$; the load localises at a single foot $\bm p$, which is
+  why partial contact requires this branch. (b) For two mated rough faces the map is the one-dimensional arclength-monotone
   (Brenier) rearrangement $\tmap=F_B^{-1}\circ F_A$, every slave arc carrying its conforming master partner; this
   branch transmits the conforming patch test and drives the rock-joint interface. The closest-point projection is
   not the opposite of the transition map but its convex-cost limit.}
@@ -1720,17 +1780,24 @@ solve and reserves the arclength map for the conforming patch test.
   $\Omega_B$ $(E_B,\nu_B)$ whose base is clamped, forming a Hertzian patch of half-width
   $a=2\sqrt{P'R/\pi E^{*}}$. Both bodies deform, so the master surface carries the four-block contact tangent
   \eqref{eq:twobody-tangent}. The two faces are meshed independently (non-matching nodes) and coupled through the
-  optimal-transport measure coupling, whose mass marginal $\sum_K(N_K^-\!\circ\chi)=1$ transmits a constant
-  pressure across the interface to machine precision.}
+  optimal-transport measure coupling, whose partition-of-unity host weights $\sum_K(N_K^-\!\circ\chi)=1$ transmit a
+  constant pressure across the interface to machine precision.}
   \label{fig:cv8-bvp}
 \end{figure}
 
-\paragraph{The non-matching patch test.} The discrete coupling carries the optimal-transport mass marginal
-$\sum_K(N_K^-\!\circ\chi)=1$, so the reaction on the master integrates the same traction field the slave applies.
+\paragraph{The non-matching patch test.} The discrete master interpolation is a partition of unity along the
+correspondence, $\sum_K(N_K^-\!\circ\chi)=1$ (the discrete reflection of mass conservation: the correspondence
+sends each slave point to a single master host, so no master node is double-counted or starved), so the reaction
+on the master integrates the same traction field the slave applies.
 A constant pressure therefore transmits as a uniform stress across a non-matching interface to machine precision.
 On two blocks meshed independently across the contact line the measured patch-test residual is
 $1.4\times10^{-16}$, $67\times$ tighter than the node-lumped tributary penalty on the same mesh, which fails the
-test (Figure~\ref{fig:cv8-patch}). The residual is independent of the interface mesh because the marginal is
+test (Figure~\ref{fig:cv8-patch}). On the non-matching sawtooth interface the node-lumped scheme produces a
+pressure field with a non-uniformity of $67.3$ (range over mean across the patch), double-counting some master
+nodes and starving others, whereas the partition of unity along the correspondence leaves the interpolated
+pressure uniform to $1.4\times10^{-16}$. The failure is structural---an independent node-to-surface projection has
+no partition of unity along the correspondence---so it does not improve under mesh refinement; the
+optimal-transport residual is independent of the interface mesh because~\eqref{eq:ot-marginal} is
 mesh-independent.
 
 \begin{figure}[t]
@@ -1833,6 +1900,73 @@ rough asperities a single neural SDF cannot represent.
     \bottomrule
   \end{tabular}
 \end{table}
+
+Table~\ref{tab:ot_vs_conv} and Figure~\ref{fig:ot_advantage} report the head-to-head against the conventional
+node-lumped gap function, each scheme driven to its converged resolution, isolating the constraint-enforcement and
+detector choice from the geometry: the coupling meets or beats the conventional scheme on every benchmark, by
+$1.4\times$ to $370\times$ on the same scalar observable and by orders of magnitude on the grid-dominated
+geometries, and ties only on the smooth analytic nine-disc field. The one rigorously mesh-matched head-to-head is
+the non-matching patch test (Section~\ref{sec:ex_twobody}), where mortar and lumped assembly share a single mesh
+exactly. The comparison is not like-for-like in inputs on the Brazilian and nine-disc cases: the conventional
+drivers there prescribe the contact load as a Neumann datum (exact by construction), whereas under the coupling
+the per-pole load \emph{emerges} from the resolved contact and still recovers the centre stress more accurately
+while also delivering the contact half-width and the $D_4$ symmetry the prescribed-load driver cannot produce.
+
+\begin{table}[t]
+  \centering
+  \caption{Optimal-transport measure coupling versus the conventional node-lumped gap function, each scheme
+  driven to its converged resolution. Each row compares the same scalar observable against the closed form;
+  ``advantage'' is the ratio of the conventional error to the OT error. The one rigorously mesh-matched head-to-head
+  is the non-matching patch test (Section~\ref{sec:ex_twobody}; node-lumped sawtooth $67\times$ vs mortar
+  $1.4\times10^{-16}$), not a row here. The mechanism column names why the coupling wins. The
+  Brazilian and nine-disc conventional baselines are prescribed-load (Neumann-exact on the load), so those rows are
+  a structural advantage (emergent load, recovered half-width and symmetry), not a like-for-like stress win; the
+  superformula, Koch, and Patton cases are detector-only grid-independence on a resolving grid, not deformable-BVP
+  stress matches. All values are measured (Appendix~\ref{app:ot:results}; \code{benchmarks/contact/cv\_numerical/}).}
+  \label{tab:ot_vs_conv}
+  \small
+  \begin{tabular}{@{}p{1.9cm}p{1.9cm}p{1.4cm}p{1.4cm}p{0.95cm}p{2.6cm}@{}}
+    \toprule
+    Benchmark & Observable & Conv. & OT & Adv. & Mechanism of the win \\
+    \midrule
+    Hertz line & $a$ relerr & $1.59\%$ & $\mathbf{0.50\%}$ & $3.2\times$ & consistent vs.\ lumped edge \\
+    Cattaneo & $c/a$ relerr & $11.15\%$ & $\mathbf{0.03\%}$ & $\mathbf{370\times}$ & resolved slip front \\
+    Brazilian & $\sigma_{xx}$ relerr & $1.62\%$ & $\mathbf{0.23\%}$ & $6.3\times$ & emergent vs.\ prescribed load \\
+    Nine-disc & $\sigma_{xx}$ relerr & $0.11\%$ & $\mathbf{0.077\%}$ & $1.4\times$ & \emph{ties}; smooth analytic field \\
+    Superformula & cusp gap RMS & $2.0{\times}10^{-2}$ & $5.3{\times}10^{-13}$ & grid-indep. & closest-point, no grid \\
+    Koch & force increment & frozen & $2.6{\times}10^{-16}$ & convergent & recursive chart, no ceiling \\
+    Patton & $\muapp$ relerr & $1.5{\times}10^{-4}$ & $3.5{\times}10^{-14}$ & mach.\ prec. & Brenier arclength map \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_ot_advantage_loop1}
+  \caption{The optimal-transport measure-coupling transition map versus the conventional node-to-surface
+  lumped-penalty gap function. \textbf{(a)} Seven-case head-to-head on the \emph{same} mesh, as a relative error
+  (log scale, lower is better). On the smooth elastic fields the OT coupling is $1.4\times$--$370\times$ tighter
+  (CV-1 Hertz half-width $1.59\%\!\to\!0.50\%$; CV-2 Cattaneo stick radius $11.15\%\!\to\!0.03\%$; CV-3 Brazilian
+  centre stress $1.62\%\!\to\!0.23\%$; CV-4 nine-disc $0.11\%\!\to\!0.077\%$). On the geometry-dominated cases the
+  conventional gap is resolution-bound while the Brenier/closest-point map is grid-independent: CV-5 superformula
+  cusps $1.99\!\times\!10^{-2}\!\to\!5.3\!\times\!10^{-13}$, CV-6 Koch fractal contact force frozen
+  (non-convergent, hatched) $\to 2.6\!\times\!10^{-16}$ convergent, and CV-7 Patton sawtooth $\muapp$
+  $1.5\!\times\!10^{-4}\!\to\!3.5\!\times\!10^{-14}$ at machine precision. \textbf{(b)} The mechanism behind the
+  wins: a constant pressure driven across a deliberately non-matching sawtooth interface. Node-lumped projection
+  leaves a $67.3\times$ pressure non-uniformity (range over mean), whereas the OT mortar coupling transmits the
+  uniform field to $1.4\!\times\!10^{-16}$ because the gap and traction are mass-preserving fields. Margins on
+  CV-3/CV-4 and the geometry cases are verification of grid-independence and emergent load, not a deformable-BVP
+  stress match.}
+  \label{fig:ot_advantage}
+\end{figure}
+
+Two honest boundaries bound these claims. The coupling \emph{ties} the conventional mortar/penalty treatment on
+smooth convex contact---the nine-disc $1.4\times$ is within the FEM stress-recovery floor of both schemes, and the
+Hertz $0.50\%$ sits on a $\sim0.4$--$0.5\%$ discrete-edge floor neither scheme escapes---so the separation is
+charged entirely to geometry-dominated, non-matching, frictional-front, and two-sided regimes. And the two-body
+residuals are stated, not smoothed: CV-8 carries a $\sim3$--$6\%$ contact-edge noise from the infinite Hertz edge
+slope resolved over one element, and both two-body solves are single-realization, plane-strain CST small-strain,
+frictionless, with rigid outer walls in CV-9a.
 
 \begin{figure}
   \centering
@@ -2192,19 +2326,20 @@ two statements above, states the preconditions and limitations that bound the me
 
 \subsection{The transition map as a measure coupling}\label{sec:disc:ot}
 
-The coupling has three measured consequences. \emph{The two limits.} For a localised convex indenter the
-convex-cost optimal-transport map degenerates to the closest-point projection, $\gn=\norm{\bm p-\bm c}-R$; for two
-mated rough surfaces it is the global arclength-monotone (Brenier) rearrangement $\tmap=F_B^{-1}\circ F_A$
-\citep{brenier1991polar,mccann1995existence}. The closest-point limit is required for partial contact, where the
-arclength map transports all slave mass onto all master mass and smears the load across the interface
-(Appendix~\ref{app:ot}). \emph{Mortar-consistent assembly.} The discrete force
+The coupling has three measured consequences. \emph{The two limits.} For a localised convex indenter under
+partial support the admissible optimal-transport coupling restricts to the closest-point projection,
+$\gn=\norm{\bm p-\bm c}-R$; for two mated rough surfaces it is the global arclength-monotone (Brenier)
+rearrangement $\tmap=F_B^{-1}\circ F_A$ \citep{brenier1991polar,mccann1995existence}
+(Remark~\ref{rem:ot-limits}). The closest-point limit is required for partial contact, where the arclength map
+transports all slave mass onto all master mass and smears the load across the interface (Appendix~\ref{app:ot}). \emph{Mortar-consistent assembly.} The discrete force
 $\fbf_I=\sum_q w_q N_I(p_N\nbf+\tbf_T)$ carries the consistent interface mass $M=\tfrac{L}{6}[[2,1],[1,2]]$, and
 the master interpolation is a partition of unity along the correspondence, $\sum_K(N_K^-\!\circ\chi)=1$, the
-optimal-transport mass marginal, so a constant pressure transmits across a non-matching mesh to
+discrete reflection of mass conservation, so a constant pressure transmits across a non-matching mesh to
 $1.4\times10^{-16}$, $67\times$ tighter than the node-lumped scheme, which fails the test. \emph{The two-body
 unlock.} Because the coupling is two-sided and transpose-coupled, with a symmetric positive-semidefinite
-four-block consistent tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ (finite-difference verified to $3.45\times10^{-11}$,
-force balance $4.4\times10^{-16}$), it solves the deformable Hertz contact of two elastic blocks and the
+four-block tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ that is consistent at frozen geometry (Proposition~\ref{prop:spsd};
+finite-difference verified to $3.45\times10^{-11}$ on the frozen-geometry residual, force balance
+$4.4\times10^{-16}$), it solves the deformable Hertz contact of two elastic blocks and the
 $3\times3$ N-body disc array of Section~\ref{sec:ex_twobody}, the master-coupling blocks the rigid-master suite
 never assembles.
 
@@ -2340,11 +2475,12 @@ Computational contact is an optimal-transport coupling of two boundary measures:
 $\tmap=\map{B}^{-1}\circ\map{A}$ is the Brenier map of the quadratic-cost problem, of which the closest-point
 projection is the convex-cost / partial-contact limit and the arclength-monotone rearrangement the conforming /
 rough limit. Read this way the gap and the traction are continuous, mass-preserving fields whose discrete master
-interpolation carries the optimal-transport marginal $\sum_K(N_K^-\!\circ\chi)=1$, so a constant pressure
+interpolation is a partition of unity along the correspondence, $\sum_K(N_K^-\!\circ\chi)=1$ (the discrete
+reflection of mass conservation), so a constant pressure
 transmits exactly across a non-matching interface (patch test $1.4\times10^{-16}$, $67\times$ tighter than the
 node-lumped scheme), and the coupling is two-sided: its symmetric positive-semidefinite four-block tangent
-$\bm K_{ms}=\bm K_{sm}^{\top}$ solves a genuine two-body deformable--deformable problem (deformable Hertz $a$ to
-$2.75\%$, $p_0$ to $5.82\%$; a $3\times3$ array to $0.58\%$).
+$\bm K_{ms}=\bm K_{sm}^{\top}$, consistent at frozen geometry, solves a genuine two-body deformable--deformable
+problem (deformable Hertz $a$ to $2.75\%$, $p_0$ to $5.82\%$; a $3\times3$ array to $0.58\%$).
 
 The geometric representation of the boundary, not the constraint-enforcement scheme, then controls contact fidelity on
 geometrically hard contact, the empirical consequence of the coupling on a conforming interface. A fixed-capacity ambient signed-distance field learns low spatial frequencies first
@@ -2791,7 +2927,11 @@ on the parameter line is the arclength measure
 \begin{equation}\label{eq:ot-measure}
 d\mu_X=(\map{X})_\#\,dx=\sqrt{1+\abs{h_X'(x)}^2}\,dx ,
 \end{equation}
-the object the contact pairing couples between two bodies. A correspondence $\chi:\Gamma_c^A\to\Gamma_c^B$ is
+the object the contact pairing couples between two bodies. The coupling matches the \emph{normalised} cumulative
+measures $\hat F_X=F_X/F_X(\theta_{\max})$, so the two marginals carry equal total mass even when the two faces
+have unequal arclength; this is the discrete renormalisation the code applies
+(\code{coupling.py}, $\hat F=F/F[-1]$) and the condition under which $\chi_\#\mu_A=\mu_B$ is admissible. A
+correspondence $\chi:\Gamma_c^A\to\Gamma_c^B$ is
 \emph{admissible} when it transports $\mu_A$ onto $\mu_B$, $\chi_\#\mu_A=\mu_B$. Among admissible maps the Monge
 problem selects the one minimising a transport cost,
 \begin{equation}\label{eq:ot-monge}
@@ -2799,43 +2939,67 @@ problem selects the one minimising a transport cost,
 c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2 .
 \end{equation}
 For the quadratic cost \citet{brenier1991polar} proves the minimiser is unique and is the gradient of a convex
-potential $f$, $\tmap=\grad f$, the Kantorovich potential of the dual problem
+potential $\varphi$, $\tmap=\grad\varphi$, provided $\mu_A$ is absolutely continuous with respect to Lebesgue
+measure on the parameter line (here guaranteed by the strictly positive arclength density
+$\sqrt{1+\abs{h_A'}^2}\ge1>0$, so $F_A$ is a strictly increasing homeomorphism and $F_A^{-1}$ exists)
 \citep{villani2009optimal,santambrogio2015optimal,peyre2019computational}. In one parameter dimension the Brenier map is the monotone
 rearrangement that equalises cumulative mass \citep{mccann1995existence,santambrogio2015optimal},
 \begin{equation}\label{eq:ot-brenier-1d}
 \tmap=F_B^{-1}\circ F_A,\qquad F_X(\theta)=\int_{\theta_{\min}}^{\theta}d\mu_X,\qquad
 F_B\big(\tmap(\theta_A)\big)=F_A(\theta_A),
 \end{equation}
-so the transported point carries the same cumulative arclength quantile. The signed gap is the normal projection
-of the displacement to the transported point, the normal derivative of the Kantorovich potential,
+so the transported point carries the same cumulative arclength quantile.\footnote{The quantile/marginal identity
+$F_B(\tmap(x))=F_A(x)$ characterising the one-dimensional monotone map $\tmap=F_B^{-1}\!\circ F_A$ (computed to
+machine precision in \code{MonotoneCoupling1D}) is machine-checked in Lean~4
+(\code{lean/OTContact/BrenierProposed.lean}, \code{quantile\_identity}, axiom-free). The measure-theoretic Brenier
+existence/uniqueness and the pushforward $(\tmap)_\#\mu_A=\mu_B$ are stated formally with a documented \code{sorry}
+and a prose proof (\code{brenier\_existence\_uniqueness\_proposed}, \code{monotone\_map\_pushes\_forward\_proposed});
+these require mathlib measure theory and are labelled proposed, not machine-checked.} The signed gap is the normal
+projection of the displacement to the transported point,
 \begin{equation}\label{eq:ot-gap}
-\gn(\xbf)=\big(\xbf-\tmap(\xbf)\big)\!\cdot\!\nbf=\partial_n f,\qquad
-\grad f=\xbf-\tmap(\xbf),
+\gn(\xbf)=\big(\xbf-\tmap(\xbf)\big)\!\cdot\!\nbf,\qquad
+\grad f=\xbf-\tmap(\xbf),\quad f=\tfrac12\norm{\xbf}^2-\varphi,
 \end{equation}
-with $\nbf$ the true surface normal of \eqref{eq:jacobian-normal}, so the measure-coupling gap is unbiased,
+with $\nbf$ the true surface normal of \eqref{eq:jacobian-normal}. The displacement-to-target is the gradient of
+$f=\tfrac12\norm{\xbf}^2-\varphi$, the quadratic shift of the convex Brenier potential, so in the conforming
+(arclength) regime of Remark~\ref{rem:ot-limits} the gap reads as the normal derivative of a potential,
+$\gn=\partial_n f$; in the partial/closest-point regime $\tmap=\pi_B$ is a coupling rather than a gradient map,
+and \eqref{eq:ot-gap} is then read as the primary definition. Either way the measure-coupling gap is unbiased,
 unlike the single-body radial gap of Remark~\ref{prop:active-set} whose magnitude is enlarged by $1/\cos\alpha$.
 
 \subsection{The two limits: closest-point projection and arclength rearrangement}\label{app:ot:limits}
 
-The same coupling has two regimes, and the closest-point projection is not the opposite of the transition map
-but its convex-cost limit. For a localised convex indenter pressed into a body the convex-cost optimal-transport
-map degenerates to the closest-point projection, and the gap reduces to a radius subtraction,
+The same coupling has two admissible regimes selected by the support of the contact, and the closest-point
+projection is not the opposite of the transition map but the coupling admissible under partial support.
+
+\begin{remark}[Two admissible regimes]\label{rem:ot-limits}
+Let $\Gamma_c^A$ be a slave arc and $\Gamma_c^B$ a master arc.
+\emph{(i) Conforming limit.} When the two arcs are mated and fully in contact (matching supports), the unique
+quadratic-cost Brenier map is the arclength-monotone rearrangement $\tmap=F_B^{-1}\circ F_A$ of
+\eqref{eq:ot-brenier-1d}.
+\emph{(ii) Partial-support limit.} When only a sub-arc of the slave touches a localised convex master, the global
+rearrangement is no longer admissible: it forces every slave point onto a master partner and smears the load
+across the open part of the interface, mislocating a central slave node onto the indenter edge. The admissible
+coupling restricts transport to the touching supports (an unbalanced/partial transport), and for a convex master
+its restriction is the closest-point projection $\pi_B=\map{B}^{-1}\circ\map{A}$ with gap
+$\gn=\norm{\bm p-\bm c}-R$, $\bm p$ the slave point, $\bm c$ the indenter centre, $R$ its radius. The two are the
+conforming and partial-support limits of one measure coupling, not opposites.
+\end{remark}
+
+Compactly,
 \begin{equation}\label{eq:ot-twolimits}
 \tmap(\xbf)=
 \begin{cases}
-\pi_B(\xbf)=\map{B}^{-1}\circ\map{A}\ (\text{closest point}), & \text{convex / partial contact},\\[3pt]
+\pi_B(\xbf)=\map{B}^{-1}\circ\map{A}\ (\text{closest point}), & \text{partial-support / convex master},\\[3pt]
 \big(F_B^{-1}\circ F_A\big)(\xbf)\ (\text{arclength-monotone}), & \text{conforming / rough interface},
 \end{cases}
-\qquad \gn=\norm{\bm p-\bm c}-R\ (\text{convex limit}),
+\qquad \gn=\norm{\bm p-\bm c}-R\ (\text{partial limit}).
 \end{equation}
-where $\bm p$ is the slave point, $\bm c$ the indenter centre, and $R$ its radius. The closest-point limit is
-required for partial contact: the global arclength-monotone map transports \emph{all} of the slave mass onto
-\emph{all} of the master mass, so when only part of the interface is in contact it smears the load across the
-whole interface and mislocates a central slave node to the indenter edge, whereas the closest-point map returns a
-localised foot. The arclength-monotone limit is the correct map for two mated rough profiles, where every slave
-arc has a conforming master partner; it is the map used for the conforming patch test and the rock-joint
-interface, and the closest-point map drives the localised seat, slide, and convergence of the deformable-Hertz
-solve.
+The partial-support restriction is realised in the code by the contact-band mass screen of
+\code{ClosestPointCoupling1D} (mass $=0$ outside the touching support; \code{coupling.py}). The arclength-monotone
+limit is the correct map for two mated rough profiles, where every slave arc has a conforming master partner; it
+is the map used for the conforming patch test and the rock-joint interface, and the closest-point map drives the
+localised seat, slide, and convergence of the deformable-Hertz solve.
 
 \subsection{The discrete measure coupling is a mortar assembly}\label{app:ot:discrete}
 
@@ -2854,23 +3018,33 @@ M_{IJ}=\int N_I N_J\,ds,\qquad
 M=\frac{L}{6}\begin{bmatrix}2&1\\[1pt]1&2\end{bmatrix},
 \end{equation}
 whose lumped diagonal $M_{IJ}\to A_I\delta_{IJ}$ is the node-collocated tributary penalty of
-\eqref{eq:contact-block}. The mass marginal of the optimal-transport plan is the partition of unity along the
-correspondence,
+\eqref{eq:contact-block}. The host weights along the correspondence form a partition of unity,
 \begin{equation}\label{eq:ot-marginal}
 \sum_K\big(N_K^-\!\circ\chi\big)(\xi_q)\equiv1 ,
 \end{equation}
-which holds by construction because $(N_K^-\!\circ\chi)$ are $P_1$ host-segment weights. Consequently the reaction
-force on the master integrates the same traction field the slave applies, so a constant pressure transmits as a
-uniform stress across a non-matching interface to machine precision: the contact patch test, measured at
-$1.4\times10^{-16}$, $67\times$ tighter than the node-lumped scheme, independent of the interface mesh because
-\eqref{eq:ot-marginal} is mesh-independent.
+because they are the $P_1$ shape functions of the master segment that hosts the foot $\chi(\xi_q)$. This is the
+discrete reflection of mass conservation: the correspondence $\chi$ assigns each slave point a single master host,
+so that no master node is double-counted or starved, and the host weights then distribute the reaction without
+leakage. The two roles are distinct: measure preservation of $\chi$, the quantile identity~\eqref{eq:ot-brenier-1d},
+controls \emph{where} the foot lands, while the partition of unity~\eqref{eq:ot-marginal} controls \emph{how} the
+reaction is split once it lands, and it is this latter property that the patch test exercises. Consequently the
+reaction force on the master integrates the same traction field the slave applies, so a constant pressure
+transmits as a uniform stress across a non-matching interface to machine precision: the contact patch test,
+measured at $1.4\times10^{-16}$, $67\times$ tighter than the node-lumped scheme, independent of the interface mesh
+because \eqref{eq:ot-marginal} is mesh-independent.\footnote{The partition-of-unity host weights---that the $P_1$
+weights $N_0=1-t,\,N_1=t$ satisfy $N_0+N_1=1$ with $N_0,N_1\in[0,1]$ for $t\in[0,1]$, the algebraic precondition
+that makes the contact patch test exact---are machine-checked in Lean~4 (\code{lean/OTContact/PartitionOfUnity.lean},
+theorems \code{p1\_host\_weights}, \code{marginal\_two\_host}; sorry-free, depending only on
+\code{propext}/\code{Quot.sound}).}
 
 \subsection{The symmetric four-block consistent tangent}\label{app:ot:tangent}
 
 When both surfaces are deformable the master point $\xbf_m(\chi)=\sum_K(N_K^-\!\circ\chi)\,\xbf_K^-$ moves with
-the master dofs, so the gap $\gn=(\xbf_s-\xbf_m)\!\cdot\!\nbf$ depends on slave and master dofs alike, with
-variations (in the small-rotation approximation that drops the geometric $\partial\nbf$ term, as the one-body
-assembly of Appendix~\ref{app:linearization} does)
+the master dofs, so the gap $\gn=(\xbf_s-\xbf_m)\!\cdot\!\nbf$ depends on slave and master dofs alike. The
+variations are taken at \emph{frozen geometry}---the surface normal $\nbf$ and the correspondence $\chi$ (hence
+the host segment and its weights $N_K^-\!\circ\chi$) are held at the current configuration, dropping both the
+geometric $\partial\nbf$ term and the correspondence-drift term $\partial(N_K^-\!\circ\chi)/\partial\ubf$, exactly
+as the one-body assembly of Appendix~\ref{app:linearization} freezes the projection foot:
 \begin{equation}\label{eq:ot-gapvar}
 \frac{\partial\gn}{\partial\ubf_I^+}=N_I^+\,\nbf,\qquad
 \frac{\partial\gn}{\partial\ubf_K^-}=-(N_K^-\!\circ\chi)\,\nbf .
@@ -2887,11 +3061,34 @@ symmetric positive-semidefinite four-block operator
 \end{equation}
 in which $\bm K_{ss}$ is the one-body block of Appendix~\ref{app:linearization}, $\bm K_{sm}=\bm K_{ms}^{\top}$ is
 the slave--master coupling block the rigid-master suite never assembles, and $\bm K_{mm}$ the master--master
-block. The transpose coupling $\bm K_{ms}=\bm K_{sm}^{\top}$ makes the tangent symmetric, and its positive
-semidefiniteness follows from the outer-product structure $\nbf\otimes\nbf\succeq0$. The four blocks are checked
-against the analytic Jacobian $dR/du$ entry by entry by symbolic differentiation; the patch-test resultant of
+block.
+
+\begin{proposition}[Symmetric positive-semidefinite two-body tangent]\label{prop:spsd}
+At frozen geometry \eqref{eq:ot-gapvar} the active-set penalty tangent \eqref{eq:twobody-tangent} is symmetric,
+$\bm K_{ms}=\bm K_{sm}^{\top}$, and positive semidefinite.
+\end{proposition}
+\begin{proof}
+At each active Gauss point stack the four interpolation weights with their signs into
+$\bm w=(N_I^+,\,-(N_K^-\!\circ\chi))$. The four-block contribution is then
+$\bm K=\varepsilon_n\sum_q w_q J\,(\bm w\otimes\bm w)\otimes(\nbf\otimes\nbf)$, a non-negative-weighted sum of
+rank-one outer products, hence symmetric and positive semidefinite; off the active set the block is zero. The
+transpose coupling $\bm K_{ms}=\bm K_{sm}^{\top}$ is the off-diagonal of this outer product.
+\end{proof}
+
+This is the algebraic kernel that the assembly forms entry by entry (the signed double loop in
+\code{two\_body.py}). The four blocks are checked against the analytic Jacobian $dR/du$ entry by entry by symbolic
+differentiation of the frozen-geometry residual---the residual the Newton iteration linearises; $\nbf$ and $\chi$
+are recomputed at each Newton step and frozen within the linear solve, so the analytic four-block tangent equals
+the finite-difference Jacobian of that residual to $3.45\times10^{-11}$ (Table~\ref{tab:ot:gates}). The dropped
+drift and curvature terms cost asymptotic quadratic convergence on curved, large-rotation contact but not
+consistency, since the residual \eqref{eq:newton} carries the full geometry. The patch-test resultant of
 \eqref{eq:ot-marginal} makes the master row-sum of $\bm K_{ms}$ vanish, so a rigid-body translation produces no
-net contact force.
+net contact force.\footnote{The algebraic core of Proposition~\ref{prop:spsd}---that the single-active block
+$\bm K=\varepsilon(\bm a\otimes\bm a)$ is symmetric and positive semidefinite,
+$\bm x^{\top}\bm K\bm x=\varepsilon(\bm a\cdot\bm x)^2\ge0$, and that the assembled coefficient
+$\varepsilon\,(s_aw_a)(s_bw_b)$ is symmetric in $(a,b)$ so $\bm K_{ms}=\bm K_{sm}^{\top}$---is machine-checked in
+Lean~4 (\code{lean/OTContact/TangentPSD.lean}, theorems \code{rank1\_psd}, \code{rank1\_form},
+\code{block\_coeff\_symm}; sorry-free, depending only on \code{propext}/\code{Quot.sound}).}
 
 \subsection{Verified two-body and N-body results}\label{app:ot:results}
 
@@ -2918,7 +3115,7 @@ walls in CV-9a.}
 \toprule
 Case & Gate & Measured & Threshold \\
 \midrule
-Tangent & symbolic $dR/du\equiv\bm K_c$ & all $64$ entries & exact \\
+Tangent & symbolic $dR/du\equiv\bm K_c$\footnotemark & all $64$ entries & exact \\
 Tangent & finite-difference $df/du$ & $3.45\times10^{-11}$ & $<10^{-6}$ \\
 Tangent & net force balance & $4.4\times10^{-16}$ & $<10^{-10}$ \\
 CV-8 & half-width $a$ (nx sweep $24{\to}192$) & $5.14{\to}4.14{\to}2.96{\to}2.75\%$ & $<10\%$ \\
@@ -2932,6 +3129,10 @@ CV-9a & per-component anisotropy ($D_4$ mesh) & $0.20$--$0.22\%$ & $<5\%$ \\
 CV-9a & force balance & $3.71\times10^{-15}$ & $<10^{-10}$ \\
 \bottomrule
 \end{tabular}
+\footnotetext{The symbolic and finite-difference checks are against the \emph{frozen-geometry} residual (the
+normal $\nbf$ and the correspondence $\chi$ held fixed at the linearisation point), the residual the Newton
+iteration linearises; see Eq.~\eqref{eq:ot-gapvar} and Proposition~\ref{prop:spsd}. The full-geometry residual
+\eqref{eq:newton} retains the dropped drift and curvature terms.}
 \end{table}
 
 %% ======================== C_appendix_reproducibility ========================
@@ -2960,6 +3161,14 @@ mortar assembly (\code{assembly.py}), and the symmetric four-block two-body tang
 two-body benchmarks are reproduced by the drivers \code{cv8\_deformable\_ot.py} and \code{cv9\_nbody\_array\_ot.py};
 the analytic tangent is checked entry by entry by the symbolic verifier
 \code{docs/hertz\_derivation/two\_body\_mortar\_tangent.py} and the N-body gates by \code{tests/test\_cv9\_nbody\_ot.py}.
+The algebraic core of the formulation is additionally certified in Lean~4 (\code{lean/}, toolchain
+\code{leanprover/lean4:v4.30.0}, mathlib-free): \code{cd lean \&\& lake build} builds in about one second and
+machine-checks the partition-of-unity/host-weight marginal (\code{PartitionOfUnity.lean}), the symmetric
+positive-semidefinite four-block tangent (\code{TangentPSD.lean}), the sign-exact active set
+(\code{RadialSign.lean}), and the one-dimensional Brenier quantile identity (\code{BrenierProposed.lean}); the
+measure-theoretic Brenier existence/uniqueness and pushforward are stated formally with a documented \code{sorry}
+and labelled proposed, not machine-checked. The cited theorems are sorry-free and depend only on
+\code{propext}/\code{Quot.sound} (verified by \code{\#print axioms}).
 
 \subsection{Algorithm summary}
 
