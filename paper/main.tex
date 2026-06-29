@@ -156,12 +156,11 @@ rock-joint dilatancy}
 Two surfaces come into contact when each point of one is paired with a point of the other. We take that pairing
 literally: contact is an optimal-transport coupling of the two boundary measures, and the gap and traction it
 induces are continuous, mass-preserving fields rather than node-collocated penalties. Read on a learned coordinate
-atlas, the pairing is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$; in the conforming
-regime it is the Brenier map of the quadratic-cost transport of the two boundary measures, and the closest-point
-composition $\tmap=\map{B}^{-1}\circ\map{A}$ familiar from node-to-segment contact is its partial-support limit
-(Section~\ref{sec:tmap}, Appendix~\ref{app:ot}). This single object has two familiar limits---the closest-point
-projection of node-to-segment contact is its partial-support limit, and the arclength-monotone rearrangement of
-mortar contact is its conforming limit. Posing contact this way
+atlas, the pairing is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$ that carries two
+familiar limits of one coupling: for two mated rough surfaces it is the arclength-monotone (Brenier) rearrangement
+of the quadratic-cost transport of the two boundary measures (its conforming limit), and the closest-point
+projection familiar from node-to-segment contact is its partial-support limit for a localised convex indenter
+(Section~\ref{sec:tmap}, Appendix~\ref{app:ot}). Posing contact this way
 does two things classical detection cannot---it transmits a constant pressure exactly across a non-matching mesh,
 and it couples two deformable bodies through a symmetric tangent---and it makes precise a fact the rest of the
 paper measures: on rough, non-convex geometry it is the representation of the boundary, not the
@@ -949,10 +948,13 @@ not the opposite of the transition map but its partial-support limit:
 For two mated rough faces in full contact the unique quadratic-cost Brenier map is the arclength-monotone
 rearrangement \eqref{eq:ot-brenier-1d-body}; for a localised convex indenter touching a sub-arc the global
 rearrangement is inadmissible---it transports every slave point onto a master partner and smears a partial load
-across the open interface---and the admissible coupling restricts transport to the touching supports (an
-unbalanced/partial transport \citep{chizat2018unbalanced}), whose restriction for a convex master is the
-closest-point projection $\pi_B$ with gap $\gn=\norm{\bm p-\bm c}-R$, $\bm p$ the slave point, $\bm c$ the
-indenter centre, $R$ its radius (Figure~\ref{fig:tm-ot-limits}). The closest-point projection that the
+across the open interface---and the admissible coupling restricts transport to the touching supports. Formally
+this is the marginal-relaxed (unbalanced) optimal-transport problem \citep{chizat2018unbalanced} of
+Appendix~\ref{app:ot:limits}, Eq.~\eqref{eq:ot-unbalanced}, whose minimiser concentrates its support on the
+touching part of the interface and, off the convex master's medial axis where the metric projection is
+single-valued, restricts to the closest-point projection $\pi_B$ with gap $\gn=\norm{\bm p-\bm c}-R$, $\bm p$ the
+slave point, $\bm c$ the indenter centre, $R$ its radius (Figure~\ref{fig:tm-ot-limits};
+Remark~\ref{rem:ot-limits}). The closest-point projection that the
 node-to-segment tradition rejects as fragile is therefore the convex-cost limit of the one coupling, which
 resolves the apparent tension between treating contact as a composition and treating it as a projection.
 
@@ -1899,8 +1901,10 @@ quadratic-cost transport problem
 closest-point projection for a localised convex indenter and the arclength-monotone (Brenier) rearrangement for
 two mated rough faces (Figure~\ref{fig:tm-ot-limits}). The closest-point limit is required for partial contact:
 the global arclength map transports all of the slave mass onto all of the master mass and smears a partial load
-across the interface, so the driver selects it for the seat, slide, and convergence of the deformable-Hertz
-solve and reserves the arclength map for the conforming patch test.
+across the interface, so it is inadmissible under partial support and is replaced by the closest-point
+restriction of the marginal-relaxed transport problem~\eqref{eq:ot-unbalanced} (Appendix~\ref{app:ot:limits}).
+The driver accordingly selects the closest-point map for the seat, slide, and convergence of the
+deformable-Hertz solve and reserves the arclength map for the conforming patch test.
 
 \begin{figure}[t]
   \centering
@@ -2446,9 +2450,10 @@ This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} comp
   band ($100\%$ retained), the plain MLP and SDF lose $-35.7$ and $-37.2$~dB ($0.027\%$, $0.019\%$ retained).
   The three networks are the exact representations the manuscript compares, trained with the repository's own
   optimizer and schedule; the parameter counts in the legend are those instantiated from the code (this PSD
-  run uses the \texttt{n\_freq=128} chart, distinct from the \texttt{n\_freq=64} capstone of
-  Table~\ref{tab:capacity-audit}). This is the frequency-domain statement of the spatial-domain slope
-  smoothing $19.4^\circ\!\to\!12.5^\circ$.}
+  run uses the \texttt{n\_freq=128} chart at $82{,}562$ trainable parameters, distinct from the
+  \texttt{n\_freq=64} capstone of Table~\ref{tab:capacity-audit} but here \emph{matched} to the ambient SDF's
+  $83{,}073$, so the roll-off separation is charged to the representation, not to a capacity advantage). This is
+  the frequency-domain statement of the spatial-domain slope smoothing $19.4^\circ\!\to\!12.5^\circ$.}
   \label{fig:spectral-bias}
 \end{figure}
 
@@ -3362,8 +3367,26 @@ point off the master's medial axis \citep[\S1.3]{santambrogio2015optimal}, and t
 single-valued graph $z=h_A(x)$, so the slave parameter $x$ indexes the contact arc without overhang; the
 restricted quadratic-cost minimiser is then unique and coincides with $\pi_B$ on the touching support. The
 code realises this support screen discretely: $\code{ClosestPointCoupling1D}$ zeroes the coupling mass outside the
-contact band (the finite-$\lambda$ analogue), so a central slave node carries no reaction.
+contact band (the finite-$\lambda$ analogue), so a central slave node carries no reaction
+(Figure~\ref{fig:ot-unbalanced}).
 \end{remark}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{fig_ot_section_loop6}
+  \caption{The partial-support limit as an \emph{unbalanced} optimal-transport problem
+  \eqref{eq:ot-unbalanced}. (a)~Under a hard marginal $\chi_{\#}\hat\mu_A=\hat\mu_B$ the balanced map is
+  inadmissible for a localised convex indenter: it forces every slave point onto a master partner and smears the
+  untouched flanks onto the indenter edge (red). (b)~Relaxing the marginals with the Kullback--Leibler penalties
+  $\lambda\,\mathrm{KL}((P_A)_{\#}\pi\,\|\,\hat\mu_A)+\lambda\,\mathrm{KL}((P_B)_{\#}\pi\,\|\,\hat\mu_B)$ lets the
+  optimal plan create or destroy mass; at finite $\lambda$ its support collapses onto the touching band, the open
+  interface is left unmatched, and the restriction is the closest-point projection $\pi_B$ with gap
+  $\gn=\norm{\bm p-\bm c}-R$. (c)~The restriction is well posed off the medial axis: for a convex master the metric
+  projection is single-valued at every slave point (lower), whereas at a re-entrant feature the medial axis
+  (purple) carries query points with two equidistant feet, where $\pi_B$ is multivalued (upper). The chart
+  inversion $\map{B}^{-1}\circ\map{A}$ never forms that axis. Schematic; no benchmark quantity is plotted.}
+  \label{fig:ot-unbalanced}
+\end{figure}
 
 Compactly,
 \begin{equation}\label{eq:ot-twolimits}

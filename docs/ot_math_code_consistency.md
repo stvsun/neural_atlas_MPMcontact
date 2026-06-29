@@ -9,11 +9,12 @@ Scope: `solvers/contact/measure_coupling/` (`coupling.py`, `gap_field.py`, `trac
 `two_body.py`), the two-body drivers under `benchmarks/contact/cv_numerical/`, and the mathlib-free Lean
 project under `lean/`. Manuscript path: `paper/main.tex` (Sec. 4 `sec:tmap`, Appendix B `app:ot`).
 
-## Status: CONSISTENT (re-verified loop 4, finalized; Kantorovich + c-cyclical promoted to body loop-4 integrator pass)
+## Status: CONSISTENT (re-verified loop 6, finalized; structure/equation-completeness SATURATED — loop-6 was a substantive-refinement pass: intro two-limits dedup + partial-OT `fig:ot-unbalanced` schematic, no equation moved)
 
-`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 4; `grep -ci undefined
+`tectonic main.tex` exits 0 with 0 undefined references/citations (re-run this loop, loop 6; `grep -ci undefined
 main.log` = 0; labels `eq:ot-kantorovich-body`/`eq:ot-cyclical-body` (body), `eq:ot-kantorovich`/`eq:ot-cyclical`
-(appendix proof home), `fig:ot-coupling`, `sec:ot`/`sec:tmap:ot`, and the
+(appendix proof home), `eq:ot-unbalanced` (Fig 37/page 51, co-located with the new schematic Eq 82),
+`fig:ot-coupling`, `fig:ot-unbalanced` (loop-6 NEW), `sec:ot`/`sec:tmap:ot`, and the
 `TranslationInvariance` footnote cross-references all resolve in `main.aux`; no duplicate `\label`). `cd lean &&
 lake build` exits 0 (mathlib-free, packages `[]`, 9 jobs); the cited algebraic theorems are sorry-free and depend
 only on `propext`/`Quot.sound` (verified by `#print axioms` this loop, including the loop-3 `MortarMass.lean` SPD
@@ -136,6 +137,8 @@ Lean precondition (`patch_test_resultant`).
 |---|---|---|---|---|
 | `rem:ot-limits` (i) conforming | full support ⇒ Brenier = arclength-monotone | `coupling.py::MonotoneCoupling1D` | — | yes |
 | `rem:ot-limits` (ii) partial-support | partial contact ⇒ admissible coupling restricts to closest-point `π_B`; `g_N=‖p−c‖−R`; well-posed under convex master (single-valued metric projection off medial axis) + single-valued slave graph `z=h_A(x)` | `coupling.py::ClosestPointCoupling1D` (`_project` orthogonal foot; `map_full`); contact-band mass screen | — | yes — wording "admissible/partial-support" (OT-P3); uniqueness hypotheses + `chizat2018unbalanced`/`santambrogio2015optimal §1.3` cites added loop 3; `cv1_ot_gap.py:15-20` documents `g=|p−c|−R` |
+| `eq:ot-unbalanced` | marginal-relaxed (KL-penalised) Kantorovich functional `inf_{π≥0} ∫c dπ + λKL((P_A)_#π‖μ̂_A) + λKL((P_B)_#π‖μ̂_B)`; `λ→∞` recovers hard marginals, finite `λ` lets the plan create/destroy mass; minimiser support → touching band; convex master ⇒ restriction is `π_B`, well-posed off the medial axis | `coupling.py::ClosestPointCoupling1D` (contact-band mass screen = finite-`λ` discrete analogue) | — (measure-theoretic; not in code) | yes — body state-and-cites it (`sec:tmap:ot` l.952-958: `\eqref{eq:ot-unbalanced}` + `chizat2018unbalanced` + medial-axis single-valuedness); full display + hypotheses in `app:ot:limits`/`rem:ot-limits`; `chizat2018unbalanced`/`santambrogio2015optimal §1.3` cited |
+| `fig:ot-unbalanced` (loop-6 NEW) | partial-OT schematic: (a) balanced map smears the untouched flanks onto the indenter edge, (b) KL-relaxed plan support collapses onto the touching band → `π_B`, `g_N=‖p−c‖−R`, (c) single-valued off medial axis vs multivalued at a re-entrant feature | `postprocessing/fig_ot_section_loop6.py` (closest-point feet + gap computed analytically; self-check `g_N==‖p−c‖−R` to 0.0; schematic, no benchmark number) | — | yes — placed in `app:ot:limits` after `rem:ot-limits`, referenced once from the remark; illustrates the balanced-map failure mode + medial-axis multivaluedness not in `fig:ot-coupling`/`fig:tm-ot-limits` |
 | `eq:ot-twolimits` | piecewise map; partial limit realised by `mass=0` outside support | `coupling.py::ClosestPointCoupling1D.map_full` (`mass[i]=0` if `d>contact_band`); `two_body.py` (`gN=...*mass+(1−mass)*1e3`) | — | yes — unbalanced/partial OT screen |
 
 ## 3. The discrete coupling is a mortar assembly (`app:ot:discrete`)
@@ -190,3 +193,44 @@ Lean precondition (`patch_test_resultant`).
 Reproduce: `cd lean && lake build` (Lean 4 v4.30.0, mathlib-free, ~1 s). The `lean/` source is present in the
 worktree (untracked; `.lake/` build artifacts are gitignored via `lean/.gitignore`); committing it is left to
 the maintainer per the repo's commit policy.
+
+## Loop-6 delta (substantive-refinement pass; manuscript-side only, no verified number altered, no equation moved)
+
+Structure and equation-completeness are SATURATED (the dedicated top-level OT section `sec:ot`/`sec:tmap`
+exists with the full body equation chain; the appendix `app:ot` carries the measure-theoretic proofs and the
+`eq:ot-unbalanced` functional). Loop 6 made exactly two manuscript edits plus one consistency-map row:
+
+- **Introduction two-limits dedup + ordering harmonised** (`sec:intro`, l.158-162). The intro previously
+  stated the two limits TWICE — once conforming-first then again closest-point-first (flipped) — with a
+  redundant restatement. Collapsed to a single "two familiar limits of one coupling" sentence ordered
+  **arclength-monotone/conforming FIRST, closest-point/partial-support SECOND**, matching the abstract
+  (l.124), the body `eq:ot-twolimits-body` (l.943-944), and the appendix `eq:ot-twolimits` (l.3395-3396).
+  All four sites now order conforming→partial identically. No new equation; pure prose harmonisation.
+- **Partial-OT schematic `fig:ot-unbalanced`** inserted in `app:ot:limits` after `rem:ot-limits` (Fig 37,
+  page 51, beside `eq:ot-unbalanced` = Eq 82). Illustrates the balanced-map smearing failure mode and the
+  medial-axis multivaluedness — content NOT in the two existing OT figures (`fig:ot-coupling`,
+  `fig:tm-ot-limits`). Honest: schematic, no benchmark quantity plotted, closest-point feet/gap computed
+  analytically with a self-check `g_N==‖p−c‖−R` to 0.0 (`postprocessing/fig_ot_section_loop6.py`).
+  Referenced once from `rem:ot-limits`; no body cross-reference added (kept the saturated body subsection
+  state-and-cite intact).
+
+Audited-and-left-unchanged this loop (verified already-present / measured, per the HARD RULE — Read the live
+target before proposing; do not re-propose live text):
+
+- **Partial-OT functional** (item 1): `eq:ot-unbalanced` (KL-relaxed Kantorovich) + the off-medial-axis
+  single-valuedness argument are STATED in full in `app:ot:limits`/`rem:ot-limits` (l.3354-3369) and
+  state-and-cited in the body `sec:tmap:ot` (l.952-958). No re-derivation needed; the body forward-references
+  the appendix equation rather than duplicating it.
+- **ML/capacity/spectral** (item 2): MEASURED, not asserted. Chart `n_freq=64` = 66,178 params; plain-MLP
+  ablation = 49,922; ambient SDF = 83,073 (25.5% surplus); spectral-figure chart `n_freq=128` = 82,562,
+  matched to the SDF's 83,073 — the `fig:spectral-bias` caption (l.2453-2457) states this matched-capacity
+  fact so the roll-off separation is charged to the representation, not a capacity edge. `n_freq=128-vs-64`
+  disambiguation intact; no implied equal-capacity where there is none.
+- **Newton-path lever** (item 3): the dropped `d(n)/d(χ)` frozen-geometry terms are framed as a
+  convergence-rate lever (NOT an accuracy lever) at every occurrence (`sec:weak`, `sec:disc:limits`
+  "identical `a_fem` at 40 and 120 iterations", `app:ot:tangent`, `app:repro`); none claims they can move the
+  converged CV-8 2.75%/5.82% accuracy.
+- **Lean** (item e): `lake build` exits 0 in this worktree with exactly the two documented `BrenierProposed`
+  sorries (`brenier_existence_uniqueness_proposed`, `monotone_map_pushes_forward_proposed`), both labelled
+  "proposed, not machine-checked" and never cited as proven; all other cited theorems sorry-free. No new
+  load-bearing algebraic claim was introduced by loop 6, so no Lean extension was required.
