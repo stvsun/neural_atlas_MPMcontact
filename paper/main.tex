@@ -549,16 +549,12 @@ features, either tracks the asperity slopes or low-passes them into a smoothed g
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{fourier_mechanism_pub}
-\caption{How the Fourier-feature encoding \eqref{eq:gamma} works, against a plain coordinate network.
-\textbf{(a)}~A plain network sees the raw coordinate $x$; the Fourier network first lifts it through a fixed
-bank of sinusoids $\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ before the same MLP. \textbf{(b)}~On a sharp
-one-dimensional target---a smooth carrier with a localised high-frequency burst---the plain, low-pass network
-smooths the sharp feature while the Fourier-feature network resolves it. This is the spectral bias of a
-coordinate network, with its Laplace-like neural-tangent kernel that low-passes high frequencies, and the
-band-limited cure the fixed bank supplies (Remark~\ref{prop:ntk}); on the real granite joint, measured directly
-in Figure~\ref{fig:spectral-bias}, it is the difference between resolving the asperity slopes and smoothing them
-(Section~\ref{sec:cv7}).}
+\includegraphics[width=0.78\linewidth]{fourier_mechanism_pub}
+\caption{The Fourier-feature chart network. The coordinate $x$ is lifted by a fixed bank of sinusoids
+$\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ \eqref{eq:gamma}---the Fourier features---which feed a trained MLP that
+returns the chart value $h(x)$. The fixed encoding is what lets the network represent the sharp, high-frequency
+detail a plain coordinate MLP low-passes: the spectral bias of Remark~\ref{prop:ntk}, measured on the real
+granite joint in Figure~\ref{fig:spectral-bias} (Section~\ref{sec:cv7}).}
 \label{fig:fourier-spectral}
 \end{figure}
 
