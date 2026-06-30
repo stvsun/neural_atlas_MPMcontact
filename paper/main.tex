@@ -550,15 +550,15 @@ features, either tracks the asperity slopes or low-passes them into a smoothed g
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fourier_mechanism_pub}
-\caption{How the Fourier-feature encoding \eqref{eq:gamma} works, against a plain coordinate network. (a) A
-plain network sees the raw coordinate $x$; the Fourier network first lifts it through a fixed bank of sinusoids
-$\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ before the same MLP. (b) Fitting a sharp one-dimensional target, shown
-as kernel regression in the two induced kernels: the plain, low-pass kernel smooths the sharp feature, while
-the Fourier kernel resolves it. (c) The mechanism: a plain network has a Laplace-like neural-tangent kernel
-whose power decays as $\abs{k}^{-(d+1)}$, so high frequencies are unlearned---the spectral bias of
-Remark~\ref{prop:ntk}---whereas the fixed Fourier bank flattens the spectrum to a tunable cutoff $2\pi\sigma$,
-making those frequencies learnable. On the real granite joint this is the difference between resolving the
-asperity slopes and smoothing them (Section~\ref{sec:cv7}).}
+\caption{How the Fourier-feature encoding \eqref{eq:gamma} works, against a plain coordinate network.
+\textbf{(a)}~A plain network sees the raw coordinate $x$; the Fourier network first lifts it through a fixed
+bank of sinusoids $\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ before the same MLP. \textbf{(b)}~On a sharp
+one-dimensional target---a smooth carrier with a localised high-frequency burst---the plain, low-pass network
+smooths the sharp feature while the Fourier-feature network resolves it. This is the spectral bias of a
+coordinate network, with its Laplace-like neural-tangent kernel that low-passes high frequencies, and the
+band-limited cure the fixed bank supplies (Remark~\ref{prop:ntk}); on the real granite joint, measured directly
+in Figure~\ref{fig:spectral-bias}, it is the difference between resolving the asperity slopes and smoothing them
+(Section~\ref{sec:cv7}).}
 \label{fig:fourier-spectral}
 \end{figure}
 
