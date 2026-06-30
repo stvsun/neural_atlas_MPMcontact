@@ -510,19 +510,15 @@ turning a coordinate change into a contact-pairing operator.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{transition_map_composite_pub}
-\caption{The composite mapping, and contact mechanics in two coordinate systems. (a) In \emph{physical
-coordinates} the contact point $\xbf=\map{A}(\theta_A)$ on $\partial\Omega_A$ and its mate $\map{B}(\psi_B)$
-on $\partial\Omega_B$ fix the signed normal gap $\gn$ along $\nbf$ and the traction $\tbf=t_N\nbf+\tbf_T$;
-recovering the mate by a closest-point search (grey) is the iterative step a level set also requires. (b) In
-\emph{reference coordinates} the inter-body transition map $\tmap=\pi_B\circ\map{A}=\map{B}^{-1}\circ\map{A}$
-\emph{transports} the parameter domain $\Theta_A$ onto $\Theta_B$ by evaluating $\map{A}$ and inverting $\map{B}$,
-with no search: a uniform grid on $\Theta_A$ is carried to a non-uniformly reparametrised grid on $\Theta_B$, and
-the highlighted pair takes $\theta_A$ to its image $\psi_B$ (the commuting triangle states
-$\tmap=\pi_B\circ\map{A}$). (c) The gap pulls back to a one-dimensional function
-$\bar g(\theta_A)=\gn^{B}(\map{A}(\theta_A))$ on $\Theta_A$, whose open sub-level set
-$\{\theta_A:\bar g<0\}$, the active set, is a union of arcs. The contact virtual work \eqref{eq:contact-vw}
-depends on the geometry only through $(\gn,\nbf)$, so the physical and the reference descriptions are
-interchangeable at the force layer.}
+\caption{The transition map: contact detection as chart composition, not a search. \textbf{(a)}~In physical
+coordinates the contact point $\xbf=\map{A}(\theta_A)$ on $\partial\Omega_A$ is carried to its mate
+$\map{B}(\psi_B)$ on $\partial\Omega_B$ by inverting body $B$'s chart, $\map{B}^{-1}$, which fixes the signed
+normal gap $\gn$ along the surface normal $\nbf$; the iterative closest-point search a level set or
+node-to-segment scheme would run (grey) is the step this inversion replaces. \textbf{(b)}~In chart coordinates
+the same mate is the composition of two charts---$\theta_A$ is taken to $\xbf$ by $\map{A}$, and $\xbf$ to
+$\psi_B$ by $\map{B}^{-1}$---so the inter-body transition map $\tmap=\map{B}^{-1}\circ\map{A}=\pi_B\circ\map{A}$
+returns the contact partner with one chart evaluation and one inversion, and no search. The gap and the normal
+that the contact virtual work \eqref{eq:contact-vw} consumes follow from $\tmap$ alone.}
 \label{fig:atlas-extension}
 \end{figure}
 
