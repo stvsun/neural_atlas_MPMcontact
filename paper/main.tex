@@ -1446,7 +1446,7 @@ distribution.}
 This benchmark verifies that the charts add by superposition across multiple simultaneous contacts on a
 symmetric packing whose closed form collapses to two perpendicular Brazilian solutions, again a regime in which
 chart and level set remain equivalent. A $3\times3$ array of discs under isotropic confinement loads each
-interior disc through four equal contacts at its poles (Figure~\ref{fig:cv4-bvp}). No diagonal contacts form, because $2\sqrt2\,R>2R$; by $D_4$
+interior disc through four equal contacts at its poles (Figure~\ref{fig:cv4-bvp}a). No diagonal contacts form, because $2\sqrt2\,R>2R$; by $D_4$
 symmetry every disc sees four equal inward loads $N$ at its north, south, east, and west poles, and
 reflection parity makes friction inactive. The unit cell is then the superposition of two perpendicular
 Brazilian solutions, with the equibiaxial center stress
@@ -1466,12 +1466,15 @@ scheme is not like-for-like in inputs: the conventional Brazilian and nine-disc 
 as a Neumann datum (exact by construction), whereas under the coupling the per-pole load $N$ \emph{emerges} from
 the resolved contact and still recovers the centre stress more accurately ($0.077\%$ vs.\ $0.11\%$ nine-disc;
 $0.23\%$ vs.\ $1.62\%$ Brazilian, Table~\ref{tab:ot_vs_conv}) while also delivering the contact half-width and the
-$D_4$ symmetry the prescribed-load driver cannot produce. Figure~\ref{fig:cv4-ninedisc} shows the maximum-principal and shear-stress
+$D_4$ symmetry the prescribed-load driver cannot produce. Figure~\ref{fig:cv4-ninedisc}b shows the maximum-principal and shear-stress
 fields across the array; the pattern repeats identically from disc to disc and is equibiaxial at each
 center, the spatial signature of the symmetry that the closed form assumes.
 
 \begin{figure}[t]
 \centering
+\begin{minipage}[b]{0.40\linewidth}
+\centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[x=1cm,y=1cm]
   % --- grid geometry: discs of radius R=1, centres spaced 2R so poles touch ---
   \def\R{1.0}
@@ -1536,24 +1539,22 @@ center, the spatial signature of the symmetry that the closed form assumes.
   \fill[grayStroke] (0,0) circle (1.0pt) (\sep,\sep) circle (1.0pt);
   \node[bcnode, fill=white, fill opacity=0.85, text opacity=1, inner sep=1.5pt, rotate=45]
         at (1.0,1.0) {$2\sqrt{2}\,R$};
-\end{tikzpicture}
-\caption{Nine-disc cell: a $3\times3$ array of equal discs (radius $R$, thickness $t$) under
-isotropic confining pressure $\sigma$ applied along all four outer faces of the periodic packing.
-By the $D_4$ symmetry of the cell, each interior disc is loaded through four equal pole contacts $N$
-at its north, south, east, and west poles with friction inactive, while the diagonal neighbours stay
-clear ($2\sqrt{2}\,R>2R$). The resulting equibiaxial centre stress is
-$\sigma_{xx}=\sigma_{yy}=-2N/(\pi R t)$; the highlighted disc is the per-disc unit cell of the
-packing, the contacts merely placing the load poles.}
-\label{fig:cv4-bvp}
-\end{figure}
-
-\begin{figure}
+\end{tikzpicture}}
+\par\smallskip{\small\textbf{(a)} confining BVP and $D_4$ symmetry}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.575\linewidth}
 \centering
 \includegraphics[width=\linewidth]{liusun_fig16_nine_disc_S1_Sxy_pub}
-\caption{Nine-disc cell, packing-field evidence. Maximum-principal stress (left) and shear stress $\sigma_{xy}$
-(right) across the $3\times3$ disc array. The field repeats from cell to cell and is equibiaxial at each
-disc center with negligible shear, confirming the $D_4$-symmetric superposition the closed form predicts.}
-\label{fig:cv4-ninedisc}
+\par\smallskip{\small\textbf{(b)} maximum-principal and shear-stress fields}
+\end{minipage}
+\caption{Nine-disc cell (CV-4). \textbf{(a)}~A $3\times3$ array of equal discs (radius $R$, thickness $t$) under
+isotropic confining pressure $\sigma$ on all four outer faces of the periodic packing; by the $D_4$ symmetry of
+the cell each interior disc is loaded through four equal pole contacts $N$ at its north, south, east, and west
+poles (friction inactive) while the diagonal neighbours stay clear ($2\sqrt{2}\,R>2R$), giving the equibiaxial
+centre stress $\sigma_{xx}=\sigma_{yy}=-2N/(\pi R t)$. \textbf{(b)}~Maximum-principal stress (left) and shear
+$\sigma_{xy}$ (right) across the array: the field repeats from cell to cell and is equibiaxial at each disc
+centre with negligible shear, confirming the $D_4$-symmetric superposition the closed form predicts.}
+\label{fig:cv4}\label{fig:cv4-bvp}\label{fig:cv4-ninedisc}
 \end{figure}
 
 Across the equivalence regime the learned geometry reproduces the contact-mechanics closed forms to $\sim
