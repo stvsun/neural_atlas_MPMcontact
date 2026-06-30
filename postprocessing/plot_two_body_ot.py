@@ -471,74 +471,114 @@ def _solve_cv9(n_discs=3, n_rings=10, E=1000.0, nu=0.25, R=1.0, t=1.0, overlap=0
 
 
 def fig_nbody(out_path):
+    """Two panels: (a) the confined disc lattice (von Mises field), (b) the centre-disc stress
+    state, drawn as a material element so the equibiaxial result reads at a glance.  All numbers
+    come from cv9_nbody_array_ot.run's metrics.json verbatim; the deterministic solve reproduces
+    them exactly, so the figure carries no value the gate does not."""
+    from matplotlib.lines import Line2D
     discs, centre_key, spacing, R = _solve_cv9()
     m = json.load(open(os.path.join(_ROOT, "runs", "cv9_nbody_array_ot", "metrics.json")))
+    sxx, syy = m["center_sxx_fem"], m["center_syy_fem"]
+    sxy, sref = m["center_sxy_fem"], m["center_exact"]
+    mean_err, aniso = m["center_mean_relerr"], m["equibiaxial_anisotropy"]
+    n_pairs = int(m["n_pairs"])
 
-    # global von Mises range (rim asperity contacts spike; clip to a robust upper percentile)
+    # global von Mises range (rim contacts spike; clip to a robust upper percentile)
     all_vm = np.concatenate([d["vm"] for d in discs])
     finite = all_vm[np.isfinite(all_vm)]
     vlo, vhi = 0.0, float(np.nanpercentile(finite, 97.0))
 
-    fig, ax = plt.subplots(figsize=(7.4, 7.0))
+    fig = plt.figure(figsize=(10.0, 5.0))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.5, 1.0], wspace=0.30)
+    axA = fig.add_subplot(gs[0, 0])
+    axB = fig.add_subplot(gs[0, 1])
+
+    # ----------------------- panel (a): the confined elastic-disc lattice -----------------------
     cmap = plt.get_cmap("inferno")
     pc_last = None
     for d in discs:
         verts = d["nodes"][d["tris"]]
-        # element value = mean of its three nodal von Mises (robust to NaN slivers)
-        ev = np.nanmean(d["vm"][d["tris"]], axis=1)
+        ev = np.nanmean(d["vm"][d["tris"]], axis=1)               # element-mean nodal von Mises
         pc = PolyCollection(verts, array=ev, cmap=cmap, edgecolors="none")
         pc.set_clim(vlo, vhi)
-        ax.add_collection(pc)
+        axA.add_collection(pc)
         pc_last = pc
-        # thin rim outline
-        ax.add_patch(plt.Circle(d["center"], R, fill=False, ec="0.75", lw=0.5, zorder=3))
+        axA.add_patch(plt.Circle(d["center"], R, fill=False, ec="0.85", lw=0.5, zorder=3))
 
-    # mark the 12 mutual-contact interfaces (midpoints between neighbouring centres)
     centres = {tuple(d["key"]): d["center"] for d in discs}
     n_disc = int(round(np.sqrt(len(discs))))
-    n_iface = 0
+    # the mutual OT contacts: small neutral markers (the bright stress bridges already locate them)
     for i in range(n_disc):
         for j in range(n_disc):
             for di, dj in ((1, 0), (0, 1)):
                 if (i + di, j + dj) in centres:
-                    cA = centres[(i, j)]; cB = centres[(i + di, j + dj)]
-                    mid = 0.5 * (cA + cB)
-                    ax.plot([mid[0]], [mid[1]], marker="x", ms=8, mew=1.6, color="#39FF14",
-                            zorder=5)
-                    n_iface += 1
+                    mid = 0.5 * (centres[(i, j)] + centres[(i + di, j + dj)])
+                    axA.plot(mid[0], mid[1], marker="o", ms=4.5, mfc="white",
+                             mec="0.1", mew=0.8, zorder=5)
 
-    # outline + label the equibiaxial centre disc
+    # centre disc: a thin ring (no label box over the field) -- panel (b) reads its state
     cc = centres[tuple(centre_key)]
-    ax.add_patch(plt.Circle(cc, R, fill=False, ec="#00BFFF", lw=2.0, zorder=4))
-    ax.annotate(r"equibiaxial centre disc", xy=cc, xytext=(cc[0], cc[1] - 0.45 * R),
-                ha="center", va="center", fontsize=8.5, color="#00BFFF", zorder=6,
-                bbox=dict(boxstyle="round,pad=0.25", fc="black", ec="#00BFFF", alpha=0.6))
+    axA.add_patch(plt.Circle(cc, R, fill=False, ec="#27B5FF", lw=2.4, zorder=6))
 
-    lo = -1.25 * R
-    hi = (n_disc - 1) * spacing + 1.25 * R
-    ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
-    ax.set_aspect("equal")
-    ax.set_xlabel(r"$x$"); ax.set_ylabel(r"$y$")
-    ax.set_title(r"CV-9a: $3\times3$ elastic disc array, %d mutual OT contact interfaces" % n_iface)
+    # rigid outer walls confine the array equibiaxially: one inward arrow per side
+    cxs = np.array([c[0] for c in centres.values()])
+    cys = np.array([c[1] for c in centres.values()])
+    x0, x1, y0, y1 = cxs.min(), cxs.max(), cys.min(), cys.max()
+    mx, my = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+    al = 0.6 * R
+    ap = dict(arrowstyle="-|>", lw=2.6, color="0.25", mutation_scale=20)
+    axA.annotate("", xy=(x0 - R + 0.05, my), xytext=(x0 - R - al, my), arrowprops=ap)
+    axA.annotate("", xy=(x1 + R - 0.05, my), xytext=(x1 + R + al, my), arrowprops=ap)
+    axA.annotate("", xy=(mx, y0 - R + 0.05), xytext=(mx, y0 - R - al), arrowprops=ap)
+    axA.annotate("", xy=(mx, y1 + R - 0.05), xytext=(mx, y1 + R + al), arrowprops=ap)
+    axA.text(mx, y1 + R + al + 0.10, "rigid-wall confinement", ha="center", va="bottom",
+             fontsize=8.0, color="0.25")
 
-    cb = fig.colorbar(pc_last, ax=ax, fraction=0.046, pad=0.03)
+    pad = al + 0.4 * R
+    axA.set_xlim(x0 - R - pad, x1 + R + pad)
+    axA.set_ylim(y0 - R - pad, y1 + R + pad + 0.35 * R)
+    axA.set_aspect("equal")
+    axA.set_xlabel(r"$x$"); axA.set_ylabel(r"$y$")
+    axA.set_title(r"(a) $3\times3$ elastic discs, %d mutual OT contacts" % n_pairs)
+    cb = fig.colorbar(pc_last, ax=axA, fraction=0.046, pad=0.03)
     cb.set_label(r"von Mises stress $\sigma_{\mathrm{vM}}$")
+    handles = [Line2D([0], [0], marker="o", color="0.1", mfc="white", lw=0, ms=6,
+                      label="mutual OT contact"),
+               Line2D([0], [0], marker="o", color="#27B5FF", lw=2, mfc="none", ms=9,
+                      label="centre disc (panel b)")]
+    axA.legend(handles=handles, loc="lower left", framealpha=0.95, fontsize=7.5)
 
-    # The acceptance ledger (centre mean error, anisotropy, force balance, Newton
-    # iterations) lives in the caption and Table~\ref{tab:ot:gates}; keeping it off
-    # the dark von-Mises field leaves the lattice readable. Only the two structural
-    # legend entries remain on the figure.
-    from matplotlib.lines import Line2D
-    handles = [Line2D([0], [0], marker="x", color="#39FF14", lw=0, ms=8, mew=1.6,
-                      label="mutual OT interface"),
-               Line2D([0], [0], marker="o", color="#00BFFF", lw=2, mfc="none", ms=9,
-                      label="equibiaxial centre disc")]
-    ax.legend(handles=handles, loc="upper right", framealpha=0.95, fontsize=9.0)
+    # ----------------------- panel (b): centre-disc stress state (equibiaxial) -----------------------
+    axB.set_aspect("equal"); axB.axis("off")
+    s = 1.0
+    axB.add_patch(plt.Rectangle((-s / 2, -s / 2), s, s, fc="#efe9dc", ec="0.3", lw=1.6, zorder=2))
+    # the four compression arrows share one length scale, so equal length == equibiaxial state
+    k = 0.9 / max(abs(sxx), abs(syy))
+    axx, ayy = k * abs(sxx), k * abs(syy)
+    cxx, cyy = "#9E3A26", "#34618A"
+    for xs in (-1, 1):
+        axB.annotate("", xy=(xs * s / 2, 0), xytext=(xs * (s / 2 + axx), 0),
+                     arrowprops=dict(arrowstyle="-|>", lw=3.0, color=cxx, mutation_scale=22))
+    for ys in (-1, 1):
+        axB.annotate("", xy=(0, ys * s / 2), xytext=(0, ys * (s / 2 + ayy)),
+                     arrowprops=dict(arrowstyle="-|>", lw=3.0, color=cyy, mutation_scale=22))
+    axB.text(s / 2 + axx + 0.08, 0.0, r"$\sigma_{xx}=%.3f$" % sxx, ha="left", va="center",
+             color=cxx, fontsize=10.5)
+    axB.text(0.0, s / 2 + ayy + 0.10, r"$\sigma_{yy}=%.3f$" % syy, ha="center", va="bottom",
+             color=cyy, fontsize=10.5)
+    axB.set_xlim(-2.4, 2.4); axB.set_ylim(-2.7, 2.5)
+    axB.set_title(r"(b) centre-disc stress state")
+    msg = (r"equibiaxial compression $\sigma_{xx}\!\approx\!\sigma_{yy}<0$" "\n"
+           r"closed form $-2N/\pi Rt=%.3f$" "\n"
+           r"mean error $\mathbf{%.2f\%%}$,  anisotropy $%.2f\%%$" "\n"
+           r"shear $\sigma_{xy}=%.3f\approx0$" % (sref, 100 * mean_err, 100 * aniso, sxy))
+    axB.text(0.0, -1.65, msg, ha="center", va="top", fontsize=8.6,
+             bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="0.6"))
 
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
-    return dict(n_iface=n_iface, centre_mean_relerr=m["center_mean_relerr"],
+    return dict(n_iface=n_pairs, centre_mean_relerr=m["center_mean_relerr"],
                 global_balance=m["global_balance"])
 
 

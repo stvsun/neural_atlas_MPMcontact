@@ -2165,12 +2165,15 @@ subset here, where the two-body advantage is argued.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.82\linewidth]{cv9_nbody_array_pub}
-  \caption{N-body optimal-transport contact (CV-9a). A $3\times3$ array of elastic discs with twelve mutual
-  mortar couplings, solved at full Newton relaxation. The centre disc reaches the equibiaxial closed form
-  $\sigma_{xx}=\sigma_{yy}=-2N/\pi Rt$ to $0.58\%$ in the mean (per-component anisotropy $0.20$--$0.22\%$ on the
-  $D_4$ mesh), with the per-pole load $N$ emerging from the couplings rather than imposed, and a global force
-  balance of $3.71\times10^{-15}$.}
+  \includegraphics[width=\linewidth]{cv9_nbody_array_pub}
+  \caption{N-body optimal-transport contact (CV-9a). \textbf{(a)}~A $3\times3$ array of elastic discs confined by
+  rigid outer walls (inward arrows) and coupled through twelve mutual optimal-transport mortar interfaces (white
+  markers), coloured by von Mises stress; the per-pole confining load $N$ emerges from the couplings rather than
+  being imposed. \textbf{(b)}~The stress state at the centre disc (blue ring), drawn as a loaded material element:
+  the two in-plane compressions are equal, $\sigma_{xx}\approx\sigma_{yy}<0$ with negligible shear, so the disc is
+  in an equibiaxial state and matches the closed form $-2N/\pi Rt$ to $0.58\%$ in the mean (per-component
+  anisotropy $0.20$--$0.22\%$ on the $D_4$ mesh). Solved at full Newton relaxation with a global force balance of
+  $3.71\times10^{-15}$.}
   \label{fig:cv9-array}
 \end{figure}
 
