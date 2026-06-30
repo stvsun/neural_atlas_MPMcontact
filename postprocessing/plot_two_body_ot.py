@@ -284,17 +284,11 @@ def fig_hertz(out_path):
     ax.set_ylim(0.0, 1.18 * max(p0_ana, p0_fem))
     ax.grid(True, alpha=0.25, lw=0.6)
 
-    # acceptance text (finest mesh, verbatim)
+    # The finest-mesh acceptance numbers (a_rel, p0_rel, a/W, active-node count) are
+    # stated in the caption and the surrounding text; the plotted half-ellipse and the
+    # convergence inset carry the evidence, so the corner stats box is dropped to keep
+    # the pressure scatter uncluttered (a number lives on the figure OR in the caption).
     a_err_fin = hz["a_relerr_finest"]; p0_err_fin = hz["p0_relerr_finest"]
-    ax.text(0.02, 0.97,
-            r"$a_{\mathrm{rel}} = %.2f\%%$ (gate $<10\%%$)"
-            "\n"
-            r"$p_{0,\mathrm{rel}} = %.2f\%%$ (gate $<12\%%$)"
-            "\n"
-            r"$a/W = %.3f$, %d active nodes" %
-            (100 * a_err_fin, 100 * p0_err_fin, hz["aW"], hz["n_active"]),
-            transform=ax.transAxes, va="top", ha="left", fontsize=9.0,
-            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.92))
     ax.legend(loc="upper right", framealpha=0.95)
 
     # ---- inset: a_relerr & p0_relerr vs nx over the FULL sweep (descent + contact-edge floor) -------
@@ -316,34 +310,33 @@ def fig_hertz(out_path):
     floor_lo = float(a_rel[floor_mask].min())   # ~1.79 %
     floor_hi = float(a_rel[floor_mask].max())   # ~4.03 %
     axin.axhspan(floor_lo, floor_hi, color=C_ACC, alpha=0.13, zorder=0)
-    axin.text(nxs[-1], floor_lo, r"contact-edge floor", color=C_ACC, fontsize=6.6,
+    axin.text(nxs[-1], floor_lo, r"contact-edge floor", color=C_ACC, fontsize=8.0,
               ha="right", va="top", zorder=3)
 
     # mark the headline gate (label below the line so it clears the floor-band label)
     axin.axvline(nx_gate, color="0.55", lw=0.8, ls=(0, (3, 2)), alpha=0.8, zorder=1)
-    axin.text(nx_gate - 2, floor_hi + 0.35, r"gate", color="0.4", fontsize=6.4,
+    axin.text(nx_gate - 2, floor_hi + 0.35, r"gate", color="0.4", fontsize=8.0,
               ha="right", va="bottom", zorder=3)
 
-    axin.plot(nxs, a_rel, "-o", color=C_MORTAR, ms=4.0, lw=1.4, zorder=4,
+    axin.plot(nxs, a_rel, "-o", color=C_MORTAR, ms=4.5, lw=1.5, zorder=4,
               label=r"$a_{\mathrm{rel}}$")
-    axin.plot(nxs, p0_rel, "-s", color=C_LUMPED, ms=4.0, lw=1.4, zorder=4,
+    axin.plot(nxs, p0_rel, "-s", color=C_LUMPED, ms=4.5, lw=1.5, zorder=4,
               label=r"$p_{0,\mathrm{rel}}$")
     axin.axhline(10.0, color=C_HERTZ, lw=0.8, ls="--", alpha=0.6, zorder=1)
-    for xx, yy in zip(nxs, a_rel):
-        axin.annotate(f"{yy:.2f}", (xx, yy), textcoords="offset points", xytext=(0, -11),
-                      ha="center", fontsize=6.4, color=C_MORTAR)
-    for xx, yy in zip(nxs, p0_rel):
-        axin.annotate(f"{yy:.2f}", (xx, yy), textcoords="offset points", xytext=(0, 5),
-                      ha="center", fontsize=6.4, color=C_LUMPED)
-    axin.set_xlabel(r"surface resolution $n_x$", fontsize=8.0)
-    axin.set_ylabel(r"rel. error [\%]", fontsize=8.0)
+    # label only the two a_rel endpoints (5.14% descent, 2.75% gate); the curve and
+    # the caption carry the rest, so the inset is not blanketed in per-point numbers.
+    for xx, yy in [(nxs[0], a_rel[0]), (nx_gate, series[nx_gate][0])]:
+        axin.annotate(f"{yy:.2f}", (xx, yy), textcoords="offset points", xytext=(0, -12),
+                      ha="center", fontsize=8.0, fontweight="bold", color=C_MORTAR)
+    axin.set_xlabel(r"surface resolution $n_x$", fontsize=8.5)
+    axin.set_ylabel(r"rel. error [\%]", fontsize=8.5)
     axin.set_xticks(nxs)
-    axin.set_xticklabels([str(k) for k in nxs], rotation=45, fontsize=6.6)
-    axin.tick_params(labelsize=7.0)
+    axin.set_xticklabels([str(k) for k in nxs], rotation=45, fontsize=8.0)
+    axin.tick_params(labelsize=8.0)
     axin.set_ylim(0, max(a_rel.max(), p0_rel.max()) * 1.42)
-    axin.legend(loc="upper left", fontsize=7.0, framealpha=0.9)
+    axin.legend(loc="upper left", fontsize=8.0, framealpha=0.9)
     axin.grid(True, alpha=0.25, lw=0.5)
-    axin.set_title(r"mesh sweep: descent to the gate, then edge-floor jitter", fontsize=7.4)
+    axin.set_title(r"mesh sweep: descent to the gate, then edge-floor jitter", fontsize=8.0)
 
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
@@ -531,29 +524,16 @@ def fig_nbody(out_path):
     cb = fig.colorbar(pc_last, ax=ax, fraction=0.046, pad=0.03)
     cb.set_label(r"von Mises stress $\sigma_{\mathrm{vM}}$")
 
-    # measured acceptance text (verbatim from metrics)
-    ax.text(0.015, 0.015,
-            r"centre mean $\sigma$ rel. err $= %.2f\%%$ (gate $<5\%%$)"
-            "\n"
-            r"per-component anisotropy $= %.2f$--$%.2f\%%$ (D4 mesh)"
-            "\n"
-            r"global force balance $|\sum\mathbf{f}| = %.2e$"
-            "\n"
-            r"full Newton (relax $=1.0$), %d iters, %d backtracks" %
-            (100 * m["center_mean_relerr"],
-             100 * min(m["sxx_relerr"], m["syy_relerr"]),
-             100 * max(m["sxx_relerr"], m["syy_relerr"]),
-             m["global_balance"], m["iters"], m["ls_backtracks"]),
-            transform=ax.transAxes, va="bottom", ha="left", fontsize=8.4,
-            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.93))
-
-    # legend proxies
+    # The acceptance ledger (centre mean error, anisotropy, force balance, Newton
+    # iterations) lives in the caption and Table~\ref{tab:ot:gates}; keeping it off
+    # the dark von-Mises field leaves the lattice readable. Only the two structural
+    # legend entries remain on the figure.
     from matplotlib.lines import Line2D
     handles = [Line2D([0], [0], marker="x", color="#39FF14", lw=0, ms=8, mew=1.6,
                       label="mutual OT interface"),
                Line2D([0], [0], marker="o", color="#00BFFF", lw=2, mfc="none", ms=9,
                       label="equibiaxial centre disc")]
-    ax.legend(handles=handles, loc="upper right", framealpha=0.95, fontsize=8.5)
+    ax.legend(handles=handles, loc="upper right", framealpha=0.95, fontsize=9.0)
 
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")

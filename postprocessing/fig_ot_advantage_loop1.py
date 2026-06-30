@@ -70,9 +70,9 @@ CV = [
     ("CV-2", "Cattaneo\n$c/a$",            11.15e-2, 0.03e-2,   r"$\mathbf{370\times}$", False),
     ("CV-3", "Brazilian\n$\\sigma_{xx}$",  1.62e-2,  0.23e-2,   r"$6.3\times$",          False),
     ("CV-4", "nine-disc\n$\\sigma_{xx}$",  0.11e-2,  0.077e-2,  r"$1.4\times$",          False),
-    ("CV-5", "superformula\ncusps",        1.99e-2,  5.3e-13,   "grid-\nindep.",         True),
-    ("CV-6", "Koch\nfractal",              None,     2.6e-16,   "frozen\n$\\to$ conv.",  True),
-    ("CV-7", "Patton\n$\\mu_{\\mathrm{app}}$", 1.5e-4, 3.5e-14, "machine\nprec.",        True),
+    ("CV-5", "superformula\ncusps",        1.99e-2,  5.3e-13,   "grid-indep.",           True),
+    ("CV-6", "Koch\nfractal",              None,     2.6e-16,   r"$\to$ conv.",          True),
+    ("CV-7", "Patton\n$\\mu_{\\mathrm{app}}$", 1.5e-4, 3.5e-14, "mach. prec.",           True),
 ]
 
 FLOOR_PLOT = 3e-15        # where machine-floor OT bars are drawn (below true values)
@@ -105,9 +105,12 @@ def _verify_against_runs():
     p8 = os.path.join(RUNS, "cv8_deformable_ot", "metrics.json")
     if os.path.isfile(p8):
         d8 = json.load(open(p8))
-        pt = d8["patch_test"]
-        assert abs(pt["lumped_uniformity_rel"] - 67.32701213725079) < 1e-6, pt["lumped_uniformity_rel"]
-        assert pt["coupling_transmit_err"] < 1e-14, pt["coupling_transmit_err"]
+        # patch_test lives in the full-suite run file; the per-seed run files
+        # carry only the Hertz convergence sweep, so guard the patch-test cross-check.
+        pt = d8.get("patch_test")
+        if pt is not None:
+            assert abs(pt["lumped_uniformity_rel"] - 67.32701213725079) < 1e-6, pt["lumped_uniformity_rel"]
+            assert pt["coupling_transmit_err"] < 1e-14, pt["coupling_transmit_err"]
         a_fin = d8["hertz_convergence"]["table"][-1]["a_relerr"]
         assert abs(a_fin - 0.02752) < 5e-4, a_fin     # 2.75% finest
     p9 = os.path.join(RUNS, "cv9_nbody_array_ot", "metrics.json")
@@ -135,7 +138,7 @@ def main():
     cv8_nx, cv8_a, cv8_p0, cv8_fb = _load_cv8_convergence()
     set_pub_style(fontsize=9.0)
 
-    fig = plt.figure(figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.40))
+    fig = plt.figure(figsize=(DOUBLE_COL_W, DOUBLE_COL_W * 0.42))
     gs = fig.add_gridspec(1, 3, width_ratios=[2.35, 0.95, 1.25], wspace=0.46)
     axA = fig.add_subplot(gs[0, 0])
     axB = fig.add_subplot(gs[0, 1])
@@ -166,51 +169,54 @@ def main():
     axA.bar(x + w / 2, ot_plot, w, color=C_OT, zorder=3)
 
     axA.set_yscale("log")
-    axA.set_ylim(1e-16, 50.0)
+    axA.set_ylim(1e-16, 1.2e3)
     axA.set_xlim(-0.7, n - 0.3)
     axA.set_xticks(x)
-    axA.set_xticklabels([c[1] for c in CV], fontsize=6.6)
-    axA.set_ylabel("relative error  (lower is better)")
+    axA.set_xticklabels([c[1] for c in CV], fontsize=8.0)
+    axA.set_ylabel("relative error  (lower is better)", fontsize=9.0)
     axA.set_title("(a)  conventional gap vs. OT coupling",
-                  loc="left", fontweight="bold", fontsize=8.2)
+                  loc="left", fontweight="bold", fontsize=9.0)
     axA.grid(True, axis="y", ls=":", lw=0.4, alpha=0.5)
     axA.set_axisbelow(True)
     axA.set_yticks([1e0, 1e-3, 1e-6, 1e-9, 1e-12, 1e-15])
+    axA.tick_params(axis="y", labelsize=8.0)
 
-    # 5% acceptance reference (drawn low so it never collides with the tag band)
+    # 5% acceptance reference. The label sits at the lower-left, clear of the
+    # advantage-factor strip near the top of the axis.
     axA.axhline(5e-2, ls="--", lw=1.0, color=C_TARGET, zorder=2)
-    axA.text(-0.62, 6.0e-2, "5% target", ha="left", va="bottom",
-             fontsize=6.4, color=C_TARGET)
+    axA.text(-0.62, 7e-2, "5% target", ha="left", va="bottom",
+             fontsize=8.0, color=C_TARGET)
 
-    # advantage-tag band lives in a clear strip near the top of the axis
-    tag_y = 7.0
-    for xi, (_, _, conv, ot, adv, _) in enumerate(CV):
-        # OT true value, written just above the OT bar top
-        if ot >= 1e-4:
-            otxt = f"{ot*100:.2g}%"
-        else:
-            otxt = _sci(ot)
-        axA.text(xi + w / 2, max(ot, FLOOR_PLOT) * 2.0, otxt, ha="center",
-                 va="bottom", fontsize=6.0, color=C_OT, rotation=90)
-        # conventional value, just above its bar top
-        if conv is not None:
-            axA.text(xi - w / 2, conv * 1.3, f"{conv*100:.2g}%", ha="center",
-                     va="bottom", fontsize=6.0, color=C_CONV, rotation=90)
-        else:
-            axA.text(xi - w / 2, CONV_FROZEN_PLOT * 1.15, "frozen", ha="center",
-                     va="bottom", fontsize=6.0, color=C_CONV, rotation=90)
-        # advantage tag in the top band
-        axA.text(xi, tag_y, adv, ha="center", va="center", fontsize=6.6,
+    # The four convex/smooth cases (CV-1..CV-4) carry a measured advantage factor;
+    # each is a compact chip above its bar pair. The three geometry-dominated cases
+    # (CV-5..CV-7) collapse to a grid/machine floor — one shared bracket says so,
+    # instead of three cramped chips. Per-bar error values live in the caption/table.
+    tag_y = 9.0
+    floor_idx = [i for i, c in enumerate(CV) if c[5]]
+    for xi, (_, _, _, _, adv, floor) in enumerate(CV):
+        if floor:
+            continue
+        axA.text(xi, tag_y, adv, ha="center", va="center", fontsize=8.0,
                  fontweight="bold", color=C_INK,
                  bbox=dict(boxstyle="round,pad=0.16", fc="#F4ECE6",
-                           ec=C_OT, lw=0.5))
+                           ec=C_OT, lw=0.6))
+    # one bracket spanning the floor cases
+    fL, fR = float(min(floor_idx)), float(max(floor_idx))
+    yb = 1.6e2
+    axA.plot([fL - 0.30, fL - 0.30, fR + 0.30, fR + 0.30],
+             [yb / 2.0, yb, yb, yb / 2.0], color=C_OT, lw=0.9, zorder=4,
+             clip_on=False)
+    axA.text((fL + fR) / 2.0, yb * 2.4,
+             "OT at grid / machine floor",
+             ha="center", va="bottom", fontsize=8.0, color=C_OT,
+             fontweight="bold")
 
     legend_handles = [
         Patch(facecolor=C_CONV, label="conventional node-to-surface gap"),
         Patch(facecolor=C_OT, label="OT measure-coupling (Brenier map)"),
     ]
-    axA.legend(handles=legend_handles, loc="lower center", fontsize=6.4,
-               ncol=1, framealpha=0.92, handlelength=1.2, borderpad=0.4)
+    axA.legend(handles=legend_handles, loc="lower center", fontsize=8.0,
+               ncol=1, framealpha=0.92, handlelength=1.3, borderpad=0.4)
 
     # =====================================================================
     # Panel (b): non-matching patch test — the mechanism (and only mesh-matched test).
@@ -225,70 +231,51 @@ def main():
     axB.set_yscale("log")
     axB.set_ylim(1e-16, 5e3)
     axB.set_xticks(xb)
-    axB.set_xticklabels(labels, fontsize=7.0)
+    axB.set_xticklabels(labels, fontsize=8.0)
     axB.set_yticks([1e2, 1e-1, 1e-4, 1e-7, 1e-10, 1e-13, 1e-16])
-    axB.set_ylabel("pressure non-uniformity  (range / mean)", fontsize=7.6)
+    axB.set_ylabel("pressure non-uniformity  (range / mean)", fontsize=8.0)
     axB.set_title("(b)  patch test", loc="left",
-                  fontweight="bold", fontsize=8.2)
+                  fontweight="bold", fontsize=9.0)
     axB.grid(True, axis="y", ls=":", lw=0.4, alpha=0.5)
     axB.set_axisbelow(True)
+    axB.tick_params(axis="y", labelsize=8.0)
 
     axB.text(0, pt_lumped * 2.0, "67.3", ha="center", va="bottom",
-             fontsize=7.6, color=C_CONV, fontweight="bold")
-    axB.text(1, max(pt_ot, FLOOR_PLOT) * 2.2, _sci(pt_ot),
-             ha="center", va="bottom", fontsize=6.8, color=C_OT, fontweight="bold")
+             fontsize=9.0, color=C_CONV, fontweight="bold")
+    axB.text(1, max(pt_ot, FLOOR_PLOT) * 2.4, _sci(pt_ot),
+             ha="center", va="bottom", fontsize=8.0, color=C_OT, fontweight="bold")
     axB.annotate("mass-preserving\nfield $\\Rightarrow$\nexact transmission",
-                 xy=(1, max(pt_ot, FLOOR_PLOT) * 60), xytext=(0.45, 4e-7),
-                 ha="center", va="center", fontsize=6.0, color="#444444",
-                 arrowprops=dict(arrowstyle="->", color="#888888", lw=0.7))
+                 xy=(1, max(pt_ot, FLOOR_PLOT) * 80), xytext=(0.42, 6e-7),
+                 ha="center", va="center", fontsize=8.0, color="#444444",
+                 arrowprops=dict(arrowstyle="->", color="#888888", lw=0.8))
 
     # =====================================================================
     # Panel (c): the two-body deformable-deformable unlock.
     # =====================================================================
-    axC.plot(cv8_nx, cv8_a * 100, "o-", color=C_OT, lw=1.3, ms=4.5, zorder=4,
+    axC.plot(cv8_nx, cv8_a * 100, "o-", color=C_OT, lw=1.5, ms=5.0, zorder=4,
              label="CV-8 Hertz half-width $a$")
-    for xi, yi in zip(cv8_nx, cv8_a * 100):
-        axC.annotate(f"{yi:.2f}%", (xi, yi), textcoords="offset points",
-                     xytext=(0, 6), ha="center", fontsize=5.8, color=C_OT)
-    axC.set_xlabel("mesh resolution  $n_x$", fontsize=7.6)
-    axC.set_ylabel("CV-8 half-width relerr  (%)", fontsize=7.6)
+    # Label only the two endpoints of the descent (the curve carries the rest);
+    # the full sweep and the conservation ledger live in the caption. Offsets are
+    # placed so neither endpoint label clips the axis frame or the legend.
+    axC.annotate(f"{cv8_a[0]*100:.2f}%", (cv8_nx[0], cv8_a[0] * 100),
+                 textcoords="offset points", xytext=(12, 2), ha="left",
+                 va="center", fontsize=8.0, fontweight="bold", color=C_OT)
+    axC.annotate(f"{cv8_a[-1]*100:.2f}%", (cv8_nx[-1], cv8_a[-1] * 100),
+                 textcoords="offset points", xytext=(-4, 11), ha="center",
+                 va="bottom", fontsize=8.0, fontweight="bold", color=C_OT)
+    axC.set_xlabel("mesh resolution  $n_x$", fontsize=9.0)
+    axC.set_ylabel("CV-8 half-width relerr  (%)", fontsize=9.0)
     axC.set_title("(c)  two deformable bodies", loc="left",
-                  fontweight="bold", fontsize=8.2)
+                  fontweight="bold", fontsize=9.0)
     axC.set_xlim(cv8_nx[0] - 16, cv8_nx[-1] + 16)
-    axC.set_ylim(0, max(cv8_a) * 100 * 1.30)
+    axC.set_ylim(0, max(cv8_a) * 100 * 1.32)
     axC.grid(True, ls=":", lw=0.4, alpha=0.5)
     axC.set_axisbelow(True)
-    axC.legend(loc="upper right", fontsize=6.2, framealpha=0.92,
+    axC.tick_params(labelsize=8.0)
+    axC.legend(loc="upper right", fontsize=8.0, framealpha=0.92,
                handlelength=1.4, borderpad=0.35)
 
-    # machine-precision conservation / consistency ledger (verified values). usetex=False,
-    # so keep TeX only inside $...$ and avoid \text/\hspace/\bf (mathtext lacks them).
-    # A single round box holds a blank first line (reserves space for the title) plus the
-    # body; the bold OT-coloured title is then drawn on that reserved line, measured from
-    # the rendered box extent so there is no hand-tuned offset and no residue.
-    fs = 5.2
-    title = "two-body machine-precision ledger"
-    rows = [
-        r"force balance  $1.3{\times}10^{-19}$ (CV-8)",
-        r"force balance  $3.7{\times}10^{-15}$ (CV-9a)",
-        r"tangent FD  $3.45{\times}10^{-11}$",
-        r"symmetric SPSD 4-block tangent",
-        r"CV-9a centre mean stress  0.58%",
-    ]
-    bbox = dict(boxstyle="round,pad=0.42", fc="#F4ECE6", ec=C_OT, lw=0.5)
-    t_body = axC.text(0.05, 0.035, "\n".join([" "] + rows), transform=axC.transAxes,
-                      ha="left", va="bottom", fontsize=fs, color=C_INK,
-                      linespacing=1.6, bbox=bbox)
-    fig.canvas.draw()
-    ext = t_body.get_window_extent()
-    inv = axC.transAxes.inverted()
-    (xL, _), (_, yT) = inv.transform((ext.x0, ext.y0)), inv.transform((ext.x1, ext.y1))
-    x_in = inv.transform((ext.x0 + 5, 0))[0] - inv.transform((ext.x0, 0))[0]
-    y_in = inv.transform((0, ext.y1))[1] - inv.transform((0, ext.y1 - 5))[1]
-    axC.text(xL + x_in, yT - y_in, title, transform=axC.transAxes,
-             ha="left", va="top", fontsize=fs, color=C_OT, fontweight="bold")
-
-    fig.subplots_adjust(left=0.075, right=0.985, top=0.86, bottom=0.20)
+    fig.subplots_adjust(left=0.075, right=0.985, top=0.84, bottom=0.20)
     os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, "fig_ot_advantage_loop1.png")
     fig.savefig(out, dpi=400)
