@@ -600,7 +600,6 @@ True measured surface                                      & ---        & ---   
 parameters, since the Fourier encoding necessarily widens the first layer. It is reported here as the
 encoding-on/off control, not as a second capacity-matched comparison.}
 
-
 \section{Governing equations and variational formulation on the coordinate chart}\label{sec:govern}\label{sec:strong}
 
 With the geometry of each body fixed by the atlas of Section~\ref{sec:atlas}, this section poses the governing mechanics.
@@ -711,7 +710,6 @@ iteration on the overlap graph, with a partition-of-unity blend on the overlaps 
 numerical examples below use one chart per body; the multi-chart coupling is exercised in the companion atlas
 study.
 \end{remark}
-
 
 \section{Contact as optimal transport: the transition-map measure coupling}\label{sec:tmap}\label{sec:ot}
 
@@ -1107,7 +1105,6 @@ $(\gn,\nbf,\tbf_{\mathrm{proj}})$
 \State \Return $\mathcal I$, arcs $\{\mathcal A_k\}$, and the contact residual and stiffness contributions
 \end{algorithmic}
 \end{algorithm}
-
 
 %% ======================== optimal_transport_backbone ========================
 \section{The optimal-transport measure coupling and the two-body contact tangent}\label{app:ot}
@@ -1515,7 +1512,7 @@ reach---is the two-body operator of Section~\ref{sec:ex_twobody}.
 This benchmark verifies that the chart-FEM solver and a neural-SDF indenter reproduce the elastic contact
 kernel on a convex geometry where the radial chart and the ambient level set are interchangeable at the
 detector, fixing the accuracy floor the transition map must clear. Two elastic cylinders pressed together along
-a line form a contact patch whose half-width grows with the load (Figure~\ref{fig:cv1-bvp}). The closed form for the half-width under plane strain is
+a line form a contact patch whose half-width grows with the load. The closed form for the half-width under plane strain is
 %
 \begin{equation}\label{eq:hertz_a}
 a = 2\sqrt{\frac{P'R}{\pi E^{*}}},\qquad
@@ -1540,56 +1537,6 @@ set coincide. The agreement holds at the field level, not only in the
 half-width: Figure~\ref{fig:cv1-hertz} shows the chart-FEM subsurface vertical stress, whose stress bulb
 and off-surface maximum-shear depth $z/a\approx0.48$ reproduce the closed-form Hertz field.
 
-\begin{figure}[t]
-  \centering
-  \begin{tikzpicture}[x=1cm,y=1cm,>=Stealth]
-    % ---- fixed geometry (cm); block 8 wide x 2.4 tall, top edge at y=2.4 ----
-    % centerline at x=4, indenter radius 1.7, center at (4, 4.1)
-    \coordinate (C)  at (4,4.1);          % indenter center (top + R)
-    \coordinate (Tc) at (4,2.4);          % contact point on block top
-
-    % ---- elastic block (body) ----
-    \draw[body] (0,0) rectangle (8,2.4);
-    \node[align=center, grayStroke] at (1.8,1.05) {$E_2,\ \nu_2$};
-
-    % ---- clamped base along bottom edge ----
-    \fixedbase{0,0}{8,0}
-
-    % ---- cylindrical indenter (chartB circle) ----
-    \draw[chartB] (C) circle (1.7);
-    \node[cBlue!75!black] at (4,4.85) {$E_1,\ \nu_1$};
-
-    % ---- radius line from center to rim ----
-    \coordinate (rim) at ($(C)+({1.7*cos(-32)},{1.7*sin(-32)})$);
-    \draw[line width=0.6pt, cBlue!70!black] (C) -- (rim)
-      node[pos=0.62, above, sloped, font=\small, cBlue!75!black] {$R$};
-    \fill[cBlue!75!black] (C) circle (0.035);
-
-    % ---- applied load per unit length P' on top of indenter ----
-    \foreach \dx in {-0.55,0,0.55}{
-      \draw[load] ($(C)+(\dx,2.65)$) -- ($(C)+(\dx,1.82)$);
-    }
-    \node[coralDark, font=\small] at ($(C)+(1.35,2.32)$) {$P'$};
-
-    % ---- faint dashed vertical centerline ----
-    \draw[dashed, line width=0.5pt, grayMid] (4,-0.55) -- (4,7.15);
-
-    % ---- contact half-width dimension 2a ----
-    \draw[line width=0.4pt, grayMid] (3.45,2.4) -- (3.45,1.95);
-    \draw[line width=0.4pt, grayMid] (4.55,2.4) -- (4.55,1.95);
-    \draw[dimen] (3.45,1.95) -- (4.55,1.95);
-    \node[bcnode, fill=grayFill, inner sep=1pt] at (4,1.95) {$2a$};
-  \end{tikzpicture}
-  \caption{The Hertz line-contact benchmark (2D plane strain). A cylinder of
-  radius $R$ and elastic constants $(E_1,\nu_1)$ is pressed by a load per unit length
-  $P'$ onto an elastic block $(E_2,\nu_2)$ whose base is fully clamped, forming a
-  contact patch of half-width $a=2\sqrt{P'R/\pi E^{*}}$ with reduced modulus $E^{*}$
-  given by $1/E^{*}=(1-\nu_1^2)/E_1+(1-\nu_2^2)/E_2$. In the numerical realization the
-  chart-FEM block is driven against a neural-SDF disc indenter under penalty contact,
-  and the recovered $a(P')$ is compared against the closed-form Hertz prediction.}
-  \label{fig:cv1-bvp}
-\end{figure}
-
 \begin{figure}
 \centering
 \includegraphics[width=0.66\linewidth]{liusun_fig13_hertz_sigma_yy_pub}
@@ -1605,7 +1552,7 @@ level set coincide on a convex contact.}
 This benchmark verifies that the regularized-friction layer recovers the stick/slip partition of a tangentially
 loaded Hertz patch on a geometry where chart and level set still coincide, isolating the friction model from any
 geometric effect. A tangential load below the friction limit, applied to a Hertz patch, splits the contact into
-a central zone that sticks and an outer annulus that slips (Figure~\ref{fig:cv2-bvp}). With a tangential load
+a central zone that sticks and an outer annulus that slips. With a tangential load
 $Q<\mu P$ (where $\mu$ is the friction coefficient and $P$ the normal load) on the Hertz contact above, the
 two-dimensional line-contact partition obeys
 %
@@ -1633,92 +1580,6 @@ so the transition map stays dormant and the two representations remain equivalen
 shows the recovered contact tractions: the elliptical Hertz normal pressure and the Cattaneo--Mindlin
 tangential traction, whose stick/slip transition at $r=c$ marks the boundary between the locked core and
 the slipping annulus.
-
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[scale=1.0]
-  % ---- geometry constants ----
-  \def\Wx{4.4}      % half-width of the half-plane block
-  \def\Hy{2.6}      % depth of the half-plane block
-  \def\Rind{1.55}   % indenter radius
-  \def\ahalf{1.15}  % contact half-width a
-  \def\chalf{0.62}  % stick half-width c
-
-  % ---- elastic half-plane (clamped far field) ----
-  \fill[body] (-\Wx,0) rectangle (\Wx,-\Hy);
-  \draw[body] (-\Wx,0) -- (\Wx,0);          % free top surface, redraw crisp
-
-  % clamped base
-  \fixedbase{-\Wx,-\Hy}{\Wx,-\Hy}
-  \node[bcnode, anchor=north] at (0,-\Hy-0.34) {clamped far field $\ubf=\bm{0}$};
-
-  % depth dimension on the right (deep half-plane)
-  \draw[dimen] (\Wx+0.45,0) -- (\Wx+0.45,-\Hy);
-  \node[bcnode, anchor=west, align=left] at (\Wx+0.55,-0.5*\Hy)
-        {deep\\half-plane};
-
-  % material label
-  \node[bcnode, anchor=center] at (-0.55*\Wx,-0.62*\Hy) {elastic half-plane $E^{*},\nu$};
-
-  % ---- contact patch on the surface: slip annulus (light) + stick core (dark) ----
-  % slip annulus c < |r| < a
-  \fill[coralFill!25] (-\ahalf,0) rectangle (-\chalf,-0.16);
-  \fill[coralFill!25] ( \chalf,0) rectangle ( \ahalf,-0.16);
-  % stick core |r| < c
-  \fill[coralFill!70] (-\chalf,0) rectangle (\chalf,-0.16);
-  \draw[coralStroke, line width=0.8pt] (-\ahalf,0) rectangle (\ahalf,-0.16);
-  \draw[coralStroke, line width=0.6pt] (-\chalf,-0.16) -- (-\chalf,0);
-  \draw[coralStroke, line width=0.6pt] ( \chalf,-0.16) -- ( \chalf,0);
-
-  % ---- cylindrical indenter ----
-  \draw[chartB] (0,\Rind) circle (\Rind);
-  \node[bcnode, anchor=center, cBlue!60!black] at (0,\Rind-0.36) {rigid cylinder};
-  % radius marker
-  \draw[dimen] (0,\Rind) -- ($(0,\Rind)+(40:\Rind)$);
-  \node[bcnode, anchor=south west] at ($(0,\Rind)+(40:0.55*\Rind)$) {$R$};
-
-  % ---- applied loads on the indenter ----
-  % normal load P (downward)
-  \draw[load] (0,2*\Rind+0.95) -- (0,2*\Rind+0.12);
-  \node[bcnode, anchor=south, coralDark] at (0,2*\Rind+0.97) {$P$};
-  % tangential load Q (horizontal)
-  \draw[load] (-\Rind-1.05,\Rind) -- (-\Rind-0.16,\Rind);
-  \node[bcnode, anchor=east, coralDark] at (-\Rind-1.08,\Rind) {$Q$};
-  % friction condition
-  \node[bcnode, anchor=center, coralDark] at (-\Rind-0.6,\Rind-0.42) {$Q<\mu P$};
-
-  % ---- stick / slip dimension arrows below the surface ----
-  \def\dlev{-0.62}
-  % a (full half-width)
-  \draw[dimen] (0,\dlev-0.5) -- (\ahalf,\dlev-0.5);
-  \node[bcnode, anchor=north] at (0.5*\ahalf,\dlev-0.52) {$a$};
-  % c (stick half-width)
-  \draw[dimen] (0,\dlev) -- (\chalf,\dlev);
-  \node[bcnode, anchor=north] at (0.5*\chalf,\dlev-0.02) {$c$};
-  % vertical guides
-  \draw[dimen, dashed, line width=0.4pt] (\chalf,-0.16) -- (\chalf,\dlev);
-  \draw[dimen, dashed, line width=0.4pt] (\ahalf,-0.16) -- (\ahalf,\dlev-0.5);
-  \draw[dimen, dashed, line width=0.4pt] (0,-0.16) -- (0,\dlev-0.5);
-
-  % zone legend with little color keys (placed in open space above-right of patch)
-  \def\lx{\ahalf+0.55}
-  \def\ly{0.95}
-  \fill[coralFill!70] (\lx,\ly) rectangle ($(\lx,\ly)+(0.20,0.18)$);
-  \draw[coralStroke,line width=0.4pt] (\lx,\ly) rectangle ($(\lx,\ly)+(0.20,0.18)$);
-  \node[bcnode, anchor=west, coralDark] at ($(\lx,\ly)+(0.30,0.09)$) {stick $\abs{r}<c$};
-  \fill[coralFill!25] (\lx,\ly-0.34) rectangle ($(\lx,\ly-0.34)+(0.20,0.18)$);
-  \draw[coralStroke,line width=0.4pt] (\lx,\ly-0.34) rectangle ($(\lx,\ly-0.34)+(0.20,0.18)$);
-  \node[bcnode, anchor=west, coralDark] at ($(\lx,\ly-0.34)+(0.30,0.09)$) {slip $c<\abs{r}<a$};
-  % thin leader from legend down to the contact patch
-  \draw[dimen, dashed, line width=0.4pt] ($(\lx,\ly)+(0.10,0)$) -- (0.85*\ahalf,-0.08);
-\end{tikzpicture}
-\caption{Cattaneo--Mindlin: a tangential load $Q<\mu P$ applied to the Hertz patch splits the
-contact into a central \emph{stick} zone of radius $c$ and a slipping annulus, with
-$c/a=\sqrt{1-Q/\mu P}$. The test is run on a deep elastic half-plane with the far field
-clamped, exercising the regularized-Coulomb friction layer in the regime where the learned
-chart and the ambient level set still agree.}
-\label{fig:cv2-bvp}
-\end{figure}
 
 \begin{figure}
 \centering
@@ -3119,7 +2980,6 @@ to wear, third-body debris, and gouge formation.
 Across both reaches the transition map, read as an optimal-transport coupling of the two boundary measures, is
 the mass-conserving, two-sided operator that resolves what the level set smooths and couples two deformable
 bodies the level set cannot.
-
 
 \begin{appendix}
 %% ======================== A_appendix_closedforms ========================
