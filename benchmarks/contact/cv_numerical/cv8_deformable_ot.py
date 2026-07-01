@@ -447,7 +447,7 @@ def _recover_ap_gauss(diag, R, Estar):
 
 def hertz_test(n_lower=(160, 16), n_upper=(160, 16), R=2.0, delta=0.02, n_load=6,
                mu=0.0, slide=0.0, n_slide=0, eps_n=None, eps_fac=600.0, grade=1.4,
-               jitter=0.03, n_avg=3, mesh_seed=7, verbose=True):
+               jitter=0.03, n_avg=3, mesh_seed=7, W=1.0, H=0.5, verbose=True):
     """Curved-bottom upper block pressed (delta) onto a flat lower block; BOTH deformable.
 
     Production regime (verified to localize to a central Hertz patch and converge): R=2.0, delta=0.02,
@@ -467,7 +467,10 @@ def hertz_test(n_lower=(160, 16), n_upper=(160, 16), R=2.0, delta=0.02, n_load=6
     from scipy.sparse.linalg import spsolve
     E1, nu1 = 1.0, 0.3            # lower (flat)
     E2, nu2 = 1.0, 0.3            # upper (curved)
-    W, H = 1.0, 0.5
+    # W (half-width) and H (depth) of each block.  The closed-form Hertz reference assumes elastic
+    # HALF-PLANES (a/W, a/H << 1); the legacy default W=1.0,H=0.5 gives a/H~0.43 -> the finite clamped
+    # strip is ~10% stiffer than a half-plane, so a_fem is biased low / p0 high (a REFERENCE-regime
+    # mismatch, not a solver bug).  Deepening/widening the blocks (a/H<=0.15) recovers the half-plane.
     nL, eL, topL, botL = block_mesh(W, H, n_lower[0], n_lower[1], y0=-H, grade=grade)
     nU, eU, topU, botU = block_mesh(W, H, n_upper[0], n_upper[1], y0=0.0, curve_R=R,
                                     jitter=jitter, seed=mesh_seed, grade=grade)
@@ -618,8 +621,9 @@ def hertz_test(n_lower=(160, 16), n_upper=(160, 16), R=2.0, delta=0.02, n_load=6
     return res
 
 
-def hertz_convergence(nx_list=(96, 128, 160, 192), ny=16, R=2.0, delta=0.02, n_load=6,
-                      eps_fac=600.0, grade=1.4, jitter=0.03, n_avg=3, mesh_seed=7, verbose=True):
+def hertz_convergence(nx_list=(140, 180, 220, 260), ny=40, R=2.0, delta=0.05, n_load=6,
+                      eps_fac=600.0, grade=1.5, jitter=0.03, n_avg=3, mesh_seed=7,
+                      W=2.0, H=2.0, verbose=True):
     """Mesh-convergence study: a_relerr & p0_relerr vs nx, shrinking toward the analytical Hertz.
 
     Runs the seating-only Hertz solve (no sliding) at >=3 surface resolutions and tabulates the
@@ -627,12 +631,19 @@ def hertz_convergence(nx_list=(96, 128, 160, 192), ny=16, R=2.0, delta=0.02, n_l
     acceptance gate reads.  ``mesh_seed`` threads the jitter seed of the curved upper block all the way
     to ``block_mesh`` so the convergence sweep (and the ensemble study below) can be re-run on an
     independent realization without editing source.  Returns a dict with the per-mesh table.
+
+    HALF-PLANE REGIME (deep/wide blocks W=2,H=2, a/H<=0.14):  the closed-form Hertz reference assumes
+    elastic HALF-PLANES.  The legacy shallow default (W=1,H=0.5 -> a/H~0.43) made the finite clamped
+    strip ~10% stiffer than a half-plane (E*_eff/E*_hp~1.10), biasing a_fem low / p0 high by ~5-6% --
+    a REFERENCE-regime mismatch, not a solver error (force balance is machine-zero throughout).
+    Deepening/widening to a/H<=0.14 restores E*_eff/E*_hp~1.0 and the errors converge to the discrete
+    contact-edge + CST stress-recovery floor (~1-2%).
     """
     rows = []
     for nx in nx_list:
         r = hertz_test(n_lower=(nx, ny), n_upper=(nx, ny), R=R, delta=delta, n_load=n_load,
                        eps_fac=eps_fac, grade=grade, jitter=jitter, n_avg=n_avg, mesh_seed=mesh_seed,
-                       slide=0.0, n_slide=0, verbose=False)
+                       W=W, H=H, slide=0.0, n_slide=0, verbose=False)
         rows.append(dict(nx=int(nx), F=r["F_line"], a_ana=r["a_ana"], a_fem=r["a_fem"],
                          a_relerr=r["a_relerr"], p0_ana=r["p0_ana"], p0_fem=r["p0_fem"],
                          p0_relerr=r["p0_relerr"], aW=r["aW"], n_active_gp=r["n_active_gp"],
@@ -645,9 +656,9 @@ def hertz_convergence(nx_list=(96, 128, 160, 192), ny=16, R=2.0, delta=0.02, n_l
     return dict(table=rows, finest=rows[-1])
 
 
-def hertz_ensemble(seeds=(7, 11, 17, 23, 31), nx=192, ny=16, R=2.0, delta=0.02, n_load=6,
-                   eps_fac=600.0, grade=1.4, jitter=0.03, n_avg=3, verbose=True):
-    """Multi-realization spread at the headline mesh (nx=192): run the seating Hertz solve on a list
+def hertz_ensemble(seeds=(7, 11, 17, 23, 31), nx=220, ny=40, R=2.0, delta=0.05, n_load=6,
+                   eps_fac=600.0, grade=1.5, jitter=0.03, n_avg=3, W=2.0, H=2.0, verbose=True):
+    """Multi-realization spread at the headline mesh (nx=220): run the seating Hertz solve on a list
     of INDEPENDENT jitter realizations (one per ``mesh_seed``) and tabulate a_relerr / p0_relerr.
 
     This is the auditable source of the paper's CV-8 ensemble disclosure (manuscript
@@ -662,7 +673,7 @@ def hertz_ensemble(seeds=(7, 11, 17, 23, 31), nx=192, ny=16, R=2.0, delta=0.02, 
     for s in seeds:
         r = hertz_test(n_lower=(nx, ny), n_upper=(nx, ny), R=R, delta=delta, n_load=n_load,
                        eps_fac=eps_fac, grade=grade, jitter=jitter, n_avg=n_avg, mesh_seed=int(s),
-                       slide=0.0, n_slide=0, verbose=False)
+                       W=W, H=H, slide=0.0, n_slide=0, verbose=False)
         per_seed.append(dict(mesh_seed=int(s), nx=int(nx),
                              a_relerr=float(r["a_relerr"]), p0_relerr=float(r["p0_relerr"]),
                              a_fem=float(r["a_fem"]), p0_fem=float(r["p0_fem"]),
@@ -710,9 +721,9 @@ def run(mode="all", mesh_coarse=None, mesh_seed=7, ensemble_seeds=None, verbose=
         # auditable multi-realization spread at the headline mesh (writes runs/.../ensemble.json).
         seeds = tuple(ensemble_seeds) if ensemble_seeds else (7, 11, 17, 23, 31)
         if verbose:
-            print("  [HERTZ] multi-realization ensemble at the headline mesh (nx=192), seeds %s:"
+            print("  [HERTZ] multi-realization ensemble at the headline mesh (nx=220), seeds %s:"
                   % (list(seeds),))
-        metrics["hertz_ensemble"] = hertz_ensemble(seeds=seeds, nx=192, ny=16, verbose=verbose)
+        metrics["hertz_ensemble"] = hertz_ensemble(seeds=seeds, nx=220, ny=40, verbose=verbose)
         metrics["elapsed_sec"] = time.time() - t0
         with open(os.path.join(RUN_DIR, "metrics_ensemble.json"), "w") as fh:
             json.dump(metrics, fh, indent=2)
@@ -721,25 +732,29 @@ def run(mode="all", mesh_coarse=None, mesh_seed=7, ensemble_seeds=None, verbose=
         metrics["patch_test"] = patch_test(verbose=verbose)
     if mode in ("all", "cylinder"):
         # production regime: graded mesh, closest-point correspondence, Gauss-point p0 fit.
+        # HALF-PLANE regime: deep+wide blocks (W=2,H=2 -> a/H<=0.14) so the closed-form Hertz
+        # half-plane reference actually applies; see hertz_convergence docstring.
+        gW, gH, gdelta, ggrade = 2.0, 2.0, 0.05, 1.5
         if mesh_coarse:                                # explicit single-mesh override
             nx_list = (mesh_coarse[0],)
             ny = mesh_coarse[1]
             prod_nx = mesh_coarse[0]
         else:
-            nx_list = (96, 128, 160, 192)
-            ny = 16
-            prod_nx = 160
+            nx_list = (140, 180, 220, 260)
+            ny = 40
+            prod_nx = 220
         if verbose:
-            print("  [HERTZ] mesh-convergence study (closest-point OT map, graded mesh, "
-                  "Gauss-point p0 fit):")
-        metrics["hertz_convergence"] = hertz_convergence(nx_list=nx_list, ny=ny,
+            print("  [HERTZ] mesh-convergence study (half-plane regime W=%.1f H=%.1f, closest-point "
+                  "OT map, graded mesh, Gauss-point p0 fit):" % (gW, gH))
+        metrics["hertz_convergence"] = hertz_convergence(nx_list=nx_list, ny=ny, delta=gdelta,
+                                                         grade=ggrade, W=gW, H=gH,
                                                          mesh_seed=mesh_seed, verbose=verbose)
         # final seated + large-sliding run at the production mesh (carries the slide gate + figure).
         if verbose:
             print("  [HERTZ] production seat + large-sliding run (nx=%d):" % prod_nx)
         metrics["hertz"] = hertz_test(n_lower=(prod_nx, ny), n_upper=(prod_nx, ny),
-                                      R=2.0, delta=0.02, n_load=6, mesh_seed=mesh_seed,
-                                      slide=0.06, n_slide=6, verbose=verbose)
+                                      R=2.0, delta=gdelta, n_load=6, grade=ggrade, W=gW, H=gH,
+                                      mesh_seed=mesh_seed, slide=0.06, n_slide=6, verbose=verbose)
         # the gate reads a/p0 from the FINEST converged mesh (most resolved contact edge).
         fin = metrics["hertz_convergence"]["finest"]
         metrics["hertz"]["a_relerr_finest"] = float(fin["a_relerr"])

@@ -138,11 +138,14 @@ def test_cv8_patch_test_not_regressed():
 
 
 def test_cv8_deformable_hertz_localizes_and_matches():
+    # Half-plane regime (deep/wide blocks W=H=2 -> a/H<=0.14) so the closed-form half-plane Hertz
+    # reference applies; the shallow default (W=1,H=0.5) is a ~10%-stiffer finite strip (a modelling
+    # gap, not a solver error).  Coarse nx for a fast smoke test; production sweep is nx=140..260.
     from benchmarks.contact.cv_numerical.cv8_deformable_ot import hertz_test
-    r = hertz_test(n_lower=(128, 16), n_upper=(128, 16), R=2.0, delta=0.02, n_load=6,
-                   slide=0.0, n_slide=0, verbose=False)
+    r = hertz_test(n_lower=(160, 24), n_upper=(160, 24), R=2.0, delta=0.05, n_load=6,
+                   W=2.0, H=2.0, grade=1.5, slide=0.0, n_slide=0, verbose=False)
     # localizes to a CENTRAL Hertz patch (NOT smeared across the whole interface)
-    assert 0.15 < r["aW"] < 0.35, r["aW"]
+    assert 0.08 < r["aW"] < 0.25, r["aW"]
     # half-width and peak pressure match the analytical line contact
     assert r["a_relerr"] < 0.10, r["a_relerr"]
     assert r["p0_relerr"] < 0.12, r["p0_relerr"]
@@ -152,8 +155,8 @@ def test_cv8_deformable_hertz_localizes_and_matches():
 
 def test_cv8_large_sliding_centroid_monotone():
     from benchmarks.contact.cv_numerical.cv8_deformable_ot import hertz_test
-    r = hertz_test(n_lower=(128, 16), n_upper=(128, 16), R=2.0, delta=0.02, n_load=6,
-                   slide=0.06, n_slide=6, verbose=False)
+    r = hertz_test(n_lower=(160, 24), n_upper=(160, 24), R=2.0, delta=0.05, n_load=6,
+                   W=2.0, H=2.0, grade=1.5, slide=0.06, n_slide=6, verbose=False)
     assert r["slide_centroid_monotone"], r["slide_hist"]
     assert r["slide_F_cov"] < 0.05, r["slide_F_cov"]             # normal load stays ~constant
 

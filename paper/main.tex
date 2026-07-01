@@ -130,11 +130,12 @@ non-matching mesh: the contact patch test passes to $1.4\times10^{-16}$, while t
 node-spacing sawtooth ($67\times$ larger stress non-uniformity). Because the coupling is two-sided and
 transpose-coupled, with a symmetric positive-semidefinite four-block tangent that is consistent at frozen geometry
 (finite-difference verified to $3.45\times10^{-11}$), it solves a genuine two-body deformable--deformable problem
-rather than rigid-master detection: on deformable Hertz contact between two elastic blocks the contact half-width
-and peak pressure converge under mesh refinement to $2.75\%$ and $5.82\%$ of the closed form (a contact-edge
-floor, not a vanishing discretisation error; the best of five jitter realisations, ensemble half-width
-$3.47\pm0.53\%$ and a realisation-robust peak pressure $5.94\pm0.07\%$), and a $3\times3$ elastic disc array matches the equibiaxial closed
-form to $0.58\%$ at full Newton. The charts are Fourier-feature coordinate networks whose random-feature embedding
+rather than rigid-master detection: on deformable Hertz contact between two elastic blocks, run in the half-plane
+regime the closed form assumes, the contact half-width and peak pressure settle under mesh refinement at $1.64\%$
+and $2.26\%$ of the closed form (a discrete contact-edge plus constant-strain-triangle floor, not a vanishing
+discretisation error; the reported seed is a median jitter realisation, ensemble half-width $1.42\pm0.32\%$ and a
+realisation-robust peak pressure $2.31\pm0.07\%$), and a $3\times3$ elastic disc array matches the equibiaxial
+closed form to $0.58\%$ at full Newton. The charts are Fourier-feature coordinate networks whose random-feature embedding
 defeats the spectral bias that low-passes a neural signed-distance function, held throughout as a matched baseline
 on identical meshes so the measured accuracy gap is charged to the geometric representation alone. The formulation
 is variationally consistent through the classical strong--weak--Galerkin sequence and verified against analytical
@@ -376,8 +377,9 @@ star-shaped bodies.
 transpose-coupled, with a symmetric positive-semidefinite four-block tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ that is
 consistent at frozen geometry (finite-difference verified to $3.45\times10^{-11}$), it solves a genuine two-body
 deformable--deformable problem rather than rigid-master detection: deformable Hertz contact between two elastic
-blocks converges under mesh refinement to $2.75\%$ on the half-width and $5.82\%$ on the peak pressure (CV-8; the
-best of five jitter realisations, ensemble $3.47\pm0.53\%$ and realisation-robust $5.94\pm0.07\%$), a
+blocks, in the half-plane regime the closed form assumes, settles under mesh refinement at $1.64\%$ on the
+half-width and $2.26\%$ on the peak pressure (CV-8; the reported seed a median jitter realisation, ensemble
+$1.42\pm0.32\%$ and realisation-robust $2.31\pm0.07\%$), a
 $3\times3$ elastic disc array matches the equibiaxial closed form to $0.58\%$ at full Newton (CV-9a), and the
 partition-of-unity host weights $\sum_K(N_K^-\!\circ\chi)=1$ (the partition of unity of the master host weights
 along the correspondence, distinct from and downstream of the optimal-transport mass marginal that places the
@@ -1350,13 +1352,13 @@ sorry-free, depending only on \code{propext}/\code{Quot.sound}).}
 
 Table~\ref{tab:ot:gates} records the decisive gates. The analytic tangent matches the finite-difference
 perturbation of the residual to $3.45\times10^{-11}$ and the symbolic Jacobian to all $64$ entries; the net force
-balance is $4.4\times10^{-16}$. On deformable Hertz between two elastic blocks (CV-8) the contact half-width and
-peak pressure converge monotonically under mesh refinement to $2.75\%$ and $5.82\%$ of the closed form (this
-seed; a five-realisation ensemble at the headline mesh gives a realisation-dependent half-width
-$3.47\pm0.53\%$ and a realisation-robust peak pressure $5.94\pm0.07\%$, with the reported $2.75\%/5.82\%$ the
-best of the five on both metrics---Table~\ref{tab:cv8-ensemble}), the
+balance is $4.4\times10^{-16}$. On deformable Hertz between two elastic blocks (CV-8), run in the half-plane
+regime the closed form assumes ($a/H\le0.14$), the contact half-width and peak pressure settle under mesh
+refinement at $1.64\%$ and $2.26\%$ of the closed form (this seed; a five-realisation ensemble at the headline
+mesh gives a realisation-dependent half-width $1.42\pm0.32\%$ and a realisation-robust peak pressure
+$2.31\pm0.07\%$, with the reported seed the median of the five---Table~\ref{tab:cv8-ensemble}), the
 non-matching patch test transmits a uniform pressure to $1.4\times10^{-16}$, the sliding history is
-centroid-monotone (maximum backstep $0.0$), and the global force balance is $1.27\times10^{-19}$. On a $3\times3$
+centroid-monotone (maximum backstep $0.0$), and the global force balance is $1.7\times10^{-18}$. On a $3\times3$
 elastic disc array with twelve mutual couplings (CV-9a) the solve converges at full Newton relaxation (32
 iterations, no backtracks), the centre mean stress matches the equibiaxial closed form to $0.58\%$, the
 per-component anisotropy is $0.20$--$0.22\%$ on the $D_4$ mesh, and the force balance is $3.71\times10^{-15}$.
@@ -1364,9 +1366,9 @@ per-component anisotropy is $0.20$--$0.22\%$ on the $D_4$ mesh, and the force ba
 \begin{table}[t]
 \centering
 \caption{Decisive gates for the two-body and N-body optimal-transport contact. All
-numbers are measured. The residual $\sim3$--$6\%$ in the CV-8 half-width and peak pressure is contact-edge noise
-(the infinite Hertz edge-pressure slope resolved over one element; $p_0$ plateaus near $5.8\%$, a genuine floor,
-evidenced realisation-robust at $5.94\pm0.07\%$ across a five-seed ensemble at the headline mesh,
+numbers are measured. The residual $\sim2\%$ in the CV-8 half-width and peak pressure is the discrete
+contact-edge plus CST stress-recovery floor (the infinite Hertz edge-pressure slope resolved over one element;
+$p_0$ is a genuine realisation-robust floor at $2.31\pm0.07\%$ across a five-seed ensemble at the headline mesh,
 Table~\ref{tab:cv8-ensemble}); both CV-8 and CV-9a report single-realisation gate values, plane-strain CST
 small-strain, frictionless solves, with rigid outer walls in CV-9a.}
 \label{tab:ot:gates}
@@ -1378,11 +1380,11 @@ Case & Gate & Measured & Threshold \\
 Tangent & symbolic $dR/du\equiv\bm K_c$\footnotemark & all $64$ entries & exact \\
 Tangent & finite-difference $df/du$ & $3.45\times10^{-11}$ & $<10^{-6}$ \\
 Tangent & net force balance & $4.4\times10^{-16}$ & $<10^{-10}$ \\
-CV-8 & half-width $a$ (nx sweep $24{\to}192$) & $5.14{\to}4.14{\to}2.96{\to}2.75\%$ & $<10\%$ \\
-CV-8 & peak pressure $p_0$ & $6.34{\to}5.68{\to}5.91{\to}5.82\%$ & $<12\%$ \\
+CV-8 & half-width $a$ (nx sweep $140{\to}260$) & $1.81{\to}6.05{\to}1.54{\to}1.64\%$ & $<10\%$ \\
+CV-8 & peak pressure $p_0$ & $2.62{\to}1.67{\to}2.38{\to}2.26\%$ & $<12\%$ \\
 CV-8 & non-matching patch test & $1.4\times10^{-16}$ & machine \\
 CV-8 & sliding monotonicity (max backstep) & $0.0$ & $0$ \\
-CV-8 & force balance & $1.27\times10^{-19}$ & $<10^{-10}$ \\
+CV-8 & force balance & $1.7\times10^{-18}$ & $<10^{-10}$ \\
 CV-9a & Newton convergence (relax $=1.0$) & $32$ iters, $0$ backtracks & converged \\
 CV-9a & centre mean stress & $0.58\%$ & $<5\%$ \\
 CV-9a & per-component anisotropy ($D_4$ mesh) & $0.20$--$0.22\%$ & $<5\%$ \\
@@ -2261,70 +2263,66 @@ mesh-independent.
 
 \paragraph{Deformable Hertz between two elastic blocks (CV-8).} The two-body BVP of Figure~\ref{fig:cv8-bvp}
 presses two elastic blocks together and compares the contact half-width $a$ and the peak pressure $p_0$ against
-the line-contact closed form $a=2\sqrt{P'R/\pi E^{*}}$ with both bodies elastic. Under mesh refinement (nx sweep
-$24\to192$) the half-width converges monotonically to $2.75\%$ of the closed form
-($5.14\to4.14\to2.96\to2.75\%$) and the peak pressure, recovered from the Gauss-point pressures, to $5.82\%$
-($6.34\to5.68\to5.91\to5.82\%$, plateauing near $5.8\%$); Figure~\ref{fig:cv8-hertz} plots both sweeps. The
-sliding history is centroid-monotone (maximum backstep $0.0$), the contact localises on $52$ of $161$ slave
-nodes ($a/W=0.228$), and the global force balance is $1.27\times10^{-19}$. The residual $\sim3$--$6\%$ is
-contact-edge noise: the half-width error \emph{decreases} monotonically at every refinement
-while the peak pressure drops then plateaus near $5.8\%$; the
-plateau, not a stall mid-descent, identifies $\sim5.8\%$ as the genuine one-element edge-slope floor of the
-half-ellipse Hertz pressure, which no constraint scheme escapes on a $C^0$ contact edge, not a tuning gap.
-Pushing the surface resolution past the gate confirms this reading rather than improving on it: the half-width
-error does not fall below the $2.75\%$ of nx$=192$ but instead jitters in a $\sim1.8$--$4\%$ band
-($1.79\to3.19\to4.03\%$ at nx$=224,256,288$), because the Hertz edge-pressure slope is infinite at $x=\pm a$ and
-the recovered contact edge shifts by $O(1)$ surface nodes ($\sim1/\mathrm{nx}$) as the mesh changes, so the
-half-width error fluctuates with an $O(1/\mathrm{nx})$ amplitude set by the edge discretisation rather than
-decreasing at the interior convergence rate; that the two finest meshes (nx$=256,288$) are no better than the
-gate---the finest is in fact the worst---is itself the signature of an edge floor, since a genuine convergence
-rate could never grow under refinement. The peak pressure, read in the interior away from that edge, plateaus
-cleanly across the same finer sweep ($5.31\to5.70\to5.99\%$, still near $5.8\%$); the residual is therefore a
-discrete contact-edge floor, not a convergence-rate error that finer meshes would remove.
+the line-contact closed form $a=2\sqrt{P'R/\pi E^{*}}$ with both bodies elastic. Because that closed form assumes
+elastic \emph{half-planes}, the benchmark is run in the half-plane regime: the blocks are deep and wide enough
+that the contact stays small relative to the body, $a/H\le0.14$ ($a/W=0.137$). In this regime the finite blocks
+reproduce the half-plane compliance---the effective modulus back-solved from the recovered half-width,
+$E^{*}_{\mathrm{eff}}=4P'R/\pi a^{2}$, matches the analytical $E^{*}=0.549$ to $\sim1\%$. Under mesh refinement
+(nx sweep $140\to260$) the half-width settles at $1.64\%$ of the closed form and the peak pressure, recovered
+from the Gauss-point pressures, at $2.26\%$ (finest mesh nx$=260$); Figure~\ref{fig:cv8-hertz} plots the sweep.
+The sliding history is centroid-monotone (maximum backstep $0.0$), the contact localises on $57$ nodes, and the
+global force balance is $1.7\times10^{-18}$. Both residuals sit at the discrete contact-edge plus
+constant-strain-triangle (CST) stress-recovery floor of $\sim2\%$: the peak pressure is a tight,
+realisation-independent CST floor (error $\approx2.3\%$ across the whole sweep), while the half-width jitters
+within an edge-quantisation band ($1.81\to6.05\to1.54\to1.64\%$; the nx$=180$ spike is a one-surface-node shift
+of the recovered edge), because the Hertz edge-pressure slope is infinite at $x=\pm a$ and the recovered contact
+edge shifts by $O(1)$ surface nodes as the mesh changes rather than converging at the interior rate. No
+constraint scheme escapes this floor on a $C^0$ contact edge; it is not a tuning gap.
 
-\paragraph{Ensemble disclosure across realisations.} The half-width and peak-pressure values above are one
-mesh realisation (mesh seed $7$), and the single-realisation restriction is stated honestly: a band-limited
-jittered mesh is statistically spiky, so we repeated the headline solve at nx$=192$ on five independent jitter
-realisations (mesh seeds $7,11,17,23,31$; all force balances $\sim\!10^{-18}$--$10^{-19}$). The two observables
-behave oppositely under re-meshing (Table~\ref{tab:cv8-ensemble}). The half-width
-error is realisation-dependent: across the five seeds it spans $[2.75,4.30]\%$ with mean $3.47\%$ and
-population standard deviation $0.53\%$, and the reported gate value $2.75\%$ is the \emph{best} of the five
-(the ensemble mean is $\sim\!3.5\%$, still inside the stated $\sim\!3$--$6\%$ contact-edge band). That $\sim\!0.5\%$
-spread is the contact-edge floor made visible: the infinite Hertz edge slope is resolved over one element, so the
-recovered edge shifts by $O(1)$ surface nodes as the mesh changes and the half-width error fluctuates rather than
-converges. The peak pressure, by contrast, is realisation-\emph{independent}: across the same five seeds it is
-$5.94\pm0.07\%$ (range $[5.82,6.02]\%$, population standard deviation $0.07\%$), and the reported $5.82\%$ is the
-\emph{low end} of that band---so the headline seed is the best realisation on \emph{both} metrics, disclosed as
-such, while the representative peak-pressure floor is the ensemble mean $5.94\%$. The tightness of that band
-identifies the $\sim\!5.9\%$ peak pressure as a genuine systematic of the plane-strain CST discretisation and the
-finite-penalty interior bias---not a fortunate realisation---consistent with the $p_0$ plateau established under
-mesh refinement. We retain $2.75\%/5.82\%$ as the reported gate values, labelled as one realisation, with the
-ensemble carried alongside.
+A word on the regime, because it is why an earlier, shallower setup mis-measured this benchmark. With shallow
+clamped blocks ($a/H\approx0.43$) the finite strip is confined by its fixed base and is $\sim10\%$ stiffer than a
+half-plane ($E^{*}_{\mathrm{eff}}/E^{*}\approx1.10$); by $a\propto(E^{*})^{-1/2}$ that alone biases the
+half-width $\sim5\%$ low and, at fixed load, the peak pressure $\sim6\%$ high---one coupled effect, not two. That
+offset is a reference-regime mismatch (the half-plane formula does not describe a clamped finite strip), not a
+solver error: the force balance is machine-zero and the non-matching patch test transmits uniform pressure to
+$1.4\times10^{-16}$ throughout. Deepening the blocks into the half-plane regime restores
+$E^{*}_{\mathrm{eff}}/E^{*}\approx1$ and leaves only the $\sim2\%$ discrete-edge/CST floor reported above.
+
+\paragraph{Ensemble disclosure across realisations.} The values above are one mesh realisation (seed $7$), and
+the single-realisation restriction is stated honestly: a band-limited jittered mesh is statistically spiky, so we
+repeated the headline solve at nx$=220$ on five independent jitter realisations (mesh seeds $7,11,17,23,31$; all
+force balances $\sim\!10^{-18}$). The two observables behave oppositely under re-meshing
+(Table~\ref{tab:cv8-ensemble}). The half-width error is realisation-dependent: across the five seeds it spans
+$[0.94,1.87]\%$ with mean $1.42\%$ and population standard deviation $0.32\%$, and the reported seed $7$
+($1.54\%$) is a \emph{typical} realisation---the median of the five, neither best nor worst. The peak pressure, by
+contrast, is realisation-\emph{independent}: across the same five seeds it is $2.31\pm0.07\%$ (range
+$[2.21,2.38]\%$, population standard deviation $0.07\%$). The tightness of that band identifies the $\sim\!2.3\%$
+peak pressure as a genuine systematic of the plane-strain CST stress recovery---not a fortunate realisation---so
+both observables rest on the same $\sim\!2\%$ discrete-edge/CST floor, disclosed with its realisation spread.
 
 \begin{table}[t]
   \centering
   \caption{CV-8 deformable-Hertz half-width and peak-pressure errors across five independent jitter realisations
-  at the headline mesh (nx$=192$, $R=2.0$, $\delta=0.02$, $n_{\mathrm{load}}=6$, graded mesh, jitter $0.03$; mesh
-  seeds $7,11,17,23,31$). All force balances are $\sim\!10^{-18}$--$10^{-19}$; the quoted spreads are population
-  standard deviations ($\mathrm{ddof}=0$) over the full five-realisation set. The half-width error is
-  realisation-dependent and the reported gate seed $7$ is the best of the five; the peak-pressure error is
-  realisation-independent (standard deviation $0.07\%$), a genuine plane-strain CST plus finite-penalty
-  systematic floor whose representative value is the ensemble mean $5.94\%$. The reported headline $5.82\%$ is the
-  low end of the $p_0$ band, so seed $7$ is best-of-five on both metrics.}
+  at the headline mesh (nx$=220$, half-plane regime $W{=}H{=}2$, $R=2.0$, $\delta=0.05$, $n_{\mathrm{load}}=6$,
+  graded mesh, jitter $0.03$; mesh seeds $7,11,17,23,31$). All force balances are $\sim\!10^{-18}$; the quoted
+  spreads are population standard deviations ($\mathrm{ddof}=0$) over the full five-realisation set. The
+  half-width error is realisation-dependent and the reported seed $7$ is the median of the five; the peak-pressure
+  error is realisation-independent (standard deviation $0.07\%$), a genuine plane-strain CST stress-recovery
+  floor whose representative value is the ensemble mean $2.31\%$.}
   \label{tab:cv8-ensemble}
   \small
   \begin{tabular}{@{}lll@{}}
     \toprule
     Mesh seed & $a$ rel.\ err.\ & $p_0$ rel.\ err.\ \\
     \midrule
-    $7$ (reported gate) & $\mathbf{2.75\%}$ & $\mathbf{5.82\%}$ \\
-    $11$               & $3.52\%$          & $5.96\%$ \\
-    $17$               & $4.30\%$          & $6.00\%$ \\
-    $23$               & $3.71\%$          & $6.02\%$ \\
-    $31$               & $3.09\%$          & $5.90\%$ \\
+    $7$ (reported)     & $\mathbf{1.54\%}$ & $\mathbf{2.38\%}$ \\
+    $11$               & $1.21\%$          & $2.36\%$ \\
+    $17$               & $1.54\%$          & $2.21\%$ \\
+    $23$               & $1.87\%$          & $2.23\%$ \\
+    $31$               & $0.94\%$          & $2.35\%$ \\
     \midrule
-    mean $\pm$ s.d.\ (pop.)   & $3.47\pm0.53\%$   & $5.94\pm0.07\%$ \\
-    range              & $[2.75,4.30]\%$   & $[5.82,6.02]\%$ \\
+    mean $\pm$ s.d.\ (pop.)   & $1.42\pm0.32\%$   & $2.31\pm0.07\%$ \\
+    range              & $[0.94,1.87]\%$   & $[2.21,2.38]\%$ \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -2332,10 +2330,12 @@ ensemble carried alongside.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{cv8_hertz_convergence_pub}
-  \caption{Deformable Hertz contact between two elastic blocks (CV-8), mesh convergence. The contact half-width
-  $a$ converges monotonically to $2.75\%$ of the closed form $a=2\sqrt{P'R/\pi E^{*}}$ over the mesh sweep
-  $24\to192$, and the peak pressure $p_0$ to $5.82\%$, plateauing near $5.8\%$. The residual is the contact-edge noise of the
-  infinite Hertz edge-pressure slope resolved over one element, not a constraint-enforcement error.}
+  \caption{Deformable Hertz contact between two elastic blocks (CV-8), mesh convergence in the half-plane regime
+  ($a/H\le0.14$). The recovered half-width $a$ and peak pressure $p_0$ settle at the $\sim2\%$ discrete
+  contact-edge plus CST stress-recovery floor of the closed form $a=2\sqrt{P'R/\pi E^{*}}$ over the sweep
+  nx$=140\to260$ (finest $1.64\%/2.26\%$); the peak pressure is a tight realisation-independent floor, the
+  half-width jitters by one-surface-node edge quantisation. The recovered half-ellipse fit (dashed) lands on the
+  analytical curve; the faded points are the piecewise-constant CST Gauss-point tractions.}
   \label{fig:cv8-hertz}
 \end{figure}
 
@@ -2357,12 +2357,12 @@ subset here, where the two-body advantage is argued.
   \centering
   \caption{Decisive two-body optimal-transport gates (full ledger Section~\ref{app:ot},
   Table~\ref{tab:ot:gates}). The four-block tangent is consistent and force-conserving to machine precision; the
-  deformable-Hertz observables converge monotonically and the non-matching patch test is exact, while the
-  conventional node-lumped assembly fails it ($67\times$). The ``---'' entries are honest: the node-lumped
+  deformable-Hertz observables settle at the $\sim2\%$ discrete-edge/CST floor and the non-matching patch test is
+  exact, while the conventional node-lumped assembly fails it ($67\times$). The ``---'' entries are honest: the node-lumped
   node-to-surface scheme has no symmetric two-body tangent and is not run on the deformable--deformable BVP, which
   is the point---the patch-test row is the one head-to-head that exists. All values measured; the CV-8 half-width
-  $2.75\%$ and peak pressure $5.82\%$ are one mesh realisation (seed $7$, the best of five on \emph{both}
-  metrics), with the realisation-robust ensemble $3.47\pm0.53\%$ ($a$) and $5.94\pm0.07\%$ ($p_0$) in
+  $1.64\%$ and peak pressure $2.26\%$ are one mesh realisation (seed $7$, the median of five), with the
+  realisation-robust ensemble $1.42\pm0.32\%$ ($a$) and $2.31\pm0.07\%$ ($p_0$) in
   Table~\ref{tab:cv8-ensemble}.}
   \label{tab:twobody:headline}
   \small
@@ -2372,10 +2372,10 @@ subset here, where the two-body advantage is argued.
     \midrule
     Tangent & finite-difference $df/du$ & $3.45\times10^{-11}$ & --- \\
     Tangent & net force balance & $4.4\times10^{-16}$ & --- \\
-    CV-8 & half-width $a$ (nx $24{\to}192$) & $5.14{\to}\mathbf{2.75\%}$ (1 seed; ens.\ $3.47{\pm}0.53\%$) & --- \\
-    CV-8 & peak pressure $p_0$ & $\mathbf{5.82\%}$ (plateau; ens.\ $5.94{\pm}0.07\%$) & --- \\
+    CV-8 & half-width $a$ (nx $140{\to}260$) & $\mathbf{1.64\%}$ (1 seed; ens.\ $1.42{\pm}0.32\%$) & --- \\
+    CV-8 & peak pressure $p_0$ & $\mathbf{2.26\%}$ (floor; ens.\ $2.31{\pm}0.07\%$) & --- \\
     CV-8 & non-matching patch test & $\mathbf{1.4\times10^{-16}}$ & fails ($67\times$) \\
-    CV-8 & force balance & $1.27\times10^{-19}$ & --- \\
+    CV-8 & force balance & $1.7\times10^{-18}$ & --- \\
     CV-9a & Newton (relax $=1.0$) & $32$ iters, $0$ backtracks & --- \\
     CV-9a & centre mean stress & $\mathbf{0.58\%}$ & --- \\
     CV-9a & force balance & $3.71\times10^{-15}$ & --- \\
@@ -2509,14 +2509,15 @@ while also delivering the contact half-width and the $D_4$ symmetry the prescrib
   are mass-preserving fields; the $67.3\times$ non-uniformity is structural, not a resolution artifact, and does
   not shrink under mesh refinement. \textbf{(c)} The regime the coupling is built for: contact between two
   \emph{deformable} bodies through the symmetric positive-semidefinite four-block mortar tangent. The CV-8 deformable-Hertz
-  half-width error converges monotonically under mesh refinement ($5.14\%\!\to\!2.75\%$), and the
-  conservation/consistency structure holds to machine precision---global force balance $1.27\!\times\!10^{-19}$
+  half-width and peak-pressure errors settle at the $\sim2\%$ discrete-edge/CST floor ($1.64\%$ and $2.26\%$ at the
+  finest mesh), and the
+  conservation/consistency structure holds to machine precision---global force balance $1.7\!\times\!10^{-18}$
   (CV-8) and $3.71\!\times\!10^{-15}$ (CV-9a $3\times3$ array), analytic tangent matching its finite difference to
   $3.45\!\times\!10^{-11}$, and the CV-9a centre disc recovering the equibiaxial mean stress to $0.58\%$. Margins
   on CV-3/CV-4 and the geometry cases are verification of grid-independence and emergent load, not a
-  deformable-BVP stress match; the CV-8 residual is $\sim3$--$6\%$ discrete contact-edge noise on a
+  deformable-BVP stress match; the CV-8 residual is the $\sim2\%$ discrete contact-edge plus CST floor on a
   plane-strain, frictionless solve, evidenced by a five-realisation ensemble at the headline mesh
-  (peak pressure realisation-robust at $5.94\pm0.07\%$; Table~\ref{tab:cv8-ensemble}).}
+  (peak pressure realisation-robust at $2.31\pm0.07\%$; Table~\ref{tab:cv8-ensemble}).}
   \label{fig:ot_advantage}
 \end{figure}
 
@@ -2540,11 +2541,11 @@ Two honest boundaries bound these claims. The coupling \emph{ties} the conventio
 smooth convex contact---the nine-disc $1.4\times$ is within the FEM stress-recovery floor of both schemes, and the
 Hertz $0.50\%$ sits on a $\sim0.4$--$0.5\%$ discrete-edge floor neither scheme escapes---so the separation is
 charged entirely to geometry-dominated, non-matching, frictional-front, and two-sided regimes. And the two-body
-residuals are stated, not smoothed: CV-8 carries a $\sim3$--$6\%$ contact-edge noise from the infinite Hertz edge
-slope resolved over one element, now evidenced by a five-realisation ensemble at the headline mesh (the
-peak pressure realisation-robust at $5.94\pm0.07\%$, the half-width spanning $[2.75,4.30]\%$ with the reported
-$2.75\%$ the best seed; Table~\ref{tab:cv8-ensemble}), and both two-body solves are plane-strain CST small-strain,
-frictionless, with rigid outer walls in CV-9a.
+residuals are stated, not smoothed: CV-8 carries a $\sim2\%$ discrete contact-edge plus CST stress-recovery floor
+from the infinite Hertz edge slope resolved over one element, now evidenced by a five-realisation ensemble at the
+headline mesh (the peak pressure realisation-robust at $2.31\pm0.07\%$, the half-width spanning $[0.94,1.87]\%$
+with the reported seed the median $1.54\%$; Table~\ref{tab:cv8-ensemble}), and both two-body solves are
+plane-strain CST small-strain, frictionless, with rigid outer walls in CV-9a.
 
 \begin{figure}
   \centering
@@ -2955,7 +2956,7 @@ Rock joint (Inada 1-D; synthetic 3-D) & rough self-affine & recon $2.3~\mu$m; ac
 \addlinespace
 \multicolumn{4}{@{}l}{\emph{Two-body operator} (Section~\ref{sec:ex_twobody}): OT measure coupling vs.\ node-lumped penalty} \\
 \addlinespace
-Two-body / N-body contact & deformable--deformable & CV-8 $a$ $2.75\%$ (ens.\ $3.47{\pm}0.53\%$), $p_0$ $5.82\%$ (ens.\ $5.94{\pm}0.07\%$), patch $1.4{\times}10^{-16}$, force bal.\ $1.27{\times}10^{-19}$; CV-9a mean $0.58\%$, anisotropy $0.22\%$, force bal.\ $3.71{\times}10^{-15}$ & node-lumped sawtooth fails the non-matching patch test; rigid-master only, no master tangent \\
+Two-body / N-body contact & deformable--deformable & CV-8 $a$ $1.64\%$ (ens.\ $1.42{\pm}0.32\%$), $p_0$ $2.26\%$ (ens.\ $2.31{\pm}0.07\%$), patch $1.4{\times}10^{-16}$, force bal.\ $1.7{\times}10^{-18}$; CV-9a mean $0.58\%$, anisotropy $0.22\%$, force bal.\ $3.71{\times}10^{-15}$ & node-lumped sawtooth fails the non-matching patch test; rigid-master only, no master tangent \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -3009,14 +3010,15 @@ one that plugs into the two-sided optimal-transport mortar tangent already assem
 Section~\ref{sec:ex_twobody}. It does not threaten the main result, because the
 emergent quantities are mesh-converged ($\muapp\to0.53\pm2\%$, dilation $\to0.063$~mm).
 \emph{The two-body contact-edge floor.} The deformable-Hertz half-width and peak pressure of
-Section~\ref{sec:ex_twobody} carry a $\sim3$--$6\%$ contact-edge residual that does not shrink under refinement;
-it is the infinite Hertz edge-pressure slope resolved over one element, so $p_0$ plateaus near $5.8\%$, a genuine
-floor rather than a vanishing discretisation error. A five-realisation ensemble at the headline mesh quantifies
-this (Table~\ref{tab:cv8-ensemble}): the peak pressure is realisation-robust at
-$5.94\pm0.07\%$ (a systematic floor, not a lucky seed), whereas the half-width spans $[2.75,4.30]\%$
-($3.47\pm0.53\%$), with the reported $2.75\%$ the best realisation---the spread is the contact-edge floor
-itself. The reported gate seed ($7$) is in fact the best of the five on both metrics ($p_0$ $5.82\%$ is the low
-end of the band). The remaining solves are single-realization, plane-strain CST
+Section~\ref{sec:ex_twobody} carry a $\sim2\%$ residual that does not shrink under refinement; it is the discrete
+contact-edge quantisation (the infinite Hertz edge-pressure slope resolved over one element) plus the
+constant-strain-triangle stress-recovery floor, a genuine floor rather than a vanishing discretisation error. A
+five-realisation ensemble at the headline mesh quantifies this (Table~\ref{tab:cv8-ensemble}): the peak pressure
+is realisation-robust at $2.31\pm0.07\%$ (a systematic CST floor, not a lucky seed), whereas the half-width spans
+$[0.94,1.87]\%$ ($1.42\pm0.32\%$), with the reported seed the median $1.54\%$---the spread is the contact-edge
+quantisation itself. Running the benchmark in the half-plane regime the closed form assumes ($a/H\le0.14$) is
+what removes the earlier shallow-block finite-size compliance offset and exposes this $\sim2\%$ floor as the true
+residual. The remaining solves are single-realization, plane-strain CST
 (small-strain), frictionless, with rigid outer walls in CV-9a. The geometric tangent term
 $d\nbf/d\chi$ is dropped under the standard small-rotation approximation, which leaves the converged solution
 tangent-independent (identical $a_{\mathrm{fem}}$ at $40$ and $120$ iterations); it is a convergence-rate lever,
@@ -3066,8 +3068,8 @@ reflection of mass conservation), so a constant pressure
 transmits exactly across a non-matching interface (patch test $1.4\times10^{-16}$, $67\times$ tighter than the
 node-lumped scheme), and the coupling is two-sided: its symmetric positive-semidefinite four-block tangent
 $\bm K_{ms}=\bm K_{sm}^{\top}$, consistent at frozen geometry, solves a genuine two-body deformable--deformable
-problem (deformable Hertz $a$ to $2.75\%$, $p_0$ to $5.82\%$---the best of five jitter realisations, ensemble
-$3.47\pm0.53\%$ and realisation-robust $5.94\pm0.07\%$; a $3\times3$ array to $0.58\%$).
+problem (deformable Hertz $a$ to $1.64\%$, $p_0$ to $2.26\%$---the reported seed a median jitter realisation, ensemble
+$1.42\pm0.32\%$ and realisation-robust $2.31\pm0.07\%$; a $3\times3$ array to $0.58\%$).
 
 The geometric representation of the boundary, not the constraint-enforcement scheme, then controls contact fidelity on
 geometrically hard contact, the empirical consequence of the coupling on a conforming interface. A fixed-capacity ambient signed-distance field learns low spatial frequencies first
@@ -3413,7 +3415,7 @@ Brazilian global balance  & $\int_{-R}^{R}\sigma_{yy}(x,0)\,\mathrm{d}x=-P/t$ & 
 Nine-disc center          & $\sigma_{xx}=\sigma_{yy}=-2N/\pi Rt$    & $<1\%$ \\
 \midrule
 \multicolumn{3}{@{}l}{\emph{Two-body optimal-transport targets} (Section~\ref{app:ot}; looser, deformable--deformable)} \\
-Deformable Hertz half-width & $a=2\sqrt{P'R/\pi E^{*}}$ (both bodies elastic) & $<10\%$ (meas.\ $2.75\%$) \\
+Deformable Hertz half-width & $a=2\sqrt{P'R/\pi E^{*}}$ (both bodies elastic) & $<10\%$ (meas.\ $1.64\%$) \\
 N-body equibiaxial mean   & $\sigma_{xx}=\sigma_{yy}=-2N/\pi Rt$ ($N$ emergent) & $<5\%$ (meas.\ $0.58\%$) \\
 \bottomrule
 \end{tabular}

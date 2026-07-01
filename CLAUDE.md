@@ -177,20 +177,28 @@ SymPy `dR/du == K`; FD tangent **3.45e-11**; force-balance self-test **4.4e-16**
 partial/non-conforming contact across the interface; the **closest-point transition map** `π_B∘φ_A` is
 the correct OT map for a localized convex indenter (convex-cost OT degenerates to `g=|p−c|−R`, per
 `cv_numerical/cv1_ot_gap.py:15-20`) — the driver hardcodes `closest_point` for seat/slide/convergence and
-uses arclength only for the full-contact patch test. Two prior CV-8 bugs fixed: inverted Hertz geometry
-(`block_mesh` sign) and the arclength-for-partial mis-use. MEASURED — **CV-8** (`cv8_deformable_ot.py`,
-`runs/cv8_deformable_ot/metrics.json`): deformable Hertz finest nx=192 **a_relerr 2.75%** (<10%),
-**p0_relerr 5.82%** (<12%, p0 from Gauss-point pressures) with monotone mesh convergence (a:
-5.14→4.14→2.96→2.75%; p0: 6.34→5.68→5.91→5.82%, plateaus ~5.8%); non-matching **patch test** transmits
-uniform pressure to **1.4e-16** (67× tighter than lumped); large **sliding** centroid-monotone (max
-backstep 0.0); **force balance 1.27e-19**; contact localizes (52/161 slave nodes, a/W=0.228). **CV-9a /
+uses arclength only for the full-contact patch test. Three prior CV-8 issues fixed: inverted Hertz geometry
+(`block_mesh` sign), the arclength-for-partial mis-use, and (loop 12, multi-agent root-cause panel) a
+FINITE-SIZE / half-plane REFERENCE-regime mismatch — the shallow clamped blocks (W=1,H=0.5 → a/H≈0.43) are
+~10% stiffer than the elastic half-plane the closed form assumes (E*_eff/E*_hp≈1.10), biasing a low / p0
+high by ~5–6% while force balance stayed machine-zero (a modelling gap, NOT a solver bug). FIX: run CV-8 in
+the half-plane regime (deep/wide blocks W=2,H=2 → a/H≤0.14, driver now parametrised by W,H,δ,grade), where
+E*_eff/E*_hp≈1.0 and the errors converge to the ~2% discrete-edge + CST stress-recovery floor. MEASURED —
+**CV-8** (`cv8_deformable_ot.py`, `runs/cv8_deformable_ot/metrics.json`): deformable Hertz finest nx=260
+**a_relerr 1.64%** (<10%), **p0_relerr 2.26%** (<12%, p0 from Gauss-point pressures); errors sit at the ~2%
+floor (a jitters 1.81→6.05→1.54→1.64% by 1-node edge quantisation; p0 a tight 2.62→1.67→2.38→2.26% CST
+floor); ensemble (nx=220, 5 seeds) a **1.42±0.32%**, p0 **2.31±0.07%** (seed 7 = median, not best-of-five);
+non-matching **patch test** transmits uniform pressure to **1.4e-16** (67× tighter than lumped); large
+**sliding** centroid-monotone (max backstep 0.0); **force balance 1.7e-18**; contact localizes (57 nodes,
+a/W=0.137). **CV-9a /
 T4** (`cv9_nbody_array_ot.py`): 3×3 array (12 mortar pairs) **converges at full Newton relax=1.0** (32
 iters, line search on, 0 backtracks; `converged=True`, not max_iter); global **force balance 3.71e-15**;
 centre-disc equibiaxial **MEAN stress 0.58%** (<5%); per-component anisotropy 0.20–0.22% on the D4 mesh
 (11.6% on the legacy ring mesh — honestly labeled mesh-symmetry; MEAN gate passes under both);
-`tests/test_cv9_nbody_ot.py` 5/5 pass. HONEST: the residual ~3–6% in CV-8 a/p0 is discrete contact-edge
-noise (∞ Hertz edge slope over one element; p0 plateaus ~5.8%); both single-realization, plane-strain CST
-(small-strain Tri2D), frictionless, rigid outer walls (T4).
+`tests/test_cv9_nbody_ot.py` 5/5 pass. HONEST: the residual ~2% in CV-8 a/p0 is the discrete contact-edge
+quantisation (∞ Hertz edge slope over one element) + the CST stress-recovery floor (the ~5–6% shallow-block
+number was the finite-size modelling gap, removed by the half-plane regime); both single-realization,
+plane-strain CST (small-strain Tri2D), frictionless, rigid outer walls (T4).
 
 **CV-7 capstone — real fractal rock-joint direct shear** (manual §11.9; the CMAME showcase). Real
 Inada-granite tensile fracture (Digital Rocks #273, DOI 10.17612/QXSA-TK92; self-affine $D\approx2.2$,

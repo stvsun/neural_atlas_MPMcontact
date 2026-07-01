@@ -66,17 +66,11 @@ sys.path.insert(0, _ROOT)
 FIG_DIR = os.path.join(_ROOT, "figures")
 CV8_RUN = os.path.join(_ROOT, "runs", "cv8_deformable_ot")
 
-# -- finer-mesh CV-8 points (nx>192) measured AFTER the gate, not yet in metrics.json -----------------
-# Production regime R=2.0, delta=0.02, n_load=6, graded mesh, jitter 0.03; force balances ~1e-18..1e-19.
-# These EVIDENCE the contact-edge floor: past the nx=192 gate the half-width error does NOT keep falling
-# but jitters in a ~2-4% band (one-surface-node ~1/nx edge ambiguity over the infinite Hertz edge slope),
-# while the interior peak pressure plateaus near 5.8%.  The headline gate row stays nx=192.
-CV8_CONV_FINER = [
-    # nx,  a_relerr, p0_relerr
-    (224, 0.0179, 0.0531),
-    (256, 0.0319, 0.0570),
-    (288, 0.0403, 0.0599),
-]
+# -- extra CV-8 convergence points not written to metrics.json ----------------------------------------
+# The half-plane production sweep (W=2, H=2 deep/wide blocks, a/H<=0.14) writes its full nx=140..260
+# table to metrics.json, so no post-gate points need hardcoding here.  Kept as an (empty) hook so a
+# future finer mesh can be pinned without touching the plot logic.
+CV8_CONV_FINER = []  # nx, a_relerr, p0_relerr
 
 # -- colorblind-friendly (Wong / Okabe-Ito) ---------------------------------------------------------
 C_MORTAR = "#0072B2"    # blue   (OT measure coupling)
@@ -258,12 +252,20 @@ def fig_hertz(out_path):
     xe = np.linspace(-a_ana, a_ana, 400)
     pe = p0_ana * np.sqrt(np.clip(1.0 - (xe / a_ana) ** 2, 0.0, None))
     ax.plot(xe, pe, "-", color=C_HERTZ, lw=2.0, zorder=3,
-            label=r"Hertz $p_0\sqrt{1-(x/a)^2}$")
+            label=r"Hertz (analytical) $p_0\sqrt{1-(x/a)^2}$")
 
-    # recovered Gauss-point pressures (only the active patch, |x| <~ a)
+    # recovered half-ellipse fit (a_fem, p0_fem): the a/p0 the benchmark actually reports -- lands on
+    # the analytical curve to ~2%, so the reader sees the fit, not just the noisy CST scatter.
+    xf = np.linspace(-a_fem, a_fem, 400)
+    pf = p0_fem * np.sqrt(np.clip(1.0 - (xf / a_fem) ** 2, 0.0, None))
+    ax.plot(xf, pf, "--", color=C_FEM, lw=2.0, zorder=3.5,
+            label=r"recovered fit ($a_{\rm fem}, p_{0,\rm fem}$)")
+
+    # recovered Gauss-point pressures (only the active patch, |x| <~ a): piecewise-constant CST
+    # tractions scatter about the fit -- the ~2% floor the mesh sweep converges to.
     keep = np.abs(xq) < 1.6 * a_ana
-    ax.scatter(xq[keep], pq[keep], s=13, color=C_FEM, alpha=0.55, edgecolors="none", zorder=4,
-               label=r"recovered Gauss-point $p(x)$")
+    ax.scatter(xq[keep], pq[keep], s=9, color=C_FEM, alpha=0.35, edgecolors="none", zorder=2.5,
+               label=r"Gauss-point $p(x)$ (CST)")
 
     # mark a and p0
     ax.axvline(a_ana, color=C_ACC, lw=1.0, ls=":", zorder=2)
@@ -291,52 +293,53 @@ def fig_hertz(out_path):
     a_err_fin = hz["a_relerr_finest"]; p0_err_fin = hz["p0_relerr_finest"]
     ax.legend(loc="upper right", framealpha=0.95)
 
-    # ---- inset: a_relerr & p0_relerr vs nx over the FULL sweep (descent + contact-edge floor) -------
-    # Head (nx<=192) is read verbatim from the run file; the finer nx=224/256/288 points (measured
-    # after the gate, not yet in metrics.json) are carried in CV8_CONV_FINER.  Dedupe on nx so a
-    # re-run that later writes the finer points into metrics.json does NOT double-plot them.
+    # ---- inset: a_relerr & p0_relerr vs nx over the half-plane sweep -------------------------------
+    # metrics.json carries the full nx=140..260 table (half-plane regime, W=2 H=2, a/H<=0.14 so the
+    # closed-form Hertz half-plane reference applies).  Both errors sit at the ~2% contact-edge + CST
+    # stress-recovery floor: the peak pressure is a tight systematic floor (realization-independent),
+    # the half-width jitters within it by ~1 surface-node edge quantization -- there is NO residual
+    # finite-size compliance bias (that was the shallow-block artefact this regime removes).
     series = {int(r["nx"]): (100 * r["a_relerr"], 100 * r["p0_relerr"]) for r in conv}
     for nx_f, a_f, p0_f in CV8_CONV_FINER:
         series.setdefault(int(nx_f), (100 * a_f, 100 * p0_f))
     nxs = np.array(sorted(series))
     a_rel = np.array([series[k][0] for k in nxs])
     p0_rel = np.array([series[k][1] for k in nxs])
-    nx_gate = 192  # the headline gate resolution
+    nx_head = int(hz["nx_finest"])  # headline (finest) mesh
 
     axin = ax.inset_axes([0.085, 0.12, 0.46, 0.40])
 
-    # shaded contact-edge floor band: the measured a_relerr range on the finer (nx>=192) meshes.
-    floor_mask = nxs >= nx_gate
-    floor_lo = float(a_rel[floor_mask].min())   # ~1.79 %
-    floor_hi = float(a_rel[floor_mask].max())   # ~4.03 %
+    # shaded floor band: the tight peak-pressure (CST) floor -- the systematic, realization-independent
+    # error the benchmark converges to (the half-width jitters around it by edge quantization).
+    floor_lo = float(p0_rel.min())
+    floor_hi = float(p0_rel.max())
     axin.axhspan(floor_lo, floor_hi, color=C_ACC, alpha=0.13, zorder=0)
-    axin.text(nxs[-1], floor_lo, r"contact-edge floor", color=C_ACC, fontsize=8.0,
-              ha="right", va="top", zorder=3)
+    axin.text(nxs[0], floor_hi, r"CST / edge floor", color=C_ACC, fontsize=8.0,
+              ha="left", va="bottom", zorder=3)
 
-    # mark the headline gate (label below the line so it clears the floor-band label)
-    axin.axvline(nx_gate, color="0.55", lw=0.8, ls=(0, (3, 2)), alpha=0.8, zorder=1)
-    axin.text(nx_gate - 2, floor_hi + 0.35, r"gate", color="0.4", fontsize=8.0,
-              ha="right", va="bottom", zorder=3)
+    # mark the headline (finest) mesh
+    y_top = max(a_rel.max(), p0_rel.max()) * 1.30
+    axin.axvline(nx_head, color="0.55", lw=0.8, ls=(0, (3, 2)), alpha=0.8, zorder=1)
+    axin.text(nx_head - 2, y_top, r"headline", color="0.4", fontsize=8.0,
+              ha="right", va="top", zorder=3)
 
     axin.plot(nxs, a_rel, "-o", color=C_MORTAR, ms=4.5, lw=1.5, zorder=4,
               label=r"$a_{\mathrm{rel}}$")
     axin.plot(nxs, p0_rel, "-s", color=C_LUMPED, ms=4.5, lw=1.5, zorder=4,
               label=r"$p_{0,\mathrm{rel}}$")
-    axin.axhline(10.0, color=C_HERTZ, lw=0.8, ls="--", alpha=0.6, zorder=1)
-    # label only the two a_rel endpoints (5.14% descent, 2.75% gate); the curve and
-    # the caption carry the rest, so the inset is not blanketed in per-point numbers.
-    for xx, yy in [(nxs[0], a_rel[0]), (nx_gate, series[nx_gate][0])]:
-        axin.annotate(f"{yy:.2f}", (xx, yy), textcoords="offset points", xytext=(0, -12),
-                      ha="center", fontsize=8.0, fontweight="bold", color=C_MORTAR)
+    # label the headline-mesh values
+    for yy, dy, col in [(series[nx_head][0], -12, C_MORTAR), (series[nx_head][1], 8, C_LUMPED)]:
+        axin.annotate(f"{yy:.2f}", (nx_head, yy), textcoords="offset points", xytext=(0, dy),
+                      ha="center", fontsize=8.0, fontweight="bold", color=col)
     axin.set_xlabel(r"surface resolution $n_x$", fontsize=8.5)
     axin.set_ylabel(r"rel. error [\%]", fontsize=8.5)
     axin.set_xticks(nxs)
     axin.set_xticklabels([str(k) for k in nxs], rotation=45, fontsize=8.0)
     axin.tick_params(labelsize=8.0)
-    axin.set_ylim(0, max(a_rel.max(), p0_rel.max()) * 1.42)
-    axin.legend(loc="upper left", fontsize=8.0, framealpha=0.9)
+    axin.set_ylim(0, max(a_rel.max(), p0_rel.max()) * 1.35)
+    axin.legend(loc="upper right", fontsize=8.0, framealpha=0.9)
     axin.grid(True, alpha=0.25, lw=0.5)
-    axin.set_title(r"mesh sweep: descent to the gate, then edge-floor jitter", fontsize=8.0)
+    axin.set_title(r"mesh sweep: errors at the $\sim$2% edge + CST floor", fontsize=8.0)
 
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
