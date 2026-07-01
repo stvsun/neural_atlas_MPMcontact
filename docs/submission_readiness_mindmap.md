@@ -92,6 +92,45 @@ ot-unbalanced); remove dead `\label{fig:cv4}`. Keep novel-geometry schematics + 
 - **loop 7** — whole-paper QA: protected-number audit, \ref/\cite/\label integrity, figure/table reconciliation,
   read-through for refs broken by §6 demotion + figure merges. Final compile + submission checklist.
 
+## Per-loop log (cont.)
+
+- **loop 2** (in progress) — §4 notation + prose. DONE by me: Brenier potential `\varphi`→`\Phi` (4 spots/6
+  tokens; verified 0 leftovers, 7 chart `\varphi_i` intact, compile OK). RUNNING: §4 prose editor agent
+  (de-repeat "one coupling/two limits", em-dashes, intensifier tics, concision). Also RUNNING: read-only loop-3
+  duplication-mapper (which app:ot content duplicates §4 → collapse plan).
+  DEFERRED (low-value/higher-risk): (1) KL-weight `λ→τ` rename — collision is non-adjacent (AL multiplier §4 vs
+  KL weight §6), reader won't confuse; skip unless loop 3 touches it anyway. (2) Remark→Lemma promotion — it's a
+  label-prefix vs environment mismatch (`prop:`/`cor:` labels on `remark` envs) that READERS NEVER SEE; changing
+  envs shifts numbering + risks overclaiming informal remarks as lemmas. Not worth it.
+
+## Loop 3 plan — collapse the doubled OT derivation (Option A, user-respecting)
+
+**CRITICAL DECISION:** the panel recommended DEMOTING `app:ot` to the back-matter appendix. But the USER
+explicitly moved this section (ex-"Appendix C", the OT theory) INTO the body in an earlier session. Do NOT
+reverse that. → **Option A: delete the duplicated PROSE, keep the section in the body.** Gets the ~2-page
+length win (the real reduction; the "4-5pp" the panel cited included relocation flow, which we skip). The OT
+theory stays prominent in the main text as the user wanted.
+
+**Duplication map (from read-only analysis):** app:ot re-derives measures/Monge/Kantorovich/Brenier that
+sec:tmap:ot (857-918) already states. Only 2 equations are DEFINED in app:ot (`eq:ot-unbalanced` 1200,
+`eq:ot-gapvar` 1295) — both referenced, KEEP. Everything else re-cites sec:tmap:ot, so the collapse deletes
+PROSE and repoints NOTHING.
+
+**Delete (duplicated prose, ~90 lines):**
+- `\subsection{...}\label{app:ot:gap}` body (1113-1182, ~70 lines) — `app:ot:gap` label referenced NOWHERE, safe.
+  EXCEPTION: MOVE its Lean footnote (1159-1165, BrenierProposed/quantile_identity caveat) to the sec:tmap:ot
+  Brenier sentence (~904) before deleting — don't lose that honesty caveat.
+- mortar re-derivation lead-in of app:ot:discrete (1247-1260) → replace with 1 sentence into `prop:patch`.
+- two-limits recap sentence (1238); tangent lead-in trim (1289-1303, condense to prop:spsd setup).
+
+**KEEP (unique, all labels survive):** app:ot:limits + eq:ot-unbalanced + fig:ot-unbalanced + rem:ot-limits;
+prop:patch (proof); prop:spsd (proof) + eq:ot-gapvar; alg:detector; tab:ot:gates; app:ot:{discrete,tangent,
+algorithm,results} labels (referenced externally). Only `app:ot:gap` label disappears.
+
+**Prose to update (not relocate):** roadmap 420-423 currently says app:ot re-derives Kantorovich/monotonicity/
+Brenier — rewrite to list only what app:ot NOW holds (unbalanced-OT, patch proof, SPSD proof, gates). Keep
+"Section~\ref{app:ot}" wording (it stays a body section). All 17 `\ref{app:ot}` + sub-refs stay valid.
+
 ## Decisions log
 
 - (loop 0) Keep both algorithms in body. Do NOT regenerate figures that retrain models (number drift risk):

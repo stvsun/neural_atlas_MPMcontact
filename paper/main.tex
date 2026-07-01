@@ -760,7 +760,7 @@ point, so the composition takes one surface coordinate straight to its counterpa
 \begin{equation}\label{eq:tmap-def}
 \tmap:\ \theta_A\longmapsto\psi_B=\big(\map{B}^{-1}\circ\map{A}\big)(\theta_A),
 \end{equation}
-as drawn in Figure~\ref{fig:tm-concept}. The construction is an evaluation followed by a chart inversion---the
+as drawn in Figure~\ref{fig:tm-concept}. The construction is an evaluation followed by a chart inversion, the
 same operation an atlas uses to pass between two overlapping charts, here applied across the gap between two
 bodies, and requiring no closest-point search. The outward normal follows from the chart tangents
 $\tbf_i=\partial\map{}/\partial\xi^i$: in three dimensions it is their normalised cross product, in two
@@ -873,8 +873,8 @@ problem selects the one of least quadratic-cost transport,
 c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2,
 \end{equation}
 the quadratic cost the choice that makes the contact pairing a metric-projection map. The Monge
-problem~\eqref{eq:ot-monge-body} can be infeasible---no map need carry an atom of $\hat\mu_A$ to a spread of
-$\hat\mu_B$---so existence is established through its convex Kantorovich relaxation, which minimises over
+problem~\eqref{eq:ot-monge-body} can be infeasible (no map need carry an atom of $\hat\mu_A$ to a spread of
+$\hat\mu_B$), so existence is established through its convex Kantorovich relaxation, which minimises over
 transport plans $\pi\in\Pi(\hat\mu_A,\hat\mu_B)$ (couplings on $\Gamma_c^A\times\Gamma_c^B$ with the prescribed
 marginals) rather than over maps,
 \begin{equation}\label{eq:ot-kantorovich-body}
@@ -893,12 +893,12 @@ the transport analogue of the rearrangement inequality \citep{villani2009optimal
 the quadratic cost and an absolutely continuous slave marginal the relaxation~\eqref{eq:ot-kantorovich-body} is
 tight: the optimal plan is supported on the graph of a map, $\pi=(\mathrm{id}\times\tmap)_\#\hat\mu_A$, so the
 Monge and Kantorovich values coincide and~\eqref{eq:ot-cyclical-body} reduces to monotonicity of the
-correspondence, $\big(\tmap(\xbf_1)-\tmap(\xbf_2)\big)\cdot(\xbf_1-\xbf_2)\ge0$ --- on the one-dimensional
+correspondence, $\big(\tmap(\xbf_1)-\tmap(\xbf_2)\big)\cdot(\xbf_1-\xbf_2)\ge0$, on the one-dimensional
 contact parameter exactly the order-preserving (no-crossing) property of the arclength rearrangement
 \eqref{eq:ot-brenier-1d-body}. By the theorem of
 \citet{brenier1991polar,mccann1995existence} this minimiser is unique and is the gradient of a convex potential,
-$\tmap=\grad\varphi$, whenever $\hat\mu_A$ is absolutely continuous with respect to Lebesgue measure---here
-automatic, since the arclength density $\sqrt{1+\abs{h_A'}^2}\ge1>0$ is strictly positive, so $\hat F_A$ is a
+$\tmap=\grad\Phi$, whenever $\hat\mu_A$ is absolutely continuous with respect to Lebesgue measure, here
+automatic since the arclength density $\sqrt{1+\abs{h_A'}^2}\ge1>0$ is strictly positive, so $\hat F_A$ is a
 strictly increasing homeomorphism. In the single parameter dimension of a boundary chart the convex potential
 integrates to the explicit monotone-rearrangement form, the classical quadratic-cost Brenier map
 \citep[Thm.~2.5]{santambrogio2015optimal}\citep{mccann1995existence},
@@ -929,8 +929,8 @@ not the opposite of the transition map but its partial-support limit:
 \end{equation}
 For two mated rough faces in full contact the unique quadratic-cost Brenier map is the arclength-monotone
 rearrangement \eqref{eq:ot-brenier-1d-body}; for a localised convex indenter touching a sub-arc the global
-rearrangement is inadmissible---it transports every slave point onto a master partner and smears a partial load
-across the open interface---and the admissible coupling restricts transport to the touching supports. Formally
+rearrangement is inadmissible, since it transports every slave point onto a master partner and smears a partial
+load across the open interface, and the admissible coupling restricts transport to the touching supports. Formally
 this is the marginal-relaxed (unbalanced) optimal-transport problem \citep{chizat2018unbalanced} of
 Section~\ref{app:ot:limits}, Eq.~\eqref{eq:ot-unbalanced}, whose minimiser concentrates its support on the
 touching part of the interface and, off the convex master's medial axis where the metric projection is
@@ -990,13 +990,13 @@ tangent
 \end{equation}
 in which $\bm K_{sm}=\bm K_{ms}^{\top}$ is the slave--master coupling block the rigid-master suite never
 assembles. This two-sided block, finite-difference verified against the frozen-geometry residual to
-$3.45\times10^{-11}$, is what unlocks the deformable Hertz and $N$-body array solves of
+$3.45\times10^{-11}$, unlocks the deformable Hertz and $N$-body array solves of
 Section~\ref{sec:ex_twobody}. The Kantorovich relaxation~\eqref{eq:ot-kantorovich-body} and $c$-cyclical
 monotonicity~\eqref{eq:ot-cyclical-body} stated here make the Brenier map~\eqref{eq:ot-brenier-1d-body} the unique
 optimiser; their measure-theoretic existence and pushforward proof, the well-posedness of the two
 limits~\eqref{eq:ot-twolimits-body}, the patch-test proof (Proposition~\ref{prop:patch}), and the
-positive-semidefiniteness of~\eqref{eq:twobody-tangent-body} (Proposition~\ref{prop:spsd})---with the decisive
-numerical gates---are given in Section~\ref{app:ot}.
+positive-semidefiniteness of~\eqref{eq:twobody-tangent-body} (Proposition~\ref{prop:spsd}), together with the
+numerical gates, are given in Section~\ref{app:ot}.
 
 \subsection{Contact contribution to the weak form}\label{sec:weak:contact}
 
@@ -1143,7 +1143,7 @@ exactly the order-preserving (no-crossing) property of the conforming arclength 
 \eqref{eq:ot-brenier-1d-body}; it is the structure that the partial-support restriction below \emph{forfeits} when it
 drops to a sub-arc, not the cause of the smearing it avoids. For the quadratic cost \citet{brenier1991polar}
 proves the minimiser is unique and is the gradient of a convex
-potential $\varphi$, $\tmap=\grad\varphi$, provided $\hat\mu_A$ is absolutely continuous with respect to Lebesgue
+potential $\Phi$, $\tmap=\grad\Phi$, provided $\hat\mu_A$ is absolutely continuous with respect to Lebesgue
 measure on the parameter line (here guaranteed by the strictly positive arclength density
 $\sqrt{1+\abs{h_A'}^2}\ge1>0$, so $\hat F_A$ is a strictly increasing homeomorphism and $\hat F_A^{-1}$ exists,
 which is exactly the absolute-continuity hypothesis the theorem requires)
@@ -1166,10 +1166,10 @@ these require mathlib measure theory and are labelled proposed, not machine-chec
 projection of the displacement to the transported point \eqref{eq:ot-gap-body},
 with $\nbf$ the true surface normal of \eqref{eq:jacobian-normal}; \eqref{eq:ot-gap-body} is the primary definition,
 valid in both regimes. In the conforming regime the correspondence itself is a gradient map \emph{on the
-parameter coordinate}: $\tmap=\varphi'$ with $\varphi$ the convex Brenier potential on the one-dimensional slave
+parameter coordinate}: $\tmap=\Phi'$ with $\Phi$ the convex Brenier potential on the one-dimensional slave
 parameter line $\Gamma_c^A$ (the Kantorovich--Brenier link for the quadratic cost,
 \citet[Prop.~1.21]{santambrogio2015optimal}), so the parameter-to-parameter rearrangement
-$\theta_A\mapsto\psi_B=\varphi'(\theta_A)$ is monotone and conservative and the contact pairing carries no
+$\theta_A\mapsto\psi_B=\Phi'(\theta_A)$ is monotone and conservative and the contact pairing carries no
 circulation. The signed gap \eqref{eq:ot-gap-body}, by contrast, is read in physical space: $\xbf\in\R^2$ is the slave
 point, $\tmap(\xbf)=\map{B}(\psi_B)\in\R^2$ its transported foot, and $\xbf-\tmap(\xbf)$ a physical displacement
 whose normal projection is $\gn$. The energy consistency of the \emph{traction} is the matched-normal property
