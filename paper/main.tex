@@ -118,30 +118,30 @@ a mortar-consistent measure coupling of deformable boundaries on a neural atlas}
 \begin{abstract}
 Computational contact is a correspondence between two surfaces. We formulate it as an
 optimal-transport coupling of two boundary measures, in which the contact pairing is the Brenier map that
-minimises a transport cost and the gap and traction follow as continuous, mass-preserving \emph{fields} assembled
-mortar-consistently, in place of node-collocated, tributary-lumped penalties. Read on a learned coordinate atlas
-the coupling is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$ realising this transport in
-two regimes of one framework: for two mated rough surfaces it is the arclength-monotone (Brenier) rearrangement
-$\hat F_B^{-1}\circ\hat F_A$ (conforming limit), while the closest-point projection $\gn=\norm{\bm p-\bm c}-R$ familiar
-from node-to-segment contact is its partial-support limit for a localised convex indenter, required where the
+minimises a transport cost. The gap and traction then follow as continuous, mass-preserving \emph{fields} assembled
+mortar-consistently, in place of node-collocated, tributary-lumped penalties. Read on a learned coordinate atlas,
+the coupling is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$ that realises this transport in
+two regimes of one framework. For two mated rough surfaces it is the arclength-monotone (Brenier) rearrangement
+$\hat F_B^{-1}\circ\hat F_A$, the conforming limit. The closest-point projection $\gn=\norm{\bm p-\bm c}-R$ familiar
+from node-to-segment contact is its partial-support limit for a localised convex indenter, needed where the
 arclength map would smear a partial load across the interface. The discrete master interpolation is a partition of
 unity along the correspondence, $\sum_K(N_K^-\!\circ\chi)=1$, so a constant pressure transmits exactly across a
 non-matching mesh: the contact patch test passes to $1.4\times10^{-16}$, while the node-lumped scheme produces a
-node-spacing sawtooth ($67\times$ larger stress non-uniformity). Because the coupling is two-sided and
+node-spacing sawtooth ($67\times$ larger stress non-uniformity). The coupling is two-sided and
 transpose-coupled, with a symmetric positive-semidefinite four-block tangent that is consistent at frozen geometry
-(finite-difference verified to $3.45\times10^{-11}$), it solves a genuine two-body deformable--deformable problem
-rather than rigid-master detection: on deformable Hertz contact between two elastic blocks, run in the half-plane
+(finite-difference verified to $3.45\times10^{-11}$), so it solves a two-body deformable--deformable problem
+rather than rigid-master detection. On deformable Hertz contact between two elastic blocks, run in the half-plane
 regime the closed form assumes, the contact half-width and peak pressure settle under mesh refinement at $1.64\%$
-and $2.26\%$ of the closed form (a discrete contact-edge plus constant-strain-triangle floor, not a vanishing
-discretisation error; the reported seed is a median jitter realisation, ensemble half-width $1.42\pm0.32\%$ and a
-realisation-robust peak pressure $2.31\pm0.07\%$), and a $3\times3$ elastic disc array matches the equibiaxial
+and $2.26\%$ of the closed form, a discrete contact-edge plus constant-strain-triangle floor rather than a vanishing
+discretisation error. Across five jitter realisations at the headline mesh the half-width error is $1.42\pm0.32\%$ and
+the peak pressure $2.31\pm0.07\%$. A $3\times3$ elastic disc array matches the equibiaxial
 closed form to $0.58\%$ at full Newton. The charts are Fourier-feature coordinate networks whose random-feature embedding
-defeats the spectral bias that low-passes a neural signed-distance function, held throughout as a matched baseline
+shifts the spectral-bias cutoff above the asperity band, where a neural signed-distance function low-passes; the level set is held throughout as a matched baseline
 on identical meshes so the measured accuracy gap is charged to the geometric representation alone. The formulation
 is variationally consistent through the classical strong--weak--Galerkin sequence and verified against analytical
 benchmarks (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc, superformula, and Koch), on which the measure-coupling
 model reaches the closed forms to $0.03\%$--$0.50\%$ where the conventional node-lumped model plateaus at
-$1.59\%$--$11.15\%$ (Hertz half-width, Cattaneo stick radius)---each at its converged resolution---and ties it on
+$1.59\%$--$11.15\%$ (Hertz half-width and Cattaneo stick radius, each at its converged resolution), and ties it on
 the smooth nine-disc field. As the empirical consequence of the same coupling on a conforming interface, by
 smoothing the asperity slopes the level set under-predicts the peak shear strength of a real Inada-granite profile
 by $61\%$ and the emergent dilatancy of a synthetic rough block by $98\%$, while the transition map recovers both
@@ -158,15 +158,11 @@ rock-joint dilatancy}
 Two surfaces come into contact when each point of one is paired with a point of the other. That pairing is an
 optimal-transport coupling of the two boundary measures, and the gap and traction it
 induces are continuous, mass-preserving fields rather than node-collocated penalties. Read on a learned coordinate
-atlas, the pairing is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$ that carries two
-familiar limits of one coupling: for two mated rough surfaces it is the arclength-monotone (Brenier) rearrangement
-of the quadratic-cost transport of the two boundary measures (its conforming limit), and the closest-point
-projection familiar from node-to-segment contact is its partial-support limit for a localised convex indenter
-(Section~\ref{sec:tmap}, Section~\ref{app:ot}). Posing contact this way
-does two things classical detection cannot---it transmits a constant pressure exactly across a non-matching mesh,
-and it couples two deformable bodies through a symmetric tangent---and it makes precise a fact the rest of the
-paper measures: on rough, non-convex geometry it is the representation of the boundary, not the
-constraint-enforcement scheme, that controls fidelity.
+atlas, the pairing is a boundary-to-boundary transition map $\tmap=\map{B}^{-1}\circ\map{A}$ that recovers both
+the arclength-monotone rearrangement for mated rough surfaces and the closest-point projection for a localised
+convex indenter (Section~\ref{sec:tmap}, Section~\ref{app:ot}). Posing contact this way transmits a constant
+pressure exactly across a non-matching mesh and couples two deformable bodies through a symmetric tangent, both
+of which classical detection cannot do.
 
 \subsection{Geometry, not the force law, controls contact fidelity}\label{sec:intro-motivation}
 
@@ -174,7 +170,7 @@ The shear strength of a rough rock joint is set by its asperity geometry, not by
 fracture are pressed together and sheared, the load is carried on the interlocking asperities, and the
 joint cannot slide without riding up their flanks; the climb dilates the interface and raises its
 resistance above that of a flat sawcut. The strength an engineer designs with is therefore set by the
-distribution of asperity slopes, a property of the boundary, and not by any material constant. The paper makes two
+distribution of asperity slopes, a property of the boundary. The paper makes two
 claims. First, the contact correspondence is an optimal-transport coupling of two boundary measures
 (Section~\ref{sec:tmap}); second, as its empirical consequence on hard geometry, \emph{the representation of the
 boundary, not the constraint-enforcement scheme, controls contact fidelity}. We will
@@ -186,8 +182,8 @@ whereas a boundary chart of the same surfaces resolves the slopes and recovers t
 A computational contact algorithm reduces, at each query point $\xbf$ near a body $X$, to two local
 questions. Is $\xbf$ inside $X$, and by how much? This is the gap $\gn$, with the sign convention
 $\gn<0\Leftrightarrow$ penetration used throughout. Along which direction is the surface? This is the
-outward normal $\nbf$. Given the pair $(\gn,\nbf)$, the standard enforcement schemes---penalty,
-augmented Lagrangian, mortar, Nitsche---convert it into nodal forces \citep{wriggers2006computational,
+outward normal $\nbf$. Given the pair $(\gn,\nbf)$, the standard enforcement schemes (penalty,
+augmented Lagrangian, mortar, Nitsche) convert it into nodal forces \citep{wriggers2006computational,
 laursen2002computational,kikuchi1988contact}. On smooth, convex bodies the gap and the normal vary smoothly, every scheme converges to the
 same answer, and accuracy is set by the enforcement. On geometrically complex bodies this fails: the gap and the normal
 cease to be smooth, or even single-valued, and the geometric representation from which they are read becomes
@@ -231,8 +227,8 @@ with frequency \citep{rahaman2019spectral}. A fixed-capacity neural $\phi_A$ the
 asperities, and fine detail: it cannot represent a boundary sharper than its capacity ceiling, and it
 smooths the geometry that, on a rough joint, carries the strength. Both weaknesses are measured in
 Sections~\ref{sec:verif} and~\ref{sec:cv7}. The chart introduced next is built to avoid
-both: it stores one fewer dimension, and it supplies the network the high frequencies it would otherwise
-fail to learn.
+both: it stores one fewer dimension, and it supplies high frequencies it would otherwise learn only slowly at
+fixed capacity.
 
 \subsection{Related work}\label{sec:intro-related}
 
@@ -246,7 +242,7 @@ Nitsche regularisation \citep{wriggers2006computational,alart1991mixed,simo1992a
 laursen2002computational,chouly2013nitsche,chouly2015symmetric} and by mortar or dual-multiplier discretisation
 \citep{puso2004mortar,fischer2005frictionless,wohlmuth2011variational}. Much of this layer is independent of the
 present contribution: penalty, augmented-Lagrangian, and Nitsche enforcement consume a gap, a normal, and a
-pressure, and are indifferent to how the first two are produced. We change the geometric operator that produces
+pressure, indifferent to how the first two are produced. We change the geometric operator that produces
 them and leave the enforcement theory intact.
 
 \paragraph{Closest-point projection and its deficiencies.}
@@ -259,19 +255,19 @@ transition map $\tmap=\map{B}^{-1}\circ\map{A}$ replaces this projection by a co
 single-valued, edge-continuous, two-sided (no designated master), and recovers every contact arc at once
 (Section~\ref{sec:tmap}). The implicit-level-set material point method of \citet{liu2020implicit}, whose
 normal-gap form our force machinery reuses, reads the gap from a per-body field and so shares the single-foot
-reading the transition map removes.
+reading.
 
 \paragraph{Smoothing the master surface, and geometrically exact contact.}
 Much subsequent work repaired the projection by smoothing the surface it acts on: $C^1$ B\'ezier, Hermite, and
 spline interpolation of the master facets \citep{wriggers2001smooth}, and, more completely, isogeometric
 contact on exact NURBS geometry \citep{temizer2011contact,delorenzis2014review}. Smoothing restores a
-continuous normal field, but it does so by smoothing the very geometry whose sharpness, in the rough-surface
+continuous normal field, but at the cost of the very geometry whose sharpness, in the rough-surface
 regime of this paper, carries the physics, and it retains the projection. Earlier mixed and
 segment-to-segment formulations \citep{simo1985perturbed,zavarise1998segment} and, more completely, mortar and
 dual-multiplier methods \citep{puso2004segment,popp2009finite,hueber2005primaldual} cure the over-constraint
 and master/slave bias of node-to-segment contact by enforcing non-penetration in an integral sense, and
 unbiased Nitsche contact
-\citep{mlika2017unbiased} removes the master/slave designation altogether---yet both still build the surface
+\citep{mlika2017unbiased} removes the master/slave designation altogether. Both nonetheless build the surface
 pairing from a projection or segmentation. Closest in spirit to the present work is the geometrically exact,
 covariant theory of \citet{konyukhov2013computational}, which also parametrises the contacting surfaces by
 intrinsic coordinates; it nonetheless establishes the contact pair by a covariant closest-point projection onto
@@ -289,8 +285,8 @@ finite elements for surface partial differential equations \citep{olshanskii2009
 and level-set/X-FEM contact \citep{moes1999xfem,sukumar2001holesinclusions,dolbow2001frictionalcontact} let the
 surface cut through a background mesh and repair the discretisation with Nitsche coupling and ghost-penalty
 stabilisation \citep{burman2010ghostpenalty}. These methods buy freedom from body-fitted meshing; they pay with cut-cell quadrature, small-cut
-conditioning, and a geometry whose accuracy is tied to the ambient field, which interpolates a distance through
-the whole volume and so rounds sharp features and carries a non-differentiable medial axis in every concavity.
+conditioning, and a geometry tied to an ambient field that interpolates a distance through
+the whole volume, rounding sharp features and carrying a non-differentiable medial axis in every concavity.
 The boundary chart is the opposite design choice: explicit and one dimension lower, it carries no interior, no
 medial axis, and no cut cells, and its surface fidelity is set by the learned parametrisation rather than the
 background mesh.
@@ -298,9 +294,9 @@ background mesh.
 \paragraph{Neural implicit geometry, spectral bias, and Fourier features.}
 Neural signed-distance and occupancy networks \citep{park2019deepsdf,mescheder2019occupancy,chen2019imnet} and
 periodic-activation networks \citep{sitzmann2020implicit} represent geometry implicitly and are trained by the
-eikonal regularisation of \citet{gropp2020igr}. They inherit the spectral bias of coordinate networks---the
+eikonal regularisation of \citet{gropp2020igr}. They inherit the spectral bias of coordinate networks (the
 neural-tangent kernel \citep{jacot2018ntk} whose spectral bias low-passes high frequencies
-\citep{rahaman2019spectral,xu2020frequency}---so a network of fixed capacity smooths sharp detail. Fourier-feature input encoding
+\citep{rahaman2019spectral,xu2020frequency}), so a network of fixed capacity smooths sharp detail. Fourier-feature input encoding
 \citep{tancik2020fourier,rahimi2007random}, which underlies the positional encoding of neural radiance fields
 \citep{mildenhall2020nerf}, reshapes that kernel to a tunable cutoff; feature-grid level of detail
 \citep{takikawa2021nglod} is the spatial alternative. We apply the encoding not to an ambient field but to a
@@ -317,15 +313,15 @@ dynamical systems on manifolds rather than geometry, and none of these carries g
 here instead serves as the computational domain of a contact boundary-value problem, with the
 elasticity pulled back through the chart Jacobian and overlapping charts coupled by multiplicative Schwarz
 \citep{sun2026neuralatlas}. This places the work within a broader programme of learning- and geometry-informed
-computational mechanics---data-driven and physics-informed solvers \citep{kirchdoerfer2016datadriven,raissi2019pinn},
+computational mechanics (data-driven and physics-informed solvers \citep{kirchdoerfer2016datadriven,raissi2019pinn},
 learned constitutive manifolds and graph embeddings \citep{wang2018multiscale,vlassis2020geometric,
 xiao2022geometric,bahmani2022manifold,heider2020so3}, and discovered interface laws
-\citep{wang2019metamodeling}---in which mechanics is carried on a learned geometric object rather than a
+\citep{wang2019metamodeling}), in which mechanics is carried on a learned geometric object rather than a
 hand-built mesh or a curve-fit law. This inverts the usual dichotomy: in a physics-informed network the unknown
 solution field is the network and the geometry is given \citep{raissi2019pinn}, and in a geometry-informed
 neural operator the network is the solution map over a geometry supplied as an ambient signed-distance field
-\citep{li2023gino}; here the network is the \emph{geometry itself}---a learned diffeomorphism onto the
-boundary---while the mechanics is solved classically on top of it, so accuracy is governed by the geometric
+\citep{li2023gino}. Here the network is the \emph{geometry itself}, a learned diffeomorphism onto the
+boundary, while the mechanics is solved classically on top of it, so accuracy is governed by the geometric
 approximation rather than by the optimisation of a residual.
 
 \paragraph{Meshfree contact and rock-joint mechanics.}
@@ -341,8 +337,8 @@ joint element of \citet{goodman1976methods}; and the coupled normal--shear model
 and \citet{grasselli2003constitutive}. Natural joint surfaces are self-affine fractals over many decades
 \citep{brown1985broad,power1991euclidean,candela2012roughness}, which is why a band-limited chart is their
 natural representation. In the present framework the dilatancy and the apparent friction are not fitted to a
-roughness index; they emerge from the resolved asperity geometry under plain Coulomb friction, with the Patton
-law serving only as the analytical anchor against which the emergent quantities are checked.
+roughness index, with the Patton law serving only as the analytical anchor against which the emergent
+quantities are checked.
 
 \subsection{Contributions and organisation}\label{sec:intro-contributions}
 
@@ -353,9 +349,9 @@ optimal-transport coupling of two boundary measures: the contact pairing is the 
 transport problem \citep{brenier1991polar,mccann1995existence}, from which the gap and the contact traction follow
 as continuous, mass-preserving fields assembled mortar-consistently, in place of node-collocated, tributary-lumped
 penalties (Section~\ref{sec:tmap:ot}, with the measure-theoretic backbone and the consistent tangent in
-Section~\ref{app:ot}). The same coupling carries two regimes---the global arclength-monotone
+Section~\ref{app:ot}). The same coupling carries two regimes, the global arclength-monotone
 (Brenier) rearrangement for two mated rough surfaces and the closest-point projection for a localised convex
-indenter---which resolves the apparent tension between treating contact as a composition and treating it as a
+indenter, which resolves the apparent tension between treating contact as a composition and treating it as a
 projection, with the closest-point limit required for partial contact.
 
 \item \textbf{Transition-map detector on a learned atlas.} We represent each body by a learned coordinate atlas of
@@ -364,46 +360,41 @@ between two such atlases, which realises this optimal-transport coupling in its 
 gap, the contact normal, and every disjoint contact arc follow without an ambient field
 (Sections~\ref{sec:atlas} and~\ref{sec:tmap}).
 
-\item \textbf{Fourier-feature charts that defeat spectral bias.} We instantiate the atlas through Fourier-feature
-charts, whose random-feature embedding defeats the spectral bias that low-passes a neural signed-distance
-function, so that a $(d{-}1)$-dimensional boundary function resolves a prescribed cutoff where a $d$-dimensional
+\item \textbf{Fourier-feature charts that shift the spectral-bias cutoff.} We instantiate the atlas through Fourier-feature
+charts, whose random-feature embedding shifts the spectral-bias cutoff above the asperity band that would
+otherwise low-pass a neural signed-distance function, so that a $(d{-}1)$-dimensional boundary function resolves a prescribed cutoff where a $d$-dimensional
 ambient field of comparable capacity cannot (Section~\ref{sec:atlas}). We develop the contact model in the
 classical strong--weak--Galerkin sequence (Sections~\ref{sec:strong}--\ref{sec:discr}) and record two properties
 of the chart detector: the normal it returns is the gradient of the gap, so contact is energy-conservative, and
 the radial gap, though enlarged in magnitude, is sign-exact, so the chart and the level set share an active set on
 star-shaped bodies.
 
-\item \textbf{The two-body deformable--deformable unlock.} Because the measure coupling is two-sided and
-transpose-coupled, with a symmetric positive-semidefinite four-block tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ that is
-consistent at frozen geometry (finite-difference verified to $3.45\times10^{-11}$), it solves a genuine two-body
-deformable--deformable problem rather than rigid-master detection: deformable Hertz contact between two elastic
-blocks, in the half-plane regime the closed form assumes, settles under mesh refinement at $1.64\%$ on the
-half-width and $2.26\%$ on the peak pressure (CV-8; the reported seed a median jitter realisation, ensemble
-$1.42\pm0.32\%$ and realisation-robust $2.31\pm0.07\%$), a
-$3\times3$ elastic disc array matches the equibiaxial closed form to $0.58\%$ at full Newton (CV-9a), and the
-partition-of-unity host weights $\sum_K(N_K^-\!\circ\chi)=1$ (the partition of unity of the master host weights
-along the correspondence, distinct from and downstream of the optimal-transport mass marginal that places the
-foot; Section~\ref{app:ot:discrete}) transmit a constant pressure across a non-matching mesh to
-$1.4\times10^{-16}$, a contact patch test the node-lumped scheme fails (Section~\ref{sec:ex_twobody},
-Section~\ref{app:ot}).
+\item \textbf{The two-body deformable--deformable result.} Because the measure coupling is two-sided and
+transpose-coupled, it carries a symmetric positive-semidefinite four-block tangent $\bm K_{ms}=\bm K_{sm}^{\top}$,
+consistent at frozen geometry and finite-difference verified, that solves a two-body
+deformable--deformable problem rather than rigid-master detection. It is checked on deformable Hertz contact
+between two elastic blocks and on a $3\times3$ elastic disc array, and it transmits a constant pressure across
+a non-matching mesh, a contact patch test the node-lumped scheme fails (Section~\ref{sec:ex_twobody},
+Table~\ref{tab:twobody:headline}; the host-weight partition of unity that distinguishes this from the
+optimal-transport mass marginal is developed in Section~\ref{app:ot:discrete}).
 
 \item \textbf{Verification ladder and rock-joint validation.} We verify the method against a closed-form ladder
 (Hertz, Cattaneo--Mindlin, nine-disc, superformula, and Koch, with the Brazilian disc as a supporting appendix
 check), on which the chart and the level set are equivalent for the convex and superposable cases and measurably
 separate on the cusped superformula and the self-similar Koch boundary, and across which the measure-coupling
 gap-function model reaches the closed forms $1.4\times$ to $370\times$ tighter than the conventional node-lumped
-model---each at its own converged resolution, the Cattaneo stick radius $11.15\%$ off against the coupling's
+model, each at its own converged resolution, the Cattaneo stick radius $11.15\%$ off against the coupling's
 $0.03\%$, with a tie on the smooth nine-disc field (Table~\ref{tab:ot_vs_conv}). As the empirical consequence of
 the same coupling on a conforming interface, we validate it on the direct shear of a real Inada-granite tensile
 fracture, where the apparent friction $\tan(\phi_b+i)$ and the normal dilation emerge from the resolved asperity
 geometry under plain Coulomb friction, and where the level set, by smoothing the asperity slopes, under-predicts
-strength and dilatancy on the quantity an engineer would design with (Section~\ref{sec:verif}).
+strength and dilatancy on the quantity an engineer would design with (quantified in Section~\ref{sec:cv7}).
 \end{itemize}
 
 The level set, held on identical meshes, isolates the representation axis, and the patch test isolates the
 enforcement axis; the measure coupling improves on the enforcement while remaining interchangeable with the chart
 on the representation. Because the detector enters the solver only through the gap--normal pair, the chart and the
-level set are interchangeable at the force layer, and the measured accuracy gap is charged to the geometric
+level set are interchangeable at the force layer, so the measured accuracy gap is charged to the geometric
 representation alone.
 
 \paragraph{Notation.}
@@ -420,16 +411,16 @@ atlas, the three chart families, and their Fourier-feature representation. Secti
 governing equations of two-body frictional contact and reduces them to the reference chart through the decoder
 Jacobian. Section~\ref{sec:tmap} is the methodological core: it poses contact as the optimal-transport measure coupling of
 the two boundary measures and reads it on the atlas as the transition map. It develops, in order, the gap and the
-conservative normal, the chart inversions, the optimal-transport coupling itself---the Brenier map, the two
-limits, the mortar-consistent assembly, and the symmetric four-block two-body tangent
-(Section~\ref{sec:tmap:ot})---the contact contribution to the weak form, and the interface constitutive law. Section~\ref{sec:discr} gives the chart-based finite element implementation.
+conservative normal, the chart inversions, the optimal-transport coupling itself (the Brenier map, the two
+limits, the mortar-consistent assembly, and the symmetric four-block two-body tangent;
+Section~\ref{sec:tmap:ot}), the contact contribution to the weak form, and the interface constitutive law. Section~\ref{sec:discr} gives the chart-based finite element implementation.
 Section~\ref{sec:verif} reports the numerical examples, from the closed-form ladder through the two-body
 deformable--deformable optimal-transport solves (Section~\ref{sec:ex_twobody}) to the
 real Inada-granite joint. Section~\ref{sec:disc} states the preconditions, limitations, and conclusions, and
 Section~\ref{app:ot} supplies only the measure-theoretic backbone behind the main-body development of
-Section~\ref{sec:tmap:ot}---the Kantorovich relaxation and $c$-cyclical monotonicity that make the Brenier map
+Section~\ref{sec:tmap:ot}: the Kantorovich relaxation and $c$-cyclical monotonicity that make the Brenier map
 the unique optimiser, the well-posedness of the two limits, the patch-test proof, and the
-positive-semidefiniteness of the four-block tangent---with the decisive numerical gates.
+positive-semidefiniteness of the four-block tangent, with the verification gates.
 
 %% ======================== METHOD (restructured) ========================
 
@@ -468,8 +459,8 @@ models no interior, and has no medial axis (Figure~\ref{fig:atlas-chart}).
 \caption{Two descriptions of the same body. (a) The ambient \emph{level set} $\phi:\R^d\to\R$ is an implicit
 field whose nested contours fill the surrounding space; the body is the sublevel set $\{\phi<0\}$ and its
 boundary is the single level $\phi=0$. (b) The \emph{coordinate chart} $\map{}:\Theta\to\partial\Omega$ maps a
-reference parameter domain $\Theta$ explicitly onto the boundary---the arrows carry reference points to their
-physical images, and the inverse $\pi=\map{}^{-1}$ reads a physical point's chart coordinate---storing only the
+reference parameter domain $\Theta$ explicitly onto the boundary (the arrows carry reference points to their
+physical images, and the inverse $\pi=\map{}^{-1}$ reads a physical point's chart coordinate), storing only the
 surface as a function of its own coordinates. The chart carries one dimension fewer than the field and has no
 medial axis.}
 \label{fig:atlas-chart}
@@ -517,8 +508,8 @@ coordinates the contact point $\xbf=\map{A}(\theta_A)$ on $\partial\Omega_A$ is 
 $\map{B}(\psi_B)$ on $\partial\Omega_B$ by inverting body $B$'s chart, $\map{B}^{-1}$, which fixes the signed
 normal gap $\gn$ along the surface normal $\nbf$; the iterative closest-point search a level set or
 node-to-segment scheme would run (grey) is the step this inversion replaces. \textbf{(b)}~In chart coordinates
-the same mate is the composition of two charts---$\theta_A$ is taken to $\xbf$ by $\map{A}$, and $\xbf$ to
-$\psi_B$ by $\map{B}^{-1}$---so the inter-body transition map $\tmap=\map{B}^{-1}\circ\map{A}=\pi_B\circ\map{A}$
+the same mate is the composition of two charts ($\theta_A$ is taken to $\xbf$ by $\map{A}$, and $\xbf$ to
+$\psi_B$ by $\map{B}^{-1}$), so the inter-body transition map $\tmap=\map{B}^{-1}\circ\map{A}=\pi_B\circ\map{A}$
 returns the contact partner with one chart evaluation and one inversion, and no search. The gap and the normal
 that the contact virtual work \eqref{eq:contact-vw} consumes follow from $\tmap$ alone.}
 \label{fig:atlas-extension}
@@ -526,8 +517,8 @@ that the contact virtual work \eqref{eq:contact-vw} consumes follow from $\tmap$
 
 \subsection{Fourier-feature representation}\label{sec:fourier}
 
-A coordinate network applied to the raw parameter cannot resolve a sharp surface, since its kernel low-passes
-high frequencies. The parameter is therefore encoded through a fixed sinusoidal bank before the network: with
+A coordinate network applied to the raw parameter does not resolve a sharp surface at a practical budget, since
+its kernel low-passes high frequencies. The parameter is therefore encoded through a fixed sinusoidal bank before the network: with
 $\tilde x\in[-1,1]^d$ the normalised parameter, $B\in\R^{K\times d}$ a bank of $K$ frequency rows, and the
 feature map $\gamma:[-1,1]^d\to\R^{2K}$,
 \begin{equation}\label{eq:gamma}
@@ -553,7 +544,7 @@ features, either tracks the asperity slopes or low-passes them into a smoothed g
 \centering
 \includegraphics[width=0.78\linewidth]{fourier_mechanism_pub}
 \caption{The Fourier-feature chart network. The coordinate $x$ is lifted by a fixed bank of sinusoids
-$\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ \eqref{eq:gamma}---the Fourier features---which feed a trained MLP that
+$\gamma(x)=[\cos(2\pi Bx),\sin(2\pi Bx)]$ \eqref{eq:gamma}, the Fourier features, which feed a trained MLP that
 returns the chart value $h(x)$. The fixed encoding is what lets the network represent the sharp, high-frequency
 detail a plain coordinate MLP low-passes: the spectral bias of Remark~\ref{prop:ntk}, measured on the real
 granite joint in Figure~\ref{fig:spectral-bias} (Section~\ref{sec:cv7}).}
@@ -616,9 +607,8 @@ encoding-on/off control, not as a second capacity-matched comparison.}
 With the geometry of each body fixed by the atlas of Section~\ref{sec:atlas}, this section poses the governing mechanics.
 The bodies are linear elastic and quasi-static, posed in the small-strain regime. Each body is the image of a
 reference cube under a trained chart decoder, so the variational problem is integrated on the chart and pulled
-back to the physical body by the Piola identity of the neural atlas \citep{sun2026neuralatlas}. The strong form,
-the virtual-work statement, and the chart pull-back are stated in turn; the discrete Galerkin form follows in
-Section~\ref{sec:discr}.
+back to the physical body by the Piola identity of the neural atlas \citep{sun2026neuralatlas}. The discrete
+Galerkin form follows in Section~\ref{sec:discr}.
 
 \subsection{Strong form}\label{sec:strong:strong}
 
@@ -647,7 +637,7 @@ read from the atlas.
 \subsection{Virtual work}\label{sec:weak}
 
 The strong form \eqref{eq:balance} holds pointwise and demands more regularity than a contact solution
-possesses; the variational form relaxes it to an integral statement, one that later admits the contact
+possesses; the variational form relaxes it to an integral statement that later admits the contact
 constraint and the chart pull-back without further change. Define the trial and test spaces
 \begin{equation}\label{eq:spaces}
 \mathcal S^\alpha=\big\{\ubf\in[H^1(\Omega^\alpha)]^d:\ubf=\bar\ubf^\alpha\ \text{on}\ \Gamma_u^\alpha\big\},\qquad
