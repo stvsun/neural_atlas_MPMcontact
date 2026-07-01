@@ -1348,6 +1348,52 @@ is machine-checked in Lean~4 (\code{lean/OTContact/TranslationInvariance.lean}, 
 \code{tangent\_translation\_null}, \code{rigid\_translation\_gap\_invariant}, \code{patch\_resultant\_list};
 sorry-free, depending only on \code{propext}/\code{Quot.sound}).}
 
+\subsection{The method in three procedures}\label{app:ot:algorithm}
+
+Algorithm~\ref{alg:detector} collects the three procedures that define the method: the transition-map
+detector, which returns the matched pair $(\gn,\nbf)$ of Section~\ref{sec:tmap}; the verify-first protocol,
+which admits a trained chart only after it passes the reconstruction, foldover, and convergence checks of
+Appendix~\ref{app:training}; and the two-body coupling, which assembles the transpose-coupled traction and the
+symmetric four-block tangent \eqref{eq:twobody-tangent-body} derived above. Everything downstream of
+detection---the broad phase, the force laws, and the discretisations of Section~\ref{sec:discr}---is shared with
+the signed-distance path through the dispatch \eqref{eq:detector}.
+
+\begin{algorithm}[htbp]
+\caption{Transition-map contact detection, the verify-first chart protocol, and the two-body coupling.}
+\label{alg:detector}
+\begin{algorithmic}[1]
+\Procedure{Detect}{query point $\xbf$; chart; frame $(c_B,Q_B)$}
+  \If{radial chart}
+    \State $\bm d \gets Q_B^\top(\xbf-c_B)$;\quad $r\gets\norm{\bm d}$;\quad $\dhat\gets\bm d/r$
+    \State $\gn \gets r-\rho_B(\dhat)$ \Comment{inverse-chart gap, Eq.~\eqref{eq:radial-gap}}
+    \State $\grad_S\rho \gets (I-\dhat\dhat^\top)\,\grad_{\hat d}\rho_B$
+    \State $\nbf\gets\widehat{Q_B(\dhat-\grad_S\rho/r)}$ \Comment{matched normal, Prop.~\ref{prop:matched-normal}}
+  \Else \Comment{height chart}
+    \State $\gn\gets z-h_\theta(x)$;\quad $\nbf\gets(-h_\theta'(x),1)/\sqrt{1+h_\theta'^2}$ \Comment{Eq.~\eqref{eq:height-gap}}
+  \EndIf
+  \State \Return $(\gn,\nbf)$ \Comment{$\gn<0$ flags penetration; consumed by Eq.~\eqref{eq:detector}}
+\EndProcedure
+\Statex
+\Procedure{VerifyFirst}{trained chart}
+  \State \textbf{reject} unless reconstruction RMSE $<$ a few percent of surface RMS
+  \State \textbf{reject} unless $\det J>0$ on every element \Comment{no foldover}
+  \State \textbf{reject} unless a manufactured-solution study recovers $O(h^2)$
+  \State \Return admitted chart
+\EndProcedure
+\Statex
+\Procedure{CoupleTwoBody}{slave surface $\partial\Omega_A$, master surface $\partial\Omega_B$}
+  \State build the correspondence $\chi=\pi_B\circ\map{A}$ \Comment{closest-point or arclength-monotone OT limit}
+  \For{each Gauss point $\xi_q$ on $\Gamma_c^A$}
+    \State $\gn(\xi_q)\gets(\xbf_s(\xi_q)-\xbf_m(\chi(\xi_q)))\!\cdot\!\nbf$;\quad host weights $(N_K^-\!\circ\chi)(\xi_q)$, $\sum_K=1$
+    \State traction $\tbf(\xi_q)\gets t_N\nbf+\tbf_T$ on the active set $\{\gn<0\}$
+  \EndFor
+  \State scatter $\fbf_I^+\!\gets+\!\sum_q w_q N_I^+\tbf$, $\fbf_K^-\!\gets-\!\sum_q w_q (N_K^-\!\circ\chi)\tbf$ \Comment{transpose-coupled via the OT marginal}
+  \State assemble the symmetric four-block tangent $\bm K_{ss},\bm K_{sm}{=}\bm K_{ms}^{\top},\bm K_{mm}$, Eq.~\eqref{eq:twobody-tangent-body}
+  \State \Return $(\fbf,\bm K_c)$ on the shared slave--master dof vector
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
 \subsection{Verified two-body and N-body results}\label{app:ot:results}
 
 Table~\ref{tab:ot:gates} records the decisive gates. The analytic tangent matches the finite-difference
@@ -3503,7 +3549,7 @@ A trained chart is geometry, and a defective chart silently corrupts every downs
 These thresholds make the geometric representation falsifiable. A chart whose cutoff is too low under-resolves the asperities: spectral smoothing returns, and check (1) catches it. A chart whose relief amplitude is too high folds an element, and check (2) catches that. Only a chart that passes all applicable checks enters a contact solve.
 
 %% ======================== C_appendix_reproducibility ========================
-\section{Data and code availability, and algorithm summary}\label{app:repro}
+\section{Data and code availability}\label{app:repro}
 
 \subsection{Data availability}
 
@@ -3542,59 +3588,18 @@ measure-theoretic Brenier existence/uniqueness and pushforward are stated formal
 and labelled proposed, not machine-checked. The cited theorems are sorry-free and depend only on
 \code{propext}/\code{Quot.sound} (verified by \code{\#print axioms}).
 
-\subsection{Algorithm summary}
+\subsection{Reproducibility notes}
 
-Algorithm~\ref{alg:detector} states the two procedures that distinguish this work from a level-set contact
-solver: the transition-map detector, which returns the matched pair $(\gn,\nbf)$ of Section~\ref{sec:tmap}, and
-the verify-first protocol, which admits a trained chart only after it passes the reconstruction, foldover, and
-convergence checks of Appendix~\ref{app:training}. Everything downstream of the detector---the broad phase, the
-force laws, the consistent tangent, and the discretisations of Section~\ref{sec:discr}---is shared with the
-signed-distance path through the dispatch \eqref{eq:detector}.
-
-\begin{algorithm}
-\caption{Transition-map contact detection and the verify-first chart protocol.}
-\label{alg:detector}
-\begin{algorithmic}[1]
-\Procedure{Detect}{query point $\xbf$; chart; frame $(c_B,Q_B)$}
-  \If{radial chart}
-    \State $\bm d \gets Q_B^\top(\xbf-c_B)$;\quad $r\gets\norm{\bm d}$;\quad $\dhat\gets\bm d/r$
-    \State $\gn \gets r-\rho_B(\dhat)$ \Comment{inverse-chart gap, Eq.~\eqref{eq:radial-gap}}
-    \State $\grad_S\rho \gets (I-\dhat\dhat^\top)\,\grad_{\hat d}\rho_B$
-    \State $\nbf\gets\widehat{Q_B(\dhat-\grad_S\rho/r)}$ \Comment{matched normal, Prop.~\ref{prop:matched-normal}}
-  \Else \Comment{height chart}
-    \State $\gn\gets z-h_\theta(x)$;\quad $\nbf\gets(-h_\theta'(x),1)/\sqrt{1+h_\theta'^2}$ \Comment{Eq.~\eqref{eq:height-gap}}
-  \EndIf
-  \State \Return $(\gn,\nbf)$ \Comment{$\gn<0$ flags penetration; consumed by Eq.~\eqref{eq:detector}}
-\EndProcedure
-\Statex
-\Procedure{VerifyFirst}{trained chart}
-  \State \textbf{reject} unless reconstruction RMSE $<$ a few percent of surface RMS
-  \State \textbf{reject} unless $\det J>0$ on every element \Comment{no foldover}
-  \State \textbf{reject} unless a manufactured-solution study recovers $O(h^2)$
-  \State \Return admitted chart
-\EndProcedure
-\Statex
-\Procedure{CoupleTwoBody}{slave surface $\partial\Omega_A$, master surface $\partial\Omega_B$}
-  \State build the correspondence $\chi=\pi_B\circ\map{A}$ \Comment{closest-point or arclength-monotone OT limit}
-  \For{each Gauss point $\xi_q$ on $\Gamma_c^A$}
-    \State $\gn(\xi_q)\gets(\xbf_s(\xi_q)-\xbf_m(\chi(\xi_q)))\!\cdot\!\nbf$;\quad host weights $(N_K^-\!\circ\chi)(\xi_q)$, $\sum_K=1$
-    \State traction $\tbf(\xi_q)\gets t_N\nbf+\tbf_T$ on the active set $\{\gn<0\}$
-  \EndFor
-  \State scatter $\fbf_I^+\!\gets+\!\sum_q w_q N_I^+\tbf$, $\fbf_K^-\!\gets-\!\sum_q w_q (N_K^-\!\circ\chi)\tbf$ \Comment{transpose-coupled via the OT marginal}
-  \State assemble the symmetric four-block tangent $\bm K_{ss},\bm K_{sm}{=}\bm K_{ms}^{\top},\bm K_{mm}$, Eq.~\eqref{eq:twobody-tangent-body}
-  \State \Return $(\fbf,\bm K_c)$ on the shared slave--master dof vector
-\EndProcedure
-\end{algorithmic}
-\end{algorithm}
-
-Two points govern exact reproduction. The deformable rock-joint study reports stresses in a consistent unit
+The full detection-to-coupling procedure is stated as Algorithm~\ref{alg:detector} in
+Section~\ref{app:ot:algorithm}. Two points govern exact reproduction. The deformable rock-joint study reports stresses in a consistent unit
 system with an uncalibrated modulus, so stresses scale linearly with it while the dimensionless apparent
 friction and the geometry-set dilation do not. The two-block node-to-surface friction residual settles near
 $4\%$ and does not shrink with mesh refinement, measuring the Coulomb non-smoothness of moving-master contact
 rather than discretisation error, and it is the one quantity whose last digits depend on the contact-solver
-tolerances. A third point governs the two-body solves of Section~\ref{app:ot}: the deformable-Hertz half-width
-and peak pressure carry a $\sim3$--$6\%$ contact-edge floor that does not shrink under refinement (the infinite
-Hertz edge-pressure slope resolved over one element), whereas the non-matching patch test transmits a uniform
+tolerances. A third point governs the two-body solves of Section~\ref{app:ot}: run in the half-plane regime the
+closed form assumes ($a/H\le0.14$), the deformable-Hertz half-width and peak pressure carry a $\sim2\%$ discrete
+contact-edge plus CST stress-recovery floor that does not shrink under refinement (the infinite Hertz
+edge-pressure slope resolved over one element), whereas the non-matching patch test transmits a uniform
 pressure to $1.4\times10^{-16}$ irrespective of the interface mesh, because the partition-of-unity marginal
 $\sum_K(N_K^-\!\circ\chi)=1$ holds by construction.
 
