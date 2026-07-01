@@ -1351,9 +1351,10 @@ Table~\ref{tab:ot:gates} records the decisive gates. The analytic tangent matche
 perturbation of the residual to $3.45\times10^{-11}$ and the symbolic Jacobian to all $64$ entries; the net force
 balance is $4.4\times10^{-16}$. On deformable Hertz between two elastic blocks (CV-8), run in the half-plane
 regime the closed form assumes ($a/H\le0.14$), the contact half-width and peak pressure settle under mesh
-refinement at $1.64\%$ and $2.26\%$ of the closed form (this seed; a five-realisation ensemble at the headline
-mesh gives a realisation-dependent half-width $1.42\pm0.32\%$ and a realisation-robust peak pressure
-$2.31\pm0.07\%$, with the reported seed the median of the five---Table~\ref{tab:cv8-ensemble}), the
+refinement to $1.64\%$ and $2.26\%$ of the closed form at the finest mesh (this seed). A five-realisation
+ensemble at the coarser headline mesh gives a realisation-dependent half-width $1.42\pm0.32\%$ and a
+realisation-robust peak pressure $2.31\pm0.07\%$, its reported seed the median of the five
+(Table~\ref{tab:cv8-ensemble}). The
 non-matching patch test transmits a uniform pressure to $1.4\times10^{-16}$, the sliding history is
 centroid-monotone (maximum backstep $0.0$), and the global force balance is $1.7\times10^{-18}$. On a $3\times3$
 elastic disc array with twelve mutual couplings (CV-9a) the solve converges at full Newton relaxation (32
@@ -1842,7 +1843,7 @@ poles (friction inactive) while the diagonal neighbours stay clear ($2\sqrt{2}\,
 centre stress $\sigma_{xx}=\sigma_{yy}=-2N/(\pi R t)$. \textbf{(b)}~Maximum-principal stress (left) and shear
 $\sigma_{xy}$ (right) across the array: the field repeats from cell to cell and is equibiaxial at each disc
 centre with negligible shear, confirming the $D_4$-symmetric superposition the closed form predicts.}
-\label{fig:cv4}\label{fig:cv4-bvp}\label{fig:cv4-ninedisc}
+\label{fig:cv4-bvp}\label{fig:cv4-ninedisc}
 \end{figure}
 
 Across the equivalence regime the learned geometry reproduces the contact-mechanics closed forms to $\sim
@@ -2233,7 +2234,7 @@ deformable-Hertz solve and reserves the arclength map for the conforming patch t
 \paragraph{The non-matching patch test.} The discrete master interpolation is a partition of unity along the
 correspondence, $\sum_K(N_K^-\!\circ\chi)=1$ (the correspondence sends each slave point to a single master host,
 so no master node is double-counted or starved; this partition of unity is distinct from, and downstream of, the
-optimal-transport mass marginal that places the foot, and it is the property the patch test exercises---see
+optimal-transport mass marginal that places the foot, and it is the property the patch test exercises; see
 Section~\ref{app:ot:discrete}), so the reaction on the master integrates the same traction field the slave
 applies.
 A constant pressure therefore transmits as a uniform stress across a non-matching interface to machine precision.
@@ -2242,8 +2243,8 @@ $1.4\times10^{-16}$, $67\times$ tighter than the node-lumped tributary penalty o
 test (Figure~\ref{fig:cv8-patch}). On the non-matching sawtooth interface the node-lumped scheme produces a
 pressure field with a non-uniformity of $67.3$ (range over mean across the patch), double-counting some master
 nodes and starving others, whereas the partition of unity along the correspondence leaves the interpolated
-pressure uniform to $1.4\times10^{-16}$. The failure is structural---an independent node-to-surface projection has
-no partition of unity along the correspondence---so it does not improve under mesh refinement; the
+pressure uniform to the machine-precision residual reported above. The failure is structural (an independent node-to-surface projection has
+no partition of unity along the correspondence), so it does not improve under mesh refinement; the
 optimal-transport residual is independent of the interface mesh because~\eqref{eq:ot-marginal-body} is
 mesh-independent.
 
@@ -2263,7 +2264,7 @@ presses two elastic blocks together and compares the contact half-width $a$ and 
 the line-contact closed form $a=2\sqrt{P'R/\pi E^{*}}$ with both bodies elastic. Because that closed form assumes
 elastic \emph{half-planes}, the benchmark is run in the half-plane regime: the blocks are deep and wide enough
 that the contact stays small relative to the body, $a/H\le0.14$ ($a/W=0.137$). In this regime the finite blocks
-reproduce the half-plane compliance---the effective modulus back-solved from the recovered half-width,
+reproduce the half-plane compliance: the effective modulus back-solved from the recovered half-width,
 $E^{*}_{\mathrm{eff}}=4P'R/\pi a^{2}$, matches the analytical $E^{*}=0.549$ to $\sim1\%$. Under mesh refinement
 (nx sweep $140\to260$) the half-width settles at $1.64\%$ of the closed form and the peak pressure, recovered
 from the Gauss-point pressures, at $2.26\%$ (finest mesh nx$=260$); Figure~\ref{fig:cv8-hertz} plots the sweep.
@@ -2279,22 +2280,22 @@ constraint scheme escapes this floor on a $C^0$ contact edge; it is not a tuning
 A word on the regime, because it is why an earlier, shallower setup mis-measured this benchmark. With shallow
 clamped blocks ($a/H\approx0.43$) the finite strip is confined by its fixed base and is $\sim10\%$ stiffer than a
 half-plane ($E^{*}_{\mathrm{eff}}/E^{*}\approx1.10$); by $a\propto(E^{*})^{-1/2}$ that alone biases the
-half-width $\sim5\%$ low and, at fixed load, the peak pressure $\sim6\%$ high---one coupled effect, not two. That
+half-width $\sim5\%$ low and, at fixed load, the peak pressure $\sim6\%$ high, one coupled effect, not two. That
 offset is a reference-regime mismatch (the half-plane formula does not describe a clamped finite strip), not a
 solver error: the force balance is machine-zero and the non-matching patch test transmits uniform pressure to
 $1.4\times10^{-16}$ throughout. Deepening the blocks into the half-plane regime restores
 $E^{*}_{\mathrm{eff}}/E^{*}\approx1$ and leaves only the $\sim2\%$ discrete-edge/CST floor reported above.
 
 \paragraph{Ensemble disclosure across realisations.} The values above are one mesh realisation (seed $7$), and
-the single-realisation restriction is stated honestly: a band-limited jittered mesh is statistically spiky, so we
+the single-realisation restriction is stated plainly: a band-limited jittered mesh is statistically spiky, so we
 repeated the headline solve at nx$=220$ on five independent jitter realisations (mesh seeds $7,11,17,23,31$; all
 force balances $\sim\!10^{-18}$). The two observables behave oppositely under re-meshing
 (Table~\ref{tab:cv8-ensemble}). The half-width error is realisation-dependent: across the five seeds it spans
 $[0.94,1.87]\%$ with mean $1.42\%$ and population standard deviation $0.32\%$, and the reported seed $7$
-($1.54\%$) is a \emph{typical} realisation---the median of the five, neither best nor worst. The peak pressure, by
+($1.54\%$) is a \emph{typical} realisation, the median of the five, neither best nor worst. The peak pressure, by
 contrast, is realisation-\emph{independent}: across the same five seeds it is $2.31\pm0.07\%$ (range
 $[2.21,2.38]\%$, population standard deviation $0.07\%$). The tightness of that band identifies the $\sim\!2.3\%$
-peak pressure as a genuine systematic of the plane-strain CST stress recovery---not a fortunate realisation---so
+peak pressure as a systematic of the plane-strain CST stress recovery, not a fortunate realisation, so
 both observables rest on the same $\sim\!2\%$ discrete-edge/CST floor, disclosed with its realisation spread.
 
 \begin{table}[t]
@@ -2304,7 +2305,7 @@ both observables rest on the same $\sim\!2\%$ discrete-edge/CST floor, disclosed
   graded mesh, jitter $0.03$; mesh seeds $7,11,17,23,31$). All force balances are $\sim\!10^{-18}$; the quoted
   spreads are population standard deviations ($\mathrm{ddof}=0$) over the full five-realisation set. The
   half-width error is realisation-dependent and the reported seed $7$ is the median of the five; the peak-pressure
-  error is realisation-independent (standard deviation $0.07\%$), a genuine plane-strain CST stress-recovery
+  error is realisation-independent (standard deviation $0.07\%$), a plane-strain CST stress-recovery
   floor whose representative value is the ensemble mean $2.31\%$.}
   \label{tab:cv8-ensemble}
   \small
@@ -2337,7 +2338,7 @@ both observables rest on the same $\sim\!2\%$ discrete-edge/CST floor, disclosed
 \end{figure}
 
 \paragraph{N-body disc array (CV-9a).} A $3\times3$ array of elastic discs with twelve mutual mortar couplings
-generalises the nine-disc unit cell of Section~\ref{sec:ex_ninedisc} to a genuine N-body optimal-transport
+generalises the nine-disc unit cell of Section~\ref{sec:ex_ninedisc} to a full N-body optimal-transport
 contact, in which the per-pole load is an emergent output of the twelve couplings rather than an imposed pole
 load (Figure~\ref{fig:cv9-array}). The solve converges at full Newton relaxation ($32$ iterations, no
 backtracks). The centre disc reaches the equibiaxial closed form
@@ -2347,17 +2348,17 @@ $n_{\mathrm{rings}}=6$ to $14$ confirms the recovery is mesh-converged: the cent
 monotonically across the five meshes ($1.22\to0.87\to0.58\to0.52\to0.52\%$) toward a plateau near $0.52\%$, with
 the headline $n_{\mathrm{rings}}=10$ value of $0.58\%$ lying on this curve; every mesh converges at full Newton
 with a force balance of order $10^{-15}$. The full gate ledger for both
-two-body solves is collected in Table~\ref{tab:ot:gates}; Table~\ref{tab:twobody:headline} surfaces the decisive
+two-body solves is collected in Table~\ref{tab:ot:gates}; Table~\ref{tab:twobody:headline} surfaces the headline
 subset here, where the two-body advantage is argued.
 
 \begin{table}[t]
   \centering
-  \caption{Decisive two-body optimal-transport gates (full ledger Section~\ref{app:ot},
+  \caption{Headline two-body optimal-transport gates (full ledger Section~\ref{app:ot},
   Table~\ref{tab:ot:gates}). The four-block tangent is consistent and force-conserving to machine precision; the
   deformable-Hertz observables settle at the $\sim2\%$ discrete-edge/CST floor and the non-matching patch test is
-  exact, while the conventional node-lumped assembly fails it ($67\times$). The ``---'' entries are honest: the node-lumped
+  exact, while the conventional node-lumped assembly fails it ($67\times$). The ``---'' entries reflect that the node-lumped
   node-to-surface scheme has no symmetric two-body tangent and is not run on the deformable--deformable BVP, which
-  is the point---the patch-test row is the one head-to-head that exists. All values measured; the CV-8 half-width
+  is the point; the patch-test row is the one head-to-head that exists. All values measured; the CV-8 half-width
   $1.64\%$ and peak pressure $2.26\%$ are one mesh realisation (seed $7$, the median of five), with the
   realisation-robust ensemble $1.42\pm0.32\%$ ($a$) and $2.31\pm0.07\%$ ($p_0$) in
   Table~\ref{tab:cv8-ensemble}.}
@@ -2394,8 +2395,8 @@ subset here, where the two-body advantage is argued.
   \label{fig:cv9-array}
 \end{figure}
 
-Both two-body solves are single-realization gate values---the CV-8 headline mesh additionally carries a
-five-realisation ensemble (Table~\ref{tab:cv8-ensemble})---plane-strain constant-strain-triangulation (CST)
+Both two-body solves are single-realization gate values (the CV-8 headline mesh additionally carries a
+five-realisation ensemble, Table~\ref{tab:cv8-ensemble}), plane-strain constant-strain-triangulation (CST)
 small-strain, and frictionless, with rigid outer
 walls in CV-9a; the analytic four-block tangent matches the symbolic Jacobian $dR/du$ on all $64$ entries and the
 finite-difference perturbation of the residual to $3.45\times10^{-11}$, with a net force balance of
@@ -2403,9 +2404,9 @@ $4.4\times10^{-16}$ (Section~\ref{app:ot}).
 
 \subsection{Performance summary across the benchmark ladder}\label{sec:verif_summary}
 
-Table~\ref{tab:cv_summary} consolidates the measured performance. The equivalence-regime benchmarks---Hertz
+Table~\ref{tab:cv_summary} consolidates the measured performance. The equivalence-regime benchmarks (Hertz
 line contact, Cattaneo--Mindlin partial slip, and the nine-disc unit cell, together with the Brazilian disc of
-Appendix~\ref{app:brazilian}---verify the chart-FEM solver on learned geometry where the chart and the level set
+Appendix~\ref{app:brazilian}) verify the chart-FEM solver on learned geometry where the chart and the level set
 are equivalent, tracking the closed forms to $\sim0.15$--$1.6\%$ (frictional partial slip at $\sim5$--$11\%$).
 The cusped superformula and the Koch fractal are where the transition map is exercised: the radial chart resolves
 a cusped non-convex boundary the SDF smooths and drives identical contact dynamics, and the recursive IFS chart
@@ -2508,7 +2509,7 @@ while also delivering the contact half-width and the $D_4$ symmetry the prescrib
   \emph{deformable} bodies through the symmetric positive-semidefinite four-block mortar tangent. The CV-8 deformable-Hertz
   half-width and peak-pressure errors settle at the $\sim2\%$ discrete-edge/CST floor ($1.64\%$ and $2.26\%$ at the
   finest mesh), and the
-  conservation/consistency structure holds to machine precision---global force balance $1.7\!\times\!10^{-18}$
+  conservation/consistency structure holds to machine precision: global force balance $1.7\!\times\!10^{-18}$
   (CV-8) and $3.71\!\times\!10^{-15}$ (CV-9a $3\times3$ array), analytic tangent matching its finite difference to
   $3.45\!\times\!10^{-11}$, and the CV-9a centre disc recovering the equibiaxial mean stress to $0.58\%$. Margins
   on CV-3/CV-4 and the geometry cases are verification of grid-independence and emergent load, not a
@@ -2518,8 +2519,8 @@ while also delivering the contact half-width and the $D_4$ symmetry the prescrib
   \label{fig:ot_advantage}
 \end{figure}
 
-\begin{remark}[What the coupling genuinely beats, and where it ties]\label{rem:ot-verdict}
-The head-to-head separates into three honestly distinct classes. \emph{(i) Like-for-like scalar wins on the same
+\begin{remark}[What the coupling beats, and where it ties]\label{rem:ot-verdict}
+The head-to-head separates into three distinct classes. \emph{(i) Like-for-like scalar wins on the same
 observable and mesh}: the frictional stick front (Cattaneo, $370\times$) and the Hertz
 contact edge ($1.59\%\!\to\!0.50\%$, $3.2\times$), where the consistent mortar integral tracks a moving or
 singular interface the lumped scheme can only relocate node by node. \emph{(ii) Grid-independence on geometry the
@@ -2534,15 +2535,13 @@ the separation is charged entirely to frictional-front, geometry-dominated, non-
 never to a smooth convex contact.
 \end{remark}
 
-Two honest boundaries bound these claims. The coupling \emph{ties} the conventional mortar/penalty treatment on
-smooth convex contact---the nine-disc $1.4\times$ is within the FEM stress-recovery floor of both schemes, and the
-Hertz $0.50\%$ sits on a $\sim0.4$--$0.5\%$ discrete-edge floor neither scheme escapes---so the separation is
-charged entirely to geometry-dominated, non-matching, frictional-front, and two-sided regimes. And the two-body
-residuals are stated, not smoothed: CV-8 carries a $\sim2\%$ discrete contact-edge plus CST stress-recovery floor
-from the infinite Hertz edge slope resolved over one element, now evidenced by a five-realisation ensemble at the
-headline mesh (the peak pressure realisation-robust at $2.31\pm0.07\%$, the half-width spanning $[0.94,1.87]\%$
-with the reported seed the median $1.54\%$; Table~\ref{tab:cv8-ensemble}), and both two-body solves are
-plane-strain CST small-strain, frictionless, with rigid outer walls in CV-9a.
+Two boundaries bound these claims, both quantified elsewhere. The coupling \emph{ties} the conventional
+mortar/penalty treatment on smooth convex contact, the nine-disc $1.4\times$ lying within the FEM stress-recovery
+floor of both schemes and the Hertz $0.50\%$ on a $\sim0.4$--$0.5\%$ discrete-edge floor neither scheme escapes
+(Remark~\ref{rem:ot-verdict}). And the two-body residuals are stated, not smoothed: the $\sim2\%$
+discrete-edge/CST floor of the deformable-Hertz solve, its five-realisation ensemble
+(Table~\ref{tab:cv8-ensemble}), and the plane-strain CST small-strain, frictionless, rigid-outer-wall setting
+of both solves are reported above and in Section~\ref{sec:disc:limits}.
 
 \begin{figure}
   \centering
@@ -2558,8 +2557,8 @@ plane-strain CST small-strain, frictionless, with rigid outer walls in CV-9a.
 %% ======================== 07_validation_cv7 ========================
 \subsection{Validation: emergent dilatancy on a real rock joint}\label{sec:cv7}
 
-This example validates the method on a problem with no closed form---the direct shear of a natural rock
-joint---where the boundary-fitted chart resolves the asperity slopes the ambient SDF smooths, so the level set
+This example validates the method on a problem with no closed form, the direct shear of a natural rock
+joint, where the boundary-fitted chart resolves the asperity slopes the ambient SDF smooths, so the level set
 under-predicts the shear strength of the interface. It is also the conforming limit of the optimal-transport
 coupling: where the convex Hertz contact of Section~\ref{sec:ex_hertz} exercises the closest-point branch of the
 transition map, two mated rough faces exercise the arclength-monotone (Brenier) branch
@@ -2577,8 +2576,8 @@ it. We first state the problem, the data, and the closed-form anchor that pins t
 the real Inada profile (Section~\ref{sec:cv7-headline}), carry the machinery through two mutually deformable
 blocks (Section~\ref{sec:cv7-p1}) and a dilatancy-versus-roughness law (Section~\ref{sec:cv7-p2}), and close
 with the atlas-versus-level-set comparison on identical shear (Section~\ref{sec:cv7-payoff}). Three further
-studies---the transition-map detector inside the contact loop, a cyclic energy ledger that verifies
-Remark~\ref{cor:second-law}, and an explicit material-point cross-check---are reported in
+studies (the transition-map detector inside the contact loop, a cyclic energy ledger that verifies
+Remark~\ref{cor:second-law}, and an explicit material-point cross-check) are reported in
 Appendix~\ref{app:supp}.
 
 \subsubsection{Problem, data, and the Patton anchor}\label{sec:cv7-data}
@@ -2735,7 +2734,7 @@ We fit two representations to the same Inada profile and then shear them. The fi
 
 The reconstruction gap is large and one-signed. The height chart reproduced the measured surface to $2.3~\mu$m with 66k parameters; the ambient SDF reached only $107~\mu$m, $47\times$ worse, and did so with \emph{more} parameters (83k). The level set spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well. The mechanism is the spectral bias of a fixed-capacity coordinate MLP \citep{rahaman2019spectral}: such a network learns smooth, low-frequency content first and starves the sharp high-frequency detail. The Fourier-feature encoding of the chart defeats that bias \citep{tancik2020fourier}, whereas the plain SDF carries it intrinsically.
 
-This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} compares the radially-averaged power spectral density (Welch periodogram) of each trained reconstruction of the real Inada profile against the ground-truth profile. In the friction-relevant asperity band $[1,14.2]$~cyc/mm the Fourier chart never rolls off---it retains $100\%$ of the ground-truth band power and stays within $0.0$~dB of the truth across the band---whereas the plain MLP and the ambient SDF roll off at $0.33$ and $0.25$~cyc/mm respectively and retain only $0.027\%$ and $0.019\%$ of the band power ($-35.7$ and $-37.2$~dB). The spectral cutoff sits two decades below the asperity band: the level set's smoothing is a frequency-domain truncation of exactly the slopes that set the strength, and the chart's win is that it does not truncate them.
+This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} compares the radially-averaged power spectral density (Welch periodogram) of each trained reconstruction of the real Inada profile against the ground-truth profile. In the friction-relevant asperity band $[1,14.2]$~cyc/mm the Fourier chart never rolls off, retaining $100\%$ of the ground-truth band power and staying within $0.0$~dB of the truth across the band, whereas the plain MLP and the ambient SDF roll off at $0.33$ and $0.25$~cyc/mm respectively and retain only $0.027\%$ and $0.019\%$ of the band power ($-35.7$ and $-37.2$~dB). The spectral cutoff sits two decades below the asperity band: the level set's smoothing is a frequency-domain truncation of exactly the slopes that set the strength, and the chart's win is that it does not truncate them.
 
 \begin{figure}[t]
   \centering
@@ -2743,7 +2742,7 @@ This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} comp
   \caption{Measured spectral bias on the real Inada profile. (a) The radially-averaged power spectral
   density (Welch) of each \emph{trained} reconstruction against the ground-truth profile; the shaded strip is
   the friction-relevant asperity band $[1,14.2]$~cyc/mm. The plain coordinate MLP and the ambient neural SDF
-  roll off at $0.33$ and $0.25$~cyc/mm---two decades below the band---while the Fourier height chart tracks
+  roll off at $0.33$ and $0.25$~cyc/mm (two decades below the band) while the Fourier height chart tracks
   the truth across it. (b) The same spectra as a ratio to the truth in dB: the chart holds $0$~dB through the
   band ($100\%$ retained), the plain MLP and SDF lose $-35.7$ and $-37.2$~dB ($0.027\%$, $0.019\%$ retained).
   The three networks are the exact representations the manuscript compares, trained with the repository's own
@@ -2869,7 +2868,7 @@ This validation has a deliberately narrow scope. The blocks here are one deforma
 Two statements organise the results. First, the transition map $\tmap=\map{B}^{-1}\circ\map{A}$ is the
 optimal-transport coupling of the two boundary measures (Section~\ref{sec:tmap:ot}): a two-sided,
 mass-conserving operator that transmits a constant pressure exactly across a non-matching interface and solves a
-genuine two-body deformable--deformable problem. Second, as the empirical consequence of that coupling on a conforming interface,
+two-body deformable--deformable problem. Second, as the empirical consequence of that coupling on a conforming interface,
 the geometric representation, not the constraint-enforcement scheme, controls contact fidelity on
 geometrically hard contact. The closest-point projection that the node-to-segment tradition rejects as fragile is
 not the opposite of the transition map but its convex-cost / partial-contact limit, while the arclength-monotone
@@ -2913,7 +2912,7 @@ the master interpolation is a partition of unity along the correspondence, $\sum
 from, and downstream of, the optimal-transport mass marginal $\chi_\#\hat\mu_A=\hat\mu_B$ that places the foot;
 see Section~\ref{app:ot:discrete}), so a constant pressure transmits exactly across a non-matching mesh,
 the patch test of Table~\ref{tab:twobody:headline} that the node-lumped scheme fails. \emph{The two-body
-unlock.} Because the coupling is two-sided and transpose-coupled, with a symmetric positive-semidefinite
+coupling.} Because the coupling is two-sided and transpose-coupled, with a symmetric positive-semidefinite
 four-block tangent $\bm K_{ms}=\bm K_{sm}^{\top}$ that is consistent at frozen geometry (Proposition~\ref{prop:spsd};
 the consistency and force-balance gates of Table~\ref{tab:twobody:headline}), it solves the deformable Hertz contact of two elastic blocks and the
 $3\times3$ N-body disc array of Section~\ref{sec:ex_twobody}, the master-coupling blocks the rigid-master suite
@@ -3001,7 +3000,7 @@ residual of $\sim10^{-9}$ with a consistent tangent; two mutually deformable blo
 the residual holding at $3.8$--$4.8\%$ and not shrinking under refinement. Its mesh-independence identifies it as
 the non-smoothness of moving-master node-to-surface contact, not a discretisation error, to be cured by a
 semismooth-Newton, augmented-Lagrangian, or mortar treatment of the tangential complementarity
-\citep{alart1991mixed,simo1992augmented,puso2004mortar,chouly2013nitsche}---a constraint-enforcement upgrade
+\citep{alart1991mixed,simo1992augmented,puso2004mortar,chouly2013nitsche}. Such a treatment is a constraint-enforcement upgrade
 orthogonal to \emph{both} the geometric representation and the measure-coupling formulation argued for here, and
 one that plugs into the two-sided optimal-transport mortar tangent already assembled in
 Section~\ref{sec:ex_twobody}. It does not threaten the main result, because the
@@ -3009,10 +3008,10 @@ emergent quantities are mesh-converged ($\muapp\to0.53\pm2\%$, dilation $\to0.06
 \emph{The two-body contact-edge floor.} The deformable-Hertz half-width and peak pressure of
 Section~\ref{sec:ex_twobody} carry a $\sim2\%$ residual that does not shrink under refinement; it is the discrete
 contact-edge quantisation (the infinite Hertz edge-pressure slope resolved over one element) plus the
-constant-strain-triangle stress-recovery floor, a genuine floor rather than a vanishing discretisation error. A
+constant-strain-triangle stress-recovery floor, a fixed floor rather than a vanishing discretisation error. A
 five-realisation ensemble at the headline mesh quantifies this (Table~\ref{tab:cv8-ensemble}): the peak pressure
 is realisation-robust at $2.31\pm0.07\%$ (a systematic CST floor, not a lucky seed), whereas the half-width spans
-$[0.94,1.87]\%$ ($1.42\pm0.32\%$), with the reported seed the median $1.54\%$---the spread is the contact-edge
+$[0.94,1.87]\%$ ($1.42\pm0.32\%$), with the reported seed the median $1.54\%$; the spread is the contact-edge
 quantisation itself. Running the benchmark in the half-plane regime the closed form assumes ($a/H\le0.14$) is
 what removes the earlier shallow-block finite-size compliance offset and exposes this $\sim2\%$ floor as the true
 residual. The remaining solves are single-realization, plane-strain CST
@@ -3046,7 +3045,7 @@ consistent tangent of Appendix~\ref{app:linearization}, with the chart-intrinsic
 \eqref{eq:weingarten-chart} and friction-direction \eqref{eq:friction-dir-deriv} blocks restored, recovers the
 asymptotic quadratic Newton rate; we measured this directly, $8$ iterations against $40$ on a smooth curved
 master surface frictionless and $11$ against $44$ under friction, with the converged solution unchanged. Third,
-what survives the first two upgrades is the genuine non-smoothness of the moving contact point under Coulomb
+what survives the first two upgrades is the intrinsic non-smoothness of the moving contact point under Coulomb
 stick--slip: completing the tangent leaves the apparent friction invariant to within $0.3\%$ and the residual
 floor unmoved on the rough joint, isolating the plateau as a tangential complementarity problem to be closed by
 a semismooth (primal--dual active-set) Newton or an augmented-Lagrangian or mortar treatment of the tangential
@@ -3065,7 +3064,7 @@ reflection of mass conservation), so a constant pressure
 transmits exactly across a non-matching interface (patch test $1.4\times10^{-16}$, $67\times$ tighter than the
 node-lumped scheme), and the coupling is two-sided: its symmetric positive-semidefinite four-block tangent
 $\bm K_{ms}=\bm K_{sm}^{\top}$, consistent at frozen geometry, solves a genuine two-body deformable--deformable
-problem (deformable Hertz $a$ to $1.64\%$, $p_0$ to $2.26\%$---the reported seed a median jitter realisation, ensemble
+problem (deformable Hertz $a$ to $1.64\%$, $p_0$ to $2.26\%$, the reported seed a median jitter realisation, ensemble
 $1.42\pm0.32\%$ and realisation-robust $2.31\pm0.07\%$; a $3\times3$ array to $0.58\%$).
 
 The geometric representation of the boundary, not the constraint-enforcement scheme, then controls contact fidelity on
@@ -3093,7 +3092,7 @@ body and their overlaps reconcile through Newton-inverted transition maps \eqref
 overhangs and re-entrant lobes no single chart can hold are handled chart by chart. Extending the \emph{two-body}
 optimal-transport coupling to full three-dimensional deformable Hertz, with local mesh refinement at the contact
 patch, would close the resolution gap that limited the two-dimensional line-contact verifications and place the
-chart-FEM contact pressure against the closed-form $p_0$ and $a(F)$ in three dimensions---the dimensional step,
+chart-FEM contact pressure against the closed-form $p_0$ and $a(F)$ in three dimensions: the dimensional step,
 not the two-body step, which is already taken. Finally, embedding the transition-map detector inside a
 mortar or augmented-Lagrangian dynamic solver, with a finite-strain hyperelastic interior, would extend the
 representation-controls-fidelity result from quasi-static rock joints to large-sliding, finite-deformation
@@ -3104,20 +3103,20 @@ Two directions reach further. The first is topo-geometric. A contact pair tracke
 leave the chart $i$ that first held it, and the inter-body map $\tmap$ then composes with the intra-body
 transition map $\psi_{ij}$ of \eqref{eq:intra-tmap} to re-express the migrating foot in the neighbouring chart
 $j$ before re-pairing, $\tmap\circ\psi_{ij}$, the active set handed off across the chart overlap by the
-partition-of-unity blend of the multiplicative-Schwarz coupling (Remark~\ref{rem:schwarz})---the same partition
-of unity that makes the inter-body optimal-transport marginal $\sum_K(N_K^-\!\circ\chi)=1$ exact---with the
+partition-of-unity blend of the multiplicative-Schwarz coupling (Remark~\ref{rem:schwarz}), the same partition
+of unity that makes the inter-body optimal-transport marginal $\sum_K(N_K^-\!\circ\chi)=1$ exact, with the
 Newton inversion \eqref{eq:newton-invert} kept local to each chart. Genus, branching, and overhang then reduce to
 bookkeeping on the overlap graph rather than a global re-parametrisation, so the detector inherits the atlas's
 topological generality at the cost of a chart-membership test per active node. The second couples the geometry
-to material degradation. Because the boundary is itself a trainable field---a height chart $h_\theta$ or a
-volumetric decoder $D_\theta$---it can carry an evolving state: an Archard-type wear law or a surface
+to material degradation. Because the boundary is itself a trainable field (a height chart $h_\theta$ or a
+volumetric decoder $D_\theta$), it can carry an evolving state: an Archard-type wear law or a surface
 phase-field damage posed on the chart parameter domain evolves $h_\theta\mapsto h_\theta(t)$, so that asperity
 crushing, tip plasticity, and micro-cracking feed back into the very geometry the detector reads. The resolved
 contact tractions then drive the degradation that reshapes the asperities, closing a loop between the geometry
 and the response it produces, and carrying the representation-controls-fidelity thesis from elastic rock joints
 to wear, third-body debris, and gouge formation.
 
-Across both reaches the transition map---read as an optimal-transport coupling of the two boundary measures---is
+Across both reaches the transition map, read as an optimal-transport coupling of the two boundary measures, is
 the mass-conserving, two-sided operator that resolves what the level set smooths and couples two deformable
 bodies the level set cannot.
 

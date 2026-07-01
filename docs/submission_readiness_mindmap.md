@@ -131,6 +131,37 @@ algorithm,results} labels (referenced externally). Only `app:ot:gap` label disap
 Brenier — rewrite to list only what app:ot NOW holds (unbalanced-OT, patch proof, SPSD proof, gates). Keep
 "Section~\ref{app:ot}" wording (it stays a body section). All 17 `\ref{app:ot}` + sub-refs stay valid.
 
+## Per-loop log (cont. 2)
+
+- **loop 3** ✔ DONE (`e425fe1`) — collapse doubled OT derivation: condensed app:ot:gap (~68→22 lines, kept the
+  unique parameter-space caveat + Lean footnote), updated roadmap sentence, KEPT app:ot in body (user's call).
+  Added the referee-proofing mortar-vs-penalty scope clause (assembly is mortar-consistent; constraint enforced
+  by penalty/AL not dual multiplier → inf-sup/LBB not invoked, cite Wohlmuth 2011; eps_n~E/h). 59 fewer lines,
+  compile clean 0 undef 61 pp.
+- **loop 4-5** (in progress) — CV-8 provenance clarified at the app:ot:results site (finest-mesh 1.64% vs coarser
+  headline ensemble 1.42±0.32%, median seed; em-dash removed) — done by me. RUNNING: §7-8 editor agent (em-dash
+  sweep on two-body block + discussion, dead `\label{fig:cv4}` removal, rem:ot-verdict/"two honest boundaries"
+  dedup, intensifier tics, back-to-back patch-test 1.4e-16 restatements → pointers).
+
+## Status snapshot (for compaction resilience)
+
+- Commits on main so far: d0c6f2d (loop1), 528220e (loop2), e425fe1 (loop3). Branch claude/unruffled-pike-35fc89.
+- Uncommitted: CV-8 provenance fix (§app:ot:results) + whatever the §7-8 agent adds → will be loop 4-5 commit.
+- Remaining after loop 4-5: figure reduction (still 35 figs — the visible page win; do the SAFE ones: Koch merge
+  if regenerable, delete 2-3 redundant BVP schematics), then final QA (protected-number audit, ref integrity,
+  em-dash final count, compile). Number de-repetition (patch 1.4e-16 ×13) partly done; full pass is a documented
+  remaining item — do carefully, not rushed.
+
+## Figure-reduction feasibility (loop-5 recon)
+
+- All 7 `cvX-bvp` schematics are inline **TikZ** → safe to delete (no orphaned PNG). Each referenced once.
+- SAFE CUT (planned): delete the 3 equivalence-case BVP schematics — `fig:cv1-bvp` (Hertz), `fig:cv2-bvp`
+  (Cattaneo), `fig:cv4-bvp` (nine-disc) — textbook setups a CMAME referee doesn't need drawn; rephrase the one
+  referencing sentence each to state the setup in words. ~3 figs, ~1-1.5 pp. KEEP novel-geometry schematics
+  (cv5 superformula, cv6 Koch, cv7 rock-joint, cv8 two-body).
+- Koch `koch_cost`/`koch_ceiling` are external `\includegraphics` → CANNOT merge without regenerating (drift
+  risk); leave. cv6-geom/cv6-bvp are TikZ but novel-geometry → keep.
+
 ## Decisions log
 
 - (loop 0) Keep both algorithms in body. Do NOT regenerate figures that retrain models (number drift risk):
