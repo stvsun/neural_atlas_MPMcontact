@@ -571,7 +571,7 @@ $107~\mu$m).
 The phrase ``comparable size'' is auditable. Table~\ref{tab:capacity-audit} reports the trainable parameter
 counts of the three representations, instantiated directly from the code (the Fourier bank $B$ is a fixed,
 non-trainable buffer and is excluded). The ambient level set carries \emph{more} trainable capacity than the
-height chart---$83{,}073$ against $66{,}178$, a $25.5\%$ surplus---and still reconstructs the granite joint
+height chart ($83{,}073$ against $66{,}178$, a $25.5\%$ surplus) and still reconstructs the granite joint
 $47\times$ worse and smooths the mean asperity slope by $7^\circ$ (Section~\ref{sec:cv7}). The advantage is
 therefore representation-limited, not capacity-limited.
 
@@ -2012,7 +2012,7 @@ error jumps from $7.8^{\circ}$ at $n=1$ to $\sim45^{\circ}$ and never recovers, 
 (Fig.~\ref{fig:koch_ceiling}). Growing the parameter count would shift the ceiling but not remove it: a
 fixed-capacity coordinate network cannot keep resolving self-similar detail, which is the intrinsic
 spectral bias of the representation. The chart, storing the generating rule, stays exact at any finite
-level---verified to machine precision against the brute-force polyline distance---where the level set hits a
+level (verified to machine precision against the brute-force polyline distance), where the level set hits a
 hard ceiling. As a contact detector the story is the same in storage terms: across recursion levels the recursive
 chart holds the cross-level contact-force increment to $2.6\times10^{-16}$ while the fixed-grid level set freezes
 (non-convergent), the resolution-bound failure made quantitative (Table~\ref{tab:ot_vs_conv}).
