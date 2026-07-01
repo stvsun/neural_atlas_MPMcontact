@@ -52,3 +52,8 @@ campaign already polished Figs 2 (transition_map_composite), 3 (fourier_mechanis
    relabel the figure to A=slave, or add a one-line CV-8 caption note that A plays the master role there.
 3. **JET→perceptual colormap** on liusun_fig13 (Hertz σ_yy) + fig16 (nine-disc) — needs vtk/pyvista (absent
    locally); real CMAME red-flag. Regenerate on a machine with pyvista, or leave.
+
+- **round 2** (WRITING group) — completed the US->UK spelling sweep the round-1 reflexion flagged: 21 prose
+  words converted (discretis/linearis/normalis/parameteris/initialis/summaris/minimis/localis/regularis-...),
+  guarded to skip \code{}/\cite{}/package lines and the LaTeX size/itemize commands. US prose -ize count now 0.
+  Compile clean, 60 pp, protected numbers intact. Brazilian 6.3x -> tracked task chip for the user (not auto-changed).
