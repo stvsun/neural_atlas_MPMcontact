@@ -162,6 +162,34 @@ Brenier — rewrite to list only what app:ot NOW holds (unbalanced-OT, patch pro
 - Koch `koch_cost`/`koch_ceiling` are external `\includegraphics` → CANNOT merge without regenerating (drift
   risk); leave. cv6-geom/cv6-bvp are TikZ but novel-geometry → keep.
 
+## CAMPAIGN SUMMARY (final)
+
+Six substantive loops, all verified (compile 0 undefined refs each loop, protected numbers byte-identical).
+Commits on main: d0c6f2d (L1) · 528220e (L2) · e425fe1 (L3) · acbb6bf (L4-5) · 22c7650 (L6).
+
+Delivered:
+- **Anti-AI-language:** em-dashes **211 → 109** (−48%; remaining are table cells / footnotes / TikZ / remark
+  bodies, not prose). AI signposting tells (Importantly/Notably/Moreover/…): **0**. Broke rhetorical tricolons,
+  cut "genuine/decisive/unlock" intensifiers, split abstract mega-sentences.
+- **Concision:** −190 source lines, **61 → 60 pp**, **35 → 33 figures**. Collapsed the doubled OT derivation
+  (app:ot:gap ~68→22 lines). Deduped rem:ot-verdict / "two honest boundaries". Contributions numbers → pointers.
+  Dropped 2 textbook BVP schematics (Hertz, Cattaneo).
+- **Referee-proofing (correctness):** mortar-vs-penalty scope clause + inf-sup/LBB positioning (Wohlmuth 2011);
+  CV-8 provenance decoupled (finest-mesh 1.64% vs coarser-headline ensemble 1.42±0.32%); ML spectral-bias claim
+  made precise ("shifts the cutoff", not "defeats"); Brenier potential φ→Φ notation collision fixed.
+- **Structure:** both algorithms confirmed in the main text; app:ot kept in the body per the user's prior choice.
+
+## Remaining recommendations (NOT executed — for user review)
+
+- **Full number de-repetition pass:** patch 1.4e-16 still appears 12× (several are canonical: abstract, prop:patch,
+  tables). A careful dedicated pass could trim ~5 more restatements to pointers (~0.3 pp). Low risk if done slowly.
+- **More figures:** (a) fold fig:ot-coupling (3 refs) into fig:ot-unbalanced — needs ref rework; (b) Koch 4→2
+  (koch_cost + koch_ceiling are external \includegraphics → must regenerate the combined plot, number-drift risk);
+  (c) move rock-joint Phases 1-5 out of the PDF into online Supplementary (~3-4 figs) — a content decision.
+- **Deferred (judged low-value):** KL-weight λ→τ (non-adjacent collision); Remark→Lemma promotion (reader-invisible
+  label prefix, renumbering risk).
+- **"robust" ×7:** mostly technical ("realisation-robust"); a couple could be reworded if desired.
+
 ## Decisions log
 
 - (loop 0) Keep both algorithms in body. Do NOT regenerate figures that retrain models (number drift risk):
