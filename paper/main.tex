@@ -417,10 +417,9 @@ Section~\ref{sec:tmap:ot}), the contact contribution to the weak form, and the i
 Section~\ref{sec:verif} reports the numerical examples, from the closed-form ladder through the two-body
 deformable--deformable optimal-transport solves (Section~\ref{sec:ex_twobody}) to the
 real Inada-granite joint. Section~\ref{sec:disc} states the preconditions, limitations, and conclusions, and
-Section~\ref{app:ot} supplies only the measure-theoretic backbone behind the main-body development of
-Section~\ref{sec:tmap:ot}: the Kantorovich relaxation and $c$-cyclical monotonicity that make the Brenier map
-the unique optimiser, the well-posedness of the two limits, the patch-test proof, and the
-positive-semidefiniteness of the four-block tangent, with the verification gates.
+Section~\ref{app:ot} supplies, on top of the compact statement of Section~\ref{sec:tmap:ot}, the partial-support
+(unbalanced-transport) argument behind the two limits, the mortar patch-test and four-block
+positive-semidefiniteness proofs, and the verification gates.
 
 %% ======================== METHOD (restructured) ========================
 
@@ -1054,6 +1053,16 @@ laursen2002computational}. The Coulomb law is regularised by a slip-velocity sca
 approaching the cone bound $\mu\,t_N$ for $\norm{\vbf_T}\gg\varepsilon_T$ and a stiff stick
 spring for $\norm{\vbf_T}\ll\varepsilon_T$.
 
+A note on terminology, since it bears on the stability literature a contact reader expects. Here
+\emph{mortar-consistent} describes the assembly, not the constraint enforcement. The traction field is
+integrated against the master interpolation with the partition-of-unity marginal $\sum_K(N_K^-\!\circ\chi)=1$, so
+a constant pressure transmits exactly across a non-matching mesh (Proposition~\ref{prop:patch}). The unilateral
+constraint itself is enforced by the penalty and augmented-Lagrangian laws above, not by a dual Lagrange
+multiplier, so the inf-sup (LBB) condition that governs multiplier-based mortar contact
+\citep{wohlmuth2011variational} is not invoked. The penalty stiffness scales as $\varepsilon_n\sim E/h$ and is
+taken large enough to enforce the constraint to the reported tolerance, with the augmented-Lagrangian update
+recovering the exact pressure without $\varepsilon_n\to\infty$.
+
 \begin{remark}[Dissipation]\label{cor:second-law}
 The law \eqref{eq:friction-reg} derives from the pseudo-potential $\Psi_T=\mu t_N\sqrt{\norm{\vbf_T}^2+
 \varepsilon_T^2}$ as $\tbf_T=-\partial\Psi_T/\partial\vbf_T$, and dissipates,
@@ -1112,74 +1121,26 @@ four-block tangent, and the decisive numerical gates.
 
 \subsection{The measure-coupling gap and the Brenier map}\label{app:ot:gap}
 
-Each boundary chart carries a measure. For a single-valued face $z=h_X(x)$ the pushforward of Lebesgue measure
-on the parameter line is the arclength measure \eqref{eq:ot-measure-body},
-the object the contact pairing couples between two bodies. The coupling matches the \emph{normalised} cumulative
-measures $\hat F_X=F_X/F_X(\theta_{\max})$, so the two marginals carry equal total mass even when the two faces
-have unequal arclength; this is the discrete renormalisation the code applies
-(\code{coupling.py}, $\hat F=F/F[-1]$) and the condition under which $\chi_\#\hat\mu_A=\hat\mu_B$ is admissible,
-where $\hat\mu_X=\mu_X/\mu_X(\Gamma_c^X)$ are the normalised (probability) marginals. (The unnormalised arclength
-measures of two faces of unequal length carry unequal total mass and admit no measure-preserving map; the
-renormalisation is what makes the pushforward identity well posed, which is why \citet{brenier1991polar} and
-\citet{mccann1995existence} state existence for probability measures.) A correspondence
-$\chi:\Gamma_c^A\to\Gamma_c^B$ is \emph{admissible} when it transports the normalised slave measure onto the
-normalised master measure, $\chi_\#\hat\mu_A=\hat\mu_B$. Among admissible maps the Monge problem
-\eqref{eq:ot-monge-body} selects the one minimising the quadratic transport cost
-$c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2$.
-The Monge problem \eqref{eq:ot-monge-body} can be infeasible---no map need carry an atom of $\hat\mu_A$ to a spread
-of $\hat\mu_B$---so existence is established through its convex Kantorovich relaxation
-\eqref{eq:ot-kantorovich-body}, which minimises over transport plans $\pi\in\Pi(\hat\mu_A,\hat\mu_B)$ (couplings
-on $\Gamma_c^A\times\Gamma_c^B$ with the prescribed marginals) rather than over maps, with $P_A,P_B$ the
-coordinate projections \citep{villani2009optimal,santambrogio2015optimal}. The optimiser is
-characterised geometrically: the support of an optimal plan is $c$-cyclically monotone, meaning that for every
-finite cycle of matched pairs $\{(\xbf_i,\ybf_i)\}_{i=1}^{N}\subset\operatorname{supp}\pi$ no rematching lowers
-the total cost \eqref{eq:ot-cyclical-body},
-the transport analogue of the rearrangement inequality \citep{villani2009optimal,santambrogio2015optimal}. For
-the quadratic cost and an absolutely continuous slave marginal the relaxation \eqref{eq:ot-kantorovich-body} is tight:
-the optimal plan is supported on the graph of a map, $\pi=(\mathrm{id}\times\tmap)_\#\hat\mu_A$, so the Monge and
-Kantorovich values coincide and \eqref{eq:ot-cyclical-body} reduces to monotonicity of the correspondence,
-$\big(\tmap(\xbf_1)-\tmap(\xbf_2)\big)\cdot(\xbf_1-\xbf_2)\ge0$. On the one-dimensional contact parameter this is
-exactly the order-preserving (no-crossing) property of the conforming arclength rearrangement
-\eqref{eq:ot-brenier-1d-body}; it is the structure that the partial-support restriction below \emph{forfeits} when it
-drops to a sub-arc, not the cause of the smearing it avoids. For the quadratic cost \citet{brenier1991polar}
-proves the minimiser is unique and is the gradient of a convex
-potential $\Phi$, $\tmap=\grad\Phi$, provided $\hat\mu_A$ is absolutely continuous with respect to Lebesgue
-measure on the parameter line (here guaranteed by the strictly positive arclength density
-$\sqrt{1+\abs{h_A'}^2}\ge1>0$, so $\hat F_A$ is a strictly increasing homeomorphism and $\hat F_A^{-1}$ exists,
-which is exactly the absolute-continuity hypothesis the theorem requires)
-\citep{villani2009optimal,santambrogio2015optimal,peyre2019computational}. In one parameter dimension the explicit
-monotone-rearrangement form $\tmap=\hat F_B^{-1}\circ\hat F_A$ of the quadratic-cost Brenier map \eqref{eq:ot-brenier-1d-body}
-is classical
-\citep[Thm.~2.5]{santambrogio2015optimal}\citep[Thm.~2.18]{villani2003topics}\citep{mccann1995existence}, writing
-$F_X$ for the cumulative arclength and $\hat F_X$ for its normalisation by the total mass,
-so the transported point carries the same \emph{normalised} cumulative-arclength quantile. The renormalisation by
-the in general unequal total masses $F_A(\theta_{\max})\neq F_B(\theta_{\max})$ is exactly what makes the
-pushforward $\chi_\#\hat\mu_A=\hat\mu_B$ admissible (Section~\ref{sec:tmap:ot}): without it the composition would
-query $F_B^{-1}$ at a quantile up to $F_A(\theta_{\max})$ outside $F_B$'s range. This is the map
-$\code{MonotoneCoupling1D}$ evaluates ($\hat F=F/F[-1]$).\footnote{The quantile/marginal identity
+The core construction is stated in Section~\ref{sec:tmap:ot}: the arclength measures \eqref{eq:ot-measure-body},
+the Monge and Kantorovich problems \eqref{eq:ot-monge-body}--\eqref{eq:ot-kantorovich-body}, the $c$-cyclical
+monotonicity \eqref{eq:ot-cyclical-body} of the optimal support, and the explicit one-dimensional Brenier map
+$\tmap=\hat F_B^{-1}\circ\hat F_A$ \eqref{eq:ot-brenier-1d-body}, the map $\code{MonotoneCoupling1D}$ evaluates
+($\hat F=F/F[-1]$).\footnote{The quantile/marginal identity
 $\hat F_B(\tmap(x))=\hat F_A(x)$ characterising the one-dimensional monotone map $\tmap=\hat F_B^{-1}\!\circ\hat F_A$ (computed to
 machine precision in \code{MonotoneCoupling1D}) is machine-checked in Lean~4
 (\code{lean/OTContact/BrenierProposed.lean}, \code{quantile\_identity}, axiom-free). The measure-theoretic Brenier
 existence/uniqueness and the pushforward $(\tmap)_\#\mu_A=\mu_B$ are stated formally with a documented \code{sorry}
 and a prose proof (\code{brenier\_existence\_uniqueness\_proposed}, \code{monotone\_map\_pushes\_forward\_proposed});
-these require mathlib measure theory and are labelled proposed, not machine-checked.} The signed gap is the normal
-projection of the displacement to the transported point \eqref{eq:ot-gap-body},
-with $\nbf$ the true surface normal of \eqref{eq:jacobian-normal}; \eqref{eq:ot-gap-body} is the primary definition,
-valid in both regimes. In the conforming regime the correspondence itself is a gradient map \emph{on the
-parameter coordinate}: $\tmap=\Phi'$ with $\Phi$ the convex Brenier potential on the one-dimensional slave
-parameter line $\Gamma_c^A$ (the Kantorovich--Brenier link for the quadratic cost,
-\citet[Prop.~1.21]{santambrogio2015optimal}), so the parameter-to-parameter rearrangement
-$\theta_A\mapsto\psi_B=\Phi'(\theta_A)$ is monotone and conservative and the contact pairing carries no
-circulation. The signed gap \eqref{eq:ot-gap-body}, by contrast, is read in physical space: $\xbf\in\R^2$ is the slave
-point, $\tmap(\xbf)=\map{B}(\psi_B)\in\R^2$ its transported foot, and $\xbf-\tmap(\xbf)$ a physical displacement
-whose normal projection is $\gn$. The energy consistency of the \emph{traction} is the matched-normal property
-$\grad_{\xbf}\gn=\nbf$ of Remark~\ref{prop:matched-normal} (the chart normal is the unit gap gradient), not a
-claim that the physical displacement $\xbf-\tmap(\xbf)\in\R^2$ is itself the gradient of a scalar field on
-$\R^2$. In the partial/closest-point regime $\tmap=\pi_B$ is a coupling rather than a gradient map---$\pi_B$ is
-many-to-one across the medial axis, hence not even on the parameter line almost everywhere a single-valued
-monotone rearrangement---and \eqref{eq:ot-gap-body} remains the definition. Either way the measure-coupling gap is
-unbiased, unlike the single-body radial gap of Remark~\ref{prop:active-set} whose magnitude is enlarged by
-$1/\cos\alpha$.
+these require mathlib measure theory and are labelled proposed, not machine-checked.} Two structural points bear on
+the discretisation that follows, and neither is contained in the compact statement above. First, the gradient-map
+property lives on the \emph{parameter} line: in the conforming regime $\tmap=\Phi'$ with $\Phi$ the convex Brenier
+potential on $\Gamma_c^A$, so the parameter-to-parameter rearrangement $\theta_A\mapsto\psi_B=\Phi'(\theta_A)$ is
+monotone and conservative. This is not a claim that the physical displacement $\xbf-\tmap(\xbf)\in\R^2$ is itself
+the gradient of a scalar field on $\R^2$; the energy consistency of the traction is the matched-normal property
+$\grad_{\xbf}\gn=\nbf$ of Remark~\ref{prop:matched-normal}. Second, in the partial/closest-point regime
+$\tmap=\pi_B$ is a coupling rather than a gradient map, since $\pi_B$ is many-to-one across the medial axis, and
+\eqref{eq:ot-gap-body} remains the primary definition of the gap. Either way the measure-coupling gap is unbiased,
+unlike the single-body radial gap of Remark~\ref{prop:active-set} whose magnitude is enlarged by $1/\cos\alpha$.
 
 \subsection{The two limits: closest-point projection and arclength rearrangement}\label{app:ot:limits}
 
