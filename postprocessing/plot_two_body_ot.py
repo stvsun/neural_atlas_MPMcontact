@@ -88,7 +88,7 @@ plt.rcParams.update({
     "ytick.labelsize": 9.5,
     "axes.linewidth": 0.9,
     "figure.dpi": 150,
-    "savefig.dpi": 150,
+    "savefig.dpi": 300,
 })
 
 
@@ -228,6 +228,7 @@ def fig_patch(out_path):
                  r"through a non-matching mesh", fontsize=11.5, y=1.02)
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
+    fig.savefig(out_path.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)
     return dict(mortar_nonunif=mort_nonunif, lumped_nonunif=lump_nonunif)
 
@@ -343,6 +344,7 @@ def fig_hertz(out_path):
 
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
+    fig.savefig(out_path.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)
     return dict(a_relerr_finest=a_err_fin, p0_relerr_finest=p0_err_fin)
 
@@ -580,6 +582,7 @@ def fig_nbody(out_path):
 
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight")
+    fig.savefig(out_path.replace(".png", ".pdf"), bbox_inches="tight")
     plt.close(fig)
     return dict(n_iface=n_pairs, centre_mean_relerr=m["center_mean_relerr"],
                 global_balance=m["global_balance"])

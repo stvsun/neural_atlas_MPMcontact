@@ -588,7 +588,7 @@ Section~\ref{sec:cv7}.}
 Representation & Trainable params & Recon.\ error & Mean asperity angle \\
 \midrule
 Fourier height chart $h_\theta$ (\texttt{n\_freq}\,$=64$) & $66{,}178$ & $2.3~\mu$m & $19.8^\circ$ \\
-Ambient neural SDF $\phi(x,z)$ (depth $6$)                 & $83{,}073$ & $107~\mu$m & $12.5^\circ$ \\
+Ambient neural signed-distance function (SDF) $\phi(x,z)$ (depth $6$)                 & $83{,}073$ & $107~\mu$m & $12.5^\circ$ \\
 Plain-MLP chart (Fourier off, ablation)\footnotemark       & $49{,}922$ & $136~\mu$m & $11.5^\circ$ \\
 \midrule
 True measured surface                                      & ---        & ---        & $19.4^\circ$ \\
@@ -869,7 +869,7 @@ problem selects the one of least quadratic-cost transport,
 \tmap=\arg\min_{\chi_\#\hat\mu_A=\hat\mu_B}\int_{\Gamma_c^A} c\big(\xbf,\chi(\xbf)\big)\,d\hat\mu_A(\xbf),\qquad
 c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2,
 \end{equation}
-the quadratic cost the choice that makes the contact pairing a metric-projection map. The Monge
+the quadratic cost, the choice under which the coupling reduces to a closest-point (metric) projection in the partial-support limit. The Monge
 problem~\eqref{eq:ot-monge-body} can be infeasible (no map need carry an atom of $\hat\mu_A$ to a spread of
 $\hat\mu_B$), so existence is established through its convex Kantorovich relaxation, which minimises over
 transport plans $\pi\in\Pi(\hat\mu_A,\hat\mu_B)$ (couplings on $\Gamma_c^A\times\Gamma_c^B$ with the prescribed
@@ -1364,8 +1364,8 @@ per-component anisotropy is $0.20$--$0.22\%$ on the $D_4$ mesh, and the force ba
 numbers are measured. The residual $\sim2\%$ in the CV-8 half-width and peak pressure is the discrete
 contact-edge plus CST stress-recovery floor (the infinite Hertz edge-pressure slope resolved over one element;
 $p_0$ is a genuine realisation-robust floor at $2.31\pm0.07\%$ across a five-seed ensemble at the headline mesh,
-Table~\ref{tab:cv8-ensemble}); both CV-8 and CV-9a report single-realisation gate values, plane-strain CST
-small-strain, frictionless solves, with rigid outer walls in CV-9a.}
+Table~\ref{tab:cv8-ensemble}); both CV-8 and CV-9a report single-realisation gate values, plane-strain
+constant-strain-triangle (CST) small-strain, frictionless solves, with rigid outer walls in CV-9a.}
 \label{tab:ot:gates}
 \small
 \begin{tabular}{@{}llll@{}}
@@ -2120,7 +2120,7 @@ mesh-independent.
   \label{fig:cv8-patch}
 \end{figure}
 
-\paragraph{Deformable Hertz between two elastic blocks (CV-8).} The two-body BVP of Figure~\ref{fig:cv8-bvp}
+\paragraph{Deformable Hertz between two elastic blocks (CV-8).} The two-body boundary-value problem (BVP) of Figure~\ref{fig:cv8-bvp}
 presses two elastic blocks together and compares the contact half-width $a$ and the peak pressure $p_0$ against
 the line-contact closed form $a=2\sqrt{P'R/\pi E^{*}}$ with both bodies elastic. Because that closed form assumes
 elastic \emph{half-planes}, the benchmark is run in the half-plane regime: the blocks are deep and wide enough
@@ -2131,7 +2131,7 @@ $E^{*}_{\mathrm{eff}}=4P'R/\pi a^{2}$, matches the analytical $E^{*}=0.549$ to $
 from the Gauss-point pressures, at $2.26\%$ (finest mesh nx$=260$); Figure~\ref{fig:cv8-hertz} plots the sweep.
 The sliding history is centroid-monotone (maximum backstep $0.0$), the contact localises on $57$ nodes, and the
 global force balance is $1.7\times10^{-18}$. Both residuals sit at the discrete contact-edge plus
-constant-strain-triangle (CST) stress-recovery floor of $\sim2\%$: the peak pressure is a tight,
+CST stress-recovery floor of $\sim2\%$: the peak pressure is a tight,
 realisation-independent CST floor (error $\approx2.3\%$ across the whole sweep), while the half-width jitters
 within an edge-quantisation band ($1.81\to6.05\to1.54\to1.64\%$; the nx$=180$ spike is a one-surface-node shift
 of the recovered edge), because the Hertz edge-pressure slope is infinite at $x=\pm a$ and the recovered contact
@@ -2256,8 +2256,8 @@ subset here, where the two-body advantage is argued.
   \label{fig:cv9-array}
 \end{figure}
 
-Both two-body solves are single-realization gate values (the CV-8 headline mesh additionally carries a
-five-realisation ensemble, Table~\ref{tab:cv8-ensemble}), plane-strain constant-strain-triangulation (CST)
+Both two-body solves are single-realisation gate values (the CV-8 headline mesh additionally carries a
+five-realisation ensemble, Table~\ref{tab:cv8-ensemble}), plane-strain constant-strain-triangle (CST)
 small-strain, and frictionless, with rigid outer
 walls in CV-9a; the analytic four-block tangent matches the symbolic Jacobian $dR/du$ on all $64$ entries and the
 finite-difference perturbation of the residual to $3.45\times10^{-11}$, with a net force balance of
@@ -2717,11 +2717,11 @@ On the atlas geometry the dilatancy emerges from the asperities with no effectiv
   \label{fig:cv7-atlas-sdf}
 \end{figure}
 
-The result holds on real data, not only the synthetic band-limited surface. On an actual Inada-granite topography patch resolved at the mesh scale, the atlas decoder reconstructs the surface to $3.2\%$ of RMS against the SDF's $15.8\%$, and the level set under-predicts the frictionless geometric dilatancy by $\sim60\%$ and the friction strength by $\sim17\%$. The two geometries must not be conflated. The $61\%$ strength figure is the real Inada 1-D profile (Section~\ref{sec:cv7-headline}), and the $98\%/35\%$ pair is the synthetic 3-D decoder run. The sign is nonetheless uniform across both, and across five independent roughness realizations the level set under-predicts the emergent dilatancy by $58\%\pm35\%$. The magnitude depends on how much asperity slope each realization's smoothing destroys, but the under-prediction itself is a statistical fact, not a cherry-picked surface.
+The result holds on real data, not only the synthetic band-limited surface. On an actual Inada-granite topography patch resolved at the mesh scale, the atlas decoder reconstructs the surface to $3.2\%$ of RMS against the SDF's $15.8\%$, and the level set under-predicts the frictionless geometric dilatancy by $\sim60\%$ and the friction strength by $\sim17\%$. The two geometries must not be conflated. The $61\%$ strength figure is the real Inada 1-D profile (Section~\ref{sec:cv7-headline}), and the $98\%/35\%$ pair is the synthetic 3-D decoder run. The sign is nonetheless uniform across both, and across five independent roughness realisations the level set under-predicts the emergent dilatancy by $58\%\pm35\%$. The magnitude depends on how much asperity slope each realisation's smoothing destroys, but the under-prediction itself is a statistical fact, not a cherry-picked surface.
 
 Three further studies carry the program beyond this headline and are reported in the supplementary appendix (Appendix~\ref{app:supp}): the transition-map height-chart detector routed as the FEM $(\text{gap},\text{normal})$ contract (active-set agreement $98.9\%$ for the chart against $95.8\%$ for the ambient SDF on $10^5$ query points, at $1.47\times$ the per-query cost), a cyclic stick/slip energy ledger that closes per cycle, and an explicit ChartMPM cross-check that reproduces the Coulomb friction floor.
 
-This validation has a deliberately narrow scope. The blocks here are one deformable face on a rigid mating surface, or two single-realization deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength and dilatancy (Section~\ref{sec:cv7-headline}, Table~\ref{tab:cv7-atlas-sdf}).
+This validation has a deliberately narrow scope. The blocks here are one deformable face on a rigid mating surface, or two single-realisation deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength and dilatancy (Section~\ref{sec:cv7-headline}, Table~\ref{tab:cv7-atlas-sdf}).
 
 %% ======================== 08_discussion_conclusions ========================
 \section{Discussion, limitations, and conclusions}\label{sec:disc}
@@ -2875,7 +2875,7 @@ is realisation-robust at $2.31\pm0.07\%$ (a systematic CST floor, not a lucky se
 $[0.94,1.87]\%$ ($1.42\pm0.32\%$), with the reported seed the median $1.54\%$; the spread is the contact-edge
 quantisation itself. Running the benchmark in the half-plane regime the closed form assumes ($a/H\le0.14$) is
 what removes the earlier shallow-block finite-size compliance offset and exposes this $\sim2\%$ floor as the true
-residual. The remaining solves are single-realization, plane-strain CST
+residual. The remaining solves are single-realisation, plane-strain CST
 (small-strain), frictionless, with rigid outer walls in CV-9a. The geometric tangent term
 $d\nbf/d\chi$ is dropped under the standard small-rotation approximation, which leaves the converged solution
 tangent-independent (identical $a_{\mathrm{fem}}$ at $40$ and $120$ iterations); it is a convergence-rate lever,

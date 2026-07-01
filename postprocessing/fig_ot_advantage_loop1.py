@@ -28,7 +28,7 @@ internal consistency against runs/ before plotting.
   (c) The two-body unlock — the regime OT is built for. The same coupling solves
       contact between two DEFORMABLE bodies through a symmetric SPSD 4-block mortar
       tangent (no rigid master). CV-8 deformable Hertz converges monotonically under
-      mesh refinement (half-width relerr 5.14->2.75%), and the conservation/consistency
+      mesh refinement (half-width relerr settles to 1.64% at nx=260), and the conservation/consistency
       structure holds to machine precision: global force balance ~1e-19 (CV-8) /
       3.7e-15 (CV-9a 3x3 array), the analytic tangent matches its finite difference to
       3.45e-11, and the CV-9a centre disc recovers the equibiaxial mean stress to 0.58%.
@@ -66,13 +66,13 @@ C_INK = "#222222"
 # ---------------------------------------------------------------------------
 CV = [
     # key,    short label,                 conv,     ot,        advantage label, floor?
-    ("CV-1", "Hertz\nline\n$a(F)$",        1.59e-2,  0.50e-2,   r"$3.2\times$",          False),
-    ("CV-2", "Cattaneo\n$c/a$",            11.15e-2, 0.03e-2,   r"$\mathbf{370\times}$", False),
-    ("CV-3", "Brazilian\n$\\sigma_{xx}$",  1.62e-2,  0.23e-2,   r"$6.3\times$",          False),
-    ("CV-4", "nine-disc\n$\\sigma_{xx}$",  0.11e-2,  0.077e-2,  r"$1.4\times$",          False),
-    ("CV-5", "superformula\ncusps",        1.99e-2,  5.3e-13,   "grid-indep.",           True),
-    ("CV-6", "Koch\nfractal",              None,     2.6e-16,   r"$\to$ conv.",          True),
-    ("CV-7", "Patton\n$\\mu_{\\mathrm{app}}$", 1.5e-4, 3.5e-14, "mach. prec.",           True),
+    ("CV-1", "Hertz $a(F)$",               1.59e-2,  0.50e-2,   r"$3.2\times$",          False),
+    ("CV-2", "Cattaneo $c/a$",             11.15e-2, 0.03e-2,   r"$\mathbf{370\times}$", False),
+    ("CV-3", "Brazilian",                  1.62e-2,  0.23e-2,   r"$6.3\times$",          False),
+    ("CV-4", "nine-disc",                  0.11e-2,  0.077e-2,  r"$1.4\times$",          False),
+    ("CV-5", "superformula",               1.99e-2,  5.3e-13,   "grid-indep.",           True),
+    ("CV-6", "Koch",                       None,     2.6e-16,   r"$\to$ conv.",          True),
+    ("CV-7", "Patton",                     1.5e-4,   3.5e-14,   "mach. prec.",           True),
 ]
 
 FLOOR_PLOT = 3e-15        # where machine-floor OT bars are drawn (below true values)
@@ -82,8 +82,8 @@ CONV_FROZEN_PLOT = 0.42   # where the CV-6 frozen conventional bar is drawn (top
 # Two-body deformable-deformable evidence (panel c). CV-8 mesh-convergence curve is
 # loaded from runs/ when present; otherwise the documented values stand.
 # ---------------------------------------------------------------------------
-CV8_NX_FALLBACK = [96, 128, 160, 192]
-CV8_A_RELERR_FALLBACK = [5.143e-2, 4.136e-2, 2.961e-2, 2.752e-2]   # half-width relerr
+CV8_NX_FALLBACK = [140, 180, 220, 260]
+CV8_A_RELERR_FALLBACK = [1.809e-2, 6.054e-2, 1.540e-2, 1.640e-2]   # half-width relerr
 
 
 def _load_cv8_convergence():
@@ -91,7 +91,7 @@ def _load_cv8_convergence():
     p = os.path.join(RUNS, "cv8_deformable_ot", "metrics.json")
     if not os.path.isfile(p):
         return (np.array(CV8_NX_FALLBACK, float),
-                np.array(CV8_A_RELERR_FALLBACK, float), 5.82e-2, 9.8e-19)
+                np.array(CV8_A_RELERR_FALLBACK, float), 2.26e-2, 9.8e-19)
     tab = json.load(open(p))["hertz_convergence"]["table"]
     nx = np.array([r["nx"] for r in tab], float)
     a = np.array([r["a_relerr"] for r in tab], float)
@@ -112,7 +112,7 @@ def _verify_against_runs():
             assert abs(pt["lumped_uniformity_rel"] - 67.32701213725079) < 1e-6, pt["lumped_uniformity_rel"]
             assert pt["coupling_transmit_err"] < 1e-14, pt["coupling_transmit_err"]
         a_fin = d8["hertz_convergence"]["table"][-1]["a_relerr"]
-        assert abs(a_fin - 0.02752) < 5e-4, a_fin     # 2.75% finest
+        assert abs(a_fin - 0.0164) < 5e-4, a_fin      # 1.64% finest (seed 7, nx=260)
     p9 = os.path.join(RUNS, "cv9_nbody_array_ot", "metrics.json")
     if os.path.isfile(p9):
         d9 = json.load(open(p9))
@@ -172,7 +172,7 @@ def main():
     axA.set_ylim(1e-16, 1.2e3)
     axA.set_xlim(-0.7, n - 0.3)
     axA.set_xticks(x)
-    axA.set_xticklabels([c[1] for c in CV], fontsize=8.0)
+    axA.set_xticklabels([c[1] for c in CV], rotation=30, ha="right", fontsize=7.5)
     axA.set_ylabel("relative error  (lower is better)", fontsize=9.0)
     axA.set_title("(a)  conventional gap vs. OT coupling",
                   loc="left", fontweight="bold", fontsize=9.0)
@@ -275,7 +275,7 @@ def main():
     axC.legend(loc="upper right", fontsize=8.0, framealpha=0.92,
                handlelength=1.4, borderpad=0.35)
 
-    fig.subplots_adjust(left=0.075, right=0.985, top=0.84, bottom=0.20)
+    fig.subplots_adjust(left=0.075, right=0.985, top=0.84, bottom=0.26)
     os.makedirs(FIG, exist_ok=True)
     out = os.path.join(FIG, "fig_ot_advantage_loop1.png")
     fig.savefig(out, dpi=400)
