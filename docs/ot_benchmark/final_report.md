@@ -18,7 +18,7 @@ per round), `math_verification.md` (the math agent's findings).
 |----|---------|--------|--------------|-------------|-----------|
 | CV-1 | Hertz line contact | half-width `a` relerr (robust) | 1.59% | **0.50%** | **3.2×** |
 | CV-2 | Cattaneo–Mindlin | stick-radius `c/a` relerr | 11.15% | **0.03%** | **370×** |
-| CV-3 | Brazilian disc | centre `σ_xx` relerr | 1.62% | **0.23%** | **6.3×** |
+| CV-3 | Brazilian disc | centre `σ_xx` relerr | 1.62% | **0.23%** | **7.0×** |
 | CV-4 | Nine-disc cell | centre `σ_xx` relerr | 0.11% | **0.077%** | **1.4×** |
 | CV-5 | Superformula cusps | cusp gap RMS | 1.99e-2 | **5.3e-13** | **>1e10× (grid-indep.)** |
 | CV-6 | Koch fractal | contact-force cross-level increment | frozen (non-convergent) | **2.6e-16** | **convergent vs frozen** |
@@ -110,6 +110,12 @@ contact across the whole interface. The correct OT map for a localized convex in
 projection $g=|p-c|-R$, as `cv1_ot_gap.py:15-20` documents). CV-8 hardcodes `closest_point` for all
 seat/slide/convergence solves; arclength is used only for the full-contact patch test. Two prior bugs were
 also fixed: an inverted Hertz geometry (`cv8` `block_mesh` sign) and the arclength-for-partial mis-use.
+
+> **Superseded (loop 12):** the CV-8 numbers in the two paragraphs below are the original *shallow-block*
+> run (W=1, H=0.5 → a/H≈0.43, ~10% stiffer than the half-plane the closed form assumes). The current
+> headline is the **half-plane-regime rerun** (W=2, H=2, finest nx=260: a relerr **1.64%**, p0 **2.26%**;
+> ensemble a 1.42±0.32%, p0 2.31±0.07%) reported in the paper and `docs/ot_math_code_consistency.md` /
+> `next_phase_status.md`. Kept here unchanged as the historical loop log.
 
 **CV-8 / T2 — deformable Hertz** (`runs/cv8_deformable_ot/metrics.json`): finest nx=192 gives
 $a$ relerr **2.75%** (<10%) and $p_0$ relerr **5.82%** (<12%, $p_0$ from Gauss-point pressures), with

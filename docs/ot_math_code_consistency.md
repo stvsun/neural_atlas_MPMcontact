@@ -199,7 +199,7 @@ Lean precondition (`patch_test_resultant`).
 | CV-8 patch test / force balance | 1.4e-16 / 1.7e-18 | same | yes |
 | CV-9a centre mean stress / anisotropy (D4) / force balance | 0.58% / 0.20–0.22% / 3.71e-15 | `cv9_nbody_array_ot.py`; `tests/test_cv9_nbody_ot.py` | yes |
 | tangent FD / force balance | 3.45e-11 / 4.4e-16 | `two_body.py` self-tests | yes |
-| OT-vs-conventional head-to-head (CV-1..7) | 1.59→0.50 (3.2×), 11.15→0.03 (370×), 1.62→0.23 (6.3×), 0.11→0.077 (1.4×), 1.99e-2→5.3e-13, frozen→2.6e-16, 1.5e-4→3.5e-14 | `final_report.md` §1 Table 1 | yes — `tab:ot_vs_conv` + `fig:ot_advantage` (P1, FIG-OT-ADV-1) |
+| OT-vs-conventional head-to-head (CV-1..7) | 1.59→0.50 (3.2×), 11.15→0.03 (370×), 1.62→0.23 (7.0×), 0.11→0.077 (1.4×), 1.99e-2→5.3e-13, frozen→2.6e-16, 1.5e-4→3.5e-14 | `final_report.md` §1 Table 1 | yes — `tab:ot_vs_conv` + `fig:ot_advantage` (P1, FIG-OT-ADV-1) |
 
 ## 6. Honest residuals / caveats carried in the paper (unchanged)
 

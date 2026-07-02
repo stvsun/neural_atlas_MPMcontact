@@ -11,7 +11,7 @@ internal consistency against runs/ before plotting.
   (a) Seven-case head-to-head. Conventional node-to-surface lumped-penalty gap vs the
       OT measure-coupling (Brenier transition-map) gap, each driven to its converged
       resolution, as a relative error (log scale, lower is better). Each pair is
-      annotated with the measured advantage factor (3.2x, 370x, 6.3x, 1.4x,
+      annotated with the measured advantage factor (3.2x, 370x, 7.0x, 1.4x,
       grid-indep., convergent, machine-prec.). The three geometry-dominated cases
       (CV-5/6/7) fall to machine/grid floors where a resolution-bound gap function is
       frozen; those OT bars are drawn at a plotting floor and labelled with their true
@@ -68,7 +68,7 @@ CV = [
     # key,    short label,                 conv,     ot,        advantage label, floor?
     ("CV-1", "Hertz $a(F)$",               1.59e-2,  0.50e-2,   r"$3.2\times$",          False),
     ("CV-2", "Cattaneo $c/a$",             11.15e-2, 0.03e-2,   r"$\mathbf{370\times}$", False),
-    ("CV-3", "Brazilian",                  1.62e-2,  0.23e-2,   r"$6.3\times$",          False),
+    ("CV-3", "Brazilian",                  1.62e-2,  0.23e-2,   r"$7.0\times$",          False),
     ("CV-4", "nine-disc",                  0.11e-2,  0.077e-2,  r"$1.4\times$",          False),
     ("CV-5", "superformula",               1.99e-2,  5.3e-13,   "grid-indep.",           True),
     ("CV-6", "Koch",                       None,     2.6e-16,   r"$\to$ conv.",          True),

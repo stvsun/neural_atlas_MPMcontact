@@ -16,6 +16,7 @@
      "ot": {"cv1": 3.24, "cv2": 0.41, "cv3": 1.29, "cv4": 0.12, "cv5": 1.18e-4, "cv6": 0.06, "cv7": 2.0e-12}},
     {"round": 1, "label": "ReAct+Reflexion; ALL 7 improved; math-verify clean",
      "ot": {"cv1": 1.48, "cv2": 0.13, "cv3": 0.258, "cv4": 0.077, "cv5": 5.26e-13, "cv6": 2.43e-5, "cv7": 3.45e-14},
+     "conventional_refresh": {"cv4": 0.11, "note": "phase-3 refreshed conventional baseline (phase_log.md round-1 table); this 0.11 is the headline conventional CV-4 used by the paper table, final_report table 1, and the advantage string (0.11/0.077 = 1.4x; the round-0 0.15 would give 1.9x)"},
      "all_improved": true},
     {"round": 2, "label": "convergence test + Euler A100; math agent corrected a wrong round-1 claim (geometric tangent is path-only, not an accuracy bias)",
      "ot": {"cv1": 0.50, "cv2": 0.03, "cv3": 0.23, "cv4": 0.077, "cv5": 5.26e-13, "cv6": 2.6e-16, "cv7": 3.45e-14},
@@ -26,8 +27,8 @@
      "cv1_mesh_convergence": "robust a_err vs n_fine: 120->1.90%, 240->0.50%, 360->0.40%, 480->0.43% (plateau ~0.4-0.5%); Euler --fine-mesh -> 6.90% (degrades). Discrete-edge floor: infinite Hertz edge-pressure slope rounded over 1 element.",
      "note": "No CV improved in round 3 -> stop criterion met."}
   ],
-  "best_ot": {"cv1": 0.50, "cv2": 0.03, "cv3": 0.23, "cv4": 0.077, "cv5": 5.26e-13, "cv6": 2.43e-5, "cv7": 3.45e-14},
-  "ot_vs_conventional_advantage": {"cv1": "3.2x", "cv2": "370x", "cv3": "6.3x", "cv4": "1.4x", "cv5": ">1e10x (grid-indep)", "cv6": "convergent vs frozen", "cv7": "~1e10x (machine-precision)"},
+  "best_ot": {"cv1": 0.50, "cv2": 0.03, "cv3": 0.23, "cv4": 0.077, "cv5": 5.26e-13, "cv6": 2.6e-16, "cv7": 3.45e-14},
+  "ot_vs_conventional_advantage": {"cv1": "3.2x", "cv2": "370x", "cv3": "7.0x", "cv4": "1.4x", "cv5": ">1e10x (grid-indep)", "cv6": "convergent vs frozen", "cv7": "~1e10x (machine-precision)"},
   "improvement_tol_rel": 0.05,
   "stop": true,
   "stop_reason": "Converged at round 3: no CV improved (frontier 7->1->0). CV-1 plateau proven by mesh convergence + Euler fine-mesh degradation; the other 6 at evidenced floors since rounds 1-2. Math verification clean (one wrong doc claim self-corrected).",

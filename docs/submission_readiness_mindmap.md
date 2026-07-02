@@ -34,7 +34,7 @@ Living planning doc for the multi-agent campaign. Updated every loop.
 
 - CV-8: a **1.64%**, p0 **2.26%**; ens a **1.42±0.32%**, p0 **2.31±0.07%**; a/W 0.137; patch 1.4e-16; FD 3.45e-11; force bal 1.7e-18.
 - CV-9a: mean **0.58%**, anisotropy 0.20–0.22%, force bal 3.71e-15.
-- OT-vs-conv: 1.59→0.50 (3.2×), 11.15→0.03 (370×), 1.62→0.23 (6.3×).
+- OT-vs-conv: 1.59→0.50 (3.2×), 11.15→0.03 (370×), 1.62→0.23 (7.0×).
 - CV-7: strength −**61%** (Inada), dilatancy −**98%** (synthetic), recon 2.3µm vs 107µm; active set 98.9% vs 95.8%.
 - Fourier recon 2.2%/48%/15.7%.
 

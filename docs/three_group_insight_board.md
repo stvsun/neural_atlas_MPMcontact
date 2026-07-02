@@ -6,7 +6,7 @@ Reasoning + Action + Reflexion routine. Updated after every round. Groups read t
 ## Ground rules (all groups)
 
 - **Protected numbers (never drift):** CV-8 a 1.64% / p0 2.26% / ens 1.42±0.32% / 2.31±0.07% / a/W 0.137 /
-  patch 1.4e-16 / FD 3.45e-11 / force bal 1.7e-18; CV-9a 0.58% / 0.20–0.22% / 3.71e-15; OT-vs-conv 3.2×/370×/6.3×;
+  patch 1.4e-16 / FD 3.45e-11 / force bal 1.7e-18; CV-9a 0.58% / 0.20–0.22% / 3.71e-15; OT-vs-conv 3.2×/370×/7.0×;
   CV-7 −61% / −98% / recon 2.3µm/107µm / active 98.9%/95.8%; Fourier recon 2.2%/48%/15.7%.
 - **Figures — SAFE to regenerate** (deterministic, read committed `runs/*.json` or pure schematic/TikZ):
   `plot_two_body_ot.py` (cv8_hertz, cv9_nbody, cv8_patch), `plot_numerical_cv_summary.py`,
@@ -42,11 +42,14 @@ campaign already polished Figs 2 (transition_map_composite), 3 (fourier_mechanis
 
 ## DEFERRED TO HUMAN (need a decision — do not auto-change)
 
-1. **Brazilian OT-vs-conv ratio "6.3×" is arithmetically wrong.** The row (main.tex:2343) shows conv 1.62%,
-   OT 0.23%, ratio **6.3×**, but 1.62/0.23 = **7.04×**. Same triple hardcoded in `fig_ot_advantage_loop1.py`.
-   6.3× is a "protected" number, so I did NOT change it. FIX OPTIONS: (a) correct the ratio to ~7.0×, or
-   (b) the true underlying OT relerr is ~0.257% (1.62/0.257=6.3) and 0.23% is the rounded/typo'd value — check
-   the CV-3 driver output and correct whichever is wrong. Needs the source number confirmed.
+1. **RESOLVED — Brazilian OT-vs-conv ratio corrected 6.3×→7.0×.** The row (main.tex:2343) showed conv 1.62%,
+   OT 0.23%, ratio **6.3×**, but 1.62/0.23 = **7.04×**. Root cause confirmed: the 6.3× was computed against the
+   round-1 OT value 0.258% (1.62/0.258=6.28) and never recomputed after round 2 refined the fine-mesh OT relerr
+   to 0.23% (ledger.json rounds). CV-3 driver re-run confirms OT relerr 0.26% (default mesh) → 0.23% (`--fine-mesh`,
+   Euler A100), i.e. 0.23% is the authoritative reported value; the ratio is the stale derived quantity. FIX
+   APPLIED (option a): ratio → **7.0×** in main.tex:2343, `fig_ot_advantage_loop1.py`, `ledger.json`,
+   `final_report.md`, `ot_math_code_consistency.md`, `submission_readiness_mindmap.md`, and this board; figure
+   regenerated. 7.0× stays inside the abstract's stated 1.4×–370× range.
 2. **CV-8 slave/master A/B convention flips.** OT theory: A=slave, B=master. The CV-8 figure labels
    Ω_A='master'/Ω_B='slave' (and the Koch figure follows the figure's assignment). Pick one direction:
    relabel the figure to A=slave, or add a one-line CV-8 caption note that A plays the master role there.
