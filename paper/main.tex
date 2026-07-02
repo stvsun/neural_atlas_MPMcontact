@@ -182,7 +182,7 @@ whereas a boundary chart of the same surfaces resolves the slopes and recovers t
 A computational contact algorithm reduces, at each query point $\xbf$ near a body $X$, to two local
 questions. Is $\xbf$ inside $X$, and by how much? This is the gap $\gn$, with the sign convention
 $\gn<0\Leftrightarrow$ penetration used throughout. Along which direction is the surface? This is the
-outward normal $\nbf$. Given the pair $(\gn,\nbf)$, the standard enforcement schemes (penalty,
+normal $\nbf$. Given the pair $(\gn,\nbf)$, the standard enforcement schemes (penalty,
 augmented Lagrangian, mortar, Nitsche) convert it into nodal forces \citep{wriggers2006computational,
 laursen2002computational,kikuchi1988contact}. On smooth, convex bodies the gap and the normal vary smoothly, every scheme converges to the
 same answer, and accuracy is set by the enforcement. On geometrically complex bodies this fails: the gap and the normal
@@ -496,7 +496,7 @@ work carries the same composition \emph{across the gap between two bodies}: the 
 Section~\ref{sec:tmap} reads the gap and the normal from the \emph{inter-body transition map}
 $\tmap=\map{B}^{-1}\circ\map{A}=\pi_B\circ\map{A}$, the boundary-chart analogue of $\psi_{ij}$~\eqref{eq:intra-tmap}
 (Figure~\ref{fig:atlas-extension}). The geometry, the governing equations, and the chart-Jacobian pull-back are
-inherited unchanged; what is new is that the transition map now joins the boundaries of two separate atlases,
+inherited unchanged; the transition map now joins the boundaries of two separate atlases,
 turning a coordinate change into a contact-pairing operator.
 
 \begin{figure}[t]
@@ -516,7 +516,7 @@ that the contact virtual work \eqref{eq:contact-vw} consumes follow from $\tmap$
 
 \subsection{Fourier-feature representation}\label{sec:fourier}
 
-A coordinate network applied to the raw parameter does not resolve a sharp surface at a practical budget, since
+A coordinate network applied to the raw parameter does not resolve a sharp surface at a practical budget, because
 its kernel low-passes high frequencies. The parameter is therefore encoded through a fixed sinusoidal bank before the network: with
 $\tilde x\in[-1,1]^d$ the normalised parameter, $B\in\R^{K\times d}$ a bank of $K$ frequency rows, and the
 feature map $\gamma:[-1,1]^d\to\R^{2K}$,
@@ -635,7 +635,7 @@ read from the atlas.
 \subsection{Virtual work}\label{sec:weak}
 
 The strong form \eqref{eq:balance} holds pointwise and demands more regularity than a contact solution
-possesses; the variational form relaxes it to an integral statement that later admits the contact
+possesses; the variational form relaxes it to an integral statement that admits the contact
 constraint and the chart pull-back without further change. Define the trial and test spaces
 \begin{equation}\label{eq:spaces}
 \mathcal S^\alpha=\big\{\ubf\in[H^1(\Omega^\alpha)]^d:\ubf=\bar\ubf^\alpha\ \text{on}\ \Gamma_u^\alpha\big\},\qquad
@@ -691,8 +691,8 @@ $\bm\sigma$ in the small-strain regime) and using the identity $\bm P:(\bm G\bm 
 \bm P_{\mathrm{chart}}:=\abs{\det\bm J}\,\bm P\,\bm J^{-\top}\in\R^{d\times d},
 \end{equation}
 so the elasticity is integrated over the reference cube $U$, and the Piola transform $\bm P_{\mathrm{chart}}$ is
-the only chart-dependent stress. A steep neural chart can make $\bm J$ ill conditioned;
-$\bm J^{-1}$ and $\abs{\det\bm J}$ are therefore formed from the singular-value decomposition $\bm J=\bm U
+the only chart-dependent stress. A steep neural chart can make $\bm J$ ill conditioned, so
+$\bm J^{-1}$ and $\abs{\det\bm J}$ are formed from the singular-value decomposition $\bm J=\bm U
 \bm\Sigma\bm V^{\!\top}$ with the spectrum floored,
 \begin{equation}\label{eq:svd-stab}
 \bm\Sigma_{\!s}=\max(\bm\Sigma,\sigma_{\!f}),\qquad
@@ -720,18 +720,18 @@ node-to-surface treatment recovers them by \emph{projection}: a point on one bod
 and the closest-point distance and the surface normal at the foot of that projection are taken as the gap and
 the normal. This projection is the origin of much of the difficulty in computational contact. In a concavity several feet
 are equidistant and the projection is non-unique; where the master surface curves sharply it is
-ill-conditioned; and along several disjoint contact patches it returns only one foot.
+ill-conditioned; along several disjoint contact patches it returns one foot.
 The level set inherits the same weakness in another guise: it reads $\gn$ and $\nbf$ from the ambient field
 through \eqref{eq:sdf-gap}, but the field must interpolate a distance function through the whole volume, so its
 accuracy decays exactly where the surface is sharpest.
 
 The atlas takes a different route. Because each body already carries a chart of its own boundary, the gap and
-the normal need not be recovered by a search at all: a surface point of one body is carried directly to its
+the normal need no search: a surface point of one body is carried directly to its
 mate on the other by \emph{composing} one chart with the inverse of the other. This composition is the
 \emph{transition map} from which the formulation below reads the gap and the normal. It replaces a minimisation
 with an evaluation that never leaves the surface and, as the following subsections establish, returns the gap
 with the exact sign (Remark~\ref{prop:active-set}), the normal as a gap gradient (Remark~\ref{prop:matched-normal}),
-and all contact patches rather than only the nearest one (Remark~\ref{lemma:multiarc}). This composition is the
+and all contact patches rather than the nearest one (Remark~\ref{lemma:multiarc}). This composition is the
 optimal-transport coupling of the two boundary measures, identified in Section~\ref{sec:tmap:ot}; the
 closest-point projection is its partial-support limit and the arclength-monotone rearrangement its conforming
 limit.
@@ -759,7 +759,7 @@ point, so the composition takes one surface coordinate straight to its counterpa
 \end{equation}
 as drawn in Figure~\ref{fig:tm-concept}. The construction is an evaluation followed by a chart inversion, the
 same operation an atlas uses to pass between two overlapping charts, here applied across the gap between two
-bodies, and requiring no closest-point search. The outward normal follows from the chart tangents
+bodies, with no closest-point search. The outward normal follows from the chart tangents
 $\tbf_i=\partial\map{}/\partial\xi^i$: in three dimensions it is their normalised cross product, in two
 dimensions the quarter-turn of the single tangent,
 \begin{equation}\label{eq:jacobian-normal}
@@ -869,9 +869,9 @@ problem selects the one of least quadratic-cost transport,
 \tmap=\arg\min_{\chi_\#\hat\mu_A=\hat\mu_B}\int_{\Gamma_c^A} c\big(\xbf,\chi(\xbf)\big)\,d\hat\mu_A(\xbf),\qquad
 c(\xbf,\ybf)=\tfrac12\norm{\xbf-\ybf}^2,
 \end{equation}
-the quadratic cost, the choice under which the coupling reduces to a closest-point (metric) projection in the partial-support limit. The Monge
+the quadratic cost, under which the coupling reduces to a closest-point (metric) projection in the partial-support limit. The Monge
 problem~\eqref{eq:ot-monge-body} can be infeasible (no map need carry an atom of $\hat\mu_A$ to a spread of
-$\hat\mu_B$), so existence is established through its convex Kantorovich relaxation, which minimises over
+$\hat\mu_B$), so existence follows from its convex Kantorovich relaxation, which minimises over
 transport plans $\pi\in\Pi(\hat\mu_A,\hat\mu_B)$ (couplings on $\Gamma_c^A\times\Gamma_c^B$ with the prescribed
 marginals) rather than over maps,
 \begin{equation}\label{eq:ot-kantorovich-body}
@@ -914,7 +914,7 @@ with $\nbf$ the chart normal \eqref{eq:jacobian-normal}; \eqref{eq:ot-gap-body} 
 gap, and unlike the single-body radial gap of Remark~\ref{prop:active-set} it carries no $1/\cos\alpha$ magnitude
 bias.
 
-One coupling carries two regimes, selected by the support of the contact, and the closest-point projection is
+One coupling carries two regimes, selected by the support of the contact; the closest-point projection is
 not the opposite of the transition map but its partial-support limit:
 \begin{equation}\label{eq:ot-twolimits-body}
 \tmap(\xbf)=
@@ -935,7 +935,7 @@ single-valued, restricts to the closest-point projection $\pi_B$ with gap $\gn=\
 slave point, $\bm c$ the indenter centre, $R$ its radius (Figure~\ref{fig:ot-coupling}c;
 Remark~\ref{rem:ot-limits}). The closest-point projection that the
 node-to-segment tradition rejects as fragile is therefore the convex-cost limit of the one coupling. The
-driver accordingly selects the closest-point map for the seat, slide, and convergence solves and reserves
+driver selects the closest-point map for the seat, slide, and convergence solves and reserves
 the arclength-monotone map for the conforming patch test.
 
 The discrete form of \eqref{eq:ot-gap-body} is a mortar assembly. On $P_1$ surface elements with Gauss
@@ -1051,7 +1051,7 @@ laursen2002computational}. The Coulomb law is regularised by a slip-velocity sca
 approaching the cone bound $\mu\,t_N$ for $\norm{\vbf_T}\gg\varepsilon_T$ and a stiff stick
 spring for $\norm{\vbf_T}\ll\varepsilon_T$.
 
-A note on terminology, since it bears on the stability literature a contact reader expects. Here
+A note on terminology, since it bears on the stability literature. Here
 \emph{mortar-consistent} describes the assembly, not the constraint enforcement. The traction field is
 integrated against the master interpolation with the partition-of-unity marginal $\sum_K(N_K^-\!\circ\chi)=1$, so
 a constant pressure transmits exactly across a non-matching mesh (Proposition~\ref{prop:patch}). The unilateral
@@ -1112,8 +1112,8 @@ $(\gn,\nbf,\tbf_{\mathrm{proj}})$
 This section supplies the optimal-transport backbone of the transition-map contact model of
 Section~\ref{sec:tmap}: the boundary measures, the Brenier map and its two limits, the discrete measure coupling
 and its identity with a mortar assembly, and the symmetric four-block consistent tangent that solves the
-two-body deformable--deformable problem. The core equations are stated in Section~\ref{sec:tmap:ot}; here we
-supply the measure-theoretic derivations, the partial-support (unbalanced) optimal-transport argument, the full
+two-body deformable--deformable problem. The core equations are stated in Section~\ref{sec:tmap:ot}; this section
+supplies the measure-theoretic derivations, the partial-support (unbalanced) optimal-transport argument, the full
 four-block tangent, and the decisive numerical gates.
 
 \subsection{The measure-coupling gap and the Brenier map}\label{app:ot:gap}
@@ -1129,7 +1129,7 @@ machine precision in \code{MonotoneCoupling1D}) is machine-checked in Lean~4
 existence/uniqueness and the pushforward $(\tmap)_\#\mu_A=\mu_B$ are stated formally with a documented \code{sorry}
 and a prose proof (\code{brenier\_existence\_uniqueness\_proposed}, \code{monotone\_map\_pushes\_forward\_proposed});
 these require mathlib measure theory and are labelled proposed, not machine-checked.} Two structural points bear on
-the discretisation that follows, and neither is contained in the compact statement above. First, the gradient-map
+the discretisation that follows. First, the gradient-map
 property lives on the \emph{parameter} line: in the conforming regime $\tmap=\Phi'$ with $\Phi$ the convex Brenier
 potential on $\Gamma_c^A$, so the parameter-to-parameter rearrangement $\theta_A\mapsto\psi_B=\Phi'(\theta_A)$ is
 monotone and conservative. This is not a claim that the physical displacement $\xbf-\tmap(\xbf)\in\R^2$ is itself
@@ -1141,7 +1141,7 @@ unlike the single-body radial gap of Remark~\ref{prop:active-set} whose magnitud
 
 \subsection{The two limits: closest-point projection and arclength rearrangement}\label{app:ot:limits}
 
-The same coupling has two admissible regimes selected by the support of the contact, and the closest-point
+The same coupling has two admissible regimes selected by the support of the contact; the closest-point
 projection is not the opposite of the transition map but the coupling admissible under partial support.
 
 \begin{remark}[Two admissible regimes]\label{rem:ot-limits}
@@ -1168,7 +1168,7 @@ convex master its restriction is the closest-point projection $\pi_B=\map{B}^{-1
 $\gn=\norm{\bm p-\bm c}-R$, $\bm p$ the slave point, $\bm c$ the indenter centre, $R$ its radius. The two are the
 conforming and partial-support limits of one measure coupling, not opposites. The restriction is well posed
 under two hypotheses: the master is convex, so its metric projection $\pi_B$ is single-valued for every slave
-point off the master's medial axis \citep[\S1.3]{santambrogio2015optimal}, and the slave face is a
+point off the medial axis \citep[\S1.3]{santambrogio2015optimal}, and the slave face is a
 single-valued graph $z=h_A(x)$, so the slave parameter $x$ indexes the contact arc without overhang; the
 restricted quadratic-cost minimiser is then unique and coincides with $\pi_B$ on the touching support. The
 code realises this support screen discretely: $\code{ClosestPointCoupling1D}$ zeroes the coupling mass outside the
@@ -1193,11 +1193,11 @@ contact band (the finite-$\lambda$ analogue), so a central slave node carries no
   \label{fig:ot-unbalanced}
 \end{figure}
 
-The two regimes are collected compactly in \eqref{eq:ot-twolimits-body}.
+The two regimes are collected in \eqref{eq:ot-twolimits-body}.
 The partial-support restriction is realised in the code by the contact-band mass screen of
 \code{ClosestPointCoupling1D} (mass $=0$ outside the touching support; \code{coupling.py}). The arclength-monotone
 limit is the correct map for two mated rough profiles, where every slave arc has a conforming master partner; it
-is the map used for the conforming patch test and the rock-joint interface, and the closest-point map drives the
+drives the conforming patch test and the rock-joint interface, and the closest-point map drives the
 localised seat, slide, and convergence of the deformable-Hertz solve.
 
 \subsection{The discrete measure coupling is a mortar assembly}\label{app:ot:discrete}
@@ -1211,8 +1211,8 @@ $L$ \eqref{eq:ot-mortar-mass-body}, whose lumped diagonal $M_{IJ}\to A_I\delta_{
 tributary penalty of \eqref{eq:contact-block}. The host weights along the correspondence form a partition of
 unity \eqref{eq:ot-marginal-body},
 because they are the $P_1$ shape functions of the master segment that hosts the foot $\chi(\xi_q)$. The
-correspondence $\chi$ assigns each slave point a single master host, so that no master node is double-counted or
-starved, and the host weights then distribute the reaction without leakage. The two roles are distinct: measure
+correspondence $\chi$ assigns each slave point a single master host, so no master node is double-counted or
+starved, and the host weights distribute the reaction without leakage. The two roles are distinct: measure
 preservation of $\chi$, the quantile identity~\eqref{eq:ot-brenier-1d-body}, controls \emph{where} the foot lands,
 while the partition of unity~\eqref{eq:ot-marginal-body} controls \emph{how} the reaction is split once it lands, and
 it is this latter property---not the optimal-transport mass marginal---that the patch test exercises.
@@ -1232,7 +1232,7 @@ also sum to one and the quadrature is Gauss-exact on $P_1$. Hence $\sum_I\fbf_I^
 precondition is the partition of unity plus Gauss exactness, not the optimal-transport marginal.\qed
 \end{proof}
 
-Consequently the reaction force on the master integrates the same traction field the slave applies, so a constant
+The reaction force on the master integrates the same traction field the slave applies, so a constant
 pressure transmits as a uniform stress across a non-matching interface to machine precision: the contact patch
 test, measured at $1.4\times10^{-16}$, independent of the
 interface mesh because \eqref{eq:ot-marginal-body} is mesh-independent.\footnote{The algebraic precondition of
@@ -1272,7 +1272,7 @@ rank-one outer products, hence symmetric and positive semidefinite; off the acti
 transpose coupling $\bm K_{ms}=\bm K_{sm}^{\top}$ is the off-diagonal of this outer product.
 \end{proof}
 
-This is the algebraic kernel that the assembly forms entry by entry (the signed double loop in
+The assembly forms this algebraic kernel entry by entry (the signed double loop in
 \code{two\_body.py}). The four blocks are checked against the analytic Jacobian $dR/du$ entry by entry by symbolic
 differentiation of the frozen-geometry residual---the residual the Newton iteration linearises; $\nbf$ and $\chi$
 are recomputed at each Newton step and frozen within the linear solve, so the analytic four-block tangent equals
@@ -1302,7 +1302,7 @@ Algorithm~\ref{alg:detector} collects the three procedures that define the metho
 detector, which returns the matched pair $(\gn,\nbf)$ of Section~\ref{sec:tmap}; the verify-first protocol,
 which admits a trained chart only after it passes the reconstruction, foldover, and convergence checks of
 Appendix~\ref{app:training}; and the two-body coupling, which assembles the transpose-coupled traction and the
-symmetric four-block tangent \eqref{eq:twobody-tangent-body} derived above. Everything downstream of
+symmetric four-block tangent \eqref{eq:twobody-tangent-body}. Everything downstream of
 detection---the broad phase, the force laws, and the discretisations of Section~\ref{sec:discr}---is shared with
 the signed-distance path through the dispatch \eqref{eq:detector}.
 
@@ -1407,7 +1407,7 @@ gradients pass through the chart Jacobian, and the Voigt strain operator $\bm B_
 \bm B_a=\mathrm{voigt}\!\big(\grad_{\xbf}N_a\big),
 \end{equation}
 with $\mathrm{voigt}(\cdot)$ the Voigt map sending a shape-function gradient to its symmetric strain rows. With
-$\bm\sigma=\mathbb C:\bm\varepsilon$ the element internal force and tangent are integrated on $U$ from the strain operator \eqref{eq:Bchart} with the
+$\bm\sigma=\mathbb C:\bm\varepsilon$, the element internal force and tangent integrate on $U$ from the strain operator \eqref{eq:Bchart} with the
 stabilised volume factor,
 \begin{equation}\label{eq:fem-assembly}
 \fbf^{\mathrm{int}}_e=V_e^{\mathrm{phys}}\,\bm B_e^{\!\top}\bm\sigma_e,\qquad
@@ -1467,9 +1467,9 @@ full linearisation, derived in Appendix~\ref{app:linearisation}.
 %% ======================== 06_verification ========================
 \section{Numerical examples}\label{sec:examples}\label{sec:verif}
 
-The method is exercised on a hierarchy of problems of increasing geometric difficulty, run as an ablation on a
+The method runs on a hierarchy of problems of increasing geometric difficulty, as an ablation on a
 shared protocol: the chart detector of Section~\ref{sec:tmap} and the ambient neural signed-distance baseline
-are evaluated on identical meshes, loads, and tolerances, so any measured difference is charged to the
+run on identical meshes, loads, and tolerances, so any measured difference is charged to the
 geometric representation alone.
 
 The first group---Hertz line contact, Cattaneo--Mindlin partial slip, the Brazilian disc
@@ -1493,7 +1493,7 @@ machine precision.
 
 Each subsection states the physical problem, names the detector property it tests, gives the closed-form
 acceptance target, describes the solve, and reports the measured result with its consequence for the
-chart-versus-level-set comparison. Three comparisons run in parallel through the suite: each solve against its
+chart-versus-level-set comparison. Three comparisons run in parallel: each solve against its
 analytical reference (the verification), the boundary chart against the ambient neural SDF on identical meshes
 (the representation test, Table~\ref{tab:comparison}), and the optimal-transport coupling against the conventional
 node-lumped gap function (the constraint-enforcement test, Table~\ref{tab:ot_vs_conv}). The one rigorously
@@ -1529,11 +1529,10 @@ neural-SDF indenter; under the optimal-transport measure coupling (the mortar-co
 Section~\ref{app:ot}) the half-width tightens to $0.50\%$, against the
 $1.59\%$ of the conventional node-lumped gap at its converged resolution---a $3.2\times$ reduction (Table~\ref{tab:ot_vs_conv})---with a discrete
 contact-edge floor of $\sim0.4$--$0.5\%$ set by the infinite Hertz edge slope resolved over one element. On a
-convex body the gain is purely the consistent-versus-lumped edge integration; the chart and the level set coincide
+convex body the gain is purely the consistent-versus-lumped edge integration; chart and level set coincide
 at the detector. The contact pressure $p_0 = 2P'/\pi a$ is
 the half-ellipse identity, not an independent check, so we do not count it. As expected on a convex body, the
-neural signed-distance indenter matches the exact-SDF baseline rather than improving on it, and chart and level
-set coincide. The agreement holds at the field level, not only in the
+neural signed-distance indenter matches the exact-SDF baseline rather than improving on it. The agreement holds at the field level, not only in the
 half-width: Figure~\ref{fig:cv1-hertz} shows the chart-FEM subsurface vertical stress, whose stress bulb
 and off-surface maximum-shear depth $z/a\approx0.48$ reproduce the closed-form Hertz field.
 
@@ -1569,13 +1568,13 @@ limit the slip boundary sweeps across the contact faster than the node spacing c
 discrete stick radius coarsens. On the converged mesh ($n=3200$ surface nodes) the optimal-transport coupling
 resolves the moving slip front and brings $c/a$ to $0.03\%$ of \eqref{eq:cattaneo}, against $11.15\%$ for the
 conventional node-lumped gap function at its converged resolution---a $370\times$ reduction, the largest
-method-to-method margin in the suite (Table~\ref{tab:ot_vs_conv}). The coupling wins here because the slip boundary is a moving internal interface: the
+method-to-method margin in the suite (Table~\ref{tab:ot_vs_conv}). The coupling wins because the slip boundary is a moving internal interface: the
 consistent mortar integral tracks it through the quadrature, whereas the lumped scheme can only relocate it node
 by node. Unlike the grid-independent cusp and fractal margins, which compare a chart against a resolution-bound
 ambient field, the Cattaneo $370\times$ is a like-for-like scalar comparison ($c/a$) on the \emph{same} converged
-mesh and the same friction law: only the constraint assembly differs, so the gain is attributable to the
-consistent mortar integral resolving the moving slip front, not to the geometric representation, since here the
-chart and the level set coincide. This benchmark inherits the Hertz contact above and adds only a friction layer,
+mesh and the same friction law: only the constraint assembly differs, so the gain comes from the
+consistent mortar integral resolving the moving slip front, not from the geometric representation, since here
+chart and level set coincide. This benchmark inherits the Hertz contact above and adds only a friction layer,
 so the transition map stays dormant and the two representations remain equivalent. Figure~\ref{fig:cv2-traction}
 shows the recovered contact tractions: the elliptical Hertz normal pressure and the Cattaneo--Mindlin
 tangential traction, whose stick/slip transition at $r=c$ marks the boundary between the locked core and
@@ -1610,7 +1609,7 @@ cell reproduces \eqref{eq:nine_disc} to $0.15\%$ in $\sigma_{xx}$ and $0.01\%$ i
 measured in-plane anisotropy of $0.16\%$ and a center shear stress below the solver tolerance. Two
 caveats accompany the result: the equal-$N$ collapse is exact only for rigid loading platens, and this
 is the per-disc unit cell rather than a full $N$-body explicit-contact solve, so the contacts only
-place the load poles. The charts add by superposition exactly as for the Brazilian disc
+place the load poles. The charts add by superposition as for the Brazilian disc
 (Appendix~\ref{app:brazilian}), and chart and level set stay equivalent. The comparison against the conventional
 scheme is not like-for-like in inputs: the conventional Brazilian and nine-disc drivers prescribe the contact load
 as a Neumann datum (exact by construction), whereas under the coupling the per-pole load $N$ \emph{emerges} from
@@ -1728,7 +1727,7 @@ Gielis-superformula cam drives a free non-convex follower, and the cam's lobe ti
 %
 where $\rho(\theta)$ is the boundary radius at polar angle $\theta$, $m$ sets the number of lobes,
 $a,b$ scale the two axes, and $n_1,n_2,n_3$ shape the lobes; for $n_1<1$ the lobe extrema sharpen into
-cusps. This geometry exercises both intrinsic weaknesses of the level set: the cusps trigger the
+cusps. This geometry exercises two weaknesses of the level set: the cusps trigger the
 network's spectral bias, and the concave valleys between lobes carry a medial axis on which even the
 exact Euclidean SDF gradient is only $C^0$. The boundary chart sidesteps both: it is a one-dimensional
 function $\rho(\theta)$ on the circle of directions, with no ambient field and no medial axis, so it
@@ -1748,7 +1747,7 @@ where $\xbf$ is the query point, $\bm{c}$ the cam center, $Q$ the rotation to bo
 \norm{Q^{\top}(\xbf-\bm{c})}$ the radial distance in that frame, $\dhat$ the unit direction to the
 query, and $\grad_{\!S}\rho=(I-\dhat\dhat^{\top})\grad_{\dhat}\rho$ the surface gradient of $\rho$
 projected onto the tangent direction. The tangential projection is load-bearing: it strips the spurious
-radial component from the raw gradient, so the penalty force is exactly the gradient of a potential.
+radial component from the raw gradient, so the penalty force is the gradient of a potential.
 
 \paragraph{Measured separation.} On the cusped superformula the neural SDF reaches a gap error of
 $8\times10^{-3}\,L$ ($L$ the cam length scale) with a degraded normal: the median out-of-plane
@@ -1760,8 +1759,8 @@ closest-point projection cannot: a boundary scan evaluates \eqref{eq:radial_gap_
 and enumerates every disjoint penetrating arc, reporting $\ge 2$ contact arcs on a wedged pose where a
 single closest-point projection returns one foot. Driving the rigid-body cam dynamics with the neural
 chart then matches the analytical-chart trajectory to $0.04\%$, while conserving linear and angular
-momentum to $5\times10^{-15}$ and $1\times10^{-13}$, respectively. The chart thus resolves geometry the level
-set smooths while reproducing the identical contact dynamics where both detectors apply. Evaluated as a detector
+momentum to $5\times10^{-15}$ and $1\times10^{-13}$, respectively. The chart resolves geometry the level
+set smooths and reproduces the same contact dynamics where both detectors apply. Evaluated as a detector
 rather than a trained network, the analytic radial chart returns the cusp gap to $5.3\times10^{-13}$ (float64,
 grid-independent), where the conventional level-set gap on a resolving grid is stuck at $2.0\times10^{-2}$
 (Table~\ref{tab:ot_vs_conv}): the chart carries no ambient grid to smooth the cusp, so its accuracy is set by
@@ -1872,8 +1871,7 @@ It mates two Koch snowflakes, a boundary generated by a four-contraction iterate
 $1/3$) evaluated to recursion depth $n$ (Figure~\ref{fig:cv6-bvp}), and measures how the storage cost and the
 boundary error of each representation scale as the recursion depth grows. The snowflake is not star-shaped for $n\ge
 2$, so the radial gap of the superformula no longer applies. Here the chart is the recursive generating rule
-itself, with the IFS doubling as a bounding hierarchy for a pruned recursive descent. The
-representation costs of chart and level set are asymmetric.
+itself, with the IFS doubling as a bounding hierarchy for a pruned recursive descent.
 Figure~\ref{fig:cv6-geom} shows the Koch boundary at successive recursion levels; the chart stores the
 single generating rule that produces every level, while a grid or a fixed-capacity field must store the
 rendered detail.
@@ -1984,11 +1982,11 @@ field must store the rendered geometry and saturates once the detail falls below
 \paragraph{Storage and query cost.} The IFS chart stores the four contraction maps once, in $O(1)$
 storage independent of depth, and evaluates the boundary to any $n$ on demand. Its inside/outside
 test prunes the recursion to a per-query cost of $O(\text{depth})$, measured at $\approx 21$ visited
-nodes and bounded for $n$ up to $12$. A level set pays differently. A uniform SDF grid storing the same
+nodes and bounded for $n$ up to $12$. A level set pays differently: a uniform SDF grid storing the same
 pattern costs $O(9^n)$ cells, and an adaptive narrow-band SDF costs $O(4^n)$ boundary cells; both are
 exponential in depth and capped at their finest cell, whereas the chart sets its resolution per query
-(Fig.~\ref{fig:koch_cost}). A precomputed SDF is in fact cheaper \emph{per query}, an $O(1)$ lookup, so
-the chart does not win on per-query speed, but it cannot represent the geometry past its stored
+(Fig.~\ref{fig:koch_cost}). A precomputed SDF is cheaper \emph{per query}, an $O(1)$ lookup, so
+the chart does not win on per-query speed, but the SDF cannot represent the geometry past its stored
 resolution. The chart's defensible advantages are therefore storage and resolution independence, not query
 speed.
 
@@ -2010,10 +2008,10 @@ plateaus as the detail refines below its resolution. The zero-level-set deviatio
 $1.9\times10^{-2}$ at $n=1$ and saturates around $4$--$8\times10^{-2}$, while the median normal-angle
 error jumps from $7.8^{\circ}$ at $n=1$ to $\sim45^{\circ}$ and never recovers, saturating for $n\ge 2$
 (Fig.~\ref{fig:koch_ceiling}). Growing the parameter count would shift the ceiling but not remove it: a
-fixed-capacity coordinate network cannot keep resolving self-similar detail, which is the intrinsic
+fixed-capacity coordinate network cannot keep resolving self-similar detail, the intrinsic
 spectral bias of the representation. The chart, storing the generating rule, stays exact at any finite
 level (verified to machine precision against the brute-force polyline distance), where the level set hits a
-hard ceiling. As a contact detector the story is the same in storage terms: across recursion levels the recursive
+hard ceiling. As a contact detector the story repeats: across recursion levels the recursive
 chart holds the cross-level contact-force increment to $2.6\times10^{-16}$ while the fixed-grid level set freezes
 (non-convergent), the resolution-bound failure made quantitative (Table~\ref{tab:ot_vs_conv}).
 
@@ -2039,11 +2037,11 @@ measure coupling of Section~\ref{sec:tmap:ot}, in which the contact pairing is t
 quadratic-cost transport problem
 \citep{brenier1991polar,mccann1995existence,santambrogio2015optimal}; the same coupling carries two regimes, the
 closest-point projection for a localised convex indenter and the arclength-monotone (Brenier) rearrangement for
-two mated rough faces (Figure~\ref{fig:ot-coupling}c). The closest-point limit is required for partial contact:
+two mated rough faces (Figure~\ref{fig:ot-coupling}c). Partial contact requires the closest-point limit:
 the global arclength map transports all of the slave mass onto all of the master mass and smears a partial load
 across the interface, so it is inadmissible under partial support and is replaced by the closest-point
 restriction of the marginal-relaxed transport problem~\eqref{eq:ot-unbalanced} (Section~\ref{app:ot:limits}).
-The driver accordingly selects the closest-point map for the seat, slide, and convergence of the
+The driver therefore selects the closest-point map for the seat, slide, and convergence of the
 deformable-Hertz solve and reserves the arclength map for the conforming patch test.
 
 \begin{figure}[t]
@@ -2095,7 +2093,7 @@ deformable-Hertz solve and reserves the arclength map for the conforming patch t
 \paragraph{The non-matching patch test.} The discrete master interpolation is a partition of unity along the
 correspondence, $\sum_K(N_K^-\!\circ\chi)=1$ (the correspondence sends each slave point to a single master host,
 so no master node is double-counted or starved; this partition of unity is distinct from, and downstream of, the
-optimal-transport mass marginal that places the foot, and it is the property the patch test exercises; see
+optimal-transport mass marginal that places the foot, and the patch test exercises it; see
 Section~\ref{app:ot:discrete}), so the reaction on the master integrates the same traction field the slave
 applies.
 A constant pressure therefore transmits as a uniform stress across a non-matching interface to machine precision.
@@ -2106,8 +2104,7 @@ pressure field with a non-uniformity of $67.3$ (range over mean across the patch
 nodes and starving others, whereas the partition of unity along the correspondence leaves the interpolated
 pressure uniform to the machine-precision residual reported above. The failure is structural (an independent node-to-surface projection has
 no partition of unity along the correspondence), so it does not improve under mesh refinement; the
-optimal-transport residual is independent of the interface mesh because~\eqref{eq:ot-marginal-body} is
-mesh-independent.
+optimal-transport residual is mesh-independent because~\eqref{eq:ot-marginal-body} is.
 
 \begin{figure}[t]
   \centering
@@ -2123,7 +2120,7 @@ mesh-independent.
 \paragraph{Deformable Hertz between two elastic blocks (CV-8).} The two-body boundary-value problem (BVP) of Figure~\ref{fig:cv8-bvp}
 presses two elastic blocks together and compares the contact half-width $a$ and the peak pressure $p_0$ against
 the line-contact closed form $a=2\sqrt{P'R/\pi E^{*}}$ with both bodies elastic. Because that closed form assumes
-elastic \emph{half-planes}, the benchmark is run in the half-plane regime: the blocks are deep and wide enough
+elastic \emph{half-planes}, we run the benchmark in the half-plane regime: the blocks are deep and wide enough
 that the contact stays small relative to the body, $a/H\le0.14$ ($a/W=0.137$). In this regime the finite blocks
 reproduce the half-plane compliance: the effective modulus back-solved from the recovered half-width,
 $E^{*}_{\mathrm{eff}}=4P'R/\pi a^{2}$, matches the analytical $E^{*}=0.549$ to $\sim1\%$. Under mesh refinement
@@ -2138,7 +2135,7 @@ of the recovered edge), because the Hertz edge-pressure slope is infinite at $x=
 edge shifts by $O(1)$ surface nodes as the mesh changes rather than converging at the interior rate. No
 constraint scheme escapes this floor on a $C^0$ contact edge; it is not a tuning gap.
 
-A word on the regime, because it is why an earlier, shallower setup mis-measured this benchmark. With shallow
+The regime matters, because an earlier, shallower setup mis-measured this benchmark. With shallow
 clamped blocks ($a/H\approx0.43$) the finite strip is confined by its fixed base and is $\sim10\%$ stiffer than a
 half-plane ($E^{*}_{\mathrm{eff}}/E^{*}\approx1.10$); by $a\propto(E^{*})^{-1/2}$ that alone biases the
 half-width $\sim5\%$ low and, at fixed load, the peak pressure $\sim6\%$ high, one coupled effect, not two. That
@@ -2147,8 +2144,8 @@ solver error: the force balance is machine-zero and the non-matching patch test 
 $1.4\times10^{-16}$ throughout. Deepening the blocks into the half-plane regime restores
 $E^{*}_{\mathrm{eff}}/E^{*}\approx1$ and leaves only the $\sim2\%$ discrete-edge/CST floor reported above.
 
-\paragraph{Ensemble disclosure across realisations.} The values above are one mesh realisation (seed $7$), and
-the single-realisation restriction is stated plainly: a band-limited jittered mesh is statistically spiky, so we
+\paragraph{Ensemble disclosure across realisations.} The values above are one mesh realisation (seed $7$). A
+band-limited jittered mesh is statistically spiky, so we
 repeated the headline solve at nx$=220$ on five independent jitter realisations (mesh seeds $7,11,17,23,31$; all
 force balances $\sim\!10^{-18}$). The two observables behave oppositely under re-meshing
 (Table~\ref{tab:cv8-ensemble}). The half-width error is realisation-dependent: across the five seeds it spans
@@ -2200,7 +2197,7 @@ both observables rest on the same $\sim\!2\%$ discrete-edge/CST floor, disclosed
 
 \paragraph{N-body disc array (CV-9a).} A $3\times3$ array of elastic discs with twelve mutual mortar couplings
 generalises the nine-disc unit cell of Section~\ref{sec:ex_ninedisc} to a full N-body optimal-transport
-contact, in which the per-pole load is an emergent output of the twelve couplings rather than an imposed pole
+contact, in which the twelve couplings produce the per-pole load rather than an imposed pole
 load (Figure~\ref{fig:cv9-array}). The solve converges at full Newton relaxation ($32$ iterations, no
 backtracks). The centre disc reaches the equibiaxial closed form
 $\sigma_{xx}=\sigma_{yy}=-2N/\pi Rt$ to $0.58\%$ in the mean, the per-component anisotropy is $0.20$--$0.22\%$ on
@@ -2269,7 +2266,7 @@ Table~\ref{tab:cv_summary} consolidates the measured performance. The equivalenc
 line contact, Cattaneo--Mindlin partial slip, and the nine-disc unit cell, together with the Brazilian disc of
 Appendix~\ref{app:brazilian}) verify the chart-FEM solver on learned geometry where the chart and the level set
 are equivalent, tracking the closed forms to $\sim0.15$--$1.6\%$ (frictional partial slip at $\sim5$--$11\%$).
-The cusped superformula and the Koch fractal are where the transition map is exercised: the radial chart resolves
+The cusped superformula and the Koch fractal exercise the transition map: the radial chart resolves
 a cusped non-convex boundary the SDF smooths and drives identical contact dynamics, and the recursive IFS chart
 resolves a fractal at any depth while a fixed-capacity SDF hits a measured refinement ceiling. The rock joint of
 Section~\ref{sec:cv7} carries the same separation to a problem with no closed form. Figure~\ref{fig:cv_summary}
@@ -2423,16 +2420,16 @@ joint, where the boundary-fitted chart resolves the asperity slopes the ambient 
 under-predicts the shear strength of the interface. It is also the conforming limit of the optimal-transport
 coupling: where the convex Hertz contact of Section~\ref{sec:ex_hertz} exercises the closest-point branch of the
 transition map, two mated rough faces exercise the arclength-monotone (Brenier) branch
-$\tmap=\hat F_B^{-1}\circ\hat F_A$, every slave asperity arc carrying its conforming master partner. The closed-form hierarchy of
+$\tmap=\hat F_B^{-1}\circ\hat F_A$, each slave asperity arc carrying its conforming master partner. The closed-form hierarchy of
 Section~\ref{sec:verif} verified the solver against problems whose answer is known, where the transition map's
-gains remained abstract: a sharper gap, a cheaper representation. Here the gains carry direct engineering
+gains remained abstract: a sharper gap, a cheaper representation. Here the gains carry engineering
 stakes, because resolving or smoothing the asperity geometry changes the \emph{predicted shear strength}, the
 quantity on which the chart and the level set disagree.
 
-\paragraph{What a direct-shear test of a rock joint measures.} A rock joint is a fracture surface inside rock: the two faces left behind when the rock splits. The faces are rough, and their bumps, the \emph{asperities}, interlock like two meshed sawteeth. In a direct-shear test, a press holds the two faces together under a fixed normal stress $\sigma_n$ and then slides the top face sideways over the bottom one while recording the shear stress $\tau$ needed to keep it moving. Because the asperities interlock, the top face cannot slide horizontally without also riding up the flanks of the bumps, and the joint opens vertically as it shears. That climbing is \emph{dilatancy}, and it makes the joint stronger than a flat sawcut would be, because part of the applied shear now does work lifting the normal load. Engineers summarise the measured resistance by the \emph{apparent friction}, the stress ratio $\muapp=\tau/\sigma_n$, and read it as an \emph{apparent friction angle} $\arctan\muapp$ that combines the material's base friction with the geometric climb. The asperity geometry, not a material constant, sets how much extra strength the climb supplies, so a method's accuracy on this test is decided by how faithfully it represents the bumps.
+\paragraph{What a direct-shear test of a rock joint measures.} A rock joint is a fracture surface inside rock: the two faces left behind when the rock splits. The faces are rough, and their bumps, the \emph{asperities}, interlock like two meshed sawteeth. In a direct-shear test, a press holds the two faces together under a fixed normal stress $\sigma_n$ and then slides the top face sideways over the bottom one while recording the shear stress $\tau$ needed to keep it moving. Because the asperities interlock, the top face cannot slide horizontally without also riding up the flanks of the bumps, and the joint opens vertically as it shears. That climbing is \emph{dilatancy}, and it makes the joint stronger than a flat sawcut would be, because part of the applied shear now does work lifting the normal load. Engineers summarise the measured resistance by the \emph{apparent friction}, the stress ratio $\muapp=\tau/\sigma_n$, and read it as an \emph{apparent friction angle} $\arctan\muapp$ that combines the material's base friction with the geometric climb. The asperity geometry, not a material constant, sets how much extra strength the climb supplies, so how faithfully a method represents the bumps decides its accuracy on this test.
 
-The argument proceeds only after the analytical ladder of Section~\ref{sec:verif} has earned the right to make
-it. We first state the problem, the data, and the closed-form anchor that pins the emergent friction law
+The argument proceeds only after the analytical ladder of Section~\ref{sec:verif} has earned it.
+We first state the problem, the data, and the closed-form anchor that pins the emergent friction law
 (Section~\ref{sec:cv7-data}); we then report the head-to-head reconstruction and its mechanical consequence on
 the real Inada profile (Section~\ref{sec:cv7-headline}), carry the machinery through two mutually deformable
 blocks (Section~\ref{sec:cv7-p1}) and a dilatancy-versus-roughness law (Section~\ref{sec:cv7-p2}), and close
@@ -2443,18 +2440,18 @@ Appendix~\ref{app:supp}.
 
 \subsubsection{Problem, data, and the Patton anchor}\label{sec:cv7-data}
 
-The specimen is a real surface, not an idealised one: a tensile fracture in Inada granite (Digital Rocks Portal \#273, DOI~10.17612/QXSA-TK92; \citealp{inada2020digitalrocks}), scanned as a height map $z(x,y)$ that gives the surface elevation $z$ over the in-plane coordinates $(x,y)$. The scan is sampled at $23.4~\mu$m, and the surface is self-affine: its roughness repeats statistically across scales, with Hurst exponent $H\approx0.78$ and fractal dimension $D\approx2.2$, so asperities exist from the micron sampling up to the joint length. The root-mean-square roughness is $1.70$~mm, matching the published value. No closed form predicts its shear response, so geometric fidelity alone determines the accuracy of a method on this test.
+The specimen is a real surface, not an idealised one: a tensile fracture in Inada granite (Digital Rocks Portal \#273, DOI~10.17612/QXSA-TK92; \citealp{inada2020digitalrocks}), scanned as a height map $z(x,y)$ that gives the surface elevation $z$ over the in-plane coordinates $(x,y)$. The scan is sampled at $23.4~\mu$m, and the surface is self-affine: its roughness repeats statistically across scales, with Hurst exponent $H\approx0.78$ and fractal dimension $D\approx2.2$, so asperities exist from the micron sampling up to the joint length. The root-mean-square roughness is $1.70$~mm, matching the published value. No closed form predicts its shear response, so geometric fidelity alone determines a method's accuracy on this test.
 
-Each of the two mating faces is carried by a learned height chart $h_\theta:\mathcal D\to\R$ (Section~\ref{sec:fourier}), a random-Fourier-feature MLP with weights $\theta$ that stores the surface as a graph $z=h_\theta(x)$ rather than as a field in the surrounding space. Because the surface is single-valued, with one height per in-plane point, the chart is already its own inverse coordinate. The transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which composes one face's boundary chart with the inverse of the other's, then needs no numerical inversion, and the signed gap reduces to a vertical offset. The next equation states that gap and the surface normal it carries.
+Each of the two mating faces is carried by a learned height chart $h_\theta:\mathcal D\to\R$ (Section~\ref{sec:fourier}), a random-Fourier-feature MLP with weights $\theta$ that stores the surface as a graph $z=h_\theta(x)$ rather than as a field in the surrounding space. Because the surface is single-valued, with one height per in-plane point, the chart is already its own inverse coordinate. The transition map $\tmap=\map{B}^{-1}\circ\map{A}$, which composes one face's boundary chart with the inverse of the other's, then needs no numerical inversion, and the signed gap reduces to a vertical offset. The next equation gives that gap and the surface normal it carries.
 %
 \begin{equation}\label{eq:cv7-gap}
 \gn(x,z)=z-h_\theta(x),\qquad
 \nbf=\frac{(-h_\theta'(x),\,1)}{\sqrt{1+h_\theta'(x)^2}},\qquad \gn<0\ \Leftrightarrow\ \text{penetration},
 \end{equation}
 %
-Here $\gn$ is the signed normal gap (negative when the point lies below the surface, i.e.\ in penetration), $\nbf$ is the unit outward normal built from the surface slope $h_\theta'(x)$, and the equation says simply that the gap is how far a point sits above or below the height graph. The slope $h_\theta'(x)$ is the moving part: it sets the normal direction, and through it the tilt of every contact force. The solver receives the small-slope vertical proxy of the gap, and the true foot point is recovered only for verification.
+Here $\gn$ is the signed normal gap (negative when the point lies below the surface, i.e.\ in penetration), $\nbf$ is the unit outward normal built from the surface slope $h_\theta'(x)$, and the equation says the gap is how far a point sits above or below the height graph. The slope $h_\theta'(x)$ is the moving part: it sets the normal direction, and through it the tilt of every contact force. The solver receives the small-slope vertical proxy of the gap, and the true foot point is recovered only for verification.
 
-The two faces are sheared under constant normal stress, with the normal degree of freedom solved to equilibrium at each shear increment, so the test is quasi-static direct shear (Figure~\ref{fig:cv7-bvp}). Friction is \emph{plain Coulomb}: the local coefficient $\mu=\tan\phi_b$ is held constant, where $\phi_b$ is the base friction angle of the rock material. There is \emph{no imposed dilatancy law}. The dilation and the apparent friction angle are therefore emergent outputs of the resolved asperity geometry. We report the apparent friction as the stress ratio $\muapp=\tau/\sigma_n$.
+The two faces are sheared under constant normal stress, with the normal degree of freedom solved to equilibrium at each shear increment, so the test is quasi-static direct shear (Figure~\ref{fig:cv7-bvp}). Friction is \emph{plain Coulomb}: the local coefficient $\mu=\tan\phi_b$ is held constant, where $\phi_b$ is the base friction angle of the rock material. There is \emph{no imposed dilatancy law}. The dilation and the apparent friction angle therefore emerge from the resolved asperity geometry. We report the apparent friction as the stress ratio $\muapp=\tau/\sigma_n$.
 
 The validation has one closed-form anchor, derived from the simplest interlocking surface. Patton
 \citep{patton1966multiple} idealised a joint as two mating sawtooth faces whose flanks rise at a single
@@ -2482,7 +2479,7 @@ $\Delta\muapp\approx\sec^2(\phi_b+i)\,(i-i')$.
 \end{remark}
 
 Remark~\ref{prop:patton} ties strength directly to the resolved slope $i$, the quantity on which the chart
-and the level set disagree. The law is not imposed: plain Coulomb friction and the resolved tilt are supplied
+and the level set disagree. The law is not imposed: we supply plain Coulomb friction and the resolved tilt
 to the solver, and on a mating sawtooth the framework reproduces \eqref{eq:patton} to $0.00\%$, with the
 dilation rate equal to $\tan i$ to within $1\%$; the anti-plane response \eqref{eq:patton-along} is the
 zero-dilation mode observed when the deformable joint is sheared along the asperity fabric
@@ -2593,9 +2590,9 @@ joint's strength and dilation under shear.}
 
 We fit two representations to the same Inada profile and then shear them. The first is the height chart $h_\theta$. The second is the comparison baseline: an ambient 2-D neural SDF $\phi(x,z)$, a plain coordinate MLP that learns the signed distance to the surface as a field in the plane, from whose zero level set we extract a reconstructed surface $h_{\rm SDF}(x)$. We compare the two on three things in turn: how well each reconstructs the surface, how well each captures the asperity slope, and what shear strength each then predicts.
 
-The reconstruction gap is large and one-signed. The height chart reproduced the measured surface to $2.3~\mu$m with 66k parameters; the ambient SDF reached only $107~\mu$m, $47\times$ worse, and did so with \emph{more} parameters (83k). The level set spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well. The mechanism is the spectral bias of a fixed-capacity coordinate MLP \citep{rahaman2019spectral}: such a network learns smooth, low-frequency content first and starves the sharp high-frequency detail. The Fourier-feature encoding of the chart defeats that bias \citep{tancik2020fourier}, whereas the plain SDF carries it intrinsically.
+The reconstruction gap is large and one-signed. The height chart reproduced the measured surface to $2.3~\mu$m with 66k parameters; the ambient SDF reached only $107~\mu$m, $47\times$ worse, with \emph{more} parameters (83k). The level set spends its capacity on a 2-D distance field and still resolves the 1-D surface far less well. The mechanism is the spectral bias of a fixed-capacity coordinate MLP \citep{rahaman2019spectral}: such a network learns smooth, low-frequency content first and starves the sharp high-frequency detail. The Fourier-feature encoding of the chart defeats that bias \citep{tancik2020fourier}, whereas the plain SDF carries it intrinsically.
 
-This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} compares the radially-averaged power spectral density (Welch periodogram) of each trained reconstruction of the real Inada profile against the ground-truth profile. In the friction-relevant asperity band $[1,14.2]$~cyc/mm the Fourier chart never rolls off, retaining $100\%$ of the ground-truth band power and staying within $0.0$~dB of the truth across the band, whereas the plain MLP and the ambient SDF roll off at $0.33$ and $0.25$~cyc/mm respectively and retain only $0.027\%$ and $0.019\%$ of the band power ($-35.7$ and $-37.2$~dB). The spectral cutoff sits two decades below the asperity band: the level set's smoothing is a frequency-domain truncation of exactly the slopes that set the strength, and the chart's win is that it does not truncate them.
+This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} compares the radially-averaged power spectral density (Welch periodogram) of each trained reconstruction of the real Inada profile against the ground truth. In the friction-relevant asperity band $[1,14.2]$~cyc/mm the Fourier chart never rolls off, retaining $100\%$ of the ground-truth band power and staying within $0.0$~dB of the truth across the band, whereas the plain MLP and the ambient SDF roll off at $0.33$ and $0.25$~cyc/mm respectively and retain only $0.027\%$ and $0.019\%$ of the band power ($-35.7$ and $-37.2$~dB). The spectral cutoff sits two decades below the asperity band: the level set's smoothing is a frequency-domain truncation of exactly the slopes that set the strength, and the chart's win is that it does not truncate them.
 
 \begin{figure}[t]
   \centering
@@ -2615,7 +2612,7 @@ This mechanism is measured, not only argued. Figure~\ref{fig:spectral-bias} comp
   \label{fig:spectral-bias}
 \end{figure}
 
-Height reconstruction error is not the relevant metric for contact. Friction and dilation depend on the asperity \emph{angle} $i=\arctan\abs{h'}$, the local slope of the surface, not on the height itself. On slope the two representations separate. The chart reproduced the mean asperity angle, $19.8^\circ$ against $19.4^\circ$ for the true surface, while the SDF's spectral bias smoothed it to $12.5^\circ$. Through the Patton law \eqref{eq:patton} the smoothed slope yields a lower strength: shearing the two representations, the level set under-predicted the peak shear strength by $61\%$. The total dilation, by contrast, was barely affected ($0.5\%$). Dilation is set by the large-scale waviness the SDF captures, while strength is controlled by the asperity slope the SDF smooths; the strongly affected strength beside the barely affected dilation is consistent with this mechanism. Figure~\ref{fig:cv7-capstone} collects the results.
+Height reconstruction error is not the relevant metric for contact. Friction and dilation depend on the asperity \emph{angle} $i=\arctan\abs{h'}$, the local slope of the surface, not on the height itself. On slope the two representations separate. The chart reproduced the mean asperity angle, $19.8^\circ$ against $19.4^\circ$ for the true surface, while the SDF's spectral bias smoothed it to $12.5^\circ$. Through the Patton law \eqref{eq:patton} the smoothed slope yields a lower strength: shearing the two representations, the level set under-predicted the peak shear strength by $61\%$. The total dilation, by contrast, was barely affected ($0.5\%$). Dilation is set by the large-scale waviness the SDF captures, while the asperity slope the SDF smooths controls strength; the strongly affected strength beside the barely affected dilation is consistent with this mechanism. Figure~\ref{fig:cv7-capstone} collects the results.
 
 \begin{figure}
   \centering
@@ -2634,11 +2631,11 @@ The claim is \emph{not} that the chart has a lower height RMSE than the SDF on a
 
 \subsubsection{Phase 1: two mutually deformable decoder blocks}\label{sec:cv7-p1}
 
-The Inada result treats the blocks as rigid. Phase 1 makes both faces deformable. Two elastic blocks, each carried by a boundary-fitted Fourier chart decoder $D_X:\boldsymbol\xi\mapsto\xbf$ that maps a reference coordinate $\boldsymbol\xi$ to the deformed position $\xbf$ (Section~\ref{sec:fourier}), meet at a fully rough mating interface and exchange node-to-surface penalty and regularised Coulomb forces through the chart-FEM solver. Both faces are rough; neither is a flat platen; the contact is mutual. The roughness lives in the decoder geometry, not in an interface constitutive law, so dilation and strength again emerge from the resolved bumps rather than from a calibrated rule.
+The Inada result treats the blocks as rigid. Phase 1 makes both faces deformable. Two elastic blocks, each carried by a boundary-fitted Fourier chart decoder $D_X:\boldsymbol\xi\mapsto\xbf$ that maps a reference coordinate $\boldsymbol\xi$ to the deformed position $\xbf$ (Section~\ref{sec:fourier}), meet at a rough mating interface and exchange node-to-surface penalty and regularised Coulomb forces through the chart-FEM solver. Both faces are rough; neither is a flat platen; the contact is mutual. The roughness lives in the decoder geometry, not in an interface constitutive law, so dilation and strength again emerge from the resolved bumps rather than from a calibrated rule.
 
 The geometry is verified before any mechanical claim. The Fourier decoders reconstruct the rough faces without element foldover ($\det J\in[0.97,1.03]$ on every element, so the chart Jacobian stays positive and the mesh never inverts), and a method-of-manufactured-solutions study on the curved chart of \emph{both} blocks recovered the optimal $O(h^2)$ convergence of the P1 discretisation (measured rates $2.39$ and $1.95$). The chart-FEM provably solves on the rough geometry it resolves.
 
-The mechanical response is emergently \emph{anisotropic}: the joint resists differently depending on which way it is sheared relative to the asperity fabric. Shearing across, along, and obliquely to that fabric gave distinct peak apparent friction, with $\muapp$ of $0.42$ (out-of-plane), $0.54$ (in-plane), and $0.74$ (mixed), and with dilation ranging from $0.038$ to $0.090$~mm across the three modes. No direction-dependent friction is imposed; the anisotropy is the asperity geometry expressed through plain Coulomb. Figure~\ref{fig:cv7-twoblock} shows the three modes.
+The mechanical response is emergently \emph{anisotropic}: the joint resists differently depending on which way it is sheared relative to the asperity fabric. Shearing across, along, and obliquely to that fabric gave distinct peak apparent friction, with $\muapp$ of $0.42$ (out-of-plane), $0.54$ (in-plane), and $0.74$ (mixed), and dilation ranging from $0.038$ to $0.090$~mm across the three modes. No direction-dependent friction is imposed; the anisotropy is the asperity geometry expressed through plain Coulomb. Figure~\ref{fig:cv7-twoblock} shows the three modes.
 
 \begin{figure}
   \centering
@@ -2650,12 +2647,12 @@ The mechanical response is emergently \emph{anisotropic}: the joint resists diff
   \label{fig:cv7-twoblock}
 \end{figure}
 
-The emergent response is mesh-converged. Refining the two-block shear across four meshes ($n_{\rm cells}=6,8,10,12$; $2.6$k to $20.7$k tetrahedra), the peak $\muapp$ settled to $\approx0.53$ within $2\%$ ($0.510\to0.528\to0.535\to0.526$) and the total dilation converged to $\approx0.063$~mm ($0.094\to0.078\to0.066\to0.063$~mm; the coarse mesh over-predicts), with $\det J_{\min}$ steady near $0.96$. The von Mises field on both blocks across refinement is shown in Appendix~\ref{app:supp} (Figure~\ref{fig:cv7-p1vm}). Two numerical features qualify this convergence. First, the two-deformable, moving-master, node-to-surface Coulomb friction residual stays at $3.8$ to $4.8\%$ across all meshes. Because it is mesh-\emph{independent}, it reflects the non-smoothness of the moving-master contact, not discretisation error, and the frictionless and one-block cases converge to $10^{-9}$. An augmented-Lagrangian or mortar formulation \citep{alart1991mixed,simo1992augmented,puso2004mortar} is the route to tight convergence and is left as future work. Second, the rigid-platen prescribed-displacement boundary concentrates the imposed shear into the top element layer and produces a spurious von Mises spike there. The joint-interface stress and the contact-derived $\muapp$ and dilation are unaffected, since they come from the contact forces, and the platen layer is trimmed for display.
+The emergent response is mesh-converged. Refining the two-block shear across four meshes ($n_{\rm cells}=6,8,10,12$; $2.6$k to $20.7$k tetrahedra), the peak $\muapp$ settled to $\approx0.53$ within $2\%$ ($0.510\to0.528\to0.535\to0.526$) and the total dilation converged to $\approx0.063$~mm ($0.094\to0.078\to0.066\to0.063$~mm; the coarse mesh over-predicts), with $\det J_{\min}$ steady near $0.96$. The von Mises field on both blocks across refinement is shown in Appendix~\ref{app:supp} (Figure~\ref{fig:cv7-p1vm}). Two numerical features qualify this convergence. First, the two-deformable, moving-master, node-to-surface Coulomb friction residual stays at $3.8$ to $4.8\%$ across all meshes. Because it is mesh-\emph{independent}, it reflects the non-smoothness of the moving-master contact, not discretisation error, and the frictionless and one-block cases converge to $10^{-9}$. An augmented-Lagrangian or mortar formulation \citep{alart1991mixed,simo1992augmented,puso2004mortar} is the route to tight convergence, left as future work. Second, the rigid-platen prescribed-displacement boundary concentrates the imposed shear into the top element layer and produces a spurious von Mises spike there. The joint-interface stress and the contact-derived $\muapp$ and dilation are unaffected, since they come from the contact forces, and the platen layer is trimmed for display.
 
 Two top-down fields on the joint face make the contact mechanism visible and explain why a smoothed
 surface mispredicts strength. The real contact area concentrates on a subset of the nominal area, the
 bearing asperity ridges, and as the joint shears and dilates the contact localises onto fewer, more
-heavily loaded ridges, with the bearing fraction $A_c/A$ dropping and then recovering across the loading.
+heavily loaded ridges, the bearing fraction $A_c/A$ dropping and then recovering across the loading.
 The normal stress $\sigma_{zz}$ on the same face concentrates in bands aligned with the bearing
 asperities, which sharpen as the mesh refines and migrate as the block rides up the flanks. These are the
 asperity-scale spatial patterns that a chart resolves and an SDF-smoothed surface cannot, and they are the
@@ -2663,11 +2660,11 @@ field-level cause of the strength and dilatancy gap reported in Section~\ref{sec
 
 \subsubsection{Phase 2: the dilatancy-versus-roughness law}\label{sec:cv7-p2}
 
-Phase 2 asks how strength depends on roughness, and builds the dilatancy law from the geometry rather than calibrating one. Holding the friction coefficient and the loading protocol fixed and varying only the root-mean-square roughness of the decoder surface, the peak apparent friction rose monotonically from $0.61$ to $1.20$ as the surface RMS rose from $0.022$ to $0.066$~mm, with the emergent dilation tracking it ($0.018\to0.059$~mm). A rougher joint mobilises a higher apparent friction angle and dilates more, here recovered as an output of resolved geometry under plain Coulomb, in the direction of the empirical Barton trend \citep{barton1977shear,barton1990review}. The same monotone law appears when the spectral cutoff of the decoder is swept instead of the amplitude ($0.68\to1.21$), which isolates the resolved frequency content as the control. Across the entire sweep the decoder reconstruction stayed under $8\%$ of RMS, so the strength variation is geometry the chart resolves, not a reconstruction artifact. The apparent friction rises from $0.61$ to $1.20$ as the surface RMS increases; Appendix~\ref{app:supp} (Figure~\ref{fig:cv7-roughness}) plots the law.
+Phase 2 asks how strength depends on roughness, and builds the dilatancy law from the geometry rather than calibrating one. Holding the friction coefficient and the loading protocol fixed and varying only the root-mean-square roughness of the decoder surface, the peak apparent friction rose monotonically from $0.61$ to $1.20$ as the surface RMS rose from $0.022$ to $0.066$~mm, with the emergent dilation tracking it ($0.018\to0.059$~mm). A rougher joint mobilises a higher apparent friction angle and dilates more, here recovered as an output of resolved geometry under plain Coulomb, in the direction of the empirical Barton trend \citep{barton1977shear,barton1990review}. The same monotone law appears when the decoder's spectral cutoff is swept instead of the amplitude ($0.68\to1.21$), which isolates the resolved frequency content as the control. Across the sweep the decoder reconstruction stayed under $8\%$ of RMS, so the strength variation is geometry the chart resolves, not a reconstruction artifact. The apparent friction rises from $0.61$ to $1.20$ as the surface RMS increases; Appendix~\ref{app:supp} (Figure~\ref{fig:cv7-roughness}) plots the law.
 
 \subsubsection{Atlas versus level set on identical shear}\label{sec:cv7-payoff}
 
-Having established that strength and dilatancy are emergent properties of the resolved geometry, we now isolate the representation by running the \emph{identical} shear twice: once on the geometry from the atlas (the true rough surface) and once on the geometry from the ambient signed-distance function's smoothed zero level set, and read off the difference in the predicted mechanics. A band-limited rough surface is carried by a trained three-dimensional chart decoder, verified first: the Fourier decoder reconstructs the surface to $2.2\%$ of RMS, against $48\%$ for a vanilla $\tanh$ decoder and $\sim16\%$ for the ambient neural signed-distance function, with no element foldover and $O(h^2)$ chart-FEM convergence (Section~\ref{sec:fourier}). The same band-limited surface is then sheared under chart-FEM Coulomb friction.
+Having established that strength and dilatancy emerge from the resolved geometry, we now isolate the representation by running the \emph{identical} shear twice: once on the geometry from the atlas (the true rough surface) and once on the geometry from the ambient signed-distance function's smoothed zero level set, and read off the difference in the predicted mechanics. A band-limited rough surface is carried by a trained three-dimensional chart decoder, verified first: the Fourier decoder reconstructs the surface to $2.2\%$ of RMS, against $48\%$ for a vanilla $\tanh$ decoder and $\sim16\%$ for the ambient neural signed-distance function, with no element foldover and $O(h^2)$ chart-FEM convergence (Section~\ref{sec:fourier}). The same band-limited surface is then sheared under chart-FEM Coulomb friction.
 
 The emergent dilatancy is a geometric consequence of the resolved normal, made precise by the following
 remark.
@@ -2717,11 +2714,11 @@ On the atlas geometry the dilatancy emerges from the asperities with no effectiv
   \label{fig:cv7-atlas-sdf}
 \end{figure}
 
-The result holds on real data, not only the synthetic band-limited surface. On an actual Inada-granite topography patch resolved at the mesh scale, the atlas decoder reconstructs the surface to $3.2\%$ of RMS against the SDF's $15.8\%$, and the level set under-predicts the frictionless geometric dilatancy by $\sim60\%$ and the friction strength by $\sim17\%$. The two geometries must not be conflated. The $61\%$ strength figure is the real Inada 1-D profile (Section~\ref{sec:cv7-headline}), and the $98\%/35\%$ pair is the synthetic 3-D decoder run. The sign is nonetheless uniform across both, and across five independent roughness realisations the level set under-predicts the emergent dilatancy by $58\%\pm35\%$. The magnitude depends on how much asperity slope each realisation's smoothing destroys, but the under-prediction itself is a statistical fact, not a cherry-picked surface.
+The result holds on real data, not only the synthetic band-limited surface. On an actual Inada-granite topography patch resolved at the mesh scale, the atlas decoder reconstructs the surface to $3.2\%$ of RMS against the SDF's $15.8\%$, and the level set under-predicts the frictionless geometric dilatancy by $\sim60\%$ and the friction strength by $\sim17\%$. Do not conflate the two geometries. The $61\%$ strength figure is the real Inada 1-D profile (Section~\ref{sec:cv7-headline}), and the $98\%/35\%$ pair is the synthetic 3-D decoder run. The sign is nonetheless uniform across both, and across five independent roughness realisations the level set under-predicts the emergent dilatancy by $58\%\pm35\%$. The magnitude depends on how much asperity slope each realisation's smoothing destroys, but the under-prediction itself is a statistical fact, not a cherry-picked surface.
 
 Three further studies carry the program beyond this headline and are reported in the supplementary appendix (Appendix~\ref{app:supp}): the transition-map height-chart detector routed as the FEM $(\text{gap},\text{normal})$ contract (active-set agreement $98.9\%$ for the chart against $95.8\%$ for the ambient SDF on $10^5$ query points, at $1.47\times$ the per-query cost), a cyclic stick/slip energy ledger that closes per cycle, and an explicit ChartMPM cross-check that reproduces the Coulomb friction floor.
 
-This validation has a deliberately narrow scope. The blocks here are one deformable face on a rigid mating surface, or two single-realisation deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items addressed by augmented-Lagrangian/mortar contact. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength and dilatancy (Section~\ref{sec:cv7-headline}, Table~\ref{tab:cv7-atlas-sdf}).
+This validation has a deliberately narrow scope. The blocks here are one deformable face on a rigid mating surface, or two single-realisation deformable blocks. The surfaces are single-valued, so the level-set failure rests on the spectral-bias ceiling and storage, not on overhangs; overhangs would require the micro-CT voxel volumes and the full transition-map atlas with decoder inversion at chart overlaps. The roughness is band-limited to the wavelengths the mesh resolves, with a modest amplitude to keep $\det J>0$. The two-block friction residual and the cyclic energy bookkeeping remain open numerical items that augmented-Lagrangian/mortar contact addresses. Within that scope, the apparent friction $\muapp=\tan(\phi_b+i)$ and the dilation are emergent from resolved asperity geometry, the boundary-fitted Fourier chart resolves the asperity slopes the ambient SDF smooths, and the level set therefore under-predicts strength and dilatancy (Section~\ref{sec:cv7-headline}, Table~\ref{tab:cv7-atlas-sdf}).
 
 %% ======================== 08_discussion_conclusions ========================
 \section{Discussion, limitations, and conclusions}\label{sec:disc}
@@ -2733,11 +2730,11 @@ two-body deformable--deformable problem. Second, as the empirical consequence of
 the geometric representation, not the constraint-enforcement scheme, controls contact fidelity on
 geometrically hard contact. The closest-point projection that the node-to-segment tradition rejects as fragile is
 not the opposite of the transition map but its convex-cost / partial-contact limit, while the arclength-monotone
-rearrangement is the conforming limit; the two regimes are one framework, which resolves the apparent tension
+rearrangement is the conforming limit; the two regimes are one framework, resolving the apparent tension
 between ``a composition, not a projection'' and the projection's documented utility. The benchmarks of
 Sections~\ref{sec:verif} and~\ref{sec:cv7} put the
-transition-map chart and the ambient level set on the same problems, meshes, and tolerances, and the measured
-difference between them is therefore attributable to the geometry alone.
+transition-map chart and the ambient level set on the same problems, meshes, and tolerances, so the measured
+difference between them is attributable to the geometry alone.
 
 \subsection{The transition map as a measure coupling}\label{sec:disc:ot}
 
@@ -2787,7 +2784,7 @@ multi-arc contact to enumerate, no cusp to resolve, and no curved-surface corres
 four the radial inverse-chart gap reduces to the level-set gap (Remark~\ref{prop:active-set} with
 $\cos\alpha\to1$), the two representations are interchangeable, and the neural geometry merely reproduces the
 closed forms. The discriminating evidence lives in the cusped superformula, the Koch fractal, and the rock joint, where the
-geometry is cusped, fractal, or rough. Reporting the equivalence regime is what makes the wins attributable to representation rather than to an
+geometry is cusped, fractal, or rough. Reporting the equivalence regime makes the wins attributable to representation rather than to an
 incidental difference in the solver. Table~\ref{tab:comparison} reports the chart-versus-level-set separation on
 the discrimination regime alone, where the two representations diverge; the equivalence regime is omitted because
 the chart reduces to the level set there, as the verification ledger of Table~\ref{tab:cv_summary} already
@@ -2843,7 +2840,7 @@ query in $O(\text{depth})$ work, whereas a uniform level set must discretise the
 $O(9^{n})$ storage; the level set answers each query more cheaply, by an $O(1)$ lookup, but its fixed capacity
 caps the geometry it can represent, and that ceiling is what the Koch benchmark measures.
 
-One trade-off is worth isolating, because it is the most carefully measured. Routing the height-chart detector
+One trade-off is worth isolating, the most carefully measured. Routing the height-chart detector
 into the contact loop on the real rough joint, the chart's active set agrees with the analytic reference $98.9\%$
 of the time against $95.8\%$ for the ambient field, and the contact-driving gap RMSE is $4.2\%$ against $44.7\%$,
 a $10.5\times$ sharper quantity, at $1.47\times$ the per-query cost. The chart does not win everywhere: its
@@ -2863,7 +2860,7 @@ the non-smoothness of moving-master node-to-surface contact, not a discretisatio
 semismooth-Newton, augmented-Lagrangian, or mortar treatment of the tangential complementarity
 \citep{alart1991mixed,simo1992augmented,puso2004mortar,chouly2013nitsche}. Such a treatment is a constraint-enforcement upgrade
 orthogonal to \emph{both} the geometric representation and the measure-coupling formulation argued for here, and
-one that plugs into the two-sided optimal-transport mortar tangent already assembled in
+it plugs into the two-sided optimal-transport mortar tangent already assembled in
 Section~\ref{sec:ex_twobody}. It does not threaten the main result, because the
 emergent quantities are mesh-converged ($\muapp\to0.53\pm2\%$, dilation $\to0.063$~mm).
 \emph{The two-body contact-edge floor.} The deformable-Hertz half-width and peak pressure of
@@ -2873,15 +2870,15 @@ constant-strain-triangle stress-recovery floor, a fixed floor rather than a vani
 five-realisation ensemble at the headline mesh quantifies this (Table~\ref{tab:cv8-ensemble}): the peak pressure
 is realisation-robust at $2.31\pm0.07\%$ (a systematic CST floor, not a lucky seed), whereas the half-width spans
 $[0.94,1.87]\%$ ($1.42\pm0.32\%$), with the reported seed the median $1.54\%$; the spread is the contact-edge
-quantisation itself. Running the benchmark in the half-plane regime the closed form assumes ($a/H\le0.14$) is
-what removes the earlier shallow-block finite-size compliance offset and exposes this $\sim2\%$ floor as the true
+quantisation itself. Running the benchmark in the half-plane regime the closed form assumes ($a/H\le0.14$)
+removes the earlier shallow-block finite-size compliance offset and exposes this $\sim2\%$ floor as the true
 residual. The remaining solves are single-realisation, plane-strain CST
 (small-strain), frictionless, with rigid outer walls in CV-9a. The geometric tangent term
 $d\nbf/d\chi$ is dropped under the standard small-rotation approximation, which leaves the converged solution
 tangent-independent (identical $a_{\mathrm{fem}}$ at $40$ and $120$ iterations); it is a convergence-rate lever,
 not an accuracy lever.
 \emph{A single band-limited realisation in small strain.} The rough-geometry validation rests on one band-limited
-surface realisation in small-strain elasticity; a single realisation is statistically spiky and the roughness sweep
+surface realisation in small-strain elasticity; a single realisation is statistically spiky, and the roughness sweep
 of Section~\ref{sec:cv7} reports the trend, not any absolute value. Finite strain, asperity-tip plasticity, and
 asperity damage lie outside the present model.
 \emph{The contact gap is a small-slope proxy.} On the height-chart joint the gap is the vertical offset
@@ -2896,7 +2893,7 @@ energy-consistency of Remark~\ref{prop:matched-normal}, confirmed by the cyclic 
 Appendix~\ref{app:supp}, whose per-cycle balance closes from $1.09$ to $1.01$ on the deformable joint.
 
 \emph{A bounded trait with a definite resolution path.} The slope proxy and the moving-master residual are not
-open-ended failures but bounded numerical traits, each with a matched cure, and the three cures compose into one
+open-ended failures but bounded numerical traits, each with a matched cure; the three cures compose into one
 roadmap. First, the vertical proxy $g_{\mathrm{vert}}$ is replaced by the exact normal-projected gap, the
 perpendicular foot $\bar{\bm\xi}=\arg\min_{\bm\xi}\norm{\xbf-\map{B}(\bm\xi)}$ on the master chart, which removes
 the $O(\text{slope}^2)$ magnitude error while preserving the sign-exact active set of
@@ -2954,7 +2951,7 @@ overhangs and re-entrant lobes no single chart can hold are handled chart by cha
 optimal-transport coupling to full three-dimensional deformable Hertz, with local mesh refinement at the contact
 patch, would close the resolution gap that limited the two-dimensional line-contact verifications and place the
 chart-FEM contact pressure against the closed-form $p_0$ and $a(F)$ in three dimensions: the dimensional step,
-not the two-body step, which is already taken. Finally, embedding the transition-map detector inside a
+not the two-body step, already taken. Finally, embedding the transition-map detector inside a
 mortar or augmented-Lagrangian dynamic solver, with a finite-strain hyperelastic interior, would extend the
 representation-controls-fidelity result from quasi-static rock joints to large-sliding, finite-deformation
 contact. Across all three the conclusion is constant: fidelity on hard contact follows the geometry one chooses
@@ -2987,10 +2984,10 @@ bodies the level set cannot.
 
 This appendix collects the closed forms that serve as acceptance targets for the
 code-verification benchmarks (Hertz, Cattaneo--Mindlin, Brazilian, nine-disc). Each solution is small-strain, linear-elastic,
-and quasi-static. Each is also the limit a finite-deformation contact solve must reproduce
-once the loading and material parameters enter the appropriate regime, so a numerical
+and quasi-static, and each is the limit a finite-deformation contact solve must reproduce
+once the loading and material parameters enter the right regime, so a numerical
 result that misses these targets signals a coding error rather than a modelling choice. Each
-solution is derived symbolically and verified against an independent vectorised evaluator.
+is derived symbolically and verified against an independent vectorised evaluator.
 Throughout the paper we use one sign convention: a normal gap $\gn<0$ denotes penetration, and
 compressive stress is negative. The Hertz and nine-disc forms below are also the acceptance targets for the
 two-body optimal-transport solves of Section~\ref{app:ot}: the combined reduced modulus $1/E^{*}$ of
@@ -2998,7 +2995,7 @@ two-body optimal-transport solves of Section~\ref{app:ot}: the combined reduced 
 \eqref{eq:ninedisc-center} is the target the $3\times3$ N-body coupling must reach with the per-pole load $N$ as
 an emergent output.
 
-The three-dimensional axisymmetric forms below are the canonical reference, and the
+The three-dimensional axisymmetric forms below are the reference, and the
 numerical study restricts itself to their two-dimensional reductions. The verification in
 Section~\ref{sec:verif} exercises the line-contact limit of the Hertz benchmark, namely the contact
 half-width, and the planar reduction of Cattaneo--Mindlin, whose stick-radius exponent is $1/2$ rather
@@ -3032,7 +3029,7 @@ and the force--approach law:
 The contact radius grows as the cube root of the load, and the pressure traces a
 hemispherical cap whose peak $p_0$ is $3/2$ the mean pressure $F/\pi a^2$. Integrating
 this pressure over the contact recovers the applied load, $\int_0^a p(r)\,2\pi
-r\,\mathrm{d}r = F$. The harness uses this identity as an independent consistency check on
+r\,\mathrm{d}r = F$; the harness uses this identity as an independent check on
 the numerical pressure field.
 
 Beneath the contact, the load redistributes into the bulk, and the stresses on the
@@ -3044,8 +3041,8 @@ symmetry axis follow \citep[Eq.~3.45]{johnson1985contact}:
   \qquad \zeta=\frac{z}{a}.
 \end{equation}
 Here $\sigma_z$ is the axial stress, $\sigma_r=\sigma_\theta$ the in-plane normal
-stress, and $\zeta=z/a$ the depth measured in contact radii. The difference between these
-components sets the shear that drives yield, which is why the maximum shear sits below the
+stress, and $\zeta=z/a$ the depth in contact radii. The difference between these
+components sets the shear that drives yield, so the maximum shear sits below the
 surface rather than at it. For $\nu=0.3$ the maximum shear
 $\tfrac12|\sigma_z-\sigma_r|$ reaches $\tau_{\max}=0.31\,p_0$ at depth $z/a=0.481$, the
 von Mises stress peaks at $\sigma_{vM}^{\max}=0.62\,p_0$, and first yield occurs at
@@ -3062,7 +3059,7 @@ load per unit thickness $P'$, the half-width and the peak pressure are
   p_0 = \frac{2P'}{\pi a} = \sqrt{\frac{P'E^\ast}{\pi R}},
 \end{equation}
 with $E^\ast = E/2(1-\nu^2)$ for two identical bodies and $a$ now the contact half-width
-of the strip. The half-width grows as the square root of the load here, in contrast to the
+of the strip. The half-width grows as the square root of the load, in contrast to the
 cube-root growth of the axisymmetric radius in \eqref{eq:hertz-a}. The subsurface field of
 a Hertzian half-plane pressure over $[-a,a]$ is the McEwen solution
 \citep[Eq.~4.49]{johnson1985contact}, evaluated for the stress-bulb figures.
@@ -3071,7 +3068,7 @@ a Hertzian half-plane pressure over $[-a,a]$ is the McEwen solution
 
 A tangential load $Q<\mu P$ is applied to a pre-formed Hertz contact of radius $a$ and
 peak pressure $p_0$ under normal load $P$. Because the tangential load stays below the
-sliding limit $\mu P$, the contact does not slide as a whole. Instead it splits into an
+sliding limit $\mu P$, the contact does not slide as a whole; it splits into an
 inner stick zone $r\le c$ and an outer slip annulus $c\le r\le a$. The stick radius $c$
 shrinks as $Q$ approaches $\mu P$ \citep{mindlin1949compliance,johnson1985contact}:
 \begin{equation}\label{eq:cattaneo-c}
@@ -3082,7 +3079,7 @@ reduction, for which the stick radius follows the larger exponent
 $c/a = (1-Q/\mu P)^{1/2}$; the axisymmetric $1/3$ form above is the spherical-contact reference.
 The stick zone vanishes ($c\to0$) exactly when $Q$ reaches $\mu P$ and full sliding
 begins. The tangential traction $q(r)$ superposes the full-sliding distribution on an
-inner corrective term that cancels the slip displacement over the stick zone:
+inner corrective term that cancels slip displacement over the stick zone:
 \begin{equation}\label{eq:cattaneo-q}
   q(r) =
   \begin{cases}
@@ -3101,7 +3098,7 @@ tangential displacement under load:
 \end{equation}
 Here $G^\ast$ is the effective shear modulus, built from the shear moduli $G_1,G_2$ the
 same way $E^\ast$ is built from the Young's moduli. The compliance is the frictional
-counterpart of the normal force--approach law. It softens as $Q$ rises and the stick zone
+counterpart of the normal force--approach law, and softens as $Q$ rises and the stick zone
 gives way. We accept the numerical solution when $c/a$ agrees to $<1\%$, the integral
 $\int q\,\mathrm{d}A = Q$ to $<1\%$, and $q(r)$ in \eqref{eq:cattaneo-q} agrees pointwise.
 
@@ -3119,7 +3116,7 @@ tensile horizontal stress and a compressive vertical stress:
 \end{equation}
 so the horizontal tension at the center is one third the vertical compression, and this
 tension splits the disc. The splitting tensile strength inferred from a failure load $P_f$
-is therefore $\sigma_t = 2P_f/\pi D t$ (ASTM~D3967). Vertical equilibrium across the
+is $\sigma_t = 2P_f/\pi D t$ (ASTM~D3967). Vertical equilibrium across the
 diametral section gives an independent balance the field must satisfy:
 \begin{equation}\label{eq:brazilian-balance}
   \int_{-R}^{R}\sigma_{yy}(x,0)\,\mathrm{d}x = -\frac{P}{t},
@@ -3145,14 +3142,14 @@ finite contact half-width $b$ keeps it finite:
   \Delta_D = \frac{4P}{\pi E t}\!\left[\ln\frac{2R}{b}-\frac{1-\nu}{2}\right],
 \end{equation}
 where $\Delta_D$ is the change in diameter along the load line. The prefactor and the
-$-(1-\nu)/2$ term are robust, while the logarithmic argument carries the calibration of the
+$-(1-\nu)/2$ term are robust, while the logarithmic argument carries the calibration of
 contact width $b$.
 
 \paragraph{Chart-FEM verification (no contact detector).} The Brazilian disc is a pure stress boundary-value
 problem with no contact detector engaged, so it certifies the chart-FEM stress recovery on a learned disc
 geometry in isolation from the contact formulation of Section~\ref{sec:tmap}. The chart-FEM solve reproduces the
 center stresses \eqref{eq:brazilian-center} to $1.62\%$ in $\sigma_{xx}$ and $0.58\%$ in $\sigma_{yy}$ against
-the exact closed form. The constant-strain triangulation leaves a $\sim 1.6\%$ center floor that plateaus under
+the closed form. The constant-strain triangulation leaves a $\sim 1.6\%$ center floor that plateaus under
 mesh refinement, a discretisation error rather than a modeling error, and we exclude the pole singularity from
 the comparison. With no detector engaged the chart contributes only the domain map, so the chart and the level
 set are interchangeable here; the example certifies the solver, not the detector
@@ -3243,7 +3240,7 @@ $R=1.7$~mm, $E=100$~GPa, $\nu=0.3$, and $t=1$~mm, the relation gives
 $N(d{=}10^{-4}\,\text{mm}) \approx 0.887$~N/mm. Equation~\eqref{eq:ninedisc-center} holds
 exactly only for rigid confining plates. Deformable plates widen and soften the disc--plate
 contacts by $\sqrt2$, so the interior discs differ by a few percent near their boundary
-contacts, and any initial gaps make the contacts engage progressively. We record these
+contacts, and any initial gaps make the contacts engage progressively; we record these
 caveats with each numerical comparison. The two-body measure coupling of Section~\ref{app:ot} reaches the
 equibiaxial state \eqref{eq:ninedisc-center} as a genuine $3\times3$ N-body optimal-transport contact in which
 the per-pole load $N$ is an emergent output of twelve mutual couplings rather than an imposed pole load, matching
@@ -3280,7 +3277,7 @@ N-body equibiaxial mean   & $\sigma_{xx}=\sigma_{yy}=-2N/\pi Rt$ ($N$ emergent) 
 %% ======================== B_appendix_training ========================
 \section{Chart training and verification protocol}\label{app:training}
 
-Every coordinate chart in this work is a small multilayer perceptron with a Fourier-encoded input. We train each one by the same regression recipe and admit it to a contact solve only after it passes a fixed set of acceptance checks. This appendix records the four chart families and their Fourier banks (Sec.~\ref{app:training:families}), the training recipe shared by all of them (Sec.~\ref{app:training:recipe}), and the verify-first acceptance thresholds that a chart must clear before it enters a solve (Sec.~\ref{app:training:verify}). The charts differ only in their domain and in which Fourier bank they carry. The optimizer, the network, and the schedule are the same for all four; the loss is mean-squared error for the height and decoder charts and mean-absolute error for the radial chart.
+Every coordinate chart in this work is a small multilayer perceptron with a Fourier-encoded input. We train each by the same regression recipe and admit it to a contact solve only after it passes a fixed set of acceptance checks. This appendix records the four chart families and their Fourier banks (Sec.~\ref{app:training:families}), the training recipe shared by all of them (Sec.~\ref{app:training:recipe}), and the verify-first acceptance thresholds a chart must clear before it enters a solve (Sec.~\ref{app:training:verify}). The charts differ only in their domain and in which Fourier bank they carry. The optimizer, the network, and the schedule are the same for all four; the loss is mean-squared error for the height and decoder charts and mean-absolute error for the radial chart.
 
 \subsection{Four chart families, three Fourier banks}\label{app:training:families}
 
@@ -3292,17 +3289,17 @@ A chart maps a low-dimensional parameter on the body's boundary to a coordinate 
 h_\theta(x)=\mathrm{base}+\mathrm{MLP}_\theta\!\big(\gamma(\tilde x)\big),
 \end{equation}
 
-where $B\in\R^{K\times d}$ is the frequency bank, $K$ is the number of features, and $\mathrm{base}$ is a single learnable scalar. The scalar $\mathrm{base}$ carries the mean of the target, so the network regresses only the deviation about that offset. The bank $B$ is a registered buffer: the optimizer never updates it. Only the MLP weights $\theta$ and the scalar $\mathrm{base}$ are trained. This fixed encoding carries the method, as Sec.~\ref{sec:fourier} establishes. A chart of the raw coordinate inherits the same spectral bias as an ambient neural SDF and smooths the geometry in the same way. The bank supplies the high frequencies that the raw network suppresses.
+where $B\in\R^{K\times d}$ is the frequency bank, $K$ is the number of features, and $\mathrm{base}$ is a single learnable scalar. The scalar $\mathrm{base}$ carries the mean of the target, so the network regresses only the deviation about that offset. The bank $B$ is a registered buffer the optimizer never updates; only the MLP weights $\theta$ and the scalar $\mathrm{base}$ are trained. This fixed encoding carries the method, as Sec.~\ref{sec:fourier} establishes: a chart of the raw coordinate inherits the same spectral bias as an ambient neural SDF and smooths the geometry the same way, and the bank supplies the high frequencies the raw network suppresses.
 
 The three banks differ in how they tile frequency space, each in the manner appropriate to its chart's domain.
 
 \begin{itemize}
 \item \emph{Geometric} (deterministic), for the 1-D height chart on the open interval. The frequencies are spaced geometrically, $B=\operatorname{geomspace}(0.5,f_{\max},K)$, which gives equal coverage per octave of scale; the scalar $\mathrm{base}$ carries the DC component. A self-affine rock profile sampled at spacing $\Delta x$ over a length $L$ contains on the order of $L/\Delta x\approx 3000$ resolvable wavelengths, so we set $f_{\max}$ to that count of cycles across the normalised domain.
-\item \emph{Gaussian random}, for the 2-D height field and the 3-D rough decoder. The rows of $B$ are drawn $B_i\sim\mathcal N(0,\sigma^2 I)$, which induces an isotropic, stationary kernel that stays flat out to a bandwidth set by $\sigma$ (Sec.~\ref{sec:fourier}). The decoder draws its relief bank from the same generator at a capped amplitude (see Sec.~\ref{app:training:verify}).
+\item \emph{Gaussian random}, for the 2-D height field and the 3-D rough decoder. The rows of $B$ are drawn $B_i\sim\mathcal N(0,\sigma^2 I)$, inducing an isotropic, stationary kernel that stays flat out to a bandwidth set by $\sigma$ (Sec.~\ref{sec:fourier}). The decoder draws its relief bank from the same generator at a capped amplitude (Sec.~\ref{app:training:verify}).
 \item \emph{Harmonic}, for the 2-D radial chart on $\Sph^1$. The bank is the integer harmonics $[\cos(k\psi),\sin(k\psi)]_{k=1,\dots,K}$, which is \emph{periodic by construction}. Periodicity is mandatory here: the radius $\rho(\psi)$ must close up at $\psi$ and $\psi+2\pi$, so a non-periodic bank is inadmissible on the circle. The radial chart also wraps its output in a softplus, $\rho=\mathrm{softplus}(\mathrm{base}+\Delta)$, to keep $\rho>0$.
 \end{itemize}
 
-Table~\ref{tab:appB-charts} collects the four families, their domains and outputs, and the bank parameters used in production. The 1-D and 2-D height charts share the width-128, depth-4 MLP of Sec.~\ref{app:training:recipe}. The radial chart uses a smaller width-96, depth-3 MLP, and the volumetric decoder a width-64, depth-3 MLP, because each of these carries fewer degrees of freedom than a full topography map.
+Table~\ref{tab:appB-charts} collects the four families, their domains and outputs, and the production bank parameters. The 1-D and 2-D height charts share the width-128, depth-4 MLP of Sec.~\ref{app:training:recipe}. The radial chart uses a smaller width-96, depth-3 MLP, and the volumetric decoder a width-64, depth-3 MLP, because each carries fewer degrees of freedom than a full topography map.
 
 \begin{table}
 \centering
@@ -3326,7 +3323,7 @@ Chart & Domain & Output & Bank & Parameters \\
 
 \subsection{Common training recipe}\label{app:training:recipe}
 
-We fit all four charts by minibatch regression onto sampled surface points. The training data are the measured or analytic target $(x_i,z_i)$: the topography map for a height chart, the analytic radius $\rho(\psi_i)$ for the radial chart, and the relief target on the rough face for the decoder. For the two height charts and the decoder the objective is the mean-squared error between the chart's prediction and that target,
+We fit all four charts by minibatch regression onto sampled surface points. The training data are the measured or analytic target $(x_i,z_i)$: the topography map for a height chart, the analytic radius $\rho(\psi_i)$ for the radial chart, and the relief target on the rough face for the decoder. For the two height charts and the decoder the objective is the mean-squared error between the chart's prediction and the target,
 
 \begin{equation}\label{eq:appB-mse}
 \mathcal L(\theta,\mathrm{base})=\frac{1}{\abs{\mathcal B}}\sum_{i\in\mathcal B}
@@ -3344,19 +3341,19 @@ evaluated on a random minibatch $\mathcal B$. The superformula radial chart inst
 \item \emph{Precision and seed.} Double precision with a fixed random seed. The networks are small, and double precision yields better-conditioned chart Jacobians and inverses for the downstream pushforward and gap evaluation.
 \end{enumerate}
 
-A plain regression with the fixed encoding suffices: there is no loss curriculum, no adversarial term, and no schedule of weights. The four trainers are structurally identical and differ only in the bank they construct.
+Plain regression with the fixed encoding suffices: no loss curriculum, no adversarial term, no schedule of weights. The four trainers are structurally identical and differ only in the bank they construct.
 
 \subsection{Verify-first acceptance thresholds}\label{app:training:verify}
 
-A trained chart is geometry, and a defective chart silently corrupts every downstream solve. We therefore require each chart to pass acceptance checks before we admit it to a contact computation. The surface charts run the reconstruction check. The volumetric decoder runs all three, in the order below. If any check fails, we reject the chart rather than patch it.
+A trained chart is geometry, and a defective chart silently corrupts every downstream solve. We therefore require each chart to pass acceptance checks before admitting it to a contact computation. The surface charts run the reconstruction check; the volumetric decoder runs all three, in the order below. If any check fails, we reject the chart rather than patch it.
 
 \paragraph{(1) Reconstruction fidelity.} The reconstruction RMSE measures how closely the chart reproduces the sampled surface; we report it as a fraction of the surface RMS and require it below a few percent. On the rough decoder target the Fourier decoder reaches $2.2\%$ of RMS, the same network with the bank disabled plateaus at $48\%$, and an ambient three-dimensional neural signed-distance function of the same surface reaches $15.7\%$. This measured separation is the quantity that justifies the chart over the level set.
 
-\paragraph{(2) No element foldover, $\det J>0$.} A folded chart has no admissible pushforward, so for the volumetric decoder the chart-Jacobian determinant must be strictly positive on every element of the reference mesh before any contact is attempted. The relief amplitude is capped so that the third column of the Jacobian, $\nbf+\tfrac12\,(\mathrm{relief})\,\hat\nbf$, keeps a positive determinant, and the geometric acceptance check verifies a positive $\det J_{\min}$ over the mesh.
+\paragraph{(2) No element foldover, $\det J>0$.} A folded chart has no admissible pushforward, so for the volumetric decoder the chart-Jacobian determinant must be strictly positive on every element of the reference mesh before any contact is attempted. The relief amplitude is capped so the third column of the Jacobian, $\nbf+\tfrac12\,(\mathrm{relief})\,\hat\nbf$, keeps a positive determinant, and the geometric acceptance check verifies a positive $\det J_{\min}$ over the mesh.
 
 \paragraph{(3) Discretisation convergence (MMS $O(h^2)$).} The trained geometry must not degrade the solver's accuracy, so on the curved decoder geometry a manufactured-solution study must recover the second-order spatial rate of the underlying P1 chart-FEM. The measured rates on the rough geometry are $2.07$ and $1.83$, consistent with the $O(h^2)$ target of the P1 element.
 
-These thresholds make the geometric representation falsifiable. A chart whose cutoff is too low under-resolves the asperities: spectral smoothing returns, and check (1) catches it. A chart whose relief amplitude is too high folds an element, and check (2) catches that. Only a chart that passes all applicable checks enters a contact solve.
+These thresholds make the geometric representation falsifiable. A chart whose cutoff is too low under-resolves the asperities: spectral smoothing returns, and check (1) catches it. A chart whose relief amplitude is too high folds an element, and check (2) catches that. Only a chart passing all applicable checks enters a contact solve.
 
 %% ======================== C_appendix_reproducibility ========================
 \section{Data and code availability}\label{app:repro}
@@ -3373,7 +3370,7 @@ reported apparent friction and dilation reproduce deterministically.
 \subsection{Code availability}
 
 The framework is implemented in Python with automatic differentiation, resolving the compute device and the
-floating-point precision automatically. The neural charts and the signed-distance baselines are trained to the
+floating-point precision automatically. We train the neural charts and the signed-distance baselines to the
 acceptance thresholds of Appendix~\ref{app:training} before use, and the source code reproducing the verification
 and validation results will be made available on publication. The optimal-transport measure coupling of
 Section~\ref{app:ot} is implemented in the module \code{solvers/contact/measure\_coupling/}: the one-dimensional
@@ -3405,7 +3402,7 @@ Section~\ref{app:ot:algorithm}. Two points govern exact reproduction. The deform
 system with an uncalibrated modulus, so stresses scale linearly with it while the dimensionless apparent
 friction and the geometry-set dilation do not. The two-block node-to-surface friction residual settles near
 $4\%$ and does not shrink with mesh refinement, measuring the Coulomb non-smoothness of moving-master contact
-rather than discretisation error, and it is the one quantity whose last digits depend on the contact-solver
+rather than discretisation error; it is the one quantity whose last digits depend on the contact-solver
 tolerances. A third point governs the two-body solves of Section~\ref{app:ot}: run in the half-plane regime the
 closed form assumes ($a/H\le0.14$), the deformable-Hertz half-width and peak pressure carry a $\sim2\%$ discrete
 contact-edge plus CST stress-recovery floor that does not shrink under refinement (the infinite Hertz
@@ -3417,7 +3414,7 @@ $\sum_K(N_K^-\!\circ\chi)=1$ holds by construction.
 \section{Supplementary material}\label{app:supp}
 
 This appendix records three deferred studies of the rough rock joint of Section~\ref{sec:cv7}. Each
-study isolates one question that the main text raises but does not develop. The first (S.1) asks whether
+isolates one question the main text raises but does not develop. The first (S.1) asks whether
 the transition-map detector survives being wired into the contact loop of an unsteady solve, rather than
 only queried on a fixed point cloud. The second (S.2) asks whether the dilatant interface obeys the first
 law over a full load cycle, with the energy ledger closed term by term. The third (S.3) asks whether an
@@ -3430,8 +3427,8 @@ separately in Section~\ref{app:ot}, so this supplementary material is not the fu
 contribution.
 
 We first collect two field-level studies of the Phase-1 two-block shear of Section~\ref{sec:cv7} that the
-main text summarises but does not display. Figure~\ref{fig:cv7-p1vm} reports the mesh convergence of the
-von Mises field on both deformable blocks, and Figure~\ref{fig:cv7-roughness} reports the Phase-2
+main text summarises but does not display. Figure~\ref{fig:cv7-p1vm} reports mesh convergence of the
+von Mises field on both deformable blocks, and Figure~\ref{fig:cv7-roughness} the Phase-2
 dilatancy-versus-roughness law.
 
 \begin{figure}
@@ -3456,11 +3453,11 @@ dilatancy-versus-roughness law.
 \subsection{Transition-map detection inside the contact loop}\label{app:supp:p3}
 
 The main text reports the chart and the level set as static geometry estimators, each queried on a fixed
-grid. Here we instead let the transition-map detector supply the gap and the normal that drive a
-quasi-static direct-shear solve, so the detector is evaluated inside the Newton loop. The chart reads
+grid. Here we instead let the transition-map detector supply the gap and normal that drive a
+quasi-static direct-shear solve, evaluating the detector inside the Newton loop. The chart reads
 contact as the boundary-to-boundary map $\tmap=\map{B}^{-1}\!\circ\map{A}$, which sends a point on one
 face to the mating point on the other: for a query point on face $A$, the height chart returns the mating
-surface height on face $B$ directly, and the gap then follows as the signed normal separation between the
+surface height on face $B$ directly, and the gap follows as the signed normal separation between the
 two. The level set returns the same gap as the value of the ambient neural SDF $\phi$, with normal
 $\nbf=\grad\phi/\norm{\grad\phi}$.
 
@@ -3473,7 +3470,7 @@ points,
 \end{equation}
 %
 where $p$ indexes the query points and $\xbf_p$ is the position of point $p$. To score the active set, we
-compare it against the analytic active set $\mathcal{A}^{\star}$, which we obtain from the closed-form
+compare it against the analytic active set $\mathcal{A}^{\star}$ obtained from the closed-form
 mating surface. The score is the symmetric agreement
 %
 \begin{equation}\label{eq:supp_agreement}
@@ -3493,10 +3490,10 @@ The gap error matters because the gap, not the active-set membership, sets the c
 
 On $N=10^{5}$ query points sampled over the joint footprint, the chart detector reproduced the analytic
 active set to $\eta=98.9\%$, against $95.8\%$ for the level set. On the gap, the chart was sharper by a
-wider margin: $e_g=4.2\%$ for the chart against $44.7\%$ for the level set, a factor of $10.5$ on the
+wider margin: $e_g=4.2\%$ against $44.7\%$ for the level set, a factor of $10.5$ on the
 quantity that sets the contact pressure. Wired into the FEM shear, the chart-driven solve tracked the
 analytic-surface solve closely, reaching a peak apparent friction $\muapp=0.566$ against the analytic
-$0.513$, with the shear traction agreeing to within $9.5\%$ over the loading history. Table~\ref{tab:supp_p3}
+$0.513$, the shear traction agreeing to within $9.5\%$ over the loading history. Table~\ref{tab:supp_p3}
 collects these results.
 
 One quantity runs the other way. At the asperity tips the level set carries the sharper
@@ -3508,7 +3505,7 @@ pointwise normal direction at the sharpest features.
 The chart detector costs $1.47\times$ the level set per query. A chart query is a single forward
 evaluation of $\map{A}$ followed by the chart read of $\map{B}^{-1}$, with no level-set root find or ray
 march, because the mating height is the chart output. The factor below two is the overhead of evaluating
-two Fourier-feature charts in place of one ambient SDF, and it stays constant as the number of query
+two Fourier-feature charts in place of one ambient SDF, and stays constant as the number of query
 points grows. The shear traction and the emergent normal dilation that this detector produces over the
 loading history appear in Figure~\ref{fig:supp_traction}.
 
@@ -3546,13 +3543,13 @@ Table~\ref{tab:supp_p3} reports the quantitative agreement.}
 \subsection{Cyclic loading and the energy ledger}\label{app:supp:p4}
 
 The cyclic study drives the joint through a triangle-wave tangential schedule under constant normal
-displacement. It accounts for every term of the first law. The friction model uses a stateful
+displacement, accounting for every term of the first law. The friction model uses a stateful
 return-map update, so stick and slip alternate and the shear-traction response forms hysteresis loops.
 The Plesha asperity-degradation parameter decays across cycles, from $0.3405$ to $0.3377$ over four
 cycles, and the contact Newton residual averages $7\times10^{-5}$. The peak apparent friction is
 $\abs{\muapp}\approx0.33$.
 
-The first law states that the external work fed into the joint must reappear as stored energy plus
+The first law states that external work fed into the joint must reappear as stored energy plus
 dissipation. With $\gn<0$ in penetration and slip taken as plastic, the ledger reads
 %
 \begin{equation}\label{eq:supp_ledger}
@@ -3566,9 +3563,9 @@ W_{\mathrm{ext}}
 where each term has a physical meaning. The left side, $W_{\mathrm{ext}}=\sum \fbf_{\mathrm{contact}}\cdot
 \mathrm{d}\ubf_{\mathrm{platen}}$, is the machine work the contact tractions do on the moving platen. On
 the right, $\Delta U_{\mathrm{el}}=\tfrac12\ubf^{\!\top}\!K\ubf$ is the recoverable strain energy of the
-blocks, $W_{\mathrm{pen}}=\tfrac12\sum\varepsilon_n A\,\gn^{2}$ is the recoverable normal penalty energy,
-$W_{\mathrm{stick}}$ is the recoverable tangential spring energy of the stuck nodes, and
-$W_{\mathrm{fric}}=\sum\abs{\tbf_T}\,\abs{\mathrm{d}\bm{s}_p}\ge0$ is the frictional dissipation
+blocks, $W_{\mathrm{pen}}=\tfrac12\sum\varepsilon_n A\,\gn^{2}$ the recoverable normal penalty energy,
+$W_{\mathrm{stick}}$ the recoverable tangential spring energy of the stuck nodes, and
+$W_{\mathrm{fric}}=\sum\abs{\tbf_T}\,\abs{\mathrm{d}\bm{s}_p}\ge0$ the frictional dissipation
 accumulated over the plastic slip increments; the tangential traction $\tbf_T$ entering it is the discrete
 realisation of the optimal-transport traction field of Section~\ref{app:ot}, carried across the
 correspondence under the same cone bound $\abs{\tbf_T}\le\mu\,t_N$, and the active set on which slip is
@@ -3589,15 +3586,15 @@ A value of $\Pi_{\mathrm{cyc}}=1$ means the work in matches the energy out, term
 
 Measured per cycle, $\Pi_{\mathrm{cyc}}=1.09$ on the first cycle and $1.01$ on the second, the latter
 inside the acceptance band $[0.98,1.02]$. The first-cycle excess is the recoverable terms not yet having
-returned to zero after a single traversal; by the second cycle they do return, and the ledger closes to
+returned to zero after a single traversal; by the second cycle they return, and the ledger closes to
 one percent. Figure~\ref{fig:supp_cyclic} shows the hysteresis loops and the per-cycle ledger.
 
 The \emph{cumulative} ratio over the whole history is a different number, $0.17$, far from one. The
 shear-only constant-normal machine work $W_{\mathrm{ext}}$ does not count the dissipation spent seating
 the asperities under the initial normal load. The run begins with
 $W_{\mathrm{fric}}[0]=0.91$ already accumulated while $W_{\mathrm{ext}}[0]=0$, because the normal-load
-seating happens before the tangential schedule starts. That offset enters the denominator of the
-cumulative ratio but never the numerator, so it depresses the ratio permanently. The offset is a
+seating precedes the tangential schedule. That offset enters the denominator of the
+cumulative ratio but never the numerator, depressing the ratio permanently. The offset is a
 bookkeeping artifact, the unmeasured seating dissipation, not an energy violation. The per-cycle balance
 of Eq.~\eqref{eq:supp_closure} differences the accumulated work across one full cycle and so cancels the
 constant offset; that per-cycle balance is the correct first-law statement, and it closes.
@@ -3617,7 +3614,7 @@ asperity-seating dissipation, a bookkeeping offset rather than an energy violati
 
 The last study checks the frictional response with an independent solver. We discretise a deformable block
 with the explicit finite-deformation ChartMPM (linear B-spline transfers, Neo-Hookean response) and shear
-it against the \emph{same} band-limited rough surface that the chart-FEM uses, sliding the surface beneath
+it against the \emph{same} band-limited rough surface the chart-FEM uses, sliding the surface beneath
 the block at a constant rate to impose direct-shear kinematics. The contact runs through the existing
 per-particle channel: the gap comes from the geometric oracle, the normal force from the penalty model,
 and the tangential force from regularised Coulomb friction, all scattered as physical-space per-particle
@@ -3626,14 +3623,14 @@ SDF $\phi(\xbf)=z-h(x-u_x,y)$, where $h$ is the rough height field and $u_x$ is 
 
 The explicit solve reproduced the Coulomb friction floor. A flat-bottomed block sliding on the rough floor
 reached an emergent apparent friction $\muapp\approx0.34$ against the prescribed base $\mu=0.4$, within
-about $14\%$, and converged stably under dynamic relaxation. This is an independent dynamic confirmation
-of the frictional channel that the quasi-static FEM uses.
+about $14\%$, and converged stably under dynamic relaxation, an independent dynamic confirmation
+of the frictional channel the quasi-static FEM uses.
 
 The explicit solve does not, however, confirm the dilatant interlock. The chart-FEM produces emergent
 dilation and an apparent-friction enhancement above the base value because two rough faces ride over one
 another. A \emph{mated} rough-on-rough block in the explicit solver, with the full surface in conformal
 contact, is unstable in explicit penalty dynamics and diverges without an implicit or mortar contact
-treatment. The cross-check therefore validates friction but not dilatancy. The explicit MPM is a consistent check of the Coulomb response, and the emergent dilatancy
+treatment. The cross-check therefore validates friction but not dilatancy: the explicit MPM is a consistent check of the Coulomb response, and the emergent dilatancy
 of Section~\ref{sec:cv7} rests instead on the quasi-static implicit chart-FEM, whose consistent tangent
 drives the contact Newton residual to $\sim10^{-9}$. An implicit or mortar contact treatment for the
 mated MPM case is the documented path to a full dynamic cross-check of dilatancy.
@@ -3646,7 +3643,7 @@ against the slave displacement alone, the restriction $\partial\xbf_m=0$ that ho
 When the counterface is itself deformable the same correspondence adds the master-coupling blocks
 $\bm K_{sm}=\bm K_{ms}^{\top}$ and $\bm K_{mm}$ of \eqref{eq:twobody-tangent-body}; this appendix derives the
 slave--slave block in full and Section~\ref{app:ot} supplies the master blocks.
-The consistent tangent of the contact virtual work \eqref{eq:contact-vw} follows from linearising the contact
+The consistent tangent of \eqref{eq:contact-vw} follows from linearising the contact
 pressure and the gap variation. The penalty pressure and the gap variation linearise as
 \begin{equation}\label{eq:lin-pressure}
 \Delta t_N=\varepsilon_n\,\Delta\gn,\qquad
@@ -3704,7 +3701,7 @@ no third derivative of the boundary, and stays consistent with the $\varepsilon$
 verified the closed form against that Jacobian---the curvature term \eqref{eq:weingarten-chart} matches the
 finite-difference normal derivative to $5.6\times10^{-4}$---and measured its effect. On a smooth curved master
 surface the consistent tangent restores the asymptotic quadratic Newton rate, converging in $8$ iterations
-against $40$ for the two-block tangent frictionless and $11$ against $44$ under Coulomb friction, with the
+against $40$ for the two-block tangent frictionless and $11$ against $44$ under Coulomb friction, the
 converged solution unchanged. On the rough Coulomb joint, by contrast, completing the tangent does \emph{not}
 remove the residual plateau: both tangents stall at the same few-percent floor and the emergent apparent
 friction is invariant to within $0.3\%$. The plateau reported in Section~\ref{sec:discr} is therefore

@@ -60,3 +60,11 @@ campaign already polished Figs 2 (transition_map_composite), 3 (fourier_mechanis
   words converted (discretis/linearis/normalis/parameteris/initialis/summaris/minimis/localis/regularis-...),
   guarded to skip \code{}/\cite{}/package lines and the LaTeX size/itemize commands. US prose -ize count now 0.
   Compile clean, 60 pp, protected numbers intact. Brazilian 6.3x -> tracked task chip for the user (not auto-changed).
+- **round 3** (WRITING group, whole-paper word-cut) — 4 chunk editors (front/methods/results/appendix) stripped
+  empty adjectives, passive phrasing, and academic fluff: 140+/143- lines, ~226 raw words cut. Per-chunk editable-
+  prose cuts: C1 ~0.5% (front matter already tightened by the two prior campaigns), C2 ~4%, C3 ~11% (results +
+  discussion, the wordiest), C4 appendix. All editors verified every claim remains backed by its equation/table/
+  citation — ZERO unsupported statements found, no placeholders needed. Compile clean 0 undefined, 60 pp; all
+  protected numbers + \cite(96)/\ref(281)/\eqref(151)/\label(211)/\includegraphics(30) byte-count identical.
+  HONEST LIMIT: a literal 10% of raw words is no longer reachable without cutting content, citations, or honesty
+  caveats — three successive tightening campaigns have consumed the fluff budget; remaining prose is claim-dense.
